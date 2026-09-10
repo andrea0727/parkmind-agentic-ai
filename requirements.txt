@@ -1,0 +1,24 @@
+# Core
+langgraph
+langchain
+python-dotenv
+
+# MCP
+# langchain-mcp-adapters
+
+# API
+# fastapi
+
+# Data validation
+# pydantic
+
+# Testing
+pytest
+# pytest-asyncio
+
+# Evaluation
+# ragas
+# deepeval
+
+# Observability
+langsmith
