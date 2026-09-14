@@ -97,11 +97,11 @@ anywhere without ceremony.
 ## Team ownership
 
 | Track | Folders |
-|---|---|---|
+|---|---|
 | Core / deterministic engine | `services/planning/`, `services/clients/` |
-| Agent / personalization | `agents/`, `graph/`, `services/personalization/`, parts of `services/use_cases/` | 
+| Agent / personalization | `agents/`, `graph/`, `services/personalization/`, parts of `services/use_cases/` |
 | Evaluation | `services/evaluation/`, `docs/evaluation/` |
-| Mechanical, well-specified | `services/clients/knowledge_store.py`, `services/planning/constraint_checker.py`, `models/event.py` |  
+| Mechanical, well-specified | `services/clients/knowledge_store.py`, `services/planning/constraint_checker.py`, `models/event.py` |
 
 ## Getting started
 
