@@ -1,0 +1,19 @@
+# scope: Postgres only. No pgvector/Qdrant container (knowledge
+# store is in-memory
+# src/parkmind/services/clients/knowledge_store.py).
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: parkmind
+      POSTGRES_PASSWORD: parkmind
+      POSTGRES_DB: parkmind
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  pgdata:
