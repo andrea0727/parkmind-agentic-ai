@@ -57,8 +57,6 @@ parkmind-agentic-ai/
 │   └── integration/              # full graphs + the 4 agent quality checks
 │
 ├── docs/
-│   ├── architecture/             # pointer to the wiki (source of truth)
-│   ├── decisions/                # scope.md — what we build vs. document
 │   └── evaluation/               # methodology behind the metrics
 │
 ├── notebooks/                     # exploratory only, nothing imported by the app
@@ -91,7 +89,7 @@ long as `src/` is on the import path. `pytest.ini` and `agent.py` both add
 `src/` to the path, so `from parkmind.models.plan import Plan` works from
 anywhere without ceremony.
 
-## Team ownership (month 1)
+## Team ownership
 
 | Track | Folders | Who |
 |---|---|---|
@@ -124,7 +122,7 @@ streamlit run ui/app.py
 ## Working conventions
 
 - **Branch per component, not per person** — `feat/planning-constraint-checker`,
-  not `feat/santiago-work`. Short-lived branches, PR to `main` within 2-4 days.
+  not `feat/collaborator_name-work`. Short-lived branches, PR to `main` within 2-4 days.
 - **`main` is protected** — at least one review before merge. The lead
   reviews the junior teammate's PRs; peers review each other's.
 - **Architecture decisions are frozen, not improvised.** If a PR needs to
