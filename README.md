@@ -12,6 +12,12 @@ Team: Johanna Andrea (lead, architect, Agentic AI Engineer) · Sebastián Toro
 **Architecture and decisions live in the GitHub Wiki** (Home → Architecture
 → v1/v2). This README is about running and navigating the code.
 
+## Resources
+
+- **Repository:** https://github.com/andrea0727/parkmind-agentic-ai
+- **Project Board:** https://github.com/users/andrea0727/projects/4/views/1
+- **Wiki (Source of Truth):** https://github.com/andrea0727/parkmind-agentic-ai.wiki.git
+
 ## Core principle
 
 > The agent orchestrates. The planning engine decides. The guest model personalizes.
