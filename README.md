@@ -6,8 +6,7 @@ proposes explainable replans that the guest always approves before anything
 changes.
 
 Capstone project — Agentic AI Engineering (MED-42).
-Team: Johanna Andrea (lead, architect, Agentic AI Engineer) · Sebastián Toro
-· Santiago Isaza.
+Team: Johanna Andrea · Sebastián Toro · Santiago Isaza.
 
 **Architecture and decisions live in the GitHub Wiki** (Home → Architecture
 → v1/v2). This README is about running and navigating the code.
