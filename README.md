@@ -96,12 +96,12 @@ anywhere without ceremony.
 
 ## Team ownership
 
-| Track | Folders | Who |
+| Track | Folders |
 |---|---|---|
-| Core / deterministic engine | `services/planning/`, `services/clients/` | Core track |
-| Agent / personalization | `agents/`, `graph/`, `services/personalization/`, parts of `services/use_cases/` | Team lead |
-| Evaluation | `services/evaluation/`, `docs/evaluation/` | Team lead, built in parallel from week 1 |
-| Mechanical, well-specified | `services/clients/knowledge_store.py`, `services/planning/constraint_checker.py`, `models/event.py` | Good starting tasks for the junior teammate |
+| Core / deterministic engine | `services/planning/`, `services/clients/` |
+| Agent / personalization | `agents/`, `graph/`, `services/personalization/`, parts of `services/use_cases/` | 
+| Evaluation | `services/evaluation/`, `docs/evaluation/` |
+| Mechanical, well-specified | `services/clients/knowledge_store.py`, `services/planning/constraint_checker.py`, `models/event.py` |  
 
 ## Getting started
 
@@ -128,8 +128,7 @@ streamlit run ui/app.py
 
 - **Branch per component, not per person** — `feat/planning-constraint-checker`,
   not `feat/collaborator_name-work`. Short-lived branches, PR to `main` within 2-4 days.
-- **`main` is protected** — at least one review before merge. The lead
-  reviews the junior teammate's PRs; peers review each other's.
+- **`main` is protected** — at least one review before merge.
 - **Architecture decisions are frozen, not improvised.** If a PR needs to
   contradict something in the wiki's "Decisions Already Frozen" section,
   that's a team conversation first, a wiki changelog entry second, and code
