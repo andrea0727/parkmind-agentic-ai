@@ -4,7 +4,9 @@ initial planning -> approval -> simulated attraction closure -> replanning
 -> approval. Useful for testing the vertical slice without the UI.
 """
 
-import sys, os
+import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 

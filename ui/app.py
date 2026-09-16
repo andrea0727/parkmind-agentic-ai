@@ -7,7 +7,9 @@ Proposal as a card with Approve / Edit / Reject buttons -> on decision,
 resume the graph via LangGraph's checkpointer.
 """
 
-import sys, os
+import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import streamlit as st

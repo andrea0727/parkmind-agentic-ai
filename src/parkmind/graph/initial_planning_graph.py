@@ -10,7 +10,6 @@ langgraph.json can reference it directly — that's the standard LangGraph
 project convention.
 """
 
-from parkmind.graph.state import ParkMindState
 
 
 def build_initial_planning_graph():

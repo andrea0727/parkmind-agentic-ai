@@ -6,7 +6,7 @@ can never be treated as active before it's been through
 interrupt()/approval.
 """
 
-from typing import TypedDict, Literal
+from typing import Literal, TypedDict
 
 
 class ParkMindState(TypedDict, total=False):
