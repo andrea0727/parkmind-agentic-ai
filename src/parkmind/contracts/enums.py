@@ -1,110 +1,155 @@
 """
-Closed taxonomies for ParkMind domain.
+Closed taxonomies for ParkMind domain using Python enums.
 
-All taxonomies are Literal enums to ensure type safety and fail-closed matching
+All taxonomies are enums to ensure type safety, autocomplete, and fail-closed matching
 in constraint validation. Free strings would cause check_accessibility to fail
 on every attraction when a guest has restrictions.
+
+Pydantic v2 serializes these to/from JSON automatically.
 
 §33 Domain Contracts — v2.2 [C15]
 """
 
-from typing import Literal
+from enum import Enum
+
 
 # Attraction & Park state
-AttractionStatus = Literal["OPERATING", "DOWN", "CLOSED", "REFURBISHMENT"]
+class AttractionStatus(str, Enum):
+    OPERATING = "OPERATING"
+    DOWN = "DOWN"
+    CLOSED = "CLOSED"
+    REFURBISHMENT = "REFURBISHMENT"
+
 
 # Schedule types
-StopKind = Literal["ATTRACTION", "SHOW", "MEAL", "REST"]
+class StopKind(str, Enum):
+    ATTRACTION = "ATTRACTION"
+    SHOW = "SHOW"
+    MEAL = "MEAL"
+    REST = "REST"
+
 
 # Guest preferences — sensitivities
-SensitivityKind = Literal[
-    "INTENSITY",
-    "DARKNESS",
-    "HEIGHTS",
-    "WATER",
-    "LOUD_NOISE",
-    "SPINNING",
-]
-SensitivityLevel = Literal["LOW", "MEDIUM", "HIGH"]
+class SensitivityKind(str, Enum):
+    INTENSITY = "INTENSITY"
+    DARKNESS = "DARKNESS"
+    HEIGHTS = "HEIGHTS"
+    WATER = "WATER"
+    LOUD_NOISE = "LOUD_NOISE"
+    SPINNING = "SPINNING"
+
+
+class SensitivityLevel(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+
 
 # Attraction category taxonomy
-AttractionCategory = Literal[
-    "THRILL",
-    "FAMILY",
-    "DARK_RIDE",
-    "SHOW",
-    "WATER",
-    "CHARACTER",
-    "TRANSPORT",
-]
+class AttractionCategory(str, Enum):
+    THRILL = "THRILL"
+    FAMILY = "FAMILY"
+    DARK_RIDE = "DARK_RIDE"
+    SHOW = "SHOW"
+    WATER = "WATER"
+    CHARACTER = "CHARACTER"
+    TRANSPORT = "TRANSPORT"
+
 
 # Accessibility requirements
-MobilityRequirement = Literal[
-    "LIMITED_WALKING",
-    "WHEELCHAIR",
-    "ECV",
-    "STROLLER_AS_WHEELCHAIR",
-]
+class MobilityRequirement(str, Enum):
+    LIMITED_WALKING = "LIMITED_WALKING"
+    WHEELCHAIR = "WHEELCHAIR"
+    ECV = "ECV"
+    STROLLER_AS_WHEELCHAIR = "STROLLER_AS_WHEELCHAIR"
+
 
 # Safety-notice derived restrictions (one-to-one with published park taxonomy).
 # Never store the underlying statement; only the derived flag. [C15]
-RideRestriction = Literal[
-    "NOT_RECOMMENDED_HIGH_G_FORCE",
-    "NOT_RECOMMENDED_MOTION_SENSITIVITY",
-    "NOT_RECOMMENDED_HEART_CONDITION",
-    "NOT_RECOMMENDED_BACK_NECK",
-    "NOT_RECOMMENDED_EXPECTANT",
-    "REQUIRES_TRANSFER_FROM_WHEELCHAIR",
-    "NO_SERVICE_ANIMALS",
-]
+class RideRestriction(str, Enum):
+    NOT_RECOMMENDED_HIGH_G_FORCE = "NOT_RECOMMENDED_HIGH_G_FORCE"
+    NOT_RECOMMENDED_MOTION_SENSITIVITY = "NOT_RECOMMENDED_MOTION_SENSITIVITY"
+    NOT_RECOMMENDED_HEART_CONDITION = "NOT_RECOMMENDED_HEART_CONDITION"
+    NOT_RECOMMENDED_BACK_NECK = "NOT_RECOMMENDED_BACK_NECK"
+    NOT_RECOMMENDED_EXPECTANT = "NOT_RECOMMENDED_EXPECTANT"
+    REQUIRES_TRANSFER_FROM_WHEELCHAIR = "REQUIRES_TRANSFER_FROM_WHEELCHAIR"
+    NO_SERVICE_ANIMALS = "NO_SERVICE_ANIMALS"
+
 
 # Event sourcing
-EventSource = Literal["monitor", "user"]
+class EventSource(str, Enum):
+    MONITOR = "monitor"
+    USER = "user"
+
 
 # Behavior tracking
-BehaviorEventType = Literal[
-    "PROPOSAL_ACCEPTED",
-    "PROPOSAL_REJECTED",
-    "PROPOSAL_EDITED",
-    "ATTRACTION_COMPLETED",
-    "ATTRACTION_SKIPPED",
-    "ALTERNATIVE_REQUESTED",
-]
+class BehaviorEventType(str, Enum):
+    PROPOSAL_ACCEPTED = "PROPOSAL_ACCEPTED"
+    PROPOSAL_REJECTED = "PROPOSAL_REJECTED"
+    PROPOSAL_EDITED = "PROPOSAL_EDITED"
+    ATTRACTION_COMPLETED = "ATTRACTION_COMPLETED"
+    ATTRACTION_SKIPPED = "ATTRACTION_SKIPPED"
+    ALTERNATIVE_REQUESTED = "ALTERNATIVE_REQUESTED"
+
 
 # Rejection reasons — categorized, not just counted.
 # Used to diagnose why recommendations are rejected. [§23]
-RejectionReason = Literal[
-    "TOO_MUCH_WALKING",
-    "TOO_MUCH_WAITING",
-    "WRONG_ATTRACTION_TYPE",
-    "BAD_TIMING",
-    "GUEST_LEFT_OUT",
-    "OTHER",
-]
+class RejectionReason(str, Enum):
+    TOO_MUCH_WALKING = "TOO_MUCH_WALKING"
+    TOO_MUCH_WAITING = "TOO_MUCH_WAITING"
+    WRONG_ATTRACTION_TYPE = "WRONG_ATTRACTION_TYPE"
+    BAD_TIMING = "BAD_TIMING"
+    GUEST_LEFT_OUT = "GUEST_LEFT_OUT"
+    OTHER = "OTHER"
+
 
 # Event severity — set by EventPolicy only, never by construction. [Invariant #4]
-EventSeverity = Literal["LOW", "MEDIUM", "HIGH"]
+class EventSeverity(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+
 
 # Proposal approval state — manages the unapproved-plan invariant. [§23]
-ApprovalStatus = Literal["PENDING", "APPROVED", "REJECTED", "EDITED", "SUPERSEDED"]
+class ApprovalStatus(str, Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    EDITED = "EDITED"
+    SUPERSEDED = "SUPERSEDED"
+
 
 # Preference source — tracks stated vs learned vs default. [C12]
-PreferenceSource = Literal["stated", "learned", "default"]
+class PreferenceSource(str, Enum):
+    STATED = "stated"
+    LEARNED = "learned"
+    DEFAULT = "default"
+
 
 # Guest role — identity, not preference
-GuestRole = Literal["adult", "child"]
+class GuestRole(str, Enum):
+    ADULT = "adult"
+    CHILD = "child"
+
 
 # Planning pace preference
-PlanningPace = Literal["relaxed", "balanced", "maximizer"]
+class PlanningPace(str, Enum):
+    RELAXED = "relaxed"
+    BALANCED = "balanced"
+    MAXIMIZER = "maximizer"
+
 
 # Planning style preference
-PlanningStyle = Literal["structured", "flexible", "spontaneous"]
+class PlanningStyle(str, Enum):
+    STRUCTURED = "structured"
+    FLEXIBLE = "flexible"
+    SPONTANEOUS = "spontaneous"
+
 
 # Data sources for provenance
-DataSource = Literal[
-    "themeparks_wiki",
-    "queue_times",
-    "open_meteo",
-    "cache",
-    "historical",
-]
+class DataSource(str, Enum):
+    THEMEPARKS_WIKI = "themeparks_wiki"
+    QUEUE_TIMES = "queue_times"
+    OPEN_METEO = "open_meteo"
+    CACHE = "cache"
+    HISTORICAL = "historical"

@@ -89,7 +89,7 @@ class PreferenceValue(ParkMindBaseModel):
 
         Invariant #3: stated_value is never overwritten by learning.
         """
-        if self.source == "stated" and self.stated_value is None:
+        if self.source == PreferenceSource.STATED and self.stated_value is None:
             raise ValueError("stated_value must be provided when source is 'stated'")
         return self
 
