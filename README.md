@@ -36,7 +36,8 @@ parkmind-agentic-ai/
 │       │                        # every subfolder below is a namespace
 │       │                        # package (PEP 420), nothing more needed
 │       │
-│       ├── models/              # Pydantic contracts — data only, no logic
+│       ├── core/                # deterministic core — no framework imports
+│       │   └── contracts/       # Pydantic domain models — data only, no logic
 │       │                        # PartyConstraints, GuestProfile, Plan,
 │       │                        # Event, Proposal, AccessibilityRequirements
 │       │
@@ -83,7 +84,7 @@ parkmind-agentic-ai/
 
 **Why this shape:** `services/` never imports from `agents/`, `graph/`,
 `tools/`, or `ui/` — only the reverse. That's what lets everyone work in
-parallel: once `models/` is frozen (it already is), the core team builds
+parallel: once `core/contracts/` is frozen (it already is), the core team builds
 `services/planning/` against real logic while the agent/personalization
 track builds against those same contracts using stubs, without either side
 blocking the other.

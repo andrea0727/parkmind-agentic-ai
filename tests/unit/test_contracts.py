@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 import pytest
 from zoneinfo import ZoneInfo
 
-from src.parkmind.contracts import (
+from parkmind.core.contracts import (
     # Enums
     AttractionStatus,
     StopKind,
