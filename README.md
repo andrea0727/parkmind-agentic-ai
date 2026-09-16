@@ -123,6 +123,22 @@ poetry run python agent.py
 poetry run streamlit run ui/app.py
 ```
 
+### Using Poetry
+
+If you don't have Poetry installed:
+```bash
+curl -sSL https://install.python-poetry.org | python3 -
+```
+
+**Common commands:**
+- `poetry install` — install all dependencies (runs automatically for new clones)
+- `poetry run pytest` — run tests
+- `poetry run python agent.py` — run scripts
+- `poetry add <package>` — add a runtime dependency
+- `poetry add --group dev <package>` — add a dev dependency
+- `poetry lock` — update poetry.lock (commit this to git when dependencies change)
+- `poetry update` — upgrade all dependencies to their latest versions
+
 ## Working conventions
 
 - **Branch per component, not per person** — `feat/planning-constraint-checker`,
