@@ -72,7 +72,7 @@ parkmind-agentic-ai/
 ├── agent.py                            # root entrypoint — exposes the compiled
 │                                        # graph(s) that langgraph.json points to
 ├── langgraph.json
-├── requirements.txt
+├── requirements.txt         → see pyproject.toml (uses Poetry)
 ├── docker-compose.yml                   # Postgres only, see docs/decisions/scope.md
 ├── pytest.ini                            # lets pytest find `parkmind.*` without
 │                                         # installing it as a package
@@ -108,20 +108,19 @@ anywhere without ceremony.
 ```bash
 # 1. clone and enter the repo, then:
 cp .env.example .env          # fill in ANTHROPIC_API_KEY at minimum
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+poetry install
 
 # 2. start Postgres
 docker compose up -d
 
 # 3. run tests (placeholders pass until real modules land)
-pytest
+poetry run pytest
 
 # 4. sanity-check the graphs build
-python agent.py
+poetry run python agent.py
 
 # 5. run the UI (once graph/ is wired up)
-streamlit run ui/app.py
+poetry run streamlit run ui/app.py
 ```
 
 ## Working conventions
