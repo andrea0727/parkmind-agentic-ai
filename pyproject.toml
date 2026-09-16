@@ -4,6 +4,13 @@ version = "0.1.0"
 description = "An agentic AI concierge that plans a guest's day at a theme park"
 authors = ["Johanna Andrea <johanna@example.com>", "Sebastián Toro <sebastian@example.com>", "Santiago Isaza <santiago@example.com>"]
 readme = "README.md"
+# `parkmind` (src/) is never pip-installed -- pytest.ini / agent.py / scripts all
+# add src/ to sys.path instead. Without this, `poetry install` on a fresh clone
+# (no cached .venv, e.g. CI) tries to build/install a root package named after
+# the project ("parkmind-agentic-ai" / "parkmind_agentic_ai") and fails with
+# "No file/folder found for package parkmind-agentic-ai" since no such folder
+# exists. This makes Poetry a pure dependency manager here, matching actual use.
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.12.9"
