@@ -32,9 +32,10 @@ approval before it's ever applied.
 parkmind-agentic-ai/
 ├── src/
 │   └── parkmind/
-│       ├── __init__.py          # the ONLY __init__.py in the whole tree —
-│       │                        # every subfolder below is a namespace
-│       │                        # package (PEP 420), nothing more needed
+│       ├── __init__.py          # every package below is a REGULAR package
+│       │                        # with its own __init__.py — namespace
+│       │                        # subpackages cost mypy/coverage/pytest
+│       │                        # friction and buy nothing [P0-04]
 │       │
 │       ├── models/              # Pydantic contracts — data only, no logic
 │       │                        # PartyConstraints, GuestProfile, Plan,
@@ -88,11 +89,14 @@ parallel: once `models/` is frozen (it already is), the core team builds
 track builds against those same contracts using stubs, without either side
 blocking the other.
 
-**One `__init__.py`, on purpose.** Python 3 doesn't require an `__init__.py`
-in every folder — namespace packages (PEP 420) handle it automatically, as
-long as `src/` is on the import path. `pytest.ini` and `agent.py` both add
-`src/` to the path, so `from parkmind.models.plan import Plan` works from
-anywhere without ceremony.
+**Every folder is a regular package.** Each subfolder under `src/parkmind/`
+has its own `__init__.py` — namespace packages (PEP 420) were tried and
+dropped (P0-04): they cost `mypy`/`import-linter`/`pytest` friction (e.g.
+`import-linter` can't resolve an implicit namespace package as a module) and
+buy nothing here. `src/` still isn't pip-installed as a package; `pytest.ini`
+and `agent.py` both add it to the import path, so
+`from parkmind.models.plan import Plan` works from anywhere without needing
+`poetry install` to set up an editable install.
 
 ## Team ownership
 
@@ -132,12 +136,22 @@ curl -sSL https://install.python-poetry.org | python3 -
 
 **Common commands:**
 - `poetry install` — install all dependencies (runs automatically for new clones)
-- `poetry run pytest` — run tests
+- `poetry run pytest` — run tests (also runs the import-boundary check, see below)
+- `poetry run ruff check .` — lint
+- `poetry run mypy src` — type check
+- `PYTHONPATH=src poetry run lint-imports` — import-boundary check (`.importlinter`
+  at repo root). Needs `PYTHONPATH=src` because `parkmind` isn't pip-installed as
+  a package — same reason `pytest.ini` sets `pythonpath = src` for pytest; run
+  bare (`poetry run lint-imports` with no `PYTHONPATH`), it fails immediately
+  with "Could not find package 'parkmind'". CI sets this env var for you; a
+  local shell needs it set explicitly.
 - `poetry run python agent.py` — run scripts
 - `poetry add <package>` — add a runtime dependency
 - `poetry add --group dev <package>` — add a dev dependency
 - `poetry lock` — update poetry.lock (commit this to git when dependencies change)
 - `poetry update` — upgrade all dependencies to their latest versions
+
+All four of the above run on every pull request via `.github/workflows/ci.yml` (P0-04).
 
 ## Working conventions
 
