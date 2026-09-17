@@ -10,54 +10,40 @@ Tests both valid and invalid cases per model to ensure:
 """
 
 from datetime import datetime, timedelta
+
 import pytest
-from zoneinfo import ZoneInfo
 
 from parkmind.core.contracts import (
-    # Enums
-    AttractionStatus,
-    StopKind,
-    SensitivityKind,
-    SensitivityLevel,
-    AttractionCategory,
-    MobilityRequirement,
-    RideRestriction,
-    EventSource,
-    BehaviorEventType,
-    RejectionReason,
-    EventSeverity,
-    EventType,
-    ApprovalStatus,
-    PreferenceSource,
-    GuestRole,
-    PlanningPace,
-    PlanningStyle,
-    DataSource,
-    # Base types
-    TimeWindow,
     PARK_TZ,
-    # Models
-    Guest,
-    PreferenceValue,
-    GuestProfile,
     AccessibilityRequirements,
-    PartyConstraints,
     Attraction,
+    AttractionCategory,
+    # Enums
+    BehaviorEntry,
+    BehaviorEventType,
+    BehaviorLog,
+    Event,
+    EventSeverity,
+    EventSource,
+    EventType,
+    Guest,
+    GuestProfile,
+    MobilityRequirement,
     Park,
-    Stop,
     Plan,
     PlanExecutionState,
-    Event,
-    Proposal,
+    PlanningPace,
+    PlanningStyle,
+    PreferenceSource,
+    PreferenceValue,
     Provenance,
-    BehaviorEntry,
-    BehaviorLog,
-    GroupObjective,
-    FairnessConfig,
-    LiveContext,
-    CoverageReport,
+    SensitivityKind,
+    SensitivityLevel,
+    Stop,
+    StopKind,
+    # Base types
+    TimeWindow,
 )
-
 
 # ============================================================================
 # FIXTURES
@@ -73,7 +59,7 @@ def aware_datetime():
 @pytest.fixture
 def naive_datetime():
     """Naive datetime (should fail validation)."""
-    return datetime(2026, 9, 15, 10, 0, 0)
+    return datetime(2026, 9, 15, 10, 0, 0)  # noqa: DTZ001 -- deliberately naive, for negative tests
 
 
 @pytest.fixture
@@ -584,7 +570,6 @@ class TestJsonRoundTrip:
 
     def test_event_json_round_trip(self, aware_datetime):
         """Event serializes and deserializes correctly."""
-        from parkmind.core.contracts import EventType
 
         original = Event(
             event_id="ev1",
@@ -596,8 +581,7 @@ class TestJsonRoundTrip:
             timestamp=aware_datetime,
         )
 
-        # Serialize to JSON dict
-        json_dict = original.model_dump()
+        # Serialize to JSON
         json_str = original.model_dump_json()
 
         # Deserialize back
@@ -642,7 +626,6 @@ class TestParkModels:
 
     def test_park_valid(self, aware_datetime):
         """Create valid Park."""
-        from parkmind.core.contracts import Park
 
         park = Park(
             park_id="mk",
@@ -659,7 +642,6 @@ class TestEventEnhancements:
 
     def test_event_with_impact_fields(self, aware_datetime):
         """Event captures impact metrics."""
-        from parkmind.core.contracts import EventType
 
         event = Event(
             event_id="ev2",
