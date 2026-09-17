@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "An agentic AI concierge that plans a guest's day at a theme park"
 authors = ["Johanna Andrea <johanna@example.com>", "Sebastián Toro <sebastian@example.com>", "Santiago Isaza <santiago@example.com>"]
 readme = "README.md"
+packages = [{include = "parkmind", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.12.9"
@@ -17,6 +18,7 @@ psycopg = {extras = ["binary"], version = ">=3.2"}
 python-dotenv = ">=1.0"
 # Observability
 langfuse = ">=2.0"
+langgraph-checkpoint-postgres = "^3.1.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0"
