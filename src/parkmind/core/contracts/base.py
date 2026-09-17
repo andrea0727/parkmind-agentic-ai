@@ -16,18 +16,29 @@ from zoneinfo import ZoneInfo
 PARK_TZ = ZoneInfo("America/New_York")
 
 
+def _check_datetime_aware(value: Any, path: str = "") -> None:
+    """Recursively check that all datetime objects are timezone-aware."""
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            raise ValueError(
+                f"{path}: datetime must be timezone-aware (America/New_York)"
+            )
+    elif isinstance(value, dict):
+        for k, v in value.items():
+            _check_datetime_aware(v, f"{path}[{k!r}]" if path else str(k))
+    elif isinstance(value, (list, tuple)):
+        for i, v in enumerate(value):
+            _check_datetime_aware(v, f"{path}[{i}]" if path else f"[{i}]")
+
+
 class ParkMindBaseModel(BaseModel):
     """Base model ensuring timezone awareness for all datetime fields."""
 
     @model_validator(mode="after")
     def validate_all_datetimes_aware(self) -> "ParkMindBaseModel":
-        """All datetime fields must be timezone-aware in America/New_York."""
+        """All datetime fields must be timezone-aware in America/New_York, including nested in collections."""
         for field_name, field_value in self:
-            if isinstance(field_value, datetime):
-                if field_value.tzinfo is None:
-                    raise ValueError(
-                        f"{field_name}: datetime must be timezone-aware (America/New_York)"
-                    )
+            _check_datetime_aware(field_value, field_name)
         return self
 
 

@@ -26,6 +26,7 @@ from parkmind.core.contracts import (
     BehaviorEventType,
     RejectionReason,
     EventSeverity,
+    EventType,
     ApprovalStatus,
     PreferenceSource,
     GuestRole,
@@ -41,6 +42,8 @@ from parkmind.core.contracts import (
     GuestProfile,
     AccessibilityRequirements,
     PartyConstraints,
+    Attraction,
+    Park,
     Stop,
     Plan,
     PlanExecutionState,
@@ -569,3 +572,124 @@ class TestInvariantEnforcement:
         # They are independent aggregates
         assert not hasattr(profile, "accessibility_requirements")
         assert accessibility.daily_walking_limit_minutes == 90
+
+
+# ============================================================================
+# JSON ROUND-TRIP TESTS
+# ============================================================================
+
+
+class TestJsonRoundTrip:
+    """Verify all contracts serialize/deserialize through JSON."""
+
+    def test_event_json_round_trip(self, aware_datetime):
+        """Event serializes and deserializes correctly."""
+        from parkmind.core.contracts import EventType
+
+        original = Event(
+            event_id="ev1",
+            type=EventType.ATTRACTION_DOWN,
+            source=EventSource.MONITOR,
+            attraction_id="attr1",
+            severity=EventSeverity.HIGH,
+            confidence=0.9,
+            timestamp=aware_datetime,
+        )
+
+        # Serialize to JSON dict
+        json_dict = original.model_dump()
+        json_str = original.model_dump_json()
+
+        # Deserialize back
+        restored = Event.model_validate_json(json_str)
+
+        assert restored.event_id == original.event_id
+        assert restored.type == original.type
+        assert restored.timestamp == original.timestamp
+
+    def test_accessibility_requirements_json_round_trip(self, aware_datetime):
+        """AccessibilityRequirements with retention_policy Literal survives round-trip."""
+        original = AccessibilityRequirements(
+            guest_id="g1",
+            daily_walking_limit_minutes=90,
+            mobility_requirements=[MobilityRequirement.WHEELCHAIR],
+            consent=True,
+            retention_policy="session_only",
+        )
+
+        json_str = original.model_dump_json()
+        restored = AccessibilityRequirements.model_validate_json(json_str)
+
+        assert restored.retention_policy == "session_only"
+        assert restored.daily_walking_limit_minutes == 90
+
+
+class TestParkModels:
+    """Test Attraction and Park infrastructure models."""
+
+    def test_attraction_valid(self):
+        """Create valid Attraction."""
+        attraction = Attraction(
+            node_id="splash",
+            name="Splash Mountain",
+            category=AttractionCategory.WATER,
+            height_restriction_cm=107,
+            typical_wait_minutes=45,
+            outdoor=True,
+        )
+        assert attraction.node_id == "splash"
+        assert attraction.outdoor is True
+
+    def test_park_valid(self, aware_datetime):
+        """Create valid Park."""
+        from parkmind.core.contracts import Park
+
+        park = Park(
+            park_id="mk",
+            name="Magic Kingdom",
+            opening_time=aware_datetime.replace(hour=9, minute=0),
+            closing_time=aware_datetime.replace(hour=23, minute=0),
+            outdoor=False,
+        )
+        assert park.park_id == "mk"
+
+
+class TestEventEnhancements:
+    """Test Event with new delta/minutes_behind/affected_hours fields."""
+
+    def test_event_with_impact_fields(self, aware_datetime):
+        """Event captures impact metrics."""
+        from parkmind.core.contracts import EventType
+
+        event = Event(
+            event_id="ev2",
+            type=EventType.WAIT_SPIKE,
+            source=EventSource.MONITOR,
+            attraction_id="attr2",
+            severity=EventSeverity.MEDIUM,
+            confidence=0.8,
+            timestamp=aware_datetime,
+            delta_minutes=30,
+            minutes_behind=15,
+            affected_hours=2.5,
+        )
+
+        assert event.delta_minutes == 30
+        assert event.minutes_behind == 15
+        assert event.affected_hours == 2.5
+
+
+class TestExecutionStateEnhancements:
+    """Test PlanExecutionState with remaining walking budget."""
+
+    def test_plan_execution_state_walking_budget(self, aware_datetime):
+        """PlanExecutionState tracks remaining walking minutes."""
+        state = PlanExecutionState(
+            plan_id="plan1",
+            completed_stop_ids=["stop1", "stop2"],
+            as_of=aware_datetime,
+            walking_minutes_consumed={"g1": 120.5},
+            remaining_walking_cap_minutes={"g1": 79.5},
+        )
+
+        assert state.remaining_walking_cap_minutes["g1"] == 79.5

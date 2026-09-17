@@ -8,7 +8,7 @@ All timestamps are timezone-aware (America/New_York).
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .base import (
@@ -160,9 +160,7 @@ class AccessibilityRequirements(ParkMindBaseModel):
     heat_sensitivity: bool = False
     ride_restrictions: list[RideRestriction] = Field(default_factory=list)
     consent: bool  # Explicit consent required before persisting
-    retention_policy: str = Field(
-        default="session_only"
-    )  # "session_only" or "persisted"
+    retention_policy: Literal["session_only", "persisted"] = "session_only"
 
     @model_validator(mode="after")
     def check_consent_required(self) -> "AccessibilityRequirements":
@@ -204,6 +202,45 @@ class PartyConstraints(ParkMindBaseModel):
         default=None, ge=0
     )  # Optional global constraint (rule 6)
     constraints_version: int
+
+
+# ============================================================================
+# PARK INFRASTRUCTURE
+# ============================================================================
+
+
+class Attraction(ParkMindBaseModel):
+    """
+    Single attraction metadata from park data source.
+
+    Immutable park topology — loaded from ThemeparksWiki.
+    Used for routing, constraint checking, and preference scoring.
+
+    §33
+    """
+
+    node_id: str
+    name: str
+    category: AttractionCategory
+    height_restriction_cm: int | None = Field(default=None, ge=0)
+    typical_wait_minutes: int = Field(ge=0)
+    outdoor: bool = False
+
+
+class Park(ParkMindBaseModel):
+    """
+    Park metadata and operating window.
+
+    Immutable park-level facts from ThemeparksWiki.
+
+    §33
+    """
+
+    park_id: str
+    name: str
+    opening_time: datetime
+    closing_time: datetime
+    outdoor: bool = False
 
 
 class Stop(ParkMindBaseModel):
@@ -276,6 +313,9 @@ class PlanExecutionState(ParkMindBaseModel):
     walking_minutes_consumed: dict[str, float] = Field(
         default_factory=dict
     )  # Per guest
+    remaining_walking_cap_minutes: dict[str, float] = Field(
+        default_factory=dict
+    )  # Per guest, remaining budget for GUEST_FATIGUE detection
 
 
 # ============================================================================
@@ -364,13 +404,16 @@ class Event(ParkMindBaseModel):
     confidence: float = Field(ge=0, le=1)
     timestamp: datetime
     requires_replan: bool | None = None  # Set by EventPolicy
+    delta_minutes: int | None = None  # Minutes of impact (e.g., wait time increase)
+    minutes_behind: int | None = None  # How far behind schedule
+    affected_hours: float | None = None  # Estimated hours of visitor impact
 
     @model_validator(mode="after")
     def validate_event_fields(self) -> "Event":
         """Validate event-type-specific fields."""
-        if self.type in ("ATTRACTION_DOWN", "WAIT_SPIKE") and not self.attraction_id:
+        if self.type in (EventType.ATTRACTION_DOWN, EventType.WAIT_SPIKE) and not self.attraction_id:
             raise ValueError(f"{self.type} requires attraction_id")
-        if self.type in ("GUEST_FATIGUE",) and not self.guest_id:
+        if self.type == EventType.GUEST_FATIGUE and not self.guest_id:
             raise ValueError(f"{self.type} requires guest_id")
         return self
 
@@ -443,7 +486,7 @@ class BehaviorEntry(ParkMindBaseModel):
     event_type: BehaviorEventType
     proposal_id: str | None = None
     plan_id: str | None = None
-    decision: str | None = None  # ACCEPTED, REJECTED, EDITED
+    decision: Literal["ACCEPTED", "REJECTED", "EDITED"] | None = None
     rejection_reason: RejectionReason | None = None
     attraction_ids: list[str] = Field(default_factory=list)
     timestamp: datetime
