@@ -8,12 +8,11 @@ Handles:
 """
 
 from datetime import datetime
-from typing import Any, TYPE_CHECKING
+from typing import Any
 from pydantic import BaseModel, field_validator, model_validator, Field
 from zoneinfo import ZoneInfo
 
-if TYPE_CHECKING:
-    from .enums import RuleId
+from .enums import RuleId
 
 # Park timezone (reference: Magic Kingdom, Walt Disney World)
 PARK_TZ = ZoneInfo("America/New_York")
@@ -116,19 +115,6 @@ class CoverageReport(ParkMindBaseModel):
     coverage_gaps: list[str] = Field(default_factory=list)  # what's missing
 
 
-class CheckResult(ParkMindBaseModel):
-    """
-    Result of ConstraintChecker validation.
-
-    Governs whether a plan passes the gate or triggers re-solve.
-    §20
-    """
-
-    valid: bool
-    violations: list[dict[str, Any]] = Field(default_factory=list)
-    # Each violation: {rule: RuleId, message: str, stop_id: str | None, suggestion: str | None}
-
-
 class ConstraintViolation(ParkMindBaseModel):
     """
     Typed constraint violation from ConstraintChecker.
@@ -139,10 +125,22 @@ class ConstraintViolation(ParkMindBaseModel):
     §20
     """
 
-    rule: str  # RuleId value as string for cross-package compatibility
+    rule: RuleId
     message: str
     stop_id: str | None = None
     suggestion: str | None = None
+
+
+class CheckResult(ParkMindBaseModel):
+    """
+    Result of ConstraintChecker validation.
+
+    Governs whether a plan passes the gate or triggers re-solve.
+    §20
+    """
+
+    valid: bool
+    violations: list[ConstraintViolation] = Field(default_factory=list)
 
 
 class PlanDiff(ParkMindBaseModel):
