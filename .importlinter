@@ -2,26 +2,28 @@
 root_package = parkmind
 include_external_packages = True
 
-# Boundary contract per project-folder-structure.md (baseline v2, "Boundary contract" section)
-# and CLAUDE.local.md "Non-negotiable boundaries":
+# Boundary contract per project-folder-structure.md (baseline v2, "Boundary contract" section,
+# updated by the [v2.1 · decided 2026-09-17] core/contracts/ decision) and CLAUDE.local.md
+# "Non-negotiable boundaries":
 #
-#   models/, services/ports/, services/planning/, services/personalization/, services/simulator/
+#   core/contracts/, services/ports/, services/planning/, services/personalization/,
+#   services/simulator/
 #       must NOT import:
 #       services/clients, services/use_cases, graph, agents, tools, api, ui,
 #       langgraph, mcp, fastapi, streamlit, psycopg/sqlalchemy, any LLM SDK
 #
 #   services/use_cases/     may import ports + planning + personalization + clients
-#   graph/, tools/, api/    may import use_cases and models only
-#   agents/                 may import models, use_cases, tools.registry, LLM SDK
+#   graph/, tools/, api/    may import use_cases and core.contracts only
+#   agents/                 may import core.contracts, use_cases, tools.registry, LLM SDK
 #
 # Only the paths that currently exist in src/parkmind are listed as modules below;
-# models/, services/ports/ and services/simulator/ will be added to this contract
-# as they are created (P0-05 and later).
+# services/ports/ and services/simulator/ will be added to this contract as they are created.
 
 [importlinter:contract:core-forbidden-imports]
 name = Deterministic core never imports adapters, frameworks or DB drivers
 type = forbidden
 source_modules =
+    parkmind.core.contracts
     parkmind.services.planning
     parkmind.services.personalization
 forbidden_modules =
@@ -54,7 +56,7 @@ forbidden_modules =
     parkmind.ui
 
 [importlinter:contract:graph-tools-forbidden-imports]
-name = graph and tools import use_cases and models only, never planning/personalization/clients directly
+name = graph and tools import use_cases and core.contracts only, never planning/personalization/clients directly
 type = forbidden
 source_modules =
     parkmind.graph
@@ -65,7 +67,7 @@ forbidden_modules =
     parkmind.services.clients
 
 [importlinter:contract:agents-forbidden-imports]
-name = agents import models, use_cases, tools.registry and the LLM SDK only, never planning/personalization/clients directly
+name = agents import core.contracts, use_cases, tools.registry and the LLM SDK only, never planning/personalization/clients directly
 type = forbidden
 source_modules =
     parkmind.agents
