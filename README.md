@@ -37,7 +37,8 @@ parkmind-agentic-ai/
 │       │                        # subpackages cost mypy/coverage/pytest
 │       │                        # friction and buy nothing [P0-04]
 │       │
-│       ├── models/              # Pydantic contracts — data only, no logic
+│       ├── core/                # deterministic core — no framework imports
+│       │   └── contracts/       # Pydantic domain models — data only, no logic
 │       │                        # PartyConstraints, GuestProfile, Plan,
 │       │                        # Event, Proposal, AccessibilityRequirements
 │       │
@@ -84,7 +85,7 @@ parkmind-agentic-ai/
 
 **Why this shape:** `services/` never imports from `agents/`, `graph/`,
 `tools/`, or `ui/` — only the reverse. That's what lets everyone work in
-parallel: once `models/` is frozen (it already is), the core team builds
+parallel: once `core/contracts/` is frozen (it already is), the core team builds
 `services/planning/` against real logic while the agent/personalization
 track builds against those same contracts using stubs, without either side
 blocking the other.
@@ -95,7 +96,7 @@ dropped (P0-04): they cost `mypy`/`import-linter`/`pytest` friction (e.g.
 `import-linter` can't resolve an implicit namespace package as a module) and
 buy nothing here. `src/` still isn't pip-installed as a package; `pytest.ini`
 and `agent.py` both add it to the import path, so
-`from parkmind.models.plan import Plan` works from anywhere without needing
+`from parkmind.core.contracts import Plan` works from anywhere without needing
 `poetry install` to set up an editable install.
 
 ## Team ownership
@@ -105,7 +106,7 @@ and `agent.py` both add it to the import path, so
 | Core / deterministic engine | `services/planning/`, `services/clients/` |
 | Agent / personalization | `agents/`, `graph/`, `services/personalization/`, parts of `services/use_cases/` |
 | Evaluation | `services/evaluation/`, `docs/evaluation/` |
-| Mechanical, well-specified | `services/clients/knowledge_store.py`, `services/planning/constraint_checker.py`, `models/event.py` |
+| Mechanical, well-specified | `services/clients/knowledge_store.py`, `services/planning/constraint_checker.py`, `core/contracts/` |
 
 ## Getting started
 

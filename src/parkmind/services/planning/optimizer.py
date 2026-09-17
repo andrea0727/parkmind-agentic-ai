@@ -3,7 +3,7 @@ Optimizer — builds a candidate Plan given constraints, context and utility
 scores. Month-1 scope: GreedyInsertionOptimizer only.
 """
 
-from parkmind.models.plan import Plan
+from parkmind.core.contracts import Plan
 
 
 class GreedyInsertionOptimizer:

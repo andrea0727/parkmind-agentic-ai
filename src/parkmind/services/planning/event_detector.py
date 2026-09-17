@@ -5,7 +5,7 @@ snapshots lives in services/use_cases/monitor_events.py — keep that I/O
 concern separate from this pure logic.
 """
 
-from parkmind.models.event import Event
+from parkmind.core.contracts import Event
 
 
 def detect_events(previous_snapshot, current_snapshot) -> list[Event]:
