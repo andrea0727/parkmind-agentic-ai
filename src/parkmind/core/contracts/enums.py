@@ -73,7 +73,7 @@ class RideRestriction(str, Enum):
     NOT_RECOMMENDED_BACK_NECK = "NOT_RECOMMENDED_BACK_NECK"
     NOT_RECOMMENDED_EXPECTANT = "NOT_RECOMMENDED_EXPECTANT"
     REQUIRES_TRANSFER_FROM_WHEELCHAIR = "REQUIRES_TRANSFER_FROM_WHEELCHAIR"
-    NO_SERVICE_ANIMALS = "NO_SERVICE_ANIMALS"
+    USES_SERVICE_ANIMAL = "USES_SERVICE_ANIMAL"
 
 
 # Event sourcing
@@ -108,6 +108,16 @@ class EventSeverity(str, Enum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
+
+
+# Event types — closed set of monitor events that trigger replanning
+class EventType(str, Enum):
+    ATTRACTION_DOWN = "ATTRACTION_DOWN"
+    WAIT_SPIKE = "WAIT_SPIKE"
+    RAIN_INCOMING = "RAIN_INCOMING"
+    BEHIND_SCHEDULE = "BEHIND_SCHEDULE"
+    GUEST_FATIGUE = "GUEST_FATIGUE"
+    PARTY_RELOCATED = "PARTY_RELOCATED"
 
 
 # Proposal approval state — manages the unapproved-plan invariant. [§23]
@@ -153,3 +163,18 @@ class DataSource(str, Enum):
     OPEN_METEO = "open_meteo"
     CACHE = "cache"
     HISTORICAL = "historical"
+
+
+# Constraint rule identifiers — closed set of 11 rules from ConstraintChecker. [§20]
+class RuleId(str, Enum):
+    OPENING_HOURS = "OPENING_HOURS"
+    HEIGHT_RESTRICTIONS = "HEIGHT_RESTRICTIONS"
+    SHOW_SCHEDULE = "SHOW_SCHEDULE"
+    MUST_DO_ATTRACTIONS = "MUST_DO_ATTRACTIONS"
+    AVOIDED_ATTRACTIONS = "AVOIDED_ATTRACTIONS"
+    WALKING_LIMIT = "WALKING_LIMIT"
+    LUNCH_WINDOW = "LUNCH_WINDOW"
+    DEPARTURE_TIME = "DEPARTURE_TIME"
+    ACCESSIBILITY_MOBILITY = "ACCESSIBILITY_MOBILITY"
+    ACCESSIBILITY_WALKING_HARD = "ACCESSIBILITY_WALKING_HARD"
+    DATA_FRESHNESS = "DATA_FRESHNESS"

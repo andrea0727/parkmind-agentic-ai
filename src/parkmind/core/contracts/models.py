@@ -33,6 +33,7 @@ from .enums import (
     BehaviorEventType,
     RejectionReason,
     EventSeverity,
+    EventType,
     ApprovalStatus,
     PreferenceSource,
     GuestRole,
@@ -338,9 +339,7 @@ class LiveContext(ParkMindBaseModel):
         default_factory=dict
     )  # attraction_id -> [times]
     weather: list["WeatherHour"] = Field(default_factory=list)
-    accessibility_results: dict[tuple[str, str], "AccessibilityCheck"] = Field(
-        default_factory=dict
-    )  # (attraction_id, guest_id) -> result
+    accessibility_results: list["AccessibilityCheck"] = Field(default_factory=list)
     coverage: CoverageReport
     tool_trace: list[ToolCall] = Field(default_factory=list)
 
@@ -356,7 +355,7 @@ class Event(ParkMindBaseModel):
     """
 
     event_id: str  # Idempotency key across sources
-    type: str  # ATTRACTION_DOWN, WAIT_SPIKE, RAIN_INCOMING, BEHIND_SCHEDULE, GUEST_FATIGUE, PARTY_RELOCATED
+    type: EventType
     source: EventSource
     attraction_id: str | None = None
     guest_id: str | None = None

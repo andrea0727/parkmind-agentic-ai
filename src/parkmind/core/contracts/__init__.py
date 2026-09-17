@@ -20,12 +20,14 @@ from .enums import (
     BehaviorEventType,
     RejectionReason,
     EventSeverity,
+    EventType,
     ApprovalStatus,
     PreferenceSource,
     GuestRole,
     PlanningPace,
     PlanningStyle,
     DataSource,
+    RuleId,
 )
 
 # Base types
@@ -77,12 +79,14 @@ __all__ = [
     "BehaviorEventType",
     "RejectionReason",
     "EventSeverity",
+    "EventType",
     "ApprovalStatus",
     "PreferenceSource",
     "GuestRole",
     "PlanningPace",
     "PlanningStyle",
     "DataSource",
+    "RuleId",
     # Base
     "ParkMindBaseModel",
     "TimeWindow",
