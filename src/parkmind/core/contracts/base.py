@@ -8,9 +8,12 @@ Handles:
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from pydantic import BaseModel, field_validator, model_validator, Field
 from zoneinfo import ZoneInfo
+
+if TYPE_CHECKING:
+    from .enums import RuleId
 
 # Park timezone (reference: Magic Kingdom, Walt Disney World)
 PARK_TZ = ZoneInfo("America/New_York")
@@ -123,7 +126,23 @@ class CheckResult(ParkMindBaseModel):
 
     valid: bool
     violations: list[dict[str, Any]] = Field(default_factory=list)
-    # Each violation: {rule, message, stop_id, suggestion}
+    # Each violation: {rule: RuleId, message: str, stop_id: str | None, suggestion: str | None}
+
+
+class ConstraintViolation(ParkMindBaseModel):
+    """
+    Typed constraint violation from ConstraintChecker.
+
+    Captures which rule failed, why, where, and suggested repair.
+    Used by EventPolicy and agent explanations.
+
+    §20
+    """
+
+    rule: str  # RuleId value as string for cross-package compatibility
+    message: str
+    stop_id: str | None = None
+    suggestion: str | None = None
 
 
 class PlanDiff(ParkMindBaseModel):

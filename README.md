@@ -92,7 +92,7 @@ blocking the other.
 **One `__init__.py`, on purpose.** Python 3 doesn't require an `__init__.py`
 in every folder — namespace packages (PEP 420) handle it automatically, as
 long as `src/` is on the import path. `pytest.ini` and `agent.py` both add
-`src/` to the path, so `from parkmind.models.plan import Plan` works from
+`src/` to the path, so `from parkmind.core.contracts import Plan` works from
 anywhere without ceremony.
 
 ## Team ownership
@@ -102,7 +102,7 @@ anywhere without ceremony.
 | Core / deterministic engine | `services/planning/`, `services/clients/` |
 | Agent / personalization | `agents/`, `graph/`, `services/personalization/`, parts of `services/use_cases/` |
 | Evaluation | `services/evaluation/`, `docs/evaluation/` |
-| Mechanical, well-specified | `services/clients/knowledge_store.py`, `services/planning/constraint_checker.py`, `models/event.py` |
+| Mechanical, well-specified | `services/clients/knowledge_store.py`, `services/planning/constraint_checker.py`, `core/contracts/` |
 
 ## Getting started
 
