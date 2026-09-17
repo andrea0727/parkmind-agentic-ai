@@ -1,0 +1,48 @@
+name: CI
+
+# P0-04: every pull request runs automated checks (formatting/linting, type
+# checking, unit + basic integration tests, import-boundary check). A failing
+# check fails the job -- no step below uses continue-on-error.
+#
+# No docker-compose/Postgres service yet: no current test connects to a real
+# database (see tests/integration -- the DB-backed ones are still TODO stubs).
+# Add a `services: postgres:` block here once one of those is un-skipped.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Lint (ruff)
+        run: poetry run ruff check .
+
+      - name: Type check (mypy)
+        run: poetry run mypy src
+
+      - name: Import-boundary check (import-linter)
+        # PYTHONPATH=src mirrors pytest.ini's `pythonpath = src` -- the
+        # package isn't pip-installed, so lint-imports needs the same hint
+        # pytest gets automatically.
+        run: poetry run lint-imports
+        env:
+          PYTHONPATH: src
+
+      - name: Tests (pytest)
+        run: poetry run pytest
