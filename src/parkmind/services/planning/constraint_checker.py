@@ -12,7 +12,7 @@ Month-1 scope, 10 rules:
 Rules 9-10 must NEVER become utility penalties in the optimizer.
 """
 
-from parkmind.models.plan import Plan
+from parkmind.core.contracts import Plan
 
 
 class CheckResult:

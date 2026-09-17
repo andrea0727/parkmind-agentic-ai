@@ -36,7 +36,8 @@ parkmind-agentic-ai/
 │       │                        # every subfolder below is a namespace
 │       │                        # package (PEP 420), nothing more needed
 │       │
-│       ├── models/              # Pydantic contracts — data only, no logic
+│       ├── core/                # deterministic core — no framework imports
+│       │   └── contracts/       # Pydantic domain models — data only, no logic
 │       │                        # PartyConstraints, GuestProfile, Plan,
 │       │                        # Event, Proposal, AccessibilityRequirements
 │       │
@@ -83,7 +84,7 @@ parkmind-agentic-ai/
 
 **Why this shape:** `services/` never imports from `agents/`, `graph/`,
 `tools/`, or `ui/` — only the reverse. That's what lets everyone work in
-parallel: once `models/` is frozen (it already is), the core team builds
+parallel: once `core/contracts/` is frozen (it already is), the core team builds
 `services/planning/` against real logic while the agent/personalization
 track builds against those same contracts using stubs, without either side
 blocking the other.
@@ -91,7 +92,7 @@ blocking the other.
 **One `__init__.py`, on purpose.** Python 3 doesn't require an `__init__.py`
 in every folder — namespace packages (PEP 420) handle it automatically, as
 long as `src/` is on the import path. `pytest.ini` and `agent.py` both add
-`src/` to the path, so `from parkmind.models.plan import Plan` works from
+`src/` to the path, so `from parkmind.core.contracts import Plan` works from
 anywhere without ceremony.
 
 ## Team ownership
@@ -101,7 +102,7 @@ anywhere without ceremony.
 | Core / deterministic engine | `services/planning/`, `services/clients/` |
 | Agent / personalization | `agents/`, `graph/`, `services/personalization/`, parts of `services/use_cases/` |
 | Evaluation | `services/evaluation/`, `docs/evaluation/` |
-| Mechanical, well-specified | `services/clients/knowledge_store.py`, `services/planning/constraint_checker.py`, `models/event.py` |
+| Mechanical, well-specified | `services/clients/knowledge_store.py`, `services/planning/constraint_checker.py`, `core/contracts/` |
 
 ## Getting started
 
