@@ -9,7 +9,7 @@ Month-1 scope (deliberately simple — see docs/decisions/scope.md):
 This is NOT a full fair-division solver — that's explicitly out of scope.
 """
 
-from parkmind.models.guest_profile import GuestProfile
+from parkmind.core.contracts import GuestProfile
 
 
 class ResolvedPreferences:

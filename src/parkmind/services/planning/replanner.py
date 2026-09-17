@@ -3,8 +3,7 @@ Replanner — recomputes a plan after a significant event, minimizing
 changes to what the guest already approved.
 """
 
-from parkmind.models.plan import Plan
-from parkmind.models.event import Event
+from parkmind.core.contracts import Plan, Event
 
 
 class Replanner:
