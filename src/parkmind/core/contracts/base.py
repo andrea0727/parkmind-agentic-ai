@@ -9,8 +9,9 @@ Handles:
 
 from datetime import datetime
 from typing import Any
-from pydantic import BaseModel, field_validator, model_validator, Field
 from zoneinfo import ZoneInfo
+
+from pydantic import BaseModel, Field, model_validator
 
 from .enums import RuleId
 
