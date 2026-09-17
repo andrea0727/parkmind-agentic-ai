@@ -8,40 +8,42 @@ All timestamps are timezone-aware (America/New_York).
 """
 
 from datetime import datetime
-from typing import Any, Literal
-from pydantic import BaseModel, Field, field_validator, model_validator
+from typing import Literal
+
+from pydantic import Field, field_validator, model_validator
 
 from .base import (
-    ParkMindBaseModel,
-    TimeWindow,
+    AccessibilityCheck,
     CoverageReport,
-    ToolCall,
-    CheckResult,
-    PlanDiff,
-    HardConstraintSet,
     EventThresholds,
+    HardConstraintSet,
+    ParkMindBaseModel,
+    PlanDiff,
+    TimeWindow,
+    ToolCall,
+    WaitEstimate,
+    WeatherHour,
 )
 from .enums import (
-    AttractionStatus,
-    StopKind,
-    SensitivityKind,
-    SensitivityLevel,
-    AttractionCategory,
-    MobilityRequirement,
-    RideRestriction,
-    EventSource,
-    BehaviorEventType,
-    RejectionReason,
-    EventSeverity,
-    EventType,
     ApprovalStatus,
-    PreferenceSource,
+    AttractionCategory,
+    AttractionStatus,
+    BehaviorEventType,
+    DataSource,
+    EventSeverity,
+    EventSource,
+    EventType,
     GuestRole,
+    MobilityRequirement,
     PlanningPace,
     PlanningStyle,
-    DataSource,
+    PreferenceSource,
+    RejectionReason,
+    RideRestriction,
+    SensitivityKind,
+    SensitivityLevel,
+    StopKind,
 )
-
 
 # ============================================================================
 # IDENTITY & PROFILE
@@ -373,13 +375,13 @@ class LiveContext(ParkMindBaseModel):
 
     snapshot_id: str
     retrieved_at: datetime
-    waits: dict[str, "WaitEstimate"] = Field(default_factory=dict)
+    waits: dict[str, WaitEstimate] = Field(default_factory=dict)
     statuses: dict[str, AttractionStatus] = Field(default_factory=dict)
     showtimes: dict[str, list[datetime]] = Field(
         default_factory=dict
     )  # attraction_id -> [times]
-    weather: list["WeatherHour"] = Field(default_factory=list)
-    accessibility_results: list["AccessibilityCheck"] = Field(default_factory=list)
+    weather: list[WeatherHour] = Field(default_factory=list)
+    accessibility_results: list[AccessibilityCheck] = Field(default_factory=list)
     coverage: CoverageReport
     tool_trace: list[ToolCall] = Field(default_factory=list)
 

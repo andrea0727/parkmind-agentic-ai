@@ -9,10 +9,11 @@ Handles:
 
 from datetime import datetime
 from typing import Any
-from pydantic import BaseModel, field_validator, model_validator, Field
 from zoneinfo import ZoneInfo
 
-from .enums import RuleId
+from pydantic import BaseModel, Field, model_validator
+
+from .enums import AttractionStatus, RuleId
 
 # Park timezone (reference: Magic Kingdom, Walt Disney World)
 PARK_TZ = ZoneInfo("America/New_York")
@@ -69,7 +70,7 @@ class WaitEstimate(ParkMindBaseModel):
 
     attraction_id: str
     wait_minutes: float = Field(ge=0)
-    status: str  # AttractionStatus (avoid circular import)
+    status: AttractionStatus
 
 
 class WeatherHour(ParkMindBaseModel):
