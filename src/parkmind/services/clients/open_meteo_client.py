@@ -3,19 +3,22 @@ Open-Meteo client — real weather adapter.
 
 Maps external hourly weather forecasts (temperature, precipitation probability,
 WMO weather codes) to the internal WeatherHour domain model, normalizes timezones
-to America/New_York (PARK_TZ), and handles API failures as recoverable data-quality
-conditions.
+to America/New_York (PARK_TZ), implements bounded retries with linear backoff,
+and handles API failures as recoverable data-quality conditions.
 
 API docs: https://open-meteo.com/en/docs
 """
 
+import time
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Self
 
 import httpx
 
 from parkmind.config.settings import settings
 from parkmind.core.contracts import PARK_TZ, WeatherHour
+
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 class OpenMeteoClientError(Exception):
@@ -72,6 +75,7 @@ class OpenMeteoClient:
     """
     HTTP Client adapter for Open-Meteo Weather API.
 
+    Implements WeatherPort structural protocol.
     Fetches hourly forecast, normalizes timestamps to park timezone,
     and maps values to Pydantic WeatherHour models.
     """
@@ -82,23 +86,96 @@ class OpenMeteoClient:
 
     def __init__(
         self,
-        base_url: str | None = None,
+        *,
+        base_url: str = settings.OPEN_METEO_BASE_URL,
+        transport: httpx.BaseTransport | None = None,
         http_client: httpx.Client | None = None,
         timeout: float = 10.0,
+        max_retries: int = 3,
+        backoff_seconds: float = 0.5,
+        default_latitude: float = DEFAULT_LATITUDE,
+        default_longitude: float = DEFAULT_LONGITUDE,
     ) -> None:
-        self.base_url = (base_url or settings.OPEN_METEO_BASE_URL).rstrip("/")
-        self._http_client = http_client
-        self.timeout = timeout
+        self.base_url = base_url.rstrip("/")
+        self.default_latitude = default_latitude
+        self.default_longitude = default_longitude
+        self.max_retries = max_retries
+        self.backoff_seconds = backoff_seconds
+        self._client = http_client or httpx.Client(
+            base_url=self.base_url,
+            transport=transport,
+            timeout=timeout,
+        )
 
-    def _get_client(self) -> httpx.Client:
-        if self._http_client is not None:
-            return self._http_client
-        return httpx.Client(timeout=self.timeout)
+    def close(self) -> None:
+        """Close the underlying HTTP client session."""
+        self._client.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
+
+    def _request(self, endpoint: str, params: dict[str, Any]) -> dict[str, Any]:
+        """
+        Execute an HTTP request with bounded retry and backoff on transient failures.
+        """
+        for attempt in range(1, self.max_retries + 1):
+            is_last_attempt = attempt == self.max_retries
+
+            try:
+                response = self._client.get(endpoint, params=params)
+            except (httpx.TimeoutException, httpx.TransportError) as exc:
+                if is_last_attempt:
+                    raise OpenMeteoClientError(
+                        f"Open-Meteo request failed after {self.max_retries} attempts: {exc}",
+                        original_error=exc,
+                    ) from exc
+                time.sleep(self.backoff_seconds * attempt)
+                continue
+
+            if response.status_code in _RETRYABLE_STATUS_CODES:
+                if is_last_attempt:
+                    raise OpenMeteoClientError(
+                        f"Open-Meteo returned HTTP {response.status_code} after {self.max_retries} attempts",
+                        status_code=response.status_code,
+                    )
+                time.sleep(self.backoff_seconds * attempt)
+                continue
+
+            if response.status_code >= 400:
+                # Open-Meteo 400 format: {"error": true, "reason": "..."}
+                try:
+                    err_payload = response.json()
+                    reason = (
+                        err_payload.get("reason", response.text)
+                        if isinstance(err_payload, dict)
+                        else response.text
+                    )
+                except (ValueError, KeyError, TypeError):
+                    reason = response.text
+
+                raise OpenMeteoClientError(
+                    f"Open-Meteo API returned HTTP {response.status_code}: {reason}",
+                    status_code=response.status_code,
+                )
+
+            try:
+                return response.json()
+            except ValueError as exc:
+                raise OpenMeteoClientError(
+                    f"Malformed non-JSON response from Open-Meteo: {exc}",
+                    status_code=response.status_code,
+                    original_error=exc,
+                ) from exc
+
+        raise AssertionError("unreachable")
 
     def get_hourly_forecast(
         self,
-        latitude: float = DEFAULT_LATITUDE,
-        longitude: float = DEFAULT_LONGITUDE,
+        latitude: float | None = None,
+        longitude: float | None = None,
         start_date: date | datetime | str | None = None,
         end_date: date | datetime | str | None = None,
         forecast_days: int = 1,
@@ -107,8 +184,8 @@ class OpenMeteoClient:
         Fetch hourly weather forecast for specified coordinates and time window.
 
         Args:
-            latitude: Latitude of the theme park.
-            longitude: Longitude of the theme park.
+            latitude: Latitude of the theme park (defaults to default_latitude).
+            longitude: Longitude of the theme park (defaults to default_longitude).
             start_date: Optional start date for forecast range.
             end_date: Optional end date for forecast range.
             forecast_days: Number of forecast days (default 1 if start/end not provided).
@@ -119,9 +196,12 @@ class OpenMeteoClient:
         Raises:
             OpenMeteoClientError: If network, HTTP status, or payload parsing fails.
         """
+        lat = latitude if latitude is not None else self.default_latitude
+        lon = longitude if longitude is not None else self.default_longitude
+
         params: dict[str, Any] = {
-            "latitude": latitude,
-            "longitude": longitude,
+            "latitude": lat,
+            "longitude": lon,
             "hourly": "temperature_2m,precipitation_probability,weather_code",
             "temperature_unit": "fahrenheit",
             "timezone": "America/New_York",
@@ -142,41 +222,7 @@ class OpenMeteoClient:
         if not start_date and not end_date:
             params["forecast_days"] = forecast_days
 
-        endpoint = f"{self.base_url}/forecast"
-
-        client = self._get_client()
-        owns_client = self._http_client is None
-
-        try:
-            response = client.get(endpoint, params=params, timeout=self.timeout)
-        except httpx.TimeoutException as e:
-            raise OpenMeteoClientError(
-                f"Open-Meteo API timed out after {self.timeout}s",
-                original_error=e,
-            ) from e
-        except httpx.RequestError as e:
-            raise OpenMeteoClientError(
-                f"Open-Meteo network request failed: {e}",
-                original_error=e,
-            ) from e
-        finally:
-            if owns_client:
-                client.close()
-
-        if response.status_code != 200:
-            raise OpenMeteoClientError(
-                f"Open-Meteo API returned HTTP {response.status_code}: {response.text}",
-                status_code=response.status_code,
-            )
-
-        try:
-            payload = response.json()
-        except Exception as e:
-            raise OpenMeteoClientError(
-                f"Malformed JSON response from Open-Meteo: {e}",
-                status_code=response.status_code,
-                original_error=e,
-            ) from e
+        payload = self._request("/forecast", params=params)
 
         if not isinstance(payload, dict) or "hourly" not in payload:
             raise OpenMeteoClientError(
@@ -209,8 +255,6 @@ class OpenMeteoClient:
                 else:
                     dt = dt.astimezone(PARK_TZ)
 
-                # Open-Meteo returns precipitation_probability in percent (0..100)
-                # WeatherHour contract requires float in [0.0, 1.0]
                 prob_percent = float(probs[i])
                 prob_normalized = max(0.0, min(1.0, prob_percent / 100.0))
 
@@ -235,46 +279,45 @@ class OpenMeteoClient:
 
     def get_weather(
         self,
-        at_time: datetime | None = None,
-        latitude: float = DEFAULT_LATITUDE,
-        longitude: float = DEFAULT_LONGITUDE,
+        at_time: datetime,
+        latitude: float | None = None,
+        longitude: float | None = None,
     ) -> WeatherHour:
         """
         Fetch weather forecast for a specific timestamp (or closest matching hour).
 
         Args:
-            at_time: Target datetime. If timezone-naive, PARK_TZ is assumed. Defaults to now.
-            latitude: Theme park latitude.
-            longitude: Theme park longitude.
+            at_time: Explicit target datetime. If timezone-naive, PARK_TZ is assumed.
+            latitude: Theme park latitude (defaults to default_latitude).
+            longitude: Theme park longitude (defaults to default_longitude).
 
         Returns:
-            WeatherHour: Closest matching forecast hour.
+            WeatherHour: Closest matching forecast hour on the target date.
+
+        Raises:
+            OpenMeteoClientError: If no data is returned for the requested date.
         """
-        if at_time is None:
-            at_time = datetime.now(PARK_TZ)
-        elif at_time.tzinfo is None:
-            at_time = at_time.replace(tzinfo=PARK_TZ)
+        if at_time.tzinfo is None:
+            normalized_time = at_time.replace(tzinfo=PARK_TZ)
         else:
-            at_time = at_time.astimezone(PARK_TZ)
+            normalized_time = at_time.astimezone(PARK_TZ)
+
+        lat = latitude if latitude is not None else self.default_latitude
+        lon = longitude if longitude is not None else self.default_longitude
 
         hourly = self.get_hourly_forecast(
-            latitude=latitude,
-            longitude=longitude,
-            start_date=at_time.date(),
-            end_date=at_time.date(),
+            latitude=lat,
+            longitude=lon,
+            start_date=normalized_time.date(),
+            end_date=normalized_time.date(),
         )
 
         if not hourly:
-            # Fallback to general forecast if date-bounded query returned empty
-            hourly = self.get_hourly_forecast(latitude=latitude, longitude=longitude)
-
-        if not hourly:
             raise OpenMeteoClientError(
-                "No weather forecast data returned for requested time"
+                f"No hourly weather forecast data available for date {normalized_time.date().isoformat()}"
             )
 
-        # Find closest hour
         closest = min(
-            hourly, key=lambda h: abs((h.timestamp - at_time).total_seconds())
+            hourly, key=lambda h: abs((h.timestamp - normalized_time).total_seconds())
         )
         return closest

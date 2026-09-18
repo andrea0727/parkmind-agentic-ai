@@ -2,12 +2,17 @@
 Unit tests for OpenMeteoClient adapter.
 
 Tests:
-1. Normal response mapping to list[WeatherHour]
-2. Temperature in Fahrenheit mapping
-3. Precipitation probability normalization (0-100% -> 0.0-1.0)
-4. Timezone normalization to America/New_York (PARK_TZ)
-5. WMO weather code interpretation
-6. Recoverable error handling on HTTP 5xx/4xx, timeouts, and malformed responses
+1. Protocol conformance: OpenMeteoClient implements WeatherPort
+2. Normal response mapping to list[WeatherHour]
+3. Temperature in Fahrenheit mapping
+4. Precipitation probability normalization (0-100% -> 0.0-1.0)
+5. Timezone normalization to America/New_York (PARK_TZ)
+6. WMO weather code interpretation
+7. Deterministic get_weather with explicit timestamp
+8. Out-of-range date error handling (no silent fallback)
+9. Bounded retries and linear backoff on 5xx, 429, and timeouts
+10. Contract fidelity for real Open-Meteo HTTP 400 error responses
+11. Malformed payload and mismatched array length validations
 """
 
 from datetime import date, datetime
@@ -21,6 +26,7 @@ from parkmind.services.clients.open_meteo_client import (
     OpenMeteoClientError,
     _map_wmo_code_to_condition,
 )
+from parkmind.services.ports.weather import WeatherPort
 
 
 @pytest.fixture
@@ -57,6 +63,17 @@ def mock_normal_weather_response():
 
 
 # ============================================================================
+# PROTOCOL CONFORMANCE
+# ============================================================================
+
+
+def test_open_meteo_client_satisfies_weather_port():
+    """Verify OpenMeteoClient satisfies the structural WeatherPort protocol."""
+    adapter = OpenMeteoClient()
+    assert isinstance(adapter, WeatherPort)
+
+
+# ============================================================================
 # SUCCESS & MAPPING TESTS
 # ============================================================================
 
@@ -74,8 +91,7 @@ def test_get_hourly_forecast_success(mock_normal_weather_response):
         return httpx.Response(200, json=mock_normal_weather_response)
 
     transport = httpx.MockTransport(custom_handler)
-    client = httpx.Client(transport=transport)
-    adapter = OpenMeteoClient(http_client=client)
+    adapter = OpenMeteoClient(transport=transport)
 
     result = adapter.get_hourly_forecast(latitude=28.4177, longitude=-81.5812)
 
@@ -102,7 +118,7 @@ def test_precipitation_probability_scaling(mock_normal_weather_response):
     transport = httpx.MockTransport(
         lambda req: httpx.Response(200, json=mock_normal_weather_response)
     )
-    adapter = OpenMeteoClient(http_client=httpx.Client(transport=transport))
+    adapter = OpenMeteoClient(transport=transport)
 
     result = adapter.get_hourly_forecast()
     probabilities = [h.precipitation_probability for h in result]
@@ -118,14 +134,13 @@ def test_timezone_normalization(mock_normal_weather_response):
     transport = httpx.MockTransport(
         lambda req: httpx.Response(200, json=mock_normal_weather_response)
     )
-    adapter = OpenMeteoClient(http_client=httpx.Client(transport=transport))
+    adapter = OpenMeteoClient(transport=transport)
 
     result = adapter.get_hourly_forecast()
 
     for h in result:
         assert h.timestamp.tzinfo is not None
         assert str(h.timestamp.tzinfo) == "America/New_York"
-        # Validate Pydantic base model awareness passes without validation error
         assert isinstance(h, WeatherHour)
 
 
@@ -167,7 +182,7 @@ def test_date_range_parameters():
         )
 
     transport = httpx.MockTransport(capture_handler)
-    adapter = OpenMeteoClient(http_client=httpx.Client(transport=transport))
+    adapter = OpenMeteoClient(transport=transport)
 
     start = date(2026, 9, 18)
     end = date(2026, 9, 19)
@@ -178,12 +193,12 @@ def test_date_range_parameters():
     assert captured_params.get("end_date") == "2026-09-19"
 
 
-def test_get_weather_convenience_method(mock_normal_weather_response):
-    """Verify get_weather method returns closest WeatherHour or matching hour."""
+def test_get_weather_explicit_timestamp(mock_normal_weather_response):
+    """Verify get_weather method returns closest WeatherHour for explicit datetime."""
     transport = httpx.MockTransport(
         lambda req: httpx.Response(200, json=mock_normal_weather_response)
     )
-    adapter = OpenMeteoClient(http_client=httpx.Client(transport=transport))
+    adapter = OpenMeteoClient(transport=transport)
 
     target_time = datetime(2026, 9, 17, 11, 15, tzinfo=PARK_TZ)
     weather = adapter.get_weather(at_time=target_time)
@@ -194,52 +209,131 @@ def test_get_weather_convenience_method(mock_normal_weather_response):
     assert weather.temperature_f == 82.3
 
 
-# ============================================================================
-# ERROR HANDLING & RECOVERABILITY TESTS
-# ============================================================================
-
-
-def test_http_500_error_raises_recoverable_exception():
-    """Verify HTTP 500 error raises OpenMeteoClientError with status_code=500."""
+def test_get_weather_raises_when_date_out_of_range():
+    """Verify get_weather raises OpenMeteoClientError if date query yields empty forecast."""
     transport = httpx.MockTransport(
-        lambda req: httpx.Response(500, text="Internal Server Error")
+        lambda req: httpx.Response(
+            200,
+            json={
+                "hourly": {
+                    "time": [],
+                    "temperature_2m": [],
+                    "precipitation_probability": [],
+                    "weather_code": [],
+                }
+            },
+        )
     )
-    adapter = OpenMeteoClient(http_client=httpx.Client(transport=transport))
+    adapter = OpenMeteoClient(transport=transport)
+
+    future_time = datetime(2026, 12, 1, 12, 0, tzinfo=PARK_TZ)
+    with pytest.raises(OpenMeteoClientError) as exc_info:
+        adapter.get_weather(at_time=future_time)
+
+    assert "no hourly weather forecast data available" in str(exc_info.value).lower()
+
+
+# ============================================================================
+# RETRY & RESILIENCE TESTS
+# ============================================================================
+
+
+def test_retry_on_503_recovers_on_second_attempt(mock_normal_weather_response):
+    """Verify bounded retry recovers when first attempt returns 503 and second succeeds."""
+    call_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(503, text="Service Unavailable")
+        return httpx.Response(200, json=mock_normal_weather_response)
+
+    transport = httpx.MockTransport(handler)
+    adapter = OpenMeteoClient(transport=transport, max_retries=3, backoff_seconds=0.01)
+
+    result = adapter.get_hourly_forecast()
+    assert len(result) == 6
+    assert call_count == 2
+
+
+def test_retry_on_429_rate_limit_recovers(mock_normal_weather_response):
+    """Verify bounded retry handles 429 rate limit and recovers."""
+    call_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return httpx.Response(429, text="Too Many Requests")
+        return httpx.Response(200, json=mock_normal_weather_response)
+
+    transport = httpx.MockTransport(handler)
+    adapter = OpenMeteoClient(transport=transport, max_retries=3, backoff_seconds=0.01)
+
+    result = adapter.get_hourly_forecast()
+    assert len(result) == 6
+    assert call_count == 2
+
+
+def test_retry_exhaustion_raises_open_meteo_client_error():
+    """Verify 3 consecutive 500 responses exhaust retries and raise OpenMeteoClientError."""
+    call_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        return httpx.Response(500, text="Internal Server Error")
+
+    transport = httpx.MockTransport(handler)
+    adapter = OpenMeteoClient(transport=transport, max_retries=3, backoff_seconds=0.01)
 
     with pytest.raises(OpenMeteoClientError) as exc_info:
         adapter.get_hourly_forecast()
 
+    assert call_count == 3
     assert exc_info.value.status_code == 500
-    assert "HTTP 500" in str(exc_info.value)
+    assert "after 3 attempts" in str(exc_info.value)
 
 
-def test_http_503_error_raises_recoverable_exception():
-    """Verify HTTP 503 error raises OpenMeteoClientError with status_code=503."""
-    transport = httpx.MockTransport(
-        lambda req: httpx.Response(503, text="Service Unavailable")
-    )
-    adapter = OpenMeteoClient(http_client=httpx.Client(transport=transport))
+def test_retry_on_timeout_exhaustion():
+    """Verify repeated timeouts exhaust retries and raise OpenMeteoClientError."""
+    call_count = 0
 
-    with pytest.raises(OpenMeteoClientError) as exc_info:
-        adapter.get_hourly_forecast()
-
-    assert exc_info.value.status_code == 503
-
-
-def test_timeout_raises_recoverable_exception():
-    """Verify httpx.TimeoutException raises OpenMeteoClientError."""
-
-    def timeout_handler(request: httpx.Request):
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
         raise httpx.ConnectTimeout("Connection timed out")
 
-    transport = httpx.MockTransport(timeout_handler)
-    adapter = OpenMeteoClient(http_client=httpx.Client(transport=transport))
+    transport = httpx.MockTransport(handler)
+    adapter = OpenMeteoClient(transport=transport, max_retries=3, backoff_seconds=0.01)
 
     with pytest.raises(OpenMeteoClientError) as exc_info:
         adapter.get_hourly_forecast()
 
-    assert "timed out" in str(exc_info.value).lower()
-    assert isinstance(exc_info.value.original_error, httpx.TimeoutException)
+    assert call_count == 3
+    assert "failed after 3 attempts" in str(exc_info.value)
+
+
+# ============================================================================
+# ERROR CONTRACT & PAYLOAD TESTS
+# ============================================================================
+
+
+def test_http_400_with_real_open_meteo_reason():
+    """Verify HTTP 400 error payload parsing includes Open-Meteo's 'reason' in exception."""
+    error_payload = {
+        "error": True,
+        "reason": "Latitude must be in range of -90 to 90. Given: 95.0",
+    }
+    transport = httpx.MockTransport(lambda req: httpx.Response(400, json=error_payload))
+    adapter = OpenMeteoClient(transport=transport, max_retries=1)
+
+    with pytest.raises(OpenMeteoClientError) as exc_info:
+        adapter.get_hourly_forecast(latitude=95.0)
+
+    assert exc_info.value.status_code == 400
+    assert "Latitude must be in range of -90 to 90" in str(exc_info.value)
 
 
 def test_malformed_json_response_raises_recoverable_exception():
@@ -247,7 +341,7 @@ def test_malformed_json_response_raises_recoverable_exception():
     transport = httpx.MockTransport(
         lambda req: httpx.Response(200, text="<html>Error</html>")
     )
-    adapter = OpenMeteoClient(http_client=httpx.Client(transport=transport))
+    adapter = OpenMeteoClient(transport=transport, max_retries=1)
 
     with pytest.raises(OpenMeteoClientError) as exc_info:
         adapter.get_hourly_forecast()
@@ -261,11 +355,9 @@ def test_malformed_json_response_raises_recoverable_exception():
 def test_missing_hourly_field_raises_recoverable_exception():
     """Verify payload missing 'hourly' section raises OpenMeteoClientError."""
     transport = httpx.MockTransport(
-        lambda req: httpx.Response(
-            200, json={"error": True, "reason": "invalid params"}
-        )
+        lambda req: httpx.Response(200, json={"some_other_key": 123})
     )
-    adapter = OpenMeteoClient(http_client=httpx.Client(transport=transport))
+    adapter = OpenMeteoClient(transport=transport, max_retries=1)
 
     with pytest.raises(OpenMeteoClientError) as exc_info:
         adapter.get_hourly_forecast()
@@ -284,7 +376,7 @@ def test_mismatched_array_lengths_raises_recoverable_exception():
         }
     }
     transport = httpx.MockTransport(lambda req: httpx.Response(200, json=payload))
-    adapter = OpenMeteoClient(http_client=httpx.Client(transport=transport))
+    adapter = OpenMeteoClient(transport=transport, max_retries=1)
 
     with pytest.raises(OpenMeteoClientError) as exc_info:
         adapter.get_hourly_forecast()

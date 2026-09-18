@@ -17,9 +17,9 @@ from parkmind.services.clients.open_meteo_client import OpenMeteoClient
 @pytest.fixture
 def fake_weather_hours() -> list[WeatherHour]:
     """Generates 24 hours of mock WeatherHour domain models for testing."""
-    base_time = datetime(2026, 9, 17, 8, 0, tzinfo=PARK_TZ)
+    base_time = datetime(2026, 9, 17, 0, 0, tzinfo=PARK_TZ)
     hours: list[WeatherHour] = []
-    for i in range(12):
+    for i in range(24):
         ts = base_time + timedelta(hours=i)
         # Afternoon rain simulation around 14:00-16:00
         is_rain = 14 <= ts.hour <= 16
@@ -27,7 +27,7 @@ def fake_weather_hours() -> list[WeatherHour]:
             WeatherHour(
                 timestamp=ts,
                 condition="rain" if is_rain else "clear",
-                temperature_f=75.0 + i * 1.5,
+                temperature_f=70.0 + (i if i <= 14 else 28 - i) * 1.2,
                 precipitation_probability=0.85 if is_rain else 0.1,
             )
         )
@@ -56,4 +56,4 @@ def fake_open_meteo_client(fake_weather_hours) -> OpenMeteoClient:
     }
 
     transport = httpx.MockTransport(lambda req: httpx.Response(200, json=mock_payload))
-    return OpenMeteoClient(http_client=httpx.Client(transport=transport))
+    return OpenMeteoClient(transport=transport)
