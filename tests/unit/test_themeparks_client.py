@@ -92,6 +92,24 @@ class TestGetCatalog:
         assert space_mountain.height_restriction_cm == 112
         assert space_mountain.outdoor is False
 
+    def test_malformed_entity_raises_schema_error(self):
+        """A curated ATTRACTION entity missing "name" raises ThemeParksSchemaError,
+        not a raw KeyError."""
+        client = _client(
+            {
+                f"/entity/{PARK_ID}/children": {
+                    "children": [
+                        {
+                            "id": "b2260923-9315-40fd-9c6b-44dd811dbe64",  # Space Mountain
+                            "entityType": "ATTRACTION",
+                        }
+                    ]
+                }
+            }
+        )
+        with pytest.raises(ThemeParksSchemaError):
+            client.get_catalog()
+
 
 # ============================================================================
 # LIVE WAITS
@@ -276,3 +294,32 @@ class TestRetriesAndErrors:
         with pytest.raises(ThemeParksClientError):
             client.get_schedule(date(2026, 9, 16))
         assert calls["count"] == 1
+
+    def test_max_retries_zero_rejected_at_construction(self):
+        with pytest.raises(ValueError, match="max_retries"):
+            ThemeParksClient(park_id=PARK_ID, max_retries=0)
+
+    def test_redirect_raises_schema_error_not_retried(self):
+        calls = {"count": 0}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls["count"] += 1
+            return httpx.Response(301, headers={"location": "/moved"})
+
+        client = ThemeParksClient(
+            park_id=PARK_ID, transport=httpx.MockTransport(handler), backoff_seconds=0
+        )
+        with pytest.raises(ThemeParksSchemaError):
+            client.get_schedule(date(2026, 9, 16))
+        assert calls["count"] == 1
+
+    def test_context_manager_closes_underlying_client(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=_load_fixture("schedule_magic_kingdom_2026-09-16.json"))
+
+        with ThemeParksClient(
+            park_id=PARK_ID, transport=httpx.MockTransport(handler), backoff_seconds=0
+        ) as client:
+            park = client.get_schedule(date(2026, 9, 16))
+            assert isinstance(park, Park)
+        assert client._client.is_closed

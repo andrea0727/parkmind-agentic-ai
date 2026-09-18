@@ -15,7 +15,7 @@ Handling) belongs to a later use_cases/load_context, not here.
 import logging
 import time
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Self
 
 import httpx
 
@@ -66,6 +66,8 @@ class ThemeParksClient:
         park_name: str = "Magic Kingdom Park",
         park_outdoor: bool = True,
     ) -> None:
+        if max_retries < 1:
+            raise ValueError(f"max_retries must be >= 1, got {max_retries}")
         self._park_id = park_id
         self._max_retries = max_retries
         self._backoff_seconds = backoff_seconds
@@ -73,6 +75,15 @@ class ThemeParksClient:
         self._park_name = park_name
         self._park_outdoor = park_outdoor
         self._client = httpx.Client(base_url=base_url, transport=transport, timeout=timeout)
+
+    def close(self) -> None:
+        self._client.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
 
     def get_catalog(self) -> list[Attraction]:
         payload = self._request(f"/entity/{self._park_id}/children")
@@ -92,16 +103,21 @@ class ThemeParksClient:
                     entity.get("name"),
                 )
                 continue
-            attractions.append(
-                Attraction(
-                    node_id=entity_id,
-                    name=entity["name"],
-                    category=metadata["category"],
-                    height_restriction_cm=metadata["height_restriction_cm"],
-                    typical_wait_minutes=metadata["typical_wait_minutes"],
-                    outdoor=metadata["outdoor"],
+            try:
+                attractions.append(
+                    Attraction(
+                        node_id=entity_id,
+                        name=entity["name"],
+                        category=metadata["category"],
+                        height_restriction_cm=metadata["height_restriction_cm"],
+                        typical_wait_minutes=metadata["typical_wait_minutes"],
+                        outdoor=metadata["outdoor"],
+                    )
                 )
-            )
+            except KeyError as exc:
+                raise ThemeParksSchemaError(
+                    f"malformed catalog entity {entity_id!r}: missing {exc}"
+                ) from exc
         return attractions
 
     def get_schedule(self, on_date: date) -> Park:
@@ -238,6 +254,12 @@ class ThemeParksClient:
                     )
                 time.sleep(self._backoff_seconds * attempt)
                 continue
+            if 300 <= response.status_code < 400:
+                # httpx.Client() defaults to follow_redirects=False; a redirect
+                # here means the provider's URL shape changed underneath us.
+                raise ThemeParksSchemaError(
+                    f"{path} returned unhandled redirect (HTTP {response.status_code})"
+                )
             if response.status_code >= 400:
                 raise ThemeParksClientError(
                     f"{path} returned unexpected status {response.status_code}"
