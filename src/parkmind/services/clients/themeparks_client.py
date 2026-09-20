@@ -6,10 +6,23 @@ Implements services.ports.park_data.ParkDataPort structurally (duck-typed,
 no inheritance). Public methods never return raw provider JSON/dicts —
 "Raw provider schema does not leak into core" (P0-07 Done-when).
 
-Retry/error policy is adapter-level only: bounded retries for transient
-failures, distinct exceptions for not-found vs unavailable vs schema
-drift. The "degrade to cached snapshot" fallback chain (§43 Failure
-Handling) belongs to a later use_cases/load_context, not here.
+Retry/error policy is adapter-level only (reference pattern for the other
+services/clients adapters). The "degrade to cached snapshot" fallback chain
+(§43 Failure Handling) belongs to a later use_cases/load_context, not here.
+
+- Attempts: `max_retries` is the TOTAL number of attempts (>= 1, validated).
+  Backoff is linear, `backoff_seconds * attempt`, slept only BETWEEN attempts:
+  with the defaults (3 attempts, 0.5s) the delays are 0.5s then 1.0s.
+- Retried: timeouts, transport errors, and HTTP 429/500/502/503/504. Exhausted
+  retries raise ThemeParksUnavailableError.
+- Never retried: 404 (ThemeParksNotFoundError) and any other 4xx
+  (ThemeParksClientError).
+- Redirects (3xx) are NOT followed and NOT retried: they raise
+  ThemeParksSchemaError. A redirect means the provider's URL contract changed,
+  so we fail closed instead of silently following it (which would hide the
+  drift). Retrying is pointless too: the same URL returns the same redirect.
+- Unrecognized statuses, malformed entities and non-JSON bodies also raise
+  ThemeParksSchemaError; malformed data is never coerced into a best guess.
 """
 
 import logging
@@ -261,8 +274,10 @@ class ThemeParksClient:
                 time.sleep(self._backoff_seconds * attempt)
                 continue
             if 300 <= response.status_code < 400:
-                # httpx.Client() defaults to follow_redirects=False; a redirect
-                # here means the provider's URL shape changed underneath us.
+                # Policy: fail closed. httpx.Client() defaults to
+                # follow_redirects=False, and we keep it: a 3xx means the
+                # provider's URL contract changed. Not retried either: the
+                # same URL would return the same redirect (see module docstring).
                 raise ThemeParksSchemaError(
                     f"{path} returned unhandled redirect (HTTP {response.status_code})"
                 )
