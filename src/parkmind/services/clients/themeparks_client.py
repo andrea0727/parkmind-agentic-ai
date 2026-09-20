@@ -14,6 +14,7 @@ Handling) belongs to a later use_cases/load_context, not here.
 
 import logging
 import time
+from collections.abc import Mapping
 from datetime import date, datetime
 from typing import Any, Self
 
@@ -62,7 +63,7 @@ class ThemeParksClient:
         timeout: float = 10.0,
         max_retries: int = 3,
         backoff_seconds: float = 0.5,
-        attraction_metadata: dict[str, AttractionMetadata] = MAGIC_KINGDOM_ATTRACTION_METADATA,
+        attraction_metadata: Mapping[str, AttractionMetadata] | None = None,
         park_name: str = "Magic Kingdom Park",
         park_outdoor: bool = True,
     ) -> None:
@@ -71,7 +72,12 @@ class ThemeParksClient:
         self._park_id = park_id
         self._max_retries = max_retries
         self._backoff_seconds = backoff_seconds
-        self._attraction_metadata = attraction_metadata
+        # `is None`, not `or`: an intentionally empty table must stay empty.
+        self._attraction_metadata: Mapping[str, AttractionMetadata] = (
+            MAGIC_KINGDOM_ATTRACTION_METADATA
+            if attraction_metadata is None
+            else attraction_metadata
+        )
         self._park_name = park_name
         self._park_outdoor = park_outdoor
         self._client = httpx.Client(base_url=base_url, transport=transport, timeout=timeout)

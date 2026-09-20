@@ -10,7 +10,13 @@ from pathlib import Path
 import httpx
 import pytest
 
-from parkmind.core.contracts import Attraction, AttractionStatus, Park, WaitEstimate
+from parkmind.core.contracts import (
+    Attraction,
+    AttractionCategory,
+    AttractionStatus,
+    Park,
+    WaitEstimate,
+)
 from parkmind.services.clients.themeparks_client import (
     ThemeParksClient,
     ThemeParksClientError,
@@ -91,6 +97,33 @@ class TestGetCatalog:
         assert space_mountain.name == "Space Mountain"
         assert space_mountain.height_restriction_cm == 112
         assert space_mountain.outdoor is False
+
+    def test_explicit_empty_metadata_table_is_not_replaced_by_default(self):
+        """`{}` is falsy; it must not silently fall back to the Magic Kingdom table."""
+        client = _client(
+            {f"/entity/{PARK_ID}/children": _load_fixture("children_magic_kingdom.json")},
+            attraction_metadata={},
+        )
+        assert client.get_catalog() == []
+
+    def test_custom_metadata_table_is_honored(self):
+        space_mountain_id = "b2260923-9315-40fd-9c6b-44dd811dbe64"
+        custom = {
+            space_mountain_id: {
+                "category": AttractionCategory.THRILL,
+                "height_restriction_cm": 100,
+                "typical_wait_minutes": 5,
+                "outdoor": True,
+            }
+        }
+        client = _client(
+            {f"/entity/{PARK_ID}/children": _load_fixture("children_magic_kingdom.json")},
+            attraction_metadata=custom,
+        )
+        catalog = client.get_catalog()
+
+        assert [a.node_id for a in catalog] == [space_mountain_id]
+        assert catalog[0].height_restriction_cm == 100
 
     def test_malformed_entity_raises_schema_error(self):
         """A curated ATTRACTION entity missing "name" raises ThemeParksSchemaError,
