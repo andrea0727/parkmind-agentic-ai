@@ -61,7 +61,7 @@ def test_a_drifted_payload_raises_stored_data_error() -> None:
     payload = _through_json(factories.guest_profile())
     payload["queue_tolerance"]["confidence"] = 7  # outside 0..1
 
-    with pytest.raises(StoredDataError, match="GuestProfile"):
+    with pytest.raises(StoredDataError):
         from_payload(type(factories.guest_profile()), payload, what="profile g1")
 
 

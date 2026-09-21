@@ -118,5 +118,6 @@ def conn(migrated_database_url: str) -> Iterator[psycopg.Connection]:
     try:
         yield connection
     finally:
-        connection.rollback()
-        connection.close()
+        if not connection.closed:  # a test may close it on purpose
+            connection.rollback()
+            connection.close()
