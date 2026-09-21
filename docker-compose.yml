@@ -13,7 +13,8 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      # No init.sql mount: the schema is owned by Alembic (database/migrations/).
+      # Apply it with `poetry run alembic -c database/alembic.ini upgrade head`.
 
 volumes:
   pgdata:
