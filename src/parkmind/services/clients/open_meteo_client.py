@@ -6,10 +6,15 @@ Implements services.ports.weather.WeatherPort structurally (duck-typed,
 no inheritance). Public methods never return raw provider JSON/dicts —
 maps provider forecast data to WeatherHour domain models in PARK_TZ.
 
-Retry/error policy is adapter-level only (reference pattern for services/clients):
+Retry/error policy is adapter-level only (reference pattern for services/clients).
+The retry loop and backoff formula themselves live in the shared
+`services/clients/_retry.py` helper (issue #56); this module owns only the
+policy values and what each outcome means.
+
 - Attempts: `max_retries` is the TOTAL number of attempts (>= 1, validated).
-  Backoff is linear, `backoff_seconds * attempt`, slept only BETWEEN attempts:
-  with the defaults (3 attempts, 0.5s) the delays are 0.5s then 1.0s.
+  Backoff is exponential, `backoff_seconds * 2 ** (attempt - 1)`, slept only
+  BETWEEN attempts: with the defaults (3 attempts, 0.5s) the delays are 0.5s
+  then 1.0s.
 - Retried: timeouts, transport errors, and HTTP 429/500/502/503/504. Exhausted
   retries raise OpenMeteoUnavailableError.
 - Never retried: 404 (OpenMeteoNotFoundError) and any other 4xx
@@ -24,7 +29,6 @@ Retry/error policy is adapter-level only (reference pattern for services/clients
 """
 
 import logging
-import time
 from datetime import date, datetime
 from typing import Any, Self
 
@@ -33,9 +37,14 @@ import httpx
 from parkmind.config.settings import settings
 from parkmind.core.contracts import PARK_TZ, WeatherHour
 
-logger = logging.getLogger(__name__)
+from ._retry import (
+    RETRYABLE_STATUS_CODES,
+    RetriesExhausted,
+    RetryPolicy,
+    send_with_retry,
+)
 
-_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+logger = logging.getLogger(__name__)
 
 
 class OpenMeteoClientError(Exception):
@@ -121,18 +130,23 @@ class OpenMeteoClient:
         default_latitude: float = DEFAULT_LATITUDE,
         default_longitude: float = DEFAULT_LONGITUDE,
     ) -> None:
-        if max_retries < 1:
-            raise ValueError(f"max_retries must be >= 1, got {max_retries}")
         self.base_url = base_url.rstrip("/")
         self.default_latitude = default_latitude
         self.default_longitude = default_longitude
-        self.max_retries = max_retries
-        self.backoff_seconds = backoff_seconds
+        self._retry_policy = RetryPolicy(max_attempts=max_retries, backoff_seconds=backoff_seconds)
         self._client = httpx.Client(
             base_url=self.base_url,
             transport=transport,
             timeout=timeout,
         )
+
+    @property
+    def max_retries(self) -> int:
+        return self._retry_policy.max_attempts
+
+    @property
+    def backoff_seconds(self) -> float:
+        return self._retry_policy.backoff_seconds
 
     def close(self) -> None:
         """Close the underlying HTTP client session."""
@@ -148,71 +162,64 @@ class OpenMeteoClient:
         """
         Execute an HTTP request with bounded retry and backoff on transient failures.
         """
-        for attempt in range(1, self.max_retries + 1):
-            is_last_attempt = attempt == self.max_retries
+        try:
+            response = send_with_retry(
+                lambda: self._client.get(endpoint, params=params),
+                policy=self._retry_policy,
+            )
+        except RetriesExhausted as exc:
+            raise OpenMeteoUnavailableError(
+                f"Open-Meteo request failed after {exc.attempts} attempts: {exc.last_error}",
+                original_error=exc.last_error,
+            ) from exc
 
+        if response.status_code == 404:
+            raise OpenMeteoNotFoundError(
+                f"{endpoint} returned 404",
+                status_code=404,
+            )
+
+        if response.status_code in RETRYABLE_STATUS_CODES:
+            raise OpenMeteoUnavailableError(
+                f"Open-Meteo returned HTTP {response.status_code} after "
+                f"{self._retry_policy.max_attempts} attempts",
+                status_code=response.status_code,
+            )
+
+        if 300 <= response.status_code < 400:
+            # Policy: fail closed. httpx.Client() defaults to
+            # follow_redirects=False, and we keep it: a 3xx means the
+            # provider's URL contract changed. Not retried either.
+            raise OpenMeteoSchemaError(
+                f"{endpoint} returned unhandled redirect (HTTP {response.status_code})",
+                status_code=response.status_code,
+            )
+
+        if response.status_code >= 400:
+            # Open-Meteo 400 format: {"error": true, "reason": "..."}
             try:
-                response = self._client.get(endpoint, params=params)
-            except (httpx.TimeoutException, httpx.TransportError) as exc:
-                if is_last_attempt:
-                    raise OpenMeteoUnavailableError(
-                        f"Open-Meteo request failed after {self.max_retries} attempts: {exc}",
-                        original_error=exc,
-                    ) from exc
-                time.sleep(self.backoff_seconds * attempt)
-                continue
-
-            if response.status_code == 404:
-                raise OpenMeteoNotFoundError(
-                    f"{endpoint} returned 404",
-                    status_code=404,
+                err_payload = response.json()
+                reason = (
+                    err_payload.get("reason", response.text)
+                    if isinstance(err_payload, dict)
+                    else response.text
                 )
+            except (ValueError, KeyError, TypeError):
+                reason = response.text
 
-            if response.status_code in _RETRYABLE_STATUS_CODES:
-                if is_last_attempt:
-                    raise OpenMeteoUnavailableError(
-                        f"Open-Meteo returned HTTP {response.status_code} after {self.max_retries} attempts",
-                        status_code=response.status_code,
-                    )
-                time.sleep(self.backoff_seconds * attempt)
-                continue
+            raise OpenMeteoClientError(
+                f"Open-Meteo API returned HTTP {response.status_code}: {reason}",
+                status_code=response.status_code,
+            )
 
-            if 300 <= response.status_code < 400:
-                # Policy: fail closed. httpx.Client() defaults to
-                # follow_redirects=False, and we keep it: a 3xx means the
-                # provider's URL contract changed. Not retried either.
-                raise OpenMeteoSchemaError(
-                    f"{endpoint} returned unhandled redirect (HTTP {response.status_code})",
-                    status_code=response.status_code,
-                )
-
-            if response.status_code >= 400:
-                # Open-Meteo 400 format: {"error": true, "reason": "..."}
-                try:
-                    err_payload = response.json()
-                    reason = (
-                        err_payload.get("reason", response.text)
-                        if isinstance(err_payload, dict)
-                        else response.text
-                    )
-                except (ValueError, KeyError, TypeError):
-                    reason = response.text
-
-                raise OpenMeteoClientError(
-                    f"Open-Meteo API returned HTTP {response.status_code}: {reason}",
-                    status_code=response.status_code,
-                )
-
-            try:
-                return response.json()
-            except ValueError as exc:
-                raise OpenMeteoSchemaError(
-                    f"Malformed non-JSON response from Open-Meteo: {exc}",
-                    status_code=response.status_code,
-                    original_error=exc,
-                ) from exc
-
-        raise AssertionError("unreachable")
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise OpenMeteoSchemaError(
+                f"Malformed non-JSON response from Open-Meteo: {exc}",
+                status_code=response.status_code,
+                original_error=exc,
+            ) from exc
 
     def get_hourly_forecast(
         self,
