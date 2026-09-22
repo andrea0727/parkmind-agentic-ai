@@ -18,7 +18,9 @@ class ProposalRepository(Protocol):
 
         Raises ``NotFoundError`` if its candidate plan was not saved first and
         ``PendingProposalExistsError`` if it is PENDING while the thread
-        already holds another PENDING proposal.
+        already holds another PENDING proposal. Re-saving a proposal with the
+        same body is a no-op and never resets a resolution; a different body
+        under the same ``proposal_id`` raises ``ProposalImmutableError``.
         """
         ...
 

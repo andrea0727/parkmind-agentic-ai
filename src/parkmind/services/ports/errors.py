@@ -39,6 +39,10 @@ class PlanImmutableError(ConflictError):
     """A stored plan body is immutable; re-saving a different body is refused."""
 
 
+class ProposalImmutableError(ConflictError):
+    """A stored proposal's body is immutable; only its resolution may change."""
+
+
 class PendingProposalExistsError(ConflictError):
     """The thread already holds a PENDING proposal (section 43 [C18])."""
 

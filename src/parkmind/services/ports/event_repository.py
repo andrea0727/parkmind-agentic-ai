@@ -23,5 +23,9 @@ class EventRepository(Protocol):
     def list_for_thread(
         self, thread_id: str, *, since: datetime | None = None
     ) -> list[Event]:
-        """The thread's events ordered by timestamp, then ``event_id``."""
+        """The thread's events ordered by timestamp, then ``event_id``.
+
+        ``since`` is inclusive (events at or after it): recording is idempotent,
+        so re-reading a boundary event is harmless while skipping one is not.
+        """
         ...
