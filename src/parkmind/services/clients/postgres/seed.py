@@ -71,7 +71,10 @@ from parkmind.services.clients.postgres.profile_repository import (
 from parkmind.services.clients.postgres.proposal_repository import (
     PostgresProposalRepository,
 )
-from parkmind.services.clients.postgres.session_store import PostgresSessionStore
+from parkmind.services.clients.postgres.session_store import (
+    PostgresSessionStore,
+    SessionMemory,
+)
 from parkmind.services.clients.postgres.snapshot_repository import (
     PostgresSnapshotRepository,
 )
@@ -292,7 +295,8 @@ def seed_dev_scenario(
     for profile in _profiles(as_of):
         profiles.save(profile)
     # Persisted only because consent is explicit; derived flags, never a statement.
-    PostgresSessionStore(conn).put(
+    # A throwaway memory is fine here: the seed only writes a persisted record.
+    PostgresSessionStore(conn, SessionMemory()).put(
         THREAD_ID,
         AccessibilityRequirements(
             guest_id=RELAXED_ADULT,

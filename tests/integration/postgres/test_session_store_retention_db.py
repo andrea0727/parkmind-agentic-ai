@@ -42,7 +42,10 @@ from parkmind.services.clients.postgres.profile_repository import (
 from parkmind.services.clients.postgres.proposal_repository import (
     PostgresProposalRepository,
 )
-from parkmind.services.clients.postgres.session_store import PostgresSessionStore
+from parkmind.services.clients.postgres.session_store import (
+    PostgresSessionStore,
+    SessionMemory,
+)
 from parkmind.services.clients.postgres.snapshot_repository import (
     PostgresSnapshotRepository,
 )
@@ -127,13 +130,17 @@ def test_session_only_record_absent_from_every_table_after_session_end(
     with PostgresSaver.from_conn_string(empty_database_url) as saver:
         saver.setup()  # creates the LangGraph checkpoint tables
 
+    memory = SessionMemory()  # one per process, shared by every request
+    guest_id = SESSION_ONLY.guest_id
+
+    # -- request 1 declares the need; request 2, on its own connection, sees it --
+    with psycopg.connect(empty_database_url) as first_request:
+        PostgresSessionStore(first_request, memory).put("sess_1", SESSION_ONLY)
     with psycopg.connect(empty_database_url) as conn:
         _populate_realistic_data(conn)
-        store = PostgresSessionStore(conn)
-        guest_id = SESSION_ONLY.guest_id
+        store = PostgresSessionStore(conn, memory)
 
         # -- during the session: held, but written nowhere ---------------------
-        store.put("sess_1", SESSION_ONLY)
         assert store.get("sess_1", guest_id) == SESSION_ONLY
         during = _scan_every_table(empty_database_url)
         assert _leaks(during, SESSION_ONLY_TOKENS) == {}
@@ -144,8 +151,9 @@ def test_session_only_record_absent_from_every_table_after_session_end(
         after = _scan_every_table(empty_database_url)
         assert _leaks(after, SESSION_ONLY_TOKENS) == {}
 
-        # -- a fresh store (no shared memory) cannot recover it ----------------
-        assert PostgresSessionStore(conn).get("sess_1", guest_id) is None
+        # -- neither the shared memory nor a fresh one can recover it ----------
+        assert PostgresSessionStore(conn, memory).get("sess_1", guest_id) is None
+        assert PostgresSessionStore(conn, SessionMemory()).get("sess_1", guest_id) is None
 
         # -- the scan is not blind: it covers checkpoint tables and real rows,
         #    and does see a persisted record where it belongs -------------------
@@ -166,17 +174,17 @@ def test_session_only_record_absent_from_every_table_after_session_end(
 def test_persisted_record_survives_the_end_of_a_session(conn: psycopg.Connection) -> None:
     PostgresGuestRepository(conn).save(factories.guest(guest_id="g1"))
     record = factories.accessibility(guest_id="g1", retention_policy="persisted")
-    store = PostgresSessionStore(conn)
+    store = PostgresSessionStore(conn, SessionMemory())
 
     store.put("sess_1", record)
     store.end_session("sess_1")
 
-    assert PostgresSessionStore(conn).get("another_session", "g1") == record
+    assert PostgresSessionStore(conn, SessionMemory()).get("another_session", "g1") == record
 
 
 def test_persisting_updates_replace_the_previous_flags(conn: psycopg.Connection) -> None:
     PostgresGuestRepository(conn).save(factories.guest(guest_id="g1"))
-    store = PostgresSessionStore(conn)
+    store = PostgresSessionStore(conn, SessionMemory())
     store.put("s", factories.accessibility(guest_id="g1", daily_walking_limit_minutes=60))
 
     store.put("s", factories.accessibility(guest_id="g1", daily_walking_limit_minutes=45))
@@ -191,7 +199,7 @@ def test_a_session_record_wins_over_the_persisted_one_for_that_session_only(
     conn: psycopg.Connection,
 ) -> None:
     PostgresGuestRepository(conn).save(factories.guest(guest_id="g1"))
-    store = PostgresSessionStore(conn)
+    store = PostgresSessionStore(conn, SessionMemory())
     persisted = factories.accessibility(guest_id="g1", daily_walking_limit_minutes=90)
     session = factories.accessibility(
         guest_id="g1", daily_walking_limit_minutes=30, retention_policy="session_only"
@@ -205,7 +213,7 @@ def test_a_session_record_wins_over_the_persisted_one_for_that_session_only(
 
 
 def test_persisting_for_an_unknown_guest_is_refused(conn: psycopg.Connection) -> None:
-    store = PostgresSessionStore(conn)
+    store = PostgresSessionStore(conn, SessionMemory())
 
     with pytest.raises(NotFoundError):
         store.put("s", factories.accessibility(guest_id="ghost", retention_policy="persisted"))
@@ -223,7 +231,7 @@ def test_persisting_without_consent_writes_nothing(conn: psycopg.Connection) -> 
     )
 
     with pytest.raises(ConsentRequiredError):
-        PostgresSessionStore(conn).put("s", no_consent)
+        PostgresSessionStore(conn, SessionMemory()).put("s", no_consent)
 
     count = conn.execute("SELECT count(*) AS n FROM accessibility_requirements").fetchone()
     assert count is not None and count["n"] == 0

@@ -1,13 +1,20 @@
 """SessionStore honoring ``retention_policy`` (section 12, 33 [C19]).
 
-* ``session_only`` records live in this object's memory, keyed by
-  ``(session_id, guest_id)``. They never reach the connection, so they cannot
+* ``session_only`` records live in a ``SessionMemory``, keyed by
+  ``(session_id, guest_id)``. They never reach a connection, so they cannot
   land in any table -- checkpoint tables included.
 * ``persisted`` records require consent and are stored as derived flags only in
   ``accessibility_requirements`` (which a CHECK constraint restricts to exactly
   such rows).
 
-Limitation: the session memory is process-local. A deployment with several API
+Lifetimes are deliberately split. The store, like every repository, is built
+on the caller's connection and may be short-lived (one per request). The
+``SessionMemory`` must outlive it: create **one per process** at startup and
+pass the same instance to every store. It is a required argument so that a
+fresh, empty memory per request -- which would silently drop a guest's
+accessibility needs mid-session -- cannot happen by default.
+
+Limitation: the memory is process-local. A deployment with several API
 workers needs sticky sessions or another non-table store; that is an open
 question for P0-35, deliberately not decided here.
 """
@@ -23,18 +30,34 @@ from parkmind.services.clients.postgres.connection import PostgresRepositoryBase
 from parkmind.services.ports.errors import ConsentRequiredError
 
 
-class PostgresSessionStore(PostgresRepositoryBase):
-    def __init__(self, conn: psycopg.Connection[Any]) -> None:
-        super().__init__(conn)
+class SessionMemory:
+    """Process-scoped holder of ``session_only`` records. Thread-safe."""
+
+    def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._session_records: dict[str, dict[str, AccessibilityRequirements]] = {}
+        self._records: dict[str, dict[str, AccessibilityRequirements]] = {}
+
+    def put(self, session_id: str, requirements: AccessibilityRequirements) -> None:
+        with self._lock:
+            self._records.setdefault(session_id, {})[requirements.guest_id] = requirements
+
+    def get(self, session_id: str, guest_id: str) -> AccessibilityRequirements | None:
+        with self._lock:
+            return self._records.get(session_id, {}).get(guest_id)
+
+    def drop(self, session_id: str) -> None:
+        with self._lock:
+            self._records.pop(session_id, None)
+
+
+class PostgresSessionStore(PostgresRepositoryBase):
+    def __init__(self, conn: psycopg.Connection[Any], memory: SessionMemory) -> None:
+        super().__init__(conn)
+        self._memory = memory
 
     def put(self, session_id: str, requirements: AccessibilityRequirements) -> None:
         if requirements.retention_policy == "session_only":
-            with self._lock:
-                self._session_records.setdefault(session_id, {})[
-                    requirements.guest_id
-                ] = requirements
+            self._memory.put(session_id, requirements)
             return
 
         if not requirements.consent:
@@ -52,8 +75,7 @@ class PostgresSessionStore(PostgresRepositoryBase):
             )
 
     def get(self, session_id: str, guest_id: str) -> AccessibilityRequirements | None:
-        with self._lock:
-            held = self._session_records.get(session_id, {}).get(guest_id)
+        held = self._memory.get(session_id, guest_id)
         if held is not None:
             return held
 
@@ -68,5 +90,4 @@ class PostgresSessionStore(PostgresRepositoryBase):
         return from_payload(AccessibilityRequirements, row["payload"], what="accessibility record")
 
     def end_session(self, session_id: str) -> None:
-        with self._lock:
-            self._session_records.pop(session_id, None)
+        self._memory.drop(session_id)

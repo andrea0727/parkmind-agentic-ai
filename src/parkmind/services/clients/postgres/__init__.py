@@ -18,7 +18,7 @@ from .plan_repository import PostgresPlanRepository
 from .profile_repository import PostgresProfileRepository
 from .proposal_repository import PostgresProposalRepository
 from .provenance_repository import PostgresProvenanceRepository
-from .session_store import PostgresSessionStore
+from .session_store import PostgresSessionStore, SessionMemory
 from .snapshot_repository import PostgresSnapshotRepository
 
 __all__ = [
@@ -34,5 +34,6 @@ __all__ = [
     "PostgresProvenanceRepository",
     "PostgresSessionStore",
     "PostgresSnapshotRepository",
+    "SessionMemory",
     "connect",
 ]

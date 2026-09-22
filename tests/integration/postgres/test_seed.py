@@ -47,7 +47,10 @@ from parkmind.services.clients.postgres.seed import (
     THREAD_ID,
     seed_dev_scenario,
 )
-from parkmind.services.clients.postgres.session_store import PostgresSessionStore
+from parkmind.services.clients.postgres.session_store import (
+    PostgresSessionStore,
+    SessionMemory,
+)
 from parkmind.services.clients.postgres.snapshot_repository import (
     PostgresSnapshotRepository,
 )
@@ -143,7 +146,7 @@ def test_seeded_rows_validate_as_contracts(conn: psycopg.Connection) -> None:
     assert approved is not None and approved.approval_status is ApprovalStatus.APPROVED
 
     # Persisted accessibility only, retrievable in any later session.
-    assert PostgresSessionStore(conn).get("later_session", RELAXED_ADULT) is not None
+    assert PostgresSessionStore(conn, SessionMemory()).get("later_session", RELAXED_ADULT) is not None
 
     # Park data and the snapshot with its raw payload.
     attractions = PostgresAttractionRepository(conn)
