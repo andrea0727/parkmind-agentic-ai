@@ -4,9 +4,9 @@ name: CI
 # checking, unit + basic integration tests, import-boundary check). A failing
 # check fails the job -- no step below uses continue-on-error.
 #
-# No docker-compose/Postgres service yet: no current test connects to a real
-# database (see tests/integration -- the DB-backed ones are still TODO stubs).
-# Add a `services: postgres:` block here once one of those is un-skipped.
+# P0-12: the repository tests (marked `db`) run against a real Postgres, the
+# `services: postgres:` container below. CI is set by GitHub Actions, so an
+# unreachable database FAILS those tests instead of skipping them.
 
 on:
   pull_request:
@@ -17,6 +17,20 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: parkmind
+          POSTGRES_PASSWORD: parkmind
+          POSTGRES_DB: parkmind
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U parkmind"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -46,3 +60,5 @@ jobs:
 
       - name: Tests (pytest)
         run: poetry run pytest
+        env:
+          PARKMIND_TEST_DATABASE_URL: postgresql://parkmind:parkmind@localhost:5432/parkmind

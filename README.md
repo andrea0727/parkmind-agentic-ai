@@ -68,7 +68,7 @@ parkmind-agentic-ai/
 │
 ├── notebooks/                     # exploratory only, nothing imported by the app
 ├── scripts/                        # seed_db.py, run_demo_scenario.py, run_baselines.py
-├── database/                        # init.sql
+├── database/                        # alembic.ini + migrations/ (schema owner, P0-12)
 ├── ui/                                # Streamlit app
 │
 ├── agent.py                            # root entrypoint — exposes the compiled
@@ -115,10 +115,13 @@ and `agent.py` both add it to the import path, so
 cp .env.example .env          # fill in ANTHROPIC_API_KEY at minimum
 poetry install
 
-# 2. start Postgres
+# 2. start Postgres, then create the schema (Alembic owns it) and, optionally,
+#    load the reproducible development scenario
 docker compose up -d
+poetry run alembic -c database/alembic.ini upgrade head
+poetry run python scripts/seed_db.py
 
-# 3. run tests (placeholders pass until real modules land)
+# 3. run tests (the `db` tests need the Postgres from step 2)
 poetry run pytest
 
 # 4. sanity-check the graphs build
@@ -127,6 +130,24 @@ poetry run python agent.py
 # 5. run the UI (once graph/ is wired up)
 poetry run streamlit run ui/app.py
 ```
+
+### Database
+
+- **Schema:** hand-written SQL migrations in `database/migrations/versions/`,
+  applied with `poetry run alembic -c database/alembic.ini upgrade head`.
+  There is no `init.sql` any more — compose no longer mounts one.
+- **Seed:** `poetry run python scripts/seed_db.py` loads a deterministic
+  scenario (two opposing profiles, one active plan, one pending candidate). It
+  is safe to re-run.
+- **Reset:** `docker compose down -v && docker compose up -d`, then migrate
+  again. A volume created before P0-12 still holds the old `init.sql` tables and
+  must be reset this way before the first `upgrade head`.
+- **Tests:** the repository tests are marked `db` and use throwaway
+  `parkmind_test_*` databases on the same server, never your `parkmind` one.
+  Without a reachable Postgres they are skipped locally and **fail** when `CI`
+  is set. `PARKMIND_TEST_DATABASE_URL` points them at another server.
+- **Accessibility data:** `session_only` records are held in process memory
+  only and are never written to any table (see `PostgresSessionStore`).
 
 ### Using Poetry
 
