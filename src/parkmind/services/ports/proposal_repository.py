@@ -16,6 +16,9 @@ class ProposalRepository(Protocol):
     def save(self, thread_id: str, proposal: Proposal) -> None:
         """Store ``proposal`` (and its ``Provenance``).
 
+        A proposal is created PENDING: any other status raises
+        ``InvalidStateTransitionError``, so a decision can only be recorded by
+        ``resolve`` and a plan can never be activated without one (section 23).
         Raises ``NotFoundError`` if its candidate plan was not saved first and
         ``PendingProposalExistsError`` if it is PENDING while the thread
         already holds another PENDING proposal. Re-saving a proposal with the

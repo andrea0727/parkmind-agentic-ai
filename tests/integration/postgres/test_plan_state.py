@@ -39,16 +39,12 @@ def _candidate(
     thread: str = "t1",
     plan_id: str = "plan_1",
     proposal_id: str = "prop_1",
-    status: ApprovalStatus = ApprovalStatus.PENDING,
 ) -> None:
-    """Store a plan body plus a proposal for it."""
+    """Store a plan body plus a PENDING proposal for it."""
     plans, proposals = _repos(conn)
     plans.save(thread, factories.plan(plan_id=plan_id))
     proposals.save(
-        thread,
-        factories.proposal(
-            proposal_id=proposal_id, candidate_plan_id=plan_id, approval_status=status
-        ),
+        thread, factories.proposal(proposal_id=proposal_id, candidate_plan_id=plan_id)
     )
 
 
@@ -196,6 +192,32 @@ def test_pending_proposal_and_active_plan_live_in_distinct_tables(
 
 
 # ------------------------------------------------------------------- proposals
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        ApprovalStatus.APPROVED,
+        ApprovalStatus.REJECTED,
+        ApprovalStatus.EDITED,
+        ApprovalStatus.SUPERSEDED,
+    ],
+)
+def test_a_proposal_cannot_be_created_already_decided(
+    conn: psycopg.Connection, status: ApprovalStatus
+) -> None:
+    """Section 23: only a human decision, recorded through resolve(), moves a
+    proposal out of PENDING -- otherwise activate() could be reached without one."""
+    plans, proposals = _repos(conn)
+    plans.save("t1", factories.plan())
+
+    with pytest.raises(InvalidStateTransitionError):
+        proposals.save("t1", factories.proposal(approval_status=status))
+
+    assert proposals.get("prop_1") is None
+    assert PostgresProvenanceRepository(conn).get("PROPOSAL", "prop_1") is None
+    with pytest.raises(NotApprovedError):
+        plans.activate("t1", "plan_1", at=NOW)
 
 
 def test_proposal_requires_its_candidate_plan_to_exist(conn: psycopg.Connection) -> None:

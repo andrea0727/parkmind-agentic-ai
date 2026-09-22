@@ -33,6 +33,10 @@ def _overlay(payload: Any, status: str, rejection_reason: str | None) -> Proposa
 
 class PostgresProposalRepository(PostgresRepositoryBase):
     def save(self, thread_id: str, proposal: Proposal) -> None:
+        if proposal.approval_status is not ApprovalStatus.PENDING:
+            raise InvalidStateTransitionError(
+                "a proposal is created PENDING; only resolve() records a decision"
+            )
         with self._tx() as cur:
             try:
                 cur.execute(
