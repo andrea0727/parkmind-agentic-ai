@@ -8,6 +8,7 @@ import json
 
 import psycopg
 import pytest
+from alembic.util import CommandError
 from psycopg import errors
 
 from parkmind.services.clients.postgres import migrate
@@ -55,6 +56,21 @@ def test_fresh_database_migrates_to_complete_mvp_schema(empty_database_url: str)
     tables = _tables(empty_database_url)
     assert tables == MVP_TABLES | {"alembic_version"}
     assert not tables & CHECKPOINT_TABLES
+
+
+def test_upgrade_refuses_a_database_with_leftover_v1_tables(empty_database_url: str) -> None:
+    """Every existing dev volume holds the v1 init.sql tables. The upgrade must
+    stop with an actionable message instead of a raw DuplicateTable traceback,
+    and must leave the database exactly as it found it."""
+    with psycopg.connect(empty_database_url, autocommit=True) as conn:
+        conn.execute("CREATE TABLE guests (guest_id TEXT PRIMARY KEY, profile JSONB NOT NULL)")
+        conn.execute("CREATE TABLE behavior_signals (id SERIAL PRIMARY KEY)")
+
+    with pytest.raises(CommandError, match=r"docker compose down -v") as excinfo:
+        migrate.upgrade(empty_database_url)
+
+    assert "guests" in str(excinfo.value)
+    assert _tables(empty_database_url) == {"guests", "behavior_signals"}
 
 
 def test_upgrade_is_idempotent_when_rerun(empty_database_url: str) -> None:

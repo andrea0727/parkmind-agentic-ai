@@ -15,7 +15,9 @@ Not created here, on purpose:
   * pgvector / knowledge tables -- P0-26.
 """
 
+import sqlalchemy as sa
 from alembic import op
+from alembic.util import CommandError
 
 revision = "0001"
 down_revision = None
@@ -226,7 +228,33 @@ _DOWNGRADE_TABLES = [
 ]
 
 
+# Created by the retired v1 database/init.sql, which docker compose used to run
+# on first start -- so every dev volume created before P0-12 still holds them.
+_V1_TABLES = ["guests", "plans", "proposals", "behavior_signals", "snapshots"]
+
+
+def _refuse_leftover_tables() -> None:
+    """Stop with an actionable message instead of a DuplicateTable traceback."""
+    names = sorted(set(_V1_TABLES) | set(_DOWNGRADE_TABLES))
+    found = [
+        name
+        for name in names
+        if op.get_bind().execute(
+            sa.text("SELECT to_regclass(:name) IS NOT NULL"), {"name": f"public.{name}"}
+        ).scalar()
+    ]
+    if found:
+        raise CommandError(
+            "The database already has tables this migration creates "
+            f"({', '.join(found)}) -- most likely the old init.sql schema. "
+            "Reset the dev database and migrate again:\n"
+            "  docker compose down -v && docker compose up -d\n"
+            "  poetry run alembic -c database/alembic.ini upgrade head"
+        )
+
+
 def upgrade() -> None:
+    _refuse_leftover_tables()
     for statement in _UPGRADE:
         op.execute(statement)
 
