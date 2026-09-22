@@ -1,0 +1,64 @@
+{
+  "id": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+  "name": "Magic Kingdom Park",
+  "entityType": "PARK",
+  "timezone": "America/New_York",
+  "children": [
+    {
+      "id": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "name": "Magic Kingdom Park",
+      "entityType": "PARK",
+      "externalId": "80007944;entityType=theme-park",
+      "parentId": null
+    },
+    {
+      "id": "b2260923-9315-40fd-9c6b-44dd811dbe64",
+      "name": "Space Mountain",
+      "entityType": "ATTRACTION",
+      "externalId": "80010208;entityType=Attraction",
+      "parentId": "75ea578a-adc8-4116-a54d-dccb60765ef9"
+    },
+    {
+      "id": "de3309ca-97d5-4211-bffe-739fed47e92f",
+      "name": "Big Thunder Mountain Railroad",
+      "entityType": "ATTRACTION",
+      "externalId": "80010153;entityType=Attraction",
+      "parentId": "75ea578a-adc8-4116-a54d-dccb60765ef9"
+    },
+    {
+      "id": "5a43d1a7-ad53-4d25-abfe-25625f0da304",
+      "name": "TRON Lightcycle / Run",
+      "entityType": "ATTRACTION",
+      "externalId": "411504497;entityType=Attraction",
+      "parentId": "75ea578a-adc8-4116-a54d-dccb60765ef9"
+    },
+    {
+      "id": "796b0a25-c51e-456e-9bb8-50a324e301b3",
+      "name": "Jungle Cruise",
+      "entityType": "ATTRACTION",
+      "externalId": "80010114;entityType=Attraction",
+      "parentId": "75ea578a-adc8-4116-a54d-dccb60765ef9"
+    },
+    {
+      "id": "4c31b3ad-5dc9-437f-ac1a-0fdff36a2818",
+      "name": "Mickey's Magical Friendship Faire",
+      "entityType": "SHOW",
+      "externalId": "18381020;entityType=Entertainment",
+      "parentId": "75ea578a-adc8-4116-a54d-dccb60765ef9"
+    },
+    {
+      "id": "c4b64a31-e855-46a9-9d1a-aa13c99e88af",
+      "name": "The Crystal Palace",
+      "entityType": "RESTAURANT",
+      "externalId": "90002660;entityType=restaurant",
+      "parentId": "75ea578a-adc8-4116-a54d-dccb60765ef9"
+    },
+    {
+      "id": "unknown-attraction-not-in-metadata-table",
+      "name": "A Brand New Ride Nobody Curated Yet",
+      "entityType": "ATTRACTION",
+      "externalId": "99999999;entityType=Attraction",
+      "parentId": "75ea578a-adc8-4116-a54d-dccb60765ef9"
+    }
+  ]
+}
