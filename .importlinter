@@ -17,7 +17,7 @@ include_external_packages = True
 #   agents/                 may import core.contracts, use_cases, tools.registry, LLM SDK
 #
 # Only the paths that currently exist in src/parkmind are listed as modules below;
-# services/ports/ and services/simulator/ will be added to this contract as they are created.
+# services/simulator/ will be added to this contract once it's created.
 
 [importlinter:contract:core-forbidden-imports]
 name = Deterministic core never imports adapters, frameworks or DB drivers
@@ -26,6 +26,7 @@ source_modules =
     parkmind.core.contracts
     parkmind.services.planning
     parkmind.services.personalization
+    parkmind.services.ports
 forbidden_modules =
     parkmind.services.clients
     parkmind.services.use_cases

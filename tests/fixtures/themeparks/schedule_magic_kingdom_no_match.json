@@ -1,0 +1,14 @@
+{
+  "id": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+  "name": "Magic Kingdom Park",
+  "entityType": "PARK",
+  "timezone": "America/New_York",
+  "schedule": [
+    {
+      "date": "2026-09-17",
+      "type": "OPERATING",
+      "openingTime": "2026-09-17T09:00:00-04:00",
+      "closingTime": "2026-09-17T23:00:00-04:00"
+    }
+  ]
+}

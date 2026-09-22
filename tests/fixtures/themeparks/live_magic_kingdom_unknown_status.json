@@ -1,0 +1,16 @@
+{
+  "id": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+  "name": "Magic Kingdom Park",
+  "entityType": "PARK",
+  "liveData": [
+    {
+      "id": "b2260923-9315-40fd-9c6b-44dd811dbe64",
+      "name": "Space Mountain",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "queue": { "STANDBY": { "waitTime": 60 } },
+      "status": "TEMPORARILY_ENHANCED",
+      "lastUpdated": "2026-09-16T13:36:04.087Z"
+    }
+  ]
+}

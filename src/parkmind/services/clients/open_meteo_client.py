@@ -1,14 +1,29 @@
 """
 Open-Meteo client — real weather adapter.
-
-Maps external hourly weather forecasts (temperature, precipitation probability,
-WMO weather codes) to the internal WeatherHour domain model, normalizes timezones
-to America/New_York (PARK_TZ), implements bounded retries with linear backoff,
-and handles API failures as recoverable data-quality conditions.
-
 API docs: https://open-meteo.com/en/docs
+
+Implements services.ports.weather.WeatherPort structurally (duck-typed,
+no inheritance). Public methods never return raw provider JSON/dicts —
+maps provider forecast data to WeatherHour domain models in PARK_TZ.
+
+Retry/error policy is adapter-level only (reference pattern for services/clients):
+- Attempts: `max_retries` is the TOTAL number of attempts (>= 1, validated).
+  Backoff is linear, `backoff_seconds * attempt`, slept only BETWEEN attempts:
+  with the defaults (3 attempts, 0.5s) the delays are 0.5s then 1.0s.
+- Retried: timeouts, transport errors, and HTTP 429/500/502/503/504. Exhausted
+  retries raise OpenMeteoUnavailableError.
+- Never retried: 404 (OpenMeteoNotFoundError) and any other 4xx
+  (OpenMeteoClientError).
+- Redirects (3xx) are NOT followed and NOT retried: they raise
+  OpenMeteoSchemaError. A redirect means the provider's URL contract changed,
+  so we fail closed instead of silently following it. Retrying is pointless too:
+  the same URL returns the same redirect.
+- Malformed payloads, missing hourly fields, mismatched array lengths and
+  non-JSON bodies also raise OpenMeteoSchemaError; malformed data is never
+  silently swallowed or coerced into a best guess.
 """
 
+import logging
 import time
 from datetime import date, datetime
 from typing import Any, Self
@@ -18,26 +33,37 @@ import httpx
 from parkmind.config.settings import settings
 from parkmind.core.contracts import PARK_TZ, WeatherHour
 
+logger = logging.getLogger(__name__)
+
 _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 class OpenMeteoClientError(Exception):
-    """
-    Recoverable error raised when Open-Meteo API fails or returns invalid data.
-
-    Allows upstream callers (e.g., LiveContext loader, MonitorEventsUseCase)
-    to gracefully degrade coverage instead of crashing.
-    """
+    """Base class for all expected OpenMeteoClient failures."""
 
     def __init__(
         self,
         message: str,
         status_code: int | None = None,
         original_error: Exception | None = None,
-    ):
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.original_error = original_error
+
+
+class OpenMeteoNotFoundError(OpenMeteoClientError):
+    """Provider returned 404, or no forecast data was found for the requested date."""
+
+
+class OpenMeteoUnavailableError(OpenMeteoClientError):
+    """Transient failure (timeout/connection/5xx/429) survived all retries."""
+
+
+class OpenMeteoSchemaError(OpenMeteoClientError):
+    """Provider response didn't match the expected shape — redirect (3xx),
+    missing field, mismatched array lengths, non-JSON body, ...
+    Contract drift, never silently swallowed or coerced."""
 
 
 def _map_wmo_code_to_condition(code: int) -> str:
@@ -89,19 +115,20 @@ class OpenMeteoClient:
         *,
         base_url: str = settings.OPEN_METEO_BASE_URL,
         transport: httpx.BaseTransport | None = None,
-        http_client: httpx.Client | None = None,
         timeout: float = 10.0,
         max_retries: int = 3,
         backoff_seconds: float = 0.5,
         default_latitude: float = DEFAULT_LATITUDE,
         default_longitude: float = DEFAULT_LONGITUDE,
     ) -> None:
+        if max_retries < 1:
+            raise ValueError(f"max_retries must be >= 1, got {max_retries}")
         self.base_url = base_url.rstrip("/")
         self.default_latitude = default_latitude
         self.default_longitude = default_longitude
         self.max_retries = max_retries
         self.backoff_seconds = backoff_seconds
-        self._client = http_client or httpx.Client(
+        self._client = httpx.Client(
             base_url=self.base_url,
             transport=transport,
             timeout=timeout,
@@ -128,21 +155,36 @@ class OpenMeteoClient:
                 response = self._client.get(endpoint, params=params)
             except (httpx.TimeoutException, httpx.TransportError) as exc:
                 if is_last_attempt:
-                    raise OpenMeteoClientError(
+                    raise OpenMeteoUnavailableError(
                         f"Open-Meteo request failed after {self.max_retries} attempts: {exc}",
                         original_error=exc,
                     ) from exc
                 time.sleep(self.backoff_seconds * attempt)
                 continue
 
+            if response.status_code == 404:
+                raise OpenMeteoNotFoundError(
+                    f"{endpoint} returned 404",
+                    status_code=404,
+                )
+
             if response.status_code in _RETRYABLE_STATUS_CODES:
                 if is_last_attempt:
-                    raise OpenMeteoClientError(
+                    raise OpenMeteoUnavailableError(
                         f"Open-Meteo returned HTTP {response.status_code} after {self.max_retries} attempts",
                         status_code=response.status_code,
                     )
                 time.sleep(self.backoff_seconds * attempt)
                 continue
+
+            if 300 <= response.status_code < 400:
+                # Policy: fail closed. httpx.Client() defaults to
+                # follow_redirects=False, and we keep it: a 3xx means the
+                # provider's URL contract changed. Not retried either.
+                raise OpenMeteoSchemaError(
+                    f"{endpoint} returned unhandled redirect (HTTP {response.status_code})",
+                    status_code=response.status_code,
+                )
 
             if response.status_code >= 400:
                 # Open-Meteo 400 format: {"error": true, "reason": "..."}
@@ -164,7 +206,7 @@ class OpenMeteoClient:
             try:
                 return response.json()
             except ValueError as exc:
-                raise OpenMeteoClientError(
+                raise OpenMeteoSchemaError(
                     f"Malformed non-JSON response from Open-Meteo: {exc}",
                     status_code=response.status_code,
                     original_error=exc,
@@ -207,6 +249,12 @@ class OpenMeteoClient:
             "timezone": "America/New_York",
         }
 
+        # Open-Meteo returns 400 Bad Request if start_date is supplied without end_date (or vice versa)
+        if start_date and not end_date:
+            end_date = start_date
+        elif end_date and not start_date:
+            start_date = end_date
+
         if start_date:
             params["start_date"] = (
                 start_date.isoformat()
@@ -225,13 +273,13 @@ class OpenMeteoClient:
         payload = self._request("/forecast", params=params)
 
         if not isinstance(payload, dict) or "hourly" not in payload:
-            raise OpenMeteoClientError(
+            raise OpenMeteoSchemaError(
                 "Malformed response: 'hourly' section missing from Open-Meteo payload"
             )
 
         hourly = payload["hourly"]
         if not isinstance(hourly, dict):
-            raise OpenMeteoClientError(
+            raise OpenMeteoSchemaError(
                 "Malformed response: 'hourly' section must be a dictionary"
             )
 
@@ -240,8 +288,18 @@ class OpenMeteoClient:
         probs = hourly.get("precipitation_probability", [])
         codes = hourly.get("weather_code", [])
 
+        if not (
+            isinstance(times, list)
+            and isinstance(temps, list)
+            and isinstance(probs, list)
+            and isinstance(codes, list)
+        ):
+            raise OpenMeteoSchemaError(
+                "Malformed response: hourly data fields must be lists"
+            )
+
         if not (len(times) == len(temps) == len(probs) == len(codes)):
-            raise OpenMeteoClientError(
+            raise OpenMeteoSchemaError(
                 f"Mismatched array lengths in hourly weather response: "
                 f"time={len(times)}, temp={len(temps)}, prob={len(probs)}, code={len(codes)}"
             )
@@ -270,7 +328,7 @@ class OpenMeteoClient:
                     )
                 )
             except Exception as e:
-                raise OpenMeteoClientError(
+                raise OpenMeteoSchemaError(
                     f"Failed to parse hourly weather item at index {i}: {e}",
                     original_error=e,
                 ) from e
@@ -295,7 +353,7 @@ class OpenMeteoClient:
             WeatherHour: Closest matching forecast hour on the target date.
 
         Raises:
-            OpenMeteoClientError: If no data is returned for the requested date.
+            OpenMeteoNotFoundError: If no data is returned for the requested date.
         """
         if at_time.tzinfo is None:
             normalized_time = at_time.replace(tzinfo=PARK_TZ)
@@ -313,7 +371,7 @@ class OpenMeteoClient:
         )
 
         if not hourly:
-            raise OpenMeteoClientError(
+            raise OpenMeteoNotFoundError(
                 f"No hourly weather forecast data available for date {normalized_time.date().isoformat()}"
             )
 

@@ -6,17 +6,16 @@ never raw provider JSON/dicts.
 """
 
 from datetime import date, datetime
-from typing import Protocol, runtime_checkable
+from typing import Protocol
 
 from parkmind.core.contracts import WeatherHour
 
 
-@runtime_checkable
 class WeatherPort(Protocol):
     def get_hourly_forecast(
         self,
-        latitude: float,
-        longitude: float,
+        latitude: float | None = None,
+        longitude: float | None = None,
         start_date: date | datetime | str | None = None,
         end_date: date | datetime | str | None = None,
         forecast_days: int = 1,
@@ -25,6 +24,6 @@ class WeatherPort(Protocol):
     def get_weather(
         self,
         at_time: datetime,
-        latitude: float,
-        longitude: float,
+        latitude: float | None = None,
+        longitude: float | None = None,
     ) -> WeatherHour: ...
