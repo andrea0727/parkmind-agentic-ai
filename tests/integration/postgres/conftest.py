@@ -12,7 +12,7 @@ turn the suite silently green.
 
 import os
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import psycopg
@@ -85,6 +85,24 @@ def empty_database_url(server_url: str) -> Iterator[str]:
         yield url
     finally:
         _drop_database(server_url, name)
+
+
+@pytest.fixture
+def make_database(server_url: str) -> Iterator[Callable[[], str]]:
+    """Factory of brand-new databases already migrated to head (all dropped afterwards)."""
+    created: list[str] = []
+
+    def make() -> str:
+        name, url = _create_database(server_url)
+        created.append(name)
+        migrate.upgrade(url)
+        return url
+
+    try:
+        yield make
+    finally:
+        for name in created:
+            _drop_database(server_url, name)
 
 
 @pytest.fixture(scope="session")
