@@ -11,4 +11,4 @@ contract protects.
 from .park_data import ParkDataPort
 from .weather import WeatherPort
 
-__all__ = ["ParkDataPort", "WeatherPort"]
+__all__ = ["ParkDataPort"]
