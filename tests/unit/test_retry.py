@@ -7,6 +7,7 @@ injected `sleep` -- no httpx.Client, no MockTransport, no real sleeping.
 import httpx
 import pytest
 
+from parkmind.services.clients import _retry
 from parkmind.services.clients._retry import (
     RETRYABLE_STATUS_CODES,
     RetriesExhausted,
@@ -159,6 +160,24 @@ def test_a_mix_of_retryable_status_and_transport_error_still_raises_on_exhaustio
         send_with_retry(send, policy=RetryPolicy(max_attempts=2), sleep=lambda _: None)
 
     assert exc_info.value.attempts == 2
+
+
+def test_default_sleep_is_looked_up_fresh_not_bound_at_definition_time(monkeypatch):
+    """Regression: `sleep: Callable = time.sleep` as a default-argument value
+    would bind the real `time.sleep` once, at import time, so a caller that
+    never passes `sleep=` explicitly (every real adapter) would keep sleeping
+    for real even after a test monkeypatches `_retry.time.sleep` -- exactly
+    the case ThemeParksClient/OpenMeteoClient are in, since neither passes
+    `sleep=` through `_request`."""
+    sleeps: list[float] = []
+    monkeypatch.setattr(_retry.time, "sleep", sleeps.append)
+
+    def send() -> httpx.Response:
+        return httpx.Response(503)
+
+    send_with_retry(send, policy=RetryPolicy(max_attempts=2, backoff_seconds=0.5))
+
+    assert sleeps == [0.5]
 
 
 def _unexpected_sleep(_seconds: float) -> None:

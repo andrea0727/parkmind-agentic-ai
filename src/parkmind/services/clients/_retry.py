@@ -71,7 +71,7 @@ def send_with_retry(
     send: Callable[[], httpx.Response],
     *,
     policy: RetryPolicy,
-    sleep: Callable[[float], None] = time.sleep,
+    sleep: Callable[[float], None] | None = None,
 ) -> httpx.Response:
     """Call ``send()`` up to ``policy.max_attempts`` times.
 
@@ -83,7 +83,18 @@ def send_with_retry(
     raising, so the caller (which owns the exception taxonomy) decides what
     it means. Raises `RetriesExhausted` only when every attempt failed at
     the transport level, since there is no response in that case.
+
+    ``sleep`` defaults to `time.sleep`, looked up fresh on every call (not
+    bound as a default-argument value) so tests can monkeypatch this
+    module's `time.sleep` even for callers that never pass `sleep=`
+    explicitly -- `is None`, not a bound default, for the same reason
+    `attraction_metadata` elsewhere in this codebase checks `is None`.
     """
+    # `is None`, not a bound default: a default argument value is captured
+    # once at function-definition time, so `time.sleep` would be frozen
+    # before any test could monkeypatch it.
+    _sleep = sleep if sleep is not None else time.sleep
+
     for attempt in range(1, policy.max_attempts + 1):
         is_last_attempt = attempt == policy.max_attempts
 
@@ -92,12 +103,12 @@ def send_with_retry(
         except (httpx.TimeoutException, httpx.TransportError) as exc:
             if is_last_attempt:
                 raise RetriesExhausted(policy.max_attempts, exc) from exc
-            sleep(policy.backoff_seconds * 2 ** (attempt - 1))
+            _sleep(policy.backoff_seconds * 2 ** (attempt - 1))
             continue
 
         if is_last_attempt or response.status_code not in RETRYABLE_STATUS_CODES:
             return response
 
-        sleep(policy.backoff_seconds * 2 ** (attempt - 1))
+        _sleep(policy.backoff_seconds * 2 ** (attempt - 1))
 
     raise AssertionError("unreachable")  # loop always returns or raises
