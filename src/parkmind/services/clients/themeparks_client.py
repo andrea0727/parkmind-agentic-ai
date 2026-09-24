@@ -9,10 +9,14 @@ no inheritance). Public methods never return raw provider JSON/dicts —
 Retry/error policy is adapter-level only (reference pattern for the other
 services/clients adapters). The "degrade to cached snapshot" fallback chain
 (§43 Failure Handling) belongs to a later use_cases/load_context, not here.
+The retry loop and backoff formula themselves live in the shared
+`services/clients/_retry.py` helper (issue #56); this module owns only the
+policy values and what each outcome means.
 
 - Attempts: `max_retries` is the TOTAL number of attempts (>= 1, validated).
-  Backoff is linear, `backoff_seconds * attempt`, slept only BETWEEN attempts:
-  with the defaults (3 attempts, 0.5s) the delays are 0.5s then 1.0s.
+  Backoff is exponential, `backoff_seconds * 2 ** (attempt - 1)`, slept only
+  BETWEEN attempts: with the defaults (3 attempts, 0.5s) the delays are 0.5s
+  then 1.0s.
 - Retried: timeouts, transport errors, and HTTP 429/500/502/503/504. Exhausted
   retries raise ThemeParksUnavailableError.
 - Never retried: 404 (ThemeParksNotFoundError) and any other 4xx
@@ -26,7 +30,6 @@ services/clients adapters). The "degrade to cached snapshot" fallback chain
 """
 
 import logging
-import time
 from collections.abc import Mapping
 from datetime import date, datetime
 from typing import Any, Self
@@ -37,6 +40,12 @@ from parkmind.config.settings import settings
 from parkmind.core.contracts import Attraction, AttractionStatus, Park, WaitEstimate
 from parkmind.core.contracts.base import PARK_TZ
 
+from ._retry import (
+    RETRYABLE_STATUS_CODES,
+    RetriesExhausted,
+    RetryPolicy,
+    send_with_retry,
+)
 from .themeparks_reference_data import (
     MAGIC_KINGDOM_ATTRACTION_METADATA,
     AttractionMetadata,
@@ -44,7 +53,6 @@ from .themeparks_reference_data import (
 
 logger = logging.getLogger(__name__)
 
-_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 _CATALOG_ENTITY_TYPES = {"ATTRACTION", "SHOW"}
 
 
@@ -80,11 +88,8 @@ class ThemeParksClient:
         park_name: str = "Magic Kingdom Park",
         park_outdoor: bool = True,
     ) -> None:
-        if max_retries < 1:
-            raise ValueError(f"max_retries must be >= 1, got {max_retries}")
         self._park_id = park_id
-        self._max_retries = max_retries
-        self._backoff_seconds = backoff_seconds
+        self._retry_policy = RetryPolicy(max_attempts=max_retries, backoff_seconds=backoff_seconds)
         # `is None`, not `or`: an intentionally empty table must stay empty.
         self._attraction_metadata: Mapping[str, AttractionMetadata] = (
             MAGIC_KINGDOM_ATTRACTION_METADATA
@@ -250,45 +255,37 @@ class ThemeParksClient:
         }
 
     def _request(self, path: str, *, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        for attempt in range(1, self._max_retries + 1):
-            is_last_attempt = attempt == self._max_retries
+        try:
+            response = send_with_retry(
+                lambda: self._client.get(path, params=params),
+                policy=self._retry_policy,
+            )
+        except RetriesExhausted as exc:
+            raise ThemeParksUnavailableError(
+                f"{path} failed after {exc.attempts} attempts: {exc.last_error}"
+            ) from exc
 
-            try:
-                response = self._client.get(path, params=params)
-            except (httpx.TimeoutException, httpx.TransportError) as exc:
-                if is_last_attempt:
-                    raise ThemeParksUnavailableError(
-                        f"{path} failed after {self._max_retries} attempts: {exc}"
-                    ) from exc
-                time.sleep(self._backoff_seconds * attempt)
-                continue
+        if response.status_code == 404:
+            raise ThemeParksNotFoundError(f"{path} returned 404")
+        if response.status_code in RETRYABLE_STATUS_CODES:
+            raise ThemeParksUnavailableError(
+                f"{path} returned {response.status_code} after "
+                f"{self._retry_policy.max_attempts} attempts"
+            )
+        if 300 <= response.status_code < 400:
+            # Policy: fail closed. httpx.Client() defaults to
+            # follow_redirects=False, and we keep it: a 3xx means the
+            # provider's URL contract changed. Not retried either: the
+            # same URL would return the same redirect (see module docstring).
+            raise ThemeParksSchemaError(
+                f"{path} returned unhandled redirect (HTTP {response.status_code})"
+            )
+        if response.status_code >= 400:
+            raise ThemeParksClientError(
+                f"{path} returned unexpected status {response.status_code}"
+            )
 
-            if response.status_code == 404:
-                raise ThemeParksNotFoundError(f"{path} returned 404")
-            if response.status_code in _RETRYABLE_STATUS_CODES:
-                if is_last_attempt:
-                    raise ThemeParksUnavailableError(
-                        f"{path} returned {response.status_code} after "
-                        f"{self._max_retries} attempts"
-                    )
-                time.sleep(self._backoff_seconds * attempt)
-                continue
-            if 300 <= response.status_code < 400:
-                # Policy: fail closed. httpx.Client() defaults to
-                # follow_redirects=False, and we keep it: a 3xx means the
-                # provider's URL contract changed. Not retried either: the
-                # same URL would return the same redirect (see module docstring).
-                raise ThemeParksSchemaError(
-                    f"{path} returned unhandled redirect (HTTP {response.status_code})"
-                )
-            if response.status_code >= 400:
-                raise ThemeParksClientError(
-                    f"{path} returned unexpected status {response.status_code}"
-                )
-
-            try:
-                return response.json()
-            except ValueError as exc:
-                raise ThemeParksSchemaError(f"{path} returned non-JSON body: {exc}") from exc
-
-        raise AssertionError("unreachable")  # loop always returns or raises
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise ThemeParksSchemaError(f"{path} returned non-JSON body: {exc}") from exc

@@ -7,7 +7,7 @@ import httpx
 import pytest
 
 from parkmind.core.contracts import PARK_TZ, WeatherHour
-from parkmind.services.clients import open_meteo_client
+from parkmind.services.clients import _retry
 from parkmind.services.clients.open_meteo_client import (
     OpenMeteoClient,
     OpenMeteoClientError,
@@ -364,11 +364,12 @@ def test_retry_on_timeout_exhaustion():
     assert "failed after 3 attempts" in str(exc_info.value)
 
 
-def test_backoff_is_linear_and_only_between_attempts(monkeypatch):
+def test_backoff_is_exponential_and_only_between_attempts(monkeypatch):
     """Pins the schedule documented in the module docstring: 3 attempts,
-    0.5s then 1.0s, and no sleep after the final attempt."""
+    0.5s then 1.0s, and no sleep after the final attempt. The sleep call
+    itself lives in the shared services/clients/_retry.py helper now."""
     sleeps: list[float] = []
-    monkeypatch.setattr(open_meteo_client.time, "sleep", sleeps.append)
+    monkeypatch.setattr(_retry.time, "sleep", sleeps.append)
     calls = {"count": 0}
 
     def handler(request: httpx.Request) -> httpx.Response:
