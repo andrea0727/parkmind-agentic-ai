@@ -149,6 +149,37 @@ poetry run streamlit run ui/app.py
 - **Accessibility data:** `session_only` records are held in process memory
   only and are never written to any table (see `PostgresSessionStore`).
 
+#### Wiring the session store
+
+Create **one** `SessionMemory` per process at startup and pass that same
+instance to every `PostgresSessionStore`. A store is cheap and can live per
+request, but the memory must outlive it. A fresh memory per request would
+silently drop a guest's `session_only` accessibility needs mid-session.
+
+```python
+from parkmind.services.clients.postgres.connection import connect
+from parkmind.services.clients.postgres.session_store import (
+    PostgresSessionStore,
+    SessionMemory,
+)
+
+SESSION_MEMORY = SessionMemory()  # once, at process startup
+
+def handle_request(thread_id: str, guest_id: str) -> None:
+    with connect() as conn:  # per request
+        store = PostgresSessionStore(conn, SESSION_MEMORY)
+        requirements = store.get(thread_id, guest_id)  # session_id == LangGraph thread_id
+        ...
+```
+
+Call `store.end_session(thread_id)` when the session ends. Persisted
+(consented) records are unaffected.
+
+**Single worker only for now.** The memory is process-local, so a deployment
+with several API workers would lose records between them. P0-35 must either
+fail loudly at startup with more than one worker, or use sticky sessions or a
+shared non-table store.
+
 ### Using Poetry
 
 If you don't have Poetry installed:
