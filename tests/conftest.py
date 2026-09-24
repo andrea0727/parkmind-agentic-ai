@@ -1,6 +1,7 @@
 """Shared pytest fixtures. Add fakes for the clients (ThemeParksClient,
-OpenMeteoClient, InMemoryKnowledgeStore, PostgresRepository) here once the
-first one exists, so unit/ tests never need real network/DB access."""
+OpenMeteoClient, InMemoryKnowledgeStore) here once the first one exists, so
+unit/ tests never need real network/DB access. The Postgres repositories are
+tested against a real database in tests/integration/postgres/."""
 
 from datetime import date, datetime, timedelta
 
