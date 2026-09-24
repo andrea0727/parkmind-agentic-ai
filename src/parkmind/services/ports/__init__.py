@@ -39,10 +39,10 @@ from .plan_repository import PlanRepository
 from .profile_repository import ProfileRepository
 from .proposal_repository import ProposalRepository
 from .provenance_repository import ProvenanceRepository, ProvenanceSubjectKind
+from .routing import RoutingPort
 from .session_store import SessionStore
 from .snapshot_repository import RawPayload, SnapshotRepository
 from .weather import WeatherPort
-from .routing import RoutingPort
 
 __all__ = [
     "AttractionRepository",
@@ -71,9 +71,9 @@ __all__ = [
     "RawPayload",
     "RepositoryError",
     "RepositoryUnavailableError",
+    "RoutingPort",
     "SessionStore",
     "SnapshotRepository",
     "StoredDataError",
     "WeatherPort",
-    "RoutingPort",
 ]
