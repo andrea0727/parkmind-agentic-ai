@@ -206,6 +206,20 @@ curl -sSL https://install.python-poetry.org | python3 -
 
 All four of the above run on every pull request via `.github/workflows/ci.yml` (P0-04).
 
+## Implementation Status
+
+| Component | Status | Details |
+|---|---|---|
+| **LangGraph State v2** | ✅ Done | Typed ParkMindState, state helpers, message reducer |
+| **Preference Resolution** | ✅ Done | Weighted aggregation from GuestProfile (queue, walking, categories) |
+| **Plan Synthesis** | ✅ Done | DRAFT plan generation with Provenance, DB persistence |
+| **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
+| **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
+| **PostgreSQL Repos** | ✅ Done | Profiles, Plans, Session store (in-memory for accessibility) |
+| **Initial Planning Graph** | ✅ Done | 4-node orchestration: resolve → fetch → synthesize → approve |
+| **Constraint Checker** | 🔄 Next | Validation rules, PlanDiff generation |
+| **Replanner** | 🔄 Next | Proposal generation, interrupt flow |
+
 ## Working conventions
 
 - **Branch per component, not per person** — `feat/planning-constraint-checker`,
