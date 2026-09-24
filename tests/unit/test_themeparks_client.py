@@ -17,7 +17,7 @@ from parkmind.core.contracts import (
     Park,
     WaitEstimate,
 )
-from parkmind.services.clients import themeparks_client
+from parkmind.services.clients import _retry
 from parkmind.services.clients.themeparks_client import (
     ThemeParksClient,
     ThemeParksClientError,
@@ -329,11 +329,12 @@ class TestRetriesAndErrors:
             client.get_schedule(date(2026, 9, 16))
         assert calls["count"] == 1
 
-    def test_backoff_is_linear_and_only_between_attempts(self, monkeypatch):
+    def test_backoff_is_exponential_and_only_between_attempts(self, monkeypatch):
         """Pins the schedule documented in the module docstring: 3 attempts,
-        0.5s then 1.0s, and no sleep after the final attempt."""
+        0.5s then 1.0s, and no sleep after the final attempt. The sleep call
+        itself lives in the shared services/clients/_retry.py helper now."""
         sleeps: list[float] = []
-        monkeypatch.setattr(themeparks_client.time, "sleep", sleeps.append)
+        monkeypatch.setattr(_retry.time, "sleep", sleeps.append)
         calls = {"count": 0}
 
         def handler(request: httpx.Request) -> httpx.Response:
