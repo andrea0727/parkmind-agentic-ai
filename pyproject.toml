@@ -13,7 +13,7 @@ readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
-python = "^3.12.9"
+python = "^3.12"
 # Runtime
 pydantic = ">=2.6"
 langgraph = ">=0.2"

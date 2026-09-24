@@ -41,6 +41,7 @@ from .proposal_repository import ProposalRepository
 from .provenance_repository import ProvenanceRepository, ProvenanceSubjectKind
 from .session_store import SessionStore
 from .snapshot_repository import RawPayload, SnapshotRepository
+from .weather import WeatherPort
 
 __all__ = [
     "AttractionRepository",
@@ -72,4 +73,5 @@ __all__ = [
     "SessionStore",
     "SnapshotRepository",
     "StoredDataError",
+    "WeatherPort",
 ]
