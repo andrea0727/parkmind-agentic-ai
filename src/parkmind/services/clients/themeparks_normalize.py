@@ -89,12 +89,29 @@ def standby_wait(entity: Mapping[str, Any]) -> float | None:
     """The STANDBY wait, or ``None`` when there is no standby queue or no value.
 
     "Standby queues only for planning; other queue types kept raw" (P0-07):
-    RETURN_TIME / PAID_RETURN_TIME are never read here.
+    RETURN_TIME / PAID_RETURN_TIME are never read here. A wait that isn't a
+    non-negative number (a string, a bool, an object) raises instead of being
+    coerced.
     """
-    standby = (entity.get("queue") or {}).get("STANDBY")
-    if standby is None or standby.get("waitTime") is None:
+    queue = entity.get("queue") or {}
+    if not isinstance(queue, Mapping):
+        raise ThemeParksSchemaError(f"malformed queue for entity {entity.get('id')}: {queue!r}")
+    standby = queue.get("STANDBY")
+    if standby is None:
         return None
-    return float(standby["waitTime"])
+    if not isinstance(standby, Mapping):
+        raise ThemeParksSchemaError(
+            f"malformed STANDBY queue for entity {entity.get('id')}: {standby!r}"
+        )
+    wait = standby.get("waitTime")
+    if wait is None:
+        return None
+    # bool is an int subclass: True must not become a 1-minute wait.
+    if isinstance(wait, bool) or not isinstance(wait, int | float) or wait < 0:
+        raise ThemeParksSchemaError(
+            f"malformed STANDBY waitTime for entity {entity.get('id')}: {wait!r}"
+        )
+    return float(wait)
 
 
 def parse_showtimes(entity: Mapping[str, Any]) -> list[datetime]:
