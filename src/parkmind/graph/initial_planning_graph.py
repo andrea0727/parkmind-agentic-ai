@@ -14,14 +14,7 @@ from langgraph.graph import END, START, StateGraph
 from parkmind.agents.plan_synthesis_agent import synthesize_plan
 from parkmind.agents.preference_resolver_agent import resolve_guest_preferences
 from parkmind.graph.state import ParkMindState
-from parkmind.services.clients.open_meteo_client import (
-    OpenMeteoClient,
-    OpenMeteoClientError,
-)
-from parkmind.services.clients.themeparks_client import (
-    ThemeParksClient,
-    ThemeParksClientError,
-)
+from parkmind.services.use_cases.load_live_context import LoadLiveContextUseCase
 
 
 def build_initial_planning_graph():
@@ -60,29 +53,12 @@ async def _fetch_context_from_apis(state: ParkMindState) -> ParkMindState:
     if not guest:
         raise ValueError("Guest must be set before fetching context")
 
-    # Fetch weather
-    try:
-        weather_client = OpenMeteoClient()
-        today = datetime.now(UTC).date()
-        weather = weather_client.get_hourly_forecast(
-            latitude=28.3852,
-            longitude=-81.5639,
-            start_date=today,
-            end_date=today,
-        )
-        state["weather"] = weather
-    except OpenMeteoClientError as e:
-        print(f"Warning: Could not fetch weather: {e}")
-        state["weather"] = []
-
-    # Fetch attractions
-    try:
-        parks_client = ThemeParksClient("80008297")
-        attractions = parks_client.get_catalog()
-        state["attractions"] = attractions
-    except ThemeParksClientError as e:
-        print(f"Warning: Could not fetch attractions: {e}")
-        state["attractions"] = []
+    live_context = LoadLiveContextUseCase(
+        park_id="80008297", latitude=28.3852, longitude=-81.5639
+    )
+    today = datetime.now(UTC).date()
+    state["weather"] = live_context.fetch_weather(start_date=today, end_date=today)
+    state["attractions"] = live_context.fetch_attractions()
 
     return state
 

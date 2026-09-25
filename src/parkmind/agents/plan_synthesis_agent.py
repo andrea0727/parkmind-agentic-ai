@@ -19,12 +19,9 @@ Persists to database.
 from datetime import UTC, datetime
 from uuid import uuid4
 
-import psycopg
-
 from parkmind.core.contracts import Plan, Provenance
 from parkmind.graph.state import ParkMindState
-from parkmind.services.clients.postgres import PostgresPlanRepository, connect
-from parkmind.services.ports.errors import RepositoryError
+from parkmind.services.use_cases.persist_plan import PersistPlanUseCase
 
 
 async def synthesize_plan(state: ParkMindState) -> ParkMindState:
@@ -70,14 +67,8 @@ async def synthesize_plan(state: ParkMindState) -> ParkMindState:
         ),
     )
 
-    # Persist to database
-    try:
-        with connect() as conn:
-            repo = PostgresPlanRepository(conn)
-            repo.save(thread_id, plan)
-    except (psycopg.Error, RepositoryError) as e:
-        print(f"Warning: Could not save plan to database: {e}")
-        # Continue anyway; plan is in memory
+    # Persist to database (graceful degradation if DB unavailable)
+    PersistPlanUseCase().execute(thread_id, plan)
 
     state["candidate_plan"] = plan
     return state

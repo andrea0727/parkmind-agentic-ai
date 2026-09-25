@@ -8,12 +8,8 @@ Inputs: guest (from state)
 Outputs: resolved_preferences (dict), guest_profiles (list[GuestProfile])
 """
 
-import psycopg
-
-from parkmind.core.contracts import GuestProfile
 from parkmind.graph.state import ParkMindState
-from parkmind.services.clients.postgres import PostgresProfileRepository, connect
-from parkmind.services.ports.errors import RepositoryError
+from parkmind.services.use_cases.load_guest_profiles import LoadGuestProfilesUseCase
 
 
 async def resolve_guest_preferences(state: ParkMindState) -> ParkMindState:
@@ -28,17 +24,8 @@ async def resolve_guest_preferences(state: ParkMindState) -> ParkMindState:
 
     guest_id = guest.guest_id
 
-    # Fetch profiles from database
-    profiles: list[GuestProfile] = []
-    try:
-        with connect() as conn:
-            repo = PostgresProfileRepository(conn)
-            profile = repo.get_latest(guest_id)
-            profiles = [profile] if profile is not None else []
-    except (psycopg.Error, RepositoryError) as e:
-        # If DB unavailable, continue with empty profiles (graceful degradation)
-        print(f"Warning: Could not fetch profiles for {guest_id}: {e}")
-        profiles = []
+    # Fetch profiles from database (graceful degradation if DB unavailable)
+    profiles = LoadGuestProfilesUseCase().execute(guest_id)
 
     # Compute resolved preferences (weighted average for now)
     resolved = {
