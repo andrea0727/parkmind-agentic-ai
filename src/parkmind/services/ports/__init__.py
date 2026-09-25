@@ -33,7 +33,7 @@ from .errors import (
 from .event_repository import EventRepository
 from .execution_state_repository import ExecutionStateRepository
 from .guest_repository import GuestRepository
-from .id_mapping_repository import IdMappingRepository
+from .id_mapping_repository import EntityKind, IdMappingRepository
 from .park_data import ParkDataPort
 from .plan_repository import PlanRepository
 from .profile_repository import ProfileRepository
@@ -48,6 +48,7 @@ __all__ = [
     "BehaviorLogRepository",
     "ConflictError",
     "ConsentRequiredError",
+    "EntityKind",
     "EventRepository",
     "ExecutionStateRepository",
     "GuestRepository",
