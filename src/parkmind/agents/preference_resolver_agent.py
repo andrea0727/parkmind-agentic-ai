@@ -33,7 +33,8 @@ async def resolve_guest_preferences(state: ParkMindState) -> ParkMindState:
     try:
         with connect() as conn:
             repo = PostgresProfileRepository(conn)
-            profiles = repo.get_all_by_guest(guest_id)
+            profile = repo.get_latest(guest_id)
+            profiles = [profile] if profile is not None else []
     except (psycopg.Error, RepositoryError) as e:
         # If DB unavailable, continue with empty profiles (graceful degradation)
         print(f"Warning: Could not fetch profiles for {guest_id}: {e}")

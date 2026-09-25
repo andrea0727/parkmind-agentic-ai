@@ -41,6 +41,9 @@ async def synthesize_plan(state: ParkMindState) -> ParkMindState:
     guest = state.get("guest")
     if not guest:
         raise ValueError("Guest must be set")
+    thread_id = state.get("thread_id")
+    if not thread_id:
+        raise ValueError("thread_id must be set")
     if not state.get("weather"):
         raise ValueError("Weather must be fetched first")
     if not state.get("attractions"):
@@ -57,14 +60,11 @@ async def synthesize_plan(state: ParkMindState) -> ParkMindState:
         per_guest_satisfaction={guest.guest_id: 0.0},  # TODO: Compute
         unmet_must_do=[],  # TODO: Validate constraints
         provenance=Provenance(
-            reason="initial_planning",
-            source="plan_synthesis_agent",
-            created_at=datetime.now(UTC),
             snapshot_id="",
             retrieved_at=datetime.now(UTC),
             forecast_strategy="weather_adapter",
             optimizer_strategy="greedy_affinity_then_wait",
-            constraints_version="1",
+            constraints_version=1,
             objective_version="1",
             preference_model_version="1",
         ),
@@ -74,7 +74,7 @@ async def synthesize_plan(state: ParkMindState) -> ParkMindState:
     try:
         with connect() as conn:
             repo = PostgresPlanRepository(conn)
-            repo.save(plan)
+            repo.save(thread_id, plan)
     except (psycopg.Error, RepositoryError) as e:
         print(f"Warning: Could not save plan to database: {e}")
         # Continue anyway; plan is in memory

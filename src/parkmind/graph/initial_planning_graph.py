@@ -14,9 +14,8 @@ from langgraph.graph import END, START, StateGraph
 from parkmind.agents.plan_synthesis_agent import synthesize_plan
 from parkmind.agents.preference_resolver_agent import resolve_guest_preferences
 from parkmind.graph.state import ParkMindState
-from parkmind.services.clients import OpenMeteoClient, ThemeParksClient
-from parkmind.services.clients.open_meteo_client import OpenMeteoClientError
-from parkmind.services.clients.themeparks_client import ThemeParksClientError
+from parkmind.services.clients.open_meteo_client import OpenMeteoClient, OpenMeteoClientError
+from parkmind.services.clients.themeparks_client import ThemeParksClient, ThemeParksClientError
 
 
 def build_initial_planning_graph():
