@@ -154,6 +154,7 @@ def parse_catalog(
     index, issues = index_entities(payload.get("children", []))
 
     attractions: list[Attraction] = []
+    kinds: dict[str, EntityKind] = {}
     for entity_id, entity in index.items():
         kind = entity_kind(entity)
         if kind is None:
@@ -176,11 +177,12 @@ def parse_catalog(
                     outdoor=curated["outdoor"],
                 )
             )
+            kinds[entity_id] = kind
         except KeyError as exc:
             raise ThemeParksSchemaError(
                 f"malformed catalog entity {entity_id!r}: missing {exc}"
             ) from exc
-    return NormalizedCatalog(attractions=attractions, issues=issues)
+    return NormalizedCatalog(attractions=attractions, kinds=kinds, issues=issues)
 
 
 def parse_live(payload: Mapping[str, Any]) -> NormalizedLive:

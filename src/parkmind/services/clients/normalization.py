@@ -60,6 +60,8 @@ class LiveEntity:
 @dataclass(frozen=True)
 class NormalizedCatalog:
     attractions: list[Attraction]
+    kinds: dict[str, EntityKind] = field(default_factory=dict)
+    """Entity kind per ``Attraction.node_id`` (an ``Attraction`` doesn't carry it)."""
     issues: list[MappingIssue] = field(default_factory=list)
 
 
