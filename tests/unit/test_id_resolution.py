@@ -200,3 +200,11 @@ def test_seen_at_must_be_timezone_aware() -> None:
 
     with pytest.raises(ValueError, match="timezone-aware"):
         resolver.resolve(THEMEPARKS, SPACE_MOUNTAIN, EntityKind.ATTRACTION, seen_at=datetime(2026, 9, 16))  # noqa: DTZ001 -- naive on purpose
+
+
+def test_catalog_kinds_are_required() -> None:
+    """A catalog built without kinds can't reach resolve_catalog and crash there."""
+    from parkmind.services.clients.normalization import NormalizedCatalog
+
+    with pytest.raises(TypeError):
+        NormalizedCatalog(attractions=[])  # type: ignore[call-arg]

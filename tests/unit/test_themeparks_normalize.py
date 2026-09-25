@@ -23,6 +23,7 @@ from parkmind.services.clients.themeparks_normalize import (
     parse_live,
     parse_schedule,
     parse_time,
+    standby_wait,
 )
 from parkmind.services.clients.themeparks_reference_data import (
     MAGIC_KINGDOM_ATTRACTION_METADATA,
@@ -229,3 +230,36 @@ def test_schedule_without_a_matching_day_is_not_found() -> None:
             park_name="Magic Kingdom Park",
             park_outdoor=True,
         )
+
+
+# ------------------------------------------------ malformed waits never coerced
+
+
+@pytest.mark.parametrize(
+    "queue",
+    [
+        {"STANDBY": {"waitTime": "60"}},
+        {"STANDBY": {"waitTime": True}},
+        {"STANDBY": {"waitTime": -5}},
+        {"STANDBY": {"waitTime": {"minutes": 60}}},
+        {"STANDBY": "n/a"},
+        ["STANDBY"],
+    ],
+)
+def test_malformed_standby_wait_raises_schema_error(queue: object) -> None:
+    with pytest.raises(ThemeParksSchemaError):
+        standby_wait({"id": SPACE_MOUNTAIN, "queue": queue})
+
+
+@pytest.mark.parametrize(
+    ("queue", "expected"),
+    [
+        ({"STANDBY": {"waitTime": 45}}, 45.0),
+        ({"STANDBY": {"waitTime": 12.5}}, 12.5),
+        ({"STANDBY": {"waitTime": None}}, None),
+        ({"RETURN_TIME": {"state": "FINISHED"}}, None),
+        (None, None),
+    ],
+)
+def test_valid_or_absent_standby_wait(queue: object, expected: float | None) -> None:
+    assert standby_wait({"id": SPACE_MOUNTAIN, "queue": queue}) == expected
