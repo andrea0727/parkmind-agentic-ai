@@ -33,6 +33,7 @@ pytest-cov = ">=5.0"
 ruff = ">=0.6"
 mypy = "^2.3.1"
 import-linter = "^2.15"
+grandalf = "^0.8"
 
 [tool.mypy]
 python_version = "3.12"
