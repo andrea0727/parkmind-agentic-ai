@@ -16,12 +16,15 @@ Simple algorithm:
 Persists to database.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
+
+import psycopg
 
 from parkmind.core.contracts import Plan, Provenance
 from parkmind.graph.state import ParkMindState
 from parkmind.services.clients.postgres import PostgresPlanRepository, connect
+from parkmind.services.ports.errors import RepositoryError
 
 
 async def synthesize_plan(state: ParkMindState) -> ParkMindState:
@@ -43,10 +46,6 @@ async def synthesize_plan(state: ParkMindState) -> ParkMindState:
     if not state.get("attractions"):
         raise ValueError("Attractions must be fetched first")
 
-    weather = state["weather"]
-    attractions = state["attractions"]
-    preferences = state.get("resolved_preferences", {})
-
     # Create minimal valid Plan
     plan = Plan(
         plan_id=f"plan_{guest.guest_id}_{uuid4().hex[:8]}",
@@ -60,9 +59,9 @@ async def synthesize_plan(state: ParkMindState) -> ParkMindState:
         provenance=Provenance(
             reason="initial_planning",
             source="plan_synthesis_agent",
-            created_at=datetime.now(),
+            created_at=datetime.now(UTC),
             snapshot_id="",
-            retrieved_at=datetime.now(),
+            retrieved_at=datetime.now(UTC),
             forecast_strategy="weather_adapter",
             optimizer_strategy="greedy_affinity_then_wait",
             constraints_version="1",
@@ -76,7 +75,7 @@ async def synthesize_plan(state: ParkMindState) -> ParkMindState:
         with connect() as conn:
             repo = PostgresPlanRepository(conn)
             repo.save(plan)
-    except Exception as e:
+    except (psycopg.Error, RepositoryError) as e:
         print(f"Warning: Could not save plan to database: {e}")
         # Continue anyway; plan is in memory
 

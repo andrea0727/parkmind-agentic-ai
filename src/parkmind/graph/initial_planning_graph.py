@@ -7,14 +7,16 @@ Workflow: START → resolve_preferences → fetch_context → synthesize_plan �
 Exposes a module-level compiled `graph` for orchestration.py to use.
 """
 
-from datetime import date
+from datetime import UTC, datetime
 
 from langgraph.graph import END, START, StateGraph
 
-from parkmind.agents.preference_resolver_agent import resolve_guest_preferences
 from parkmind.agents.plan_synthesis_agent import synthesize_plan
+from parkmind.agents.preference_resolver_agent import resolve_guest_preferences
 from parkmind.graph.state import ParkMindState
 from parkmind.services.clients import OpenMeteoClient, ThemeParksClient
+from parkmind.services.clients.open_meteo_client import OpenMeteoClientError
+from parkmind.services.clients.themeparks_client import ThemeParksClientError
 
 
 def build_initial_planning_graph():
@@ -56,14 +58,15 @@ async def _fetch_context_from_apis(state: ParkMindState) -> ParkMindState:
     # Fetch weather
     try:
         weather_client = OpenMeteoClient()
+        today = datetime.now(UTC).date()
         weather = weather_client.get_hourly_forecast(
             latitude=28.3852,
             longitude=-81.5639,
-            start_date=date.today(),
-            end_date=date.today(),
+            start_date=today,
+            end_date=today,
         )
         state["weather"] = weather
-    except Exception as e:
+    except OpenMeteoClientError as e:
         print(f"Warning: Could not fetch weather: {e}")
         state["weather"] = []
 
@@ -72,7 +75,7 @@ async def _fetch_context_from_apis(state: ParkMindState) -> ParkMindState:
         parks_client = ThemeParksClient("80008297")
         attractions = parks_client.get_catalog()
         state["attractions"] = attractions
-    except Exception as e:
+    except ThemeParksClientError as e:
         print(f"Warning: Could not fetch attractions: {e}")
         state["attractions"] = []
 

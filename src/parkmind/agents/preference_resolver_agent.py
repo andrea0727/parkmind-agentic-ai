@@ -8,9 +8,12 @@ Inputs: guest (from state)
 Outputs: resolved_preferences (dict), guest_profiles (list[GuestProfile])
 """
 
+import psycopg
+
 from parkmind.core.contracts import GuestProfile
 from parkmind.graph.state import ParkMindState
 from parkmind.services.clients.postgres import PostgresProfileRepository, connect
+from parkmind.services.ports.errors import RepositoryError
 
 
 async def resolve_guest_preferences(state: ParkMindState) -> ParkMindState:
@@ -31,7 +34,7 @@ async def resolve_guest_preferences(state: ParkMindState) -> ParkMindState:
         with connect() as conn:
             repo = PostgresProfileRepository(conn)
             profiles = repo.get_all_by_guest(guest_id)
-    except Exception as e:
+    except (psycopg.Error, RepositoryError) as e:
         # If DB unavailable, continue with empty profiles (graceful degradation)
         print(f"Warning: Could not fetch profiles for {guest_id}: {e}")
         profiles = []

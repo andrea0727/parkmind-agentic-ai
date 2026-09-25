@@ -24,7 +24,6 @@ from langgraph.graph import add_messages
 
 from parkmind.core.contracts import (
     AccessibilityCheck,
-    ApprovalStatus,
     Attraction,
     BehaviorEntry,
     Event,
