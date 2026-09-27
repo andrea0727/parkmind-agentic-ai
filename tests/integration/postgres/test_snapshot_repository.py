@@ -195,3 +195,27 @@ def test_normalizer_version_must_be_positive(conn: psycopg.Connection) -> None:
         PostgresSnapshotRepository(conn).save(
             factories.live_context(), RAW, [], normalizer_version=0
         )
+
+
+def test_latest_valid_snapshot_skips_a_row_that_no_longer_validates(
+    conn: psycopg.Connection,
+) -> None:
+    """P0-11 Done-when 3 against the real table: a corrupt newest row is passed over."""
+    from parkmind.services.use_cases.latest_snapshot import latest_valid_snapshot
+
+    repo = PostgresSnapshotRepository(conn)
+    for sid, minutes in (("older", 20), ("newest", 1)):
+        repo.save(
+            factories.live_context(snapshot_id=sid, retrieved_at=factories.NOW - timedelta(minutes=minutes)),
+            RAW,
+            [],
+            normalizer_version=1,
+        )
+    conn.execute("UPDATE snapshots SET live_context = '{\"broken\": true}'::jsonb WHERE snapshot_id = 'newest'")
+
+    latest = latest_valid_snapshot(repo, now=factories.NOW)
+
+    assert latest is not None
+    assert latest.live_context.snapshot_id == "older"
+    assert latest.skipped == ["newest"]
+    assert latest.age == timedelta(minutes=20)
