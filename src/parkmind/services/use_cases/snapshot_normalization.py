@@ -101,13 +101,16 @@ def normalize_raw_snapshot(
         if entity.showtimes
     }
 
+    # data_sources records what was *collected* (it is stored once and never
+    # rewritten by re-normalization); a collected payload that can't be read
+    # shows up as a coverage gap instead.
     data_sources = [DataSource.THEMEPARKS_WIKI]
     weather: list[WeatherHour] = []
     open_meteo = raw.get("open_meteo")
     if open_meteo is not None:
+        data_sources.append(DataSource.OPEN_METEO)
         try:
             weather = parse_hourly_forecast(open_meteo.get("hourly"))
-            data_sources.append(DataSource.OPEN_METEO)
         except OpenMeteoSchemaError as exc:
             gaps.append(f"open_meteo payload rejected: {exc}")
 
