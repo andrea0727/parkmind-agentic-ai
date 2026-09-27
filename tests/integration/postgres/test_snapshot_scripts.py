@@ -79,3 +79,30 @@ def test_renormalize_command_exits_one_when_a_snapshot_fails(
 
     assert renormalize(["--database-url", migrated_database_url, "--snapshot-id", "ghost"]) == 1
     assert "failed ghost: no such snapshot" in capsys.readouterr().out
+
+
+def test_latest_shows_the_newest_valid_snapshot_and_its_age(
+    migrated_database_url: str, conn, capsys: pytest.CaptureFixture[str]
+) -> None:
+    script = _script("collect_snapshot")
+    assert script.main(["--database-url", migrated_database_url, "--latest"]) == 0
+    assert "no valid snapshot stored yet" in capsys.readouterr().out
+
+    assert _collect(migrated_database_url, Provider()) == 0
+    capsys.readouterr()
+
+    assert script.main(["--database-url", migrated_database_url, "--latest"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("latest snap_") and "age 0 min" in out and "fresh" in out
+
+
+def test_latest_points_to_renormalize_when_stored_rows_are_invalid(
+    migrated_database_url: str, conn, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert _collect(migrated_database_url, Provider()) == 0
+    conn.execute("UPDATE snapshots SET live_context = %s::jsonb", (json.dumps({"broken": True}),))
+    conn.commit()
+    capsys.readouterr()
+
+    assert _script("collect_snapshot").main(["--database-url", migrated_database_url, "--latest"]) == 0
+    assert "renormalize_snapshots.py --all" in capsys.readouterr().out
