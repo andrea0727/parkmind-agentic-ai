@@ -18,7 +18,7 @@ file, an unknown attraction status, a stale or incomplete LiveContext
 snapshot) fails closed — the candidate is rejected rather than assumed safe.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from parkmind.core.contracts import (
     AccessibilityRequirements,
@@ -30,6 +30,7 @@ from parkmind.core.contracts import (
     Park,
     PartyConstraints,
     Plan,
+    PlanExecutionState,
     RuleId,
     Stop,
     StopKind,
@@ -37,10 +38,23 @@ from parkmind.core.contracts import (
 
 MAX_SNAPSHOT_AGE_MINUTES = 30
 HEAT_SENSITIVITY_THRESHOLD_F = 90.0
+SHOW_ARRIVAL_BUFFER_MINUTES = 5.0
+
+_STATUS_BEARING_KINDS = (StopKind.ATTRACTION, StopKind.SHOW)
 
 
 class ConstraintChecker:
     """Validates a candidate plan against all 11 hard constraint rules."""
+
+    def __init__(
+        self,
+        max_snapshot_age_minutes: float = MAX_SNAPSHOT_AGE_MINUTES,
+        heat_sensitivity_threshold_f: float = HEAT_SENSITIVITY_THRESHOLD_F,
+        show_arrival_buffer_minutes: float = SHOW_ARRIVAL_BUFFER_MINUTES,
+    ) -> None:
+        self._max_snapshot_age_minutes = max_snapshot_age_minutes
+        self._heat_sensitivity_threshold_f = heat_sensitivity_threshold_f
+        self._show_arrival_buffer_minutes = show_arrival_buffer_minutes
 
     def check(
         self,
@@ -50,13 +64,15 @@ class ConstraintChecker:
         attractions: dict[str, Attraction],
         park: Park,
         live_context: LiveContext,
+        now: datetime,
+        execution_state: PlanExecutionState | None = None,
     ) -> CheckResult:
         all_guest_ids = [guest.guest_id for guest in constraints.guests]
         accessibility_by_guest = {req.guest_id: req for req in accessibility}
 
         violations: list[ConstraintViolation] = []
-        violations += self._check_data_freshness(plan, live_context)
-        violations += self._check_opening_hours(plan, park)
+        violations += self._check_data_freshness(live_context, now)
+        violations += self._check_opening_hours(plan, park, live_context)
         violations += self._check_height(plan, constraints, attractions, all_guest_ids)
         violations += self._check_show_arrival(plan, live_context)
         violations += self._check_must_do(plan, constraints, live_context)
@@ -65,7 +81,12 @@ class ConstraintChecker:
         violations += self._check_lunch_window(plan, constraints)
         violations += self._check_departure(plan, constraints)
         violations += self._check_accessibility(
-            plan, accessibility_by_guest, attractions, live_context, all_guest_ids
+            plan,
+            accessibility_by_guest,
+            attractions,
+            live_context,
+            all_guest_ids,
+            execution_state,
         )
         violations += self._check_ride_restriction(
             plan, accessibility_by_guest, live_context, all_guest_ids
@@ -79,17 +100,23 @@ class ConstraintChecker:
         return stop.served_guests if stop.served_guests else all_guest_ids
 
     @staticmethod
-    def _temperature_during(stop: Stop, live_context: LiveContext) -> float | None:
+    def _temperatures_during(stop: Stop, live_context: LiveContext) -> list[float]:
         hour = stop.arrival_time.replace(minute=0, second=0, microsecond=0)
-        for weather_hour in live_context.weather:
-            if (
-                weather_hour.timestamp.replace(minute=0, second=0, microsecond=0)
-                == hour
-            ):
-                return weather_hour.temperature_f
-        return None
+        last_hour = stop.departure_time.replace(minute=0, second=0, microsecond=0)
+        hours = set()
+        while hour <= last_hour:
+            hours.add(hour)
+            hour += timedelta(hours=1)
+        return [
+            weather_hour.temperature_f
+            for weather_hour in live_context.weather
+            if weather_hour.timestamp.replace(minute=0, second=0, microsecond=0)
+            in hours
+        ]
 
-    def _check_opening_hours(self, plan: Plan, park: Park) -> list[ConstraintViolation]:
+    def _check_opening_hours(
+        self, plan: Plan, park: Park, live_context: LiveContext
+    ) -> list[ConstraintViolation]:
         violations = []
         for stop in plan.stops:
             if (
@@ -102,6 +129,28 @@ class ConstraintChecker:
                         message=f"Stop {stop.node_id} falls outside park operating hours",
                         stop_id=stop.node_id,
                         suggestion=f"Shift stop {stop.node_id} inside operating hours or remove it.",
+                    )
+                )
+
+            if stop.kind not in _STATUS_BEARING_KINDS:
+                continue
+            status = live_context.statuses.get(stop.node_id)
+            if status is None:
+                violations.append(
+                    ConstraintViolation(
+                        rule=RuleId.OPENING_HOURS,
+                        message=f"Attraction status unknown for stop {stop.node_id}; failing closed",
+                        stop_id=stop.node_id,
+                        suggestion=f"Forbid stop {stop.node_id} and re-solve until status is confirmed.",
+                    )
+                )
+            elif status != AttractionStatus.OPERATING:
+                violations.append(
+                    ConstraintViolation(
+                        rule=RuleId.OPENING_HOURS,
+                        message=f"Stop {stop.node_id} attraction status is {status.value}, not OPERATING",
+                        stop_id=stop.node_id,
+                        suggestion=f"Forbid stop {stop.node_id} and re-solve.",
                     )
                 )
         return violations
@@ -117,7 +166,24 @@ class ConstraintChecker:
         guests_by_id = {guest.guest_id: guest for guest in constraints.guests}
         for stop in plan.stops:
             attraction = attractions.get(stop.node_id)
-            if attraction is None or attraction.height_restriction_cm is None:
+            if attraction is None:
+                if stop.kind in _STATUS_BEARING_KINDS:
+                    violations.append(
+                        ConstraintViolation(
+                            rule=RuleId.HEIGHT,
+                            message=(
+                                f"No attraction metadata on file for stop {stop.node_id}; "
+                                f"cannot verify height requirement; failing closed"
+                            ),
+                            stop_id=stop.node_id,
+                            suggestion=(
+                                f"Reload attraction metadata before proposing; forbid stop "
+                                f"{stop.node_id} until confirmed safe."
+                            ),
+                        )
+                    )
+                continue
+            if attraction.height_restriction_cm is None:
                 continue
             for guest_id in self._served_guest_ids(stop, all_guest_ids):
                 guest = guests_by_id.get(guest_id)
@@ -161,10 +227,10 @@ class ConstraintChecker:
             if stop.kind != StopKind.SHOW:
                 continue
             showtimes = live_context.showtimes.get(stop.node_id, [])
-            if not showtimes:
-                continue
+            buffer = timedelta(minutes=self._show_arrival_buffer_minutes)
             if not any(
-                stop.arrival_time <= t <= stop.departure_time for t in showtimes
+                stop.arrival_time <= t - buffer and t <= stop.departure_time
+                for t in showtimes
             ):
                 violations.append(
                     ConstraintViolation(
@@ -300,22 +366,16 @@ class ConstraintChecker:
         attractions: dict[str, Attraction],
         live_context: LiveContext,
         all_guest_ids: list[str],
+        execution_state: PlanExecutionState | None,
     ) -> list[ConstraintViolation]:
         violations = []
         for guest_id, req in accessibility_by_guest.items():
-            guest_stops = sorted(
-                (
-                    stop
-                    for stop in plan.stops
-                    if guest_id in self._served_guest_ids(stop, all_guest_ids)
-                ),
-                key=lambda s: s.arrival_time,
-            )
-            if not guest_stops:
-                continue
-
+            # The party moves together: an excluded guest still walks
+            # alongside the group, so these two checks apply against the
+            # group total regardless of whether the guest has any stops of
+            # their own in the plan.
             if req.daily_walking_limit_minutes is not None:
-                total_walking = sum(stop.walking_minutes for stop in guest_stops)
+                total_walking = plan.total_walking_minutes
                 if total_walking > req.daily_walking_limit_minutes:
                     violations.append(
                         ConstraintViolation(
@@ -327,6 +387,37 @@ class ConstraintChecker:
                             suggestion="Drop the lowest-utility optional stop or insert a REST stop.",
                         )
                     )
+
+            if execution_state is not None:
+                remaining_cap = execution_state.remaining_walking_cap_minutes.get(
+                    guest_id
+                )
+                if (
+                    remaining_cap is not None
+                    and plan.total_walking_minutes > remaining_cap
+                ):
+                    violations.append(
+                        ConstraintViolation(
+                            rule=RuleId.ACCESSIBILITY,
+                            message=(
+                                f"Guest {guest_id} walking total {plan.total_walking_minutes} "
+                                f"minutes exceeds their remaining fatigue-adjusted cap of "
+                                f"{remaining_cap} minutes"
+                            ),
+                            suggestion="Drop the lowest-utility optional stop or insert a REST stop.",
+                        )
+                    )
+
+            guest_stops = sorted(
+                (
+                    stop
+                    for stop in plan.stops
+                    if guest_id in self._served_guest_ids(stop, all_guest_ids)
+                ),
+                key=lambda s: s.arrival_time,
+            )
+            if not guest_stops:
+                continue
 
             if req.rest_frequency_minutes is not None:
                 last_rest_end = guest_stops[0].arrival_time
@@ -354,10 +445,28 @@ class ConstraintChecker:
             if req.heat_sensitivity:
                 for stop in guest_stops:
                     attraction = attractions.get(stop.node_id)
-                    if attraction is None or not attraction.outdoor:
+                    if attraction is None:
+                        if stop.kind in _STATUS_BEARING_KINDS:
+                            violations.append(
+                                ConstraintViolation(
+                                    rule=RuleId.ACCESSIBILITY,
+                                    message=(
+                                        f"No attraction metadata on file for stop {stop.node_id}; "
+                                        f"cannot verify heat exposure for heat-sensitive guest "
+                                        f"{guest_id}; failing closed"
+                                    ),
+                                    stop_id=stop.node_id,
+                                    suggestion=(
+                                        f"Reload attraction metadata before proposing; remove "
+                                        f"guest {guest_id} from served_guests until confirmed safe."
+                                    ),
+                                )
+                            )
                         continue
-                    temperature_f = self._temperature_during(stop, live_context)
-                    if temperature_f is None:
+                    if not attraction.outdoor:
+                        continue
+                    temperatures = self._temperatures_during(stop, live_context)
+                    if not temperatures:
                         violations.append(
                             ConstraintViolation(
                                 rule=RuleId.ACCESSIBILITY,
@@ -372,14 +481,14 @@ class ConstraintChecker:
                                 ),
                             )
                         )
-                    elif temperature_f > HEAT_SENSITIVITY_THRESHOLD_F:
+                    elif max(temperatures) > self._heat_sensitivity_threshold_f:
                         violations.append(
                             ConstraintViolation(
                                 rule=RuleId.ACCESSIBILITY,
                                 message=(
                                     f"Heat-sensitive guest {guest_id} is scheduled at outdoor stop "
-                                    f"{stop.node_id} at {temperature_f}°F, above the "
-                                    f"{HEAT_SENSITIVITY_THRESHOLD_F}°F threshold"
+                                    f"{stop.node_id} at {max(temperatures)}°F, above the "
+                                    f"{self._heat_sensitivity_threshold_f}°F threshold"
                                 ),
                                 stop_id=stop.node_id,
                                 suggestion=(
@@ -403,6 +512,8 @@ class ConstraintChecker:
             for check in live_context.accessibility_results
         }
         for stop in plan.stops:
+            if stop.kind not in _STATUS_BEARING_KINDS:
+                continue
             for guest_id in self._served_guest_ids(stop, all_guest_ids):
                 req = accessibility_by_guest.get(guest_id)
                 if req is None or not (
@@ -444,61 +555,42 @@ class ConstraintChecker:
         return violations
 
     def _check_data_freshness(
-        self, plan: Plan, live_context: LiveContext
+        self, live_context: LiveContext, now: datetime
     ) -> list[ConstraintViolation]:
         """
-        Rule 11: status-dependent stops fail if the LiveContext snapshot age
-        exceeds the freshness window, if per-guest accessibility coverage is
-        incomplete, or if a stop's attraction status is unknown or not
-        OPERATING (e.g. closed, down, under refurbishment).
+        Rule 11: fails if the LiveContext snapshot is stale relative to the
+        current time, or if any data coverage dimension is incomplete for
+        this snapshot (required attractions, required shows, weather, or
+        per-guest accessibility checks).
         """
         violations = []
-        if not live_context.coverage.accessibility_checks_complete:
-            violations.append(
-                ConstraintViolation(
-                    rule=RuleId.DATA_FRESHNESS,
-                    message="Accessibility checks incomplete for this snapshot; failing closed",
-                    suggestion="Reload LiveContext once; fail closed if still incomplete.",
-                )
-            )
-
-        if plan.stops:
-            reference_time = min(stop.arrival_time for stop in plan.stops)
-            age_minutes = (reference_time - live_context.retrieved_at) / timedelta(
-                minutes=1
-            )
-            if age_minutes > MAX_SNAPSHOT_AGE_MINUTES:
+        coverage = live_context.coverage
+        coverage_checks = (
+            (coverage.required_attractions_covered, "required attractions"),
+            (coverage.required_shows_covered, "required shows"),
+            (coverage.weather_covered, "weather"),
+            (coverage.accessibility_checks_complete, "accessibility checks"),
+        )
+        for covered, label in coverage_checks:
+            if not covered:
                 violations.append(
                     ConstraintViolation(
                         rule=RuleId.DATA_FRESHNESS,
-                        message=(
-                            f"LiveContext snapshot is {age_minutes:.0f} minutes old, "
-                            f"exceeding the {MAX_SNAPSHOT_AGE_MINUTES}-minute freshness limit"
-                        ),
-                        suggestion="Reload LiveContext once; fail closed if still stale.",
+                        message=f"Data coverage for {label} is incomplete for this snapshot; failing closed",
+                        suggestion="Reload LiveContext once; fail closed if still incomplete.",
                     )
                 )
 
-            for stop in plan.stops:
-                if stop.kind != StopKind.ATTRACTION:
-                    continue
-                status = live_context.statuses.get(stop.node_id)
-                if status is None:
-                    violations.append(
-                        ConstraintViolation(
-                            rule=RuleId.DATA_FRESHNESS,
-                            message=f"Attraction status unknown for stop {stop.node_id}; failing closed",
-                            stop_id=stop.node_id,
-                            suggestion="Reload LiveContext once; drop the stop if status remains unknown.",
-                        )
-                    )
-                elif status != AttractionStatus.OPERATING:
-                    violations.append(
-                        ConstraintViolation(
-                            rule=RuleId.DATA_FRESHNESS,
-                            message=f"Stop {stop.node_id} attraction status is {status.value}, not OPERATING",
-                            stop_id=stop.node_id,
-                            suggestion=f"Remove stop {stop.node_id} or replace it with an operating alternative.",
-                        )
-                    )
+        age_minutes = (now - live_context.retrieved_at) / timedelta(minutes=1)
+        if age_minutes > self._max_snapshot_age_minutes:
+            violations.append(
+                ConstraintViolation(
+                    rule=RuleId.DATA_FRESHNESS,
+                    message=(
+                        f"LiveContext snapshot is {age_minutes:.0f} minutes old, "
+                        f"exceeding the {self._max_snapshot_age_minutes}-minute freshness limit"
+                    ),
+                    suggestion="Reload LiveContext once; fail closed if still stale.",
+                )
+            )
         return violations
