@@ -124,41 +124,8 @@ MAGIC_KINGDOM_NODE_COORDINATES: dict[str, tuple[float, float]] = {
     ),  # Buzz Lightyear's Space Ranger Spin
 }
 
-# Curated direct walking times (in minutes) for key frequently walked paths
-MAGIC_KINGDOM_DIRECT_WALKING_TIMES: dict[tuple[str, str], float] = {
-    # Hub <-> Major Land Entry Points
-    (
-        "90d79335-c907-4069-a021-d0fe1ec73ae2",
-        "b2260923-9315-40fd-9c6b-44dd811dbe64",
-    ): 5.0,  # Hub <-> Space Mountain
-    (
-        "90d79335-c907-4069-a021-d0fe1ec73ae2",
-        "de3309ca-97d5-4211-bffe-739fed47e92f",
-    ): 6.0,  # Hub <-> Big Thunder
-    (
-        "90d79335-c907-4069-a021-d0fe1ec73ae2",
-        "352feb94-e52e-45eb-9c92-e4b44c6b1a9d",
-    ): 4.5,  # Hub <-> Pirates
-    (
-        "90d79335-c907-4069-a021-d0fe1ec73ae2",
-        "2551a77d-023f-4ab1-9a19-8afec0190f39",
-    ): 3.5,  # Hub <-> Haunted Mansion
-    (
-        "90d79335-c907-4069-a021-d0fe1ec73ae2",
-        "9d4d5229-7142-44b6-b4fb-528920969a2c",
-    ): 3.0,  # Hub <-> Seven Dwarfs
-    # Tomorrowland Intra-land
-    (
-        "b2260923-9315-40fd-9c6b-44dd811dbe64",
-        "5a43d1a7-ad53-4d25-abfe-25625f0da304",
-    ): 2.5,  # Space Mtn <-> TRON
-    (
-        "b2260923-9315-40fd-9c6b-44dd811dbe64",
-        "72c7343a-f7fb-4f66-95df-c91016de7338",
-    ): 2.0,  # Space Mtn <-> Buzz
-    # Frontierland Intra-land
-    (
-        "de3309ca-97d5-4211-bffe-739fed47e92f",
-        "73cb9445-0695-47a3-87ce-d08ae36b5f3c",
-    ): 1.5,  # Big Thunder <-> Tiana
-}
+# Direct walking times overrides (empty by default to preserve metric space properties
+# and triangular inequality via uniform Haversine + tortuosity calculations).
+# Custom overrides can be supplied via `custom_matrix` in RoutingClient when certified
+# empirical route measurements become available.
+MAGIC_KINGDOM_DIRECT_WALKING_TIMES: dict[tuple[str, str], float] = {}

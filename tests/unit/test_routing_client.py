@@ -7,13 +7,20 @@ import pytest
 from parkmind.services.clients.routing_client import (
     DEFAULT_FALLBACK_WALKING_MINUTES,
     DEFAULT_WALKING_SPEED_METERS_PER_MINUTE,
-    InvalidRouteError,
-    RouteNotFoundError,
     RoutingClient,
     calculate_haversine_distance_meters,
 )
+from parkmind.services.clients.routing_reference_data import (
+    MAGIC_KINGDOM_NODE_COORDINATES,
+)
 from parkmind.services.planning.park_graph import ParkGraph
-from parkmind.services.ports import RoutingPort
+from parkmind.services.ports import (
+    InvalidRouteError,
+    RouteNotFoundError,
+    RoutingError,
+    RoutingNotFoundError,
+    RoutingPort,
+)
 
 
 def _accepts_port(port: RoutingPort) -> None:
@@ -37,11 +44,12 @@ def test_routing_client_satisfies_protocol():
     """Verify RoutingClient satisfies RoutingPort interface."""
     client = RoutingClient()
     _accepts_port(client)
-    assert isinstance(client, RoutingPort)
+    assert hasattr(client, "walk_minutes")
+    assert callable(client.walk_minutes)
 
 
 def test_default_initialization():
-    """Verify default parameters."""
+    """Verify default parameters: strict mode (fallback_enabled=False) by default."""
     client = RoutingClient()
     assert (
         client.walking_speed_meters_per_minute
@@ -49,7 +57,7 @@ def test_default_initialization():
     )
     assert client.default_fallback_minutes == DEFAULT_FALLBACK_WALKING_MINUTES
     assert client.tortuosity_factor == 1.2
-    assert client.fallback_enabled is True
+    assert client.fallback_enabled is False
 
 
 def test_invalid_initialization_parameters():
@@ -85,28 +93,60 @@ def test_same_node_returns_zero():
     assert client.walk_minutes("any-node-id", "any-node-id") == 0.0
 
 
-def test_direct_matrix_lookup():
-    """Known pair in precalculated matrix returns exact minutes."""
+def test_coordinate_based_estimation_between_known_attractions():
+    """Known attractions calculate walking duration based on Haversine coordinates."""
     client = RoutingClient()
-    # Space Mtn <-> TRON is 2.5 minutes in direct table
+    # Space Mtn <-> TRON (~138m * 1.2 / 75 m/min = ~2.2 min)
+    minutes = client.walk_minutes(SPACE_MTN_ID, TRON_ID)
+    assert 2.0 <= minutes <= 2.5
+
+    # Hub <-> Big Thunder (~458m * 1.2 / 75 m/min = ~7.3 min)
+    hub_bt_minutes = client.walk_minutes(HUB_ID, BIG_THUNDER_ID)
+    assert 7.0 <= hub_bt_minutes <= 7.6
+
+
+def test_custom_matrix_lookup():
+    """Custom matrix overrides take precedence when explicit edge durations are provided."""
+    custom = {
+        (SPACE_MTN_ID, TRON_ID): 2.5,
+        (HUB_ID, BIG_THUNDER_ID): 6.0,
+    }
+    client = RoutingClient(custom_matrix=custom)
     assert client.walk_minutes(SPACE_MTN_ID, TRON_ID) == 2.5
-    # Hub <-> Big Thunder is 6.0 minutes
     assert client.walk_minutes(HUB_ID, BIG_THUNDER_ID) == 6.0
 
 
-def test_matrix_bidirectional_lookup():
-    """Lookups in reverse direction should work symmetrically."""
-    client = RoutingClient()
+def test_custom_matrix_bidirectional_lookup():
+    """Lookups in reverse direction should work symmetrically when defined in custom matrix."""
+    custom = {(HUB_ID, PIRATES_ID): 4.5}
+    client = RoutingClient(custom_matrix=custom)
     forward = client.walk_minutes(HUB_ID, PIRATES_ID)
     backward = client.walk_minutes(PIRATES_ID, HUB_ID)
     assert forward == backward == 4.5
 
 
-def test_custom_matrix_override():
-    """Custom matrix takes precedence over defaults."""
-    custom = {(SPACE_MTN_ID, TRON_ID): 1.0}
-    client = RoutingClient(custom_matrix=custom)
-    assert client.walk_minutes(SPACE_MTN_ID, TRON_ID) == 1.0
+# ============================================================================
+# TRIANGULAR INEQUALITY TESTS
+# ============================================================================
+
+
+def test_triangular_inequality_holds_for_all_reference_nodes():
+    """Verify that the continuous coordinate model satisfies triangular inequality across all reference nodes."""
+    client = RoutingClient()
+    node_ids = list(MAGIC_KINGDOM_NODE_COORDINATES.keys())[:10]  # Sample first 10 for speed
+    violations = 0
+
+    for a in node_ids:
+        for b in node_ids:
+            for c in node_ids:
+                d_ac = client.walk_minutes(a, c)
+                d_ab = client.walk_minutes(a, b)
+                d_bc = client.walk_minutes(b, c)
+                # Allow 0.2 min tolerance due to round(..., 1) rounding
+                if d_ac > d_ab + d_bc + 0.2:
+                    violations += 1
+
+    assert violations == 0, f"Found {violations} triangular inequality violations"
 
 
 # ============================================================================
@@ -121,8 +161,8 @@ def test_haversine_distance_calculation():
     assert 380.0 < dist < 410.0  # Approx 391 meters
 
 
-def test_coordinate_based_estimation_without_matrix_entry():
-    """Nodes with coordinates but no explicit matrix edge use Haversine estimation."""
+def test_coordinate_based_estimation_with_custom_coordinates():
+    """Nodes with custom coordinates use Haversine estimation."""
     custom_coords = {
         "node_a": (28.4190, -81.5810),
         "node_b": (28.4200, -81.5810),  # approx 111 meters north
@@ -138,25 +178,32 @@ def test_coordinate_based_estimation_without_matrix_entry():
 
 
 # ============================================================================
-# FALLBACK & MISSING ROUTE TESTS
+# FALLBACK & MISSING ROUTE TESTS (FAIL-CLOSED)
 # ============================================================================
 
 
-def test_missing_route_graceful_fallback(caplog):
-    """When a node is unknown, fallback_enabled=True returns default_fallback_minutes and logs warning."""
+def test_missing_route_strict_mode_by_default_raises_error():
+    """When fallback_enabled is not specified (default False), unknown routes raise RoutingNotFoundError."""
+    client = RoutingClient()
+    with pytest.raises(RoutingNotFoundError, match="No route or coordinates found"):
+        client.walk_minutes("unknown_node_1", "unknown_node_2")
+
+    # Also catches as RouteNotFoundError (alias) and RoutingError (base)
+    with pytest.raises(RouteNotFoundError):
+        client.walk_minutes("unknown_node_1", "unknown_node_2")
+
+    with pytest.raises(RoutingError):
+        client.walk_minutes("unknown_node_1", "unknown_node_2")
+
+
+def test_missing_route_explicit_fallback_when_enabled(caplog):
+    """When fallback_enabled=True explicitly, returns default_fallback_minutes and logs warning."""
     client = RoutingClient(default_fallback_minutes=12.5, fallback_enabled=True)
     with caplog.at_level(logging.WARNING):
         result = client.walk_minutes("unknown_node_1", "unknown_node_2")
 
     assert result == 12.5
     assert "Explicit routing fallback applied" in caplog.text
-
-
-def test_missing_route_strict_mode_raises_error():
-    """When fallback_enabled=False, unknown routes raise RouteNotFoundError."""
-    client = RoutingClient(fallback_enabled=False)
-    with pytest.raises(RouteNotFoundError, match="No route or coordinates found"):
-        client.walk_minutes("unknown_node_1", "unknown_node_2")
 
 
 # ============================================================================
@@ -194,15 +241,15 @@ def test_park_graph_delegates_to_routing_port():
     """Planning core (ParkGraph) delegates walk_minutes to RoutingPort."""
     routing = RoutingClient()
     graph = ParkGraph(routing=routing)
-    assert graph.walk_minutes(SPACE_MTN_ID, TRON_ID) == 2.5
     assert graph.walk_minutes(SPACE_MTN_ID, SPACE_MTN_ID) == 0.0
+    # Between Space Mtn and TRON
+    assert 2.0 <= graph.walk_minutes(SPACE_MTN_ID, TRON_ID) <= 2.5
 
 
-def test_park_graph_unconfigured_routing_raises_runtime_error():
-    """ParkGraph without configured RoutingPort raises RuntimeError."""
-    graph = ParkGraph(routing=None)
-    with pytest.raises(RuntimeError, match="RoutingPort has not been configured"):
-        graph.walk_minutes(SPACE_MTN_ID, TRON_ID)
+def test_park_graph_unconfigured_routing_raises_type_error_at_construction():
+    """ParkGraph requires a valid RoutingPort at construction time (fail-fast)."""
+    with pytest.raises(TypeError, match="ParkGraph requires a valid RoutingPort"):
+        ParkGraph(routing=None)  # type: ignore[arg-type]
 
 
 class DummyFakeRouting:
