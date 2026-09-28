@@ -1,6 +1,6 @@
 # scope: Postgres only. No pgvector/Qdrant container (knowledge
 # store is in-memory
-# src/parkmind/services/clients/knowledge_store.py).
+# src/parkmind/services/clients/knowledge/in_memory.py).
 
 services:
   postgres:
