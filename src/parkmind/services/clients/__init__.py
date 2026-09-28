@@ -20,13 +20,6 @@ from .themeparks_client import (
     ThemeParksUnavailableError,
 )
 
-# Routing exceptions that live at port level — re-exported here for convenience
-from parkmind.services.ports import (
-    RoutingNotFoundError,
-    RoutingSchemaError,
-    RoutingUnavailableError,
-)
-
 __all__ = [
     "InvalidRouteError",
     "OpenMeteoClient",
@@ -38,9 +31,6 @@ __all__ = [
     "RoutingClient",
     "RoutingClientError",
     "RoutingError",
-    "RoutingNotFoundError",
-    "RoutingSchemaError",
-    "RoutingUnavailableError",
     "ThemeParksClient",
     "ThemeParksClientError",
     "ThemeParksNotFoundError",
