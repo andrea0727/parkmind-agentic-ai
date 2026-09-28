@@ -22,7 +22,14 @@ attraction "for any guest with restrictions", not for every guest.
 C19: this path reads ``AccessibilityRequirements`` and returns only the
 derived ``AccessibilityCheck``. It logs nothing and touches no repository, so
 no requirement value can reach a table, a log or a trace from here.
+
+Coverage (section 30 [C14], section 45): because an uncovered attraction is
+excluded for every guest with restrictions, corpus coverage is a product
+metric. ``notice_coverage`` reports it over the curated attraction catalog.
 """
+
+from collections.abc import Iterable
+from dataclasses import dataclass
 
 from parkmind.core.contracts import (
     AccessibilityCheck,
@@ -90,4 +97,39 @@ def check_accessibility(
         eligible=eligible,
         conflicting_requirement=conflict,
         provenance=provenance,
+    )
+
+
+@dataclass(frozen=True)
+class NoticeCoverage:
+    """How much of the attraction catalog the notice corpus covers (section 45).
+
+    ``missing`` attractions fail closed for every guest with restrictions;
+    ``not_in_catalog`` are corpus entries for ids the catalog no longer has
+    (stale entries to review). All id tuples are sorted.
+    """
+
+    corpus_version: str
+    covered: tuple[str, ...]
+    missing: tuple[str, ...]
+    not_in_catalog: tuple[str, ...]
+
+    @property
+    def ratio(self) -> float:
+        """Covered share of the catalog; 1.0 for an empty catalog (nothing to cover)."""
+        total = len(self.covered) + len(self.missing)
+        return len(self.covered) / total if total else 1.0
+
+
+def notice_coverage(
+    store: KnowledgeStore, catalog_ids: Iterable[str]
+) -> NoticeCoverage:
+    """Which catalog attractions have a notice on file."""
+    catalog = frozenset(catalog_ids)
+    on_file = store.covered_attraction_ids()
+    return NoticeCoverage(
+        corpus_version=store.corpus_version,
+        covered=tuple(sorted(catalog & on_file)),
+        missing=tuple(sorted(catalog - on_file)),
+        not_in_catalog=tuple(sorted(on_file - catalog)),
     )

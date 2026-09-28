@@ -18,6 +18,7 @@ from parkmind.services.use_cases import check_accessibility as module
 from parkmind.services.use_cases.check_accessibility import (
     check_accessibility,
     guest_flags,
+    notice_coverage,
 )
 
 HIGH_G = RideRestriction.NOT_RECOMMENDED_HIGH_G_FORCE
@@ -177,4 +178,28 @@ def test_check_module_imports_no_repository_or_logging() -> None:
         for alias in node.names
     }
 
-    assert imported == {"parkmind.core.contracts", "parkmind.services.ports"}
+    assert imported <= {
+        "collections.abc",
+        "dataclasses",
+        "parkmind.core.contracts",
+        "parkmind.services.ports",
+    }
+
+
+def test_notice_coverage_lists_covered_and_missing() -> None:
+    store = _store(a1=[HIGH_G], a2=[], retired=[TRANSFER])
+
+    coverage = notice_coverage(store, ["a3", "a2", "a1"])
+
+    assert coverage.corpus_version == "2026-09-test"
+    assert coverage.covered == ("a1", "a2")
+    assert coverage.missing == ("a3",)
+    assert coverage.not_in_catalog == ("retired",)
+    assert coverage.ratio == pytest.approx(2 / 3)
+
+
+def test_notice_coverage_of_an_empty_catalog_is_complete() -> None:
+    coverage = notice_coverage(_store(a1=[]), [])
+
+    assert coverage.covered == coverage.missing == ()
+    assert coverage.ratio == 1.0
