@@ -33,12 +33,13 @@ from .errors import (
 from .event_repository import EventRepository
 from .execution_state_repository import ExecutionStateRepository
 from .guest_repository import GuestRepository
-from .id_mapping_repository import IdMappingRepository
+from .id_mapping_repository import EntityKind, IdMappingRepository
 from .park_data import ParkDataPort
 from .plan_repository import PlanRepository
 from .profile_repository import ProfileRepository
 from .proposal_repository import ProposalRepository
 from .provenance_repository import ProvenanceRepository, ProvenanceSubjectKind
+from .routing import RoutingPort
 from .session_store import SessionStore
 from .snapshot_repository import RawPayload, SnapshotRepository
 from .weather import WeatherPort
@@ -48,6 +49,7 @@ __all__ = [
     "BehaviorLogRepository",
     "ConflictError",
     "ConsentRequiredError",
+    "EntityKind",
     "EventRepository",
     "ExecutionStateRepository",
     "GuestRepository",
@@ -70,6 +72,7 @@ __all__ = [
     "RawPayload",
     "RepositoryError",
     "RepositoryUnavailableError",
+    "RoutingPort",
     "SessionStore",
     "SnapshotRepository",
     "StoredDataError",

@@ -180,6 +180,24 @@ with several API workers would lose records between them. P0-35 must either
 fail loudly at startup with more than one worker, or use sticky sessions or a
 shared non-table store.
 
+### IDs and normalization (P0-10)
+
+- **Internal ids.** An entity's internal id is the ThemeParks entity UUID it had
+  when first seen. Every lookup goes through the `id_mapping` table
+  (`services/use_cases/id_resolution.py`), so a re-issued provider id can be
+  mapped back to the old internal id. Other providers (Queue-Times, later) need
+  a curated mapping; they are never auto-minted.
+- **Normalization** lives in `services/clients/themeparks_normalize.py`: pure
+  functions over the raw payload, so a stored snapshot can be re-normalized
+  without calling the API. All times become aware `America/New_York`
+  datetimes (a timestamp without an offset is rejected), statuses are the
+  closed `AttractionStatus` enum, and a payload in another timezone raises.
+- **Problems are reported, never merged.** A duplicated provider id, missing
+  curated metadata, an unknown entity type, an unmapped or conflicting id: the
+  entity is left out and returned as a `MappingIssue`; the rest still loads.
+  Today the 28 SHOW entities show up as `MISSING_METADATA` until they're
+  curated in `themeparks_reference_data.py`.
+
 ### Using Poetry
 
 If you don't have Poetry installed:

@@ -1,12 +1,24 @@
 """IdMappingRepository -- provider id -> stable internal id (backlog P0-10).
 
 Storage only, typed with plain values: section 33 defines no ``IdMapping``
-contract, and adding one is a baseline change. P0-10 owns the model and the
-``entity_kind`` vocabulary and can wrap this port.
+contract, and adding one is a baseline change. ``EntityKind`` is the closed
+``entity_kind`` vocabulary (P0-10); it is a ``StrEnum``, so it can be passed
+wherever the port takes a ``str``. The model around this port lives in
+``services.use_cases.id_resolution``.
 """
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Protocol
+
+
+class EntityKind(StrEnum):
+    """What a mapped provider entity is. Distinct kinds are distinct namespaces."""
+
+    ATTRACTION = "attraction"
+    SHOW = "show"
+    RESTAURANT = "restaurant"
+    PARK = "park"
 
 
 class IdMappingRepository(Protocol):
