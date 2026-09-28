@@ -28,9 +28,11 @@ from parkmind.services.ports import NotFoundError, ProfileRepository
 class PreferenceUpdate:
     """A new observation for one `PreferenceValue` dimension.
 
-    `stated_value` only takes effect when `source` is STATED. For a
-    learned/default update the profile's current `stated_value` is always
-    carried forward, never overwritten.
+    `stated_value` is only meaningful when `source` is STATED, where it must
+    equal `value` if given at all. For a LEARNED/DEFAULT update the profile's
+    current `stated_value` is carried forward untouched, so `stated_value`
+    must be left `None`. A DEFAULT update is only accepted when the
+    dimension has no prior stated or learned value.
     """
 
     value: float
@@ -46,7 +48,15 @@ class ProfileUpdate:
 
     A field left as `None` leaves that dimension untouched. `sensitivities`
     and `thematic_affinity` are merged key-wise, so an update naming one
-    sensitivity or theme does not erase the others.
+    sensitivity or theme does not erase the others -- there is no way to
+    remove a sensitivity or theme through this update.
+
+    `sensitivities={}` is therefore a no-op (nothing to merge in), while
+    `preferred_categories=[]` / `avoided_categories=[]` do replace the
+    current list with an empty one, since those fields are replaced
+    wholesale rather than merged. A `ProfileUpdate()` with every field left
+    `None` is also a no-op: `update()` returns the current profile without
+    persisting a new version.
     """
 
     pace: PlanningPace | None = None
@@ -64,8 +74,26 @@ def _merge_preference(
 ) -> PreferenceValue:
     stated_value: float | None
     if update.source == PreferenceSource.STATED:
-        stated_value = update.value if update.stated_value is None else update.stated_value
+        if update.stated_value is not None and update.stated_value != update.value:
+            raise ValueError(
+                "a STATED update's stated_value must equal value "
+                f"(got value={update.value!r}, stated_value={update.stated_value!r})"
+            )
+        stated_value = update.value
     else:
+        if update.stated_value is not None:
+            raise ValueError(
+                f"a {update.source.value.upper()} update must not set stated_value"
+            )
+        if update.source == PreferenceSource.DEFAULT and current is not None:
+            has_prior_value = current.stated_value is not None or current.source != (
+                PreferenceSource.DEFAULT
+            )
+            if has_prior_value:
+                raise ValueError(
+                    "a DEFAULT update cannot overwrite a dimension that already has a "
+                    "stated or learned value"
+                )
         stated_value = current.stated_value if current is not None else None
     return PreferenceValue(
         value=update.value,
@@ -97,11 +125,19 @@ class GuestProfileService:
     def update(self, guest_id: str, update: ProfileUpdate) -> GuestProfile:
         """Apply `update` onto the latest stored profile and persist a new version.
 
-        Raises `NotFoundError` if the guest has no stored profile yet.
+        Raises `NotFoundError` if the guest has no stored profile yet. Raises
+        `ProfileVersionConflictError` (via the repository) if another update
+        was persisted concurrently -- the caller must retry against the new
+        latest version; this update's changes are not lost, they simply
+        never get applied. A `ProfileUpdate` with every field `None` returns
+        the current profile unchanged, without persisting a new version.
         """
         current = self._profiles.get_latest(guest_id)
         if current is None:
             raise NotFoundError(f"no stored profile for guest {guest_id!r}")
+
+        if update == ProfileUpdate():
+            return current
 
         sensitivities = dict(current.sensitivities)
         if update.sensitivities:

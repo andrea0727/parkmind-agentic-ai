@@ -91,6 +91,7 @@ def test_update_leaves_unrelated_dimensions_untouched() -> None:
         sensitivities={SensitivityKind.LOUD_NOISE: SensitivityLevel.HIGH},
         thematic_affinity={"space": factories.preference(0.7)},
         preferred_categories=["THRILL"],
+        avoided_categories=["WATER"],
     )
     service.create(original)
 
@@ -109,7 +110,19 @@ def test_update_leaves_unrelated_dimensions_untouched() -> None:
     assert updated.sensitivities == original.sensitivities
     assert updated.thematic_affinity == original.thematic_affinity
     assert updated.preferred_categories == original.preferred_categories
+    assert updated.avoided_categories == original.avoided_categories
     assert updated.queue_tolerance.value == 0.9
+
+
+def test_empty_update_is_a_noop() -> None:
+    service, _ = _service_with_guests("g1")
+    original = factories.guest_profile(guest_id="g1")
+    service.create(original)
+
+    result = service.update("g1", ProfileUpdate())
+
+    assert result == original
+    assert service.get_version("g1", 2) is None
 
 
 def test_sensitivities_and_thematic_affinity_merge_key_wise() -> None:
@@ -199,6 +212,102 @@ def test_a_stated_update_can_set_a_new_stated_value() -> None:
 
     assert updated.queue_tolerance.source is PreferenceSource.STATED
     assert updated.queue_tolerance.stated_value == 0.6
+
+
+def test_stated_update_value_must_match_stated_value() -> None:
+    service, _ = _service_with_guests("g1")
+    service.create(factories.guest_profile(guest_id="g1"))
+
+    with pytest.raises(ValueError, match="stated_value"):
+        service.update(
+            "g1",
+            ProfileUpdate(
+                queue_tolerance=PreferenceUpdate(
+                    value=0.8,
+                    source=PreferenceSource.STATED,
+                    confidence=1.0,
+                    updated_at=NOW,
+                    stated_value=0.3,
+                )
+            ),
+        )
+
+
+def test_a_non_stated_update_rejects_stated_value() -> None:
+    service, _ = _service_with_guests("g1")
+    service.create(factories.guest_profile(guest_id="g1"))
+
+    with pytest.raises(ValueError, match="stated_value"):
+        service.update(
+            "g1",
+            ProfileUpdate(
+                queue_tolerance=PreferenceUpdate(
+                    value=0.9,
+                    source=PreferenceSource.LEARNED,
+                    confidence=0.6,
+                    updated_at=NOW,
+                    stated_value=0.4,
+                )
+            ),
+        )
+
+
+def test_a_default_update_cannot_overwrite_a_stated_value() -> None:
+    service, _ = _service_with_guests("g1")
+    service.create(
+        factories.guest_profile(
+            guest_id="g1", queue_tolerance=factories.preference(0.2, stated_value=0.2)
+        )
+    )
+
+    with pytest.raises(ValueError, match="DEFAULT"):
+        service.update(
+            "g1",
+            ProfileUpdate(
+                queue_tolerance=PreferenceUpdate(
+                    value=0.5, source=PreferenceSource.DEFAULT, confidence=0.1, updated_at=NOW
+                )
+            ),
+        )
+
+
+def test_a_default_update_is_accepted_for_a_dimension_with_no_prior_value() -> None:
+    service, _ = _service_with_guests("g1")
+    service.create(factories.guest_profile(guest_id="g1"))
+
+    updated = service.update(
+        "g1",
+        ProfileUpdate(
+            thematic_affinity={
+                "pirates": PreferenceUpdate(
+                    value=0.0, source=PreferenceSource.DEFAULT, confidence=0.1, updated_at=NOW
+                )
+            }
+        ),
+    )
+
+    assert updated.thematic_affinity["pirates"].value == 0.0
+    assert updated.thematic_affinity["pirates"].stated_value is None
+
+
+def test_update_propagates_a_concurrent_version_conflict() -> None:
+    class AlwaysConflictsRepository(FakeProfileRepository):
+        def save(self, profile: GuestProfile) -> None:
+            raise ProfileVersionConflictError("a concurrent update landed first")
+
+    repo = AlwaysConflictsRepository({"g1"})
+    repo._history["g1"] = {1: factories.guest_profile(guest_id="g1", profile_version=1)}
+    service = GuestProfileService(repo)
+
+    with pytest.raises(ProfileVersionConflictError):
+        service.update(
+            "g1",
+            ProfileUpdate(
+                queue_tolerance=PreferenceUpdate(
+                    value=0.9, source=PreferenceSource.LEARNED, confidence=0.6, updated_at=NOW
+                )
+            ),
+        )
 
 
 def test_update_bumps_the_profile_version_and_preserves_history() -> None:
