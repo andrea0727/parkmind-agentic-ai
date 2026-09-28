@@ -4,7 +4,17 @@ import pytest
 
 from parkmind.core.contracts import RideRestriction
 from parkmind.services import ports
-from parkmind.services.clients.knowledge import InMemoryKnowledgeStore
+from parkmind.services.clients.knowledge import (
+    NOTICE_CORPUS_VERSION,
+    InMemoryKnowledgeStore,
+    magic_kingdom_knowledge_store,
+)
+from parkmind.services.clients.knowledge.safety_notices import (
+    MAGIC_KINGDOM_SAFETY_NOTICES,
+)
+from parkmind.services.clients.themeparks_reference_data import (
+    MAGIC_KINGDOM_ATTRACTION_METADATA,
+)
 from parkmind.services.ports import KnowledgeStore
 
 HIGH_G = RideRestriction.NOT_RECOMMENDED_HIGH_G_FORCE
@@ -62,3 +72,95 @@ def test_adapter_rejects_free_text_flags() -> None:
 def test_adapter_requires_a_corpus_version() -> None:
     with pytest.raises(ValueError, match="version"):
         InMemoryKnowledgeStore({"a1": [HIGH_G]}, corpus_version="")
+
+
+# --- the reviewed Magic Kingdom corpus (clients/knowledge/safety_notices.py) ---
+
+_EVIDENCE_FLAGS = {
+    "transfer-from-wheelchair": {TRANSFER},
+    "transfer-to-wheelchair-then-ride": {TRANSFER},
+    "ambulatory": {TRANSFER},
+    "transfer-to-wheelchair": set(),
+    "wheelchair-accessibility": set(),
+    "no-service-animals": {RideRestriction.USES_SERVICE_ANIMAL},
+    "no-service-animals-in-some-areas": {RideRestriction.USES_SERVICE_ANIMAL},
+    "service-animals-with-caution": set(),
+    "expectant-mothers": {RideRestriction.NOT_RECOMMENDED_EXPECTANT},
+    "rider-warning": {
+        HIGH_G,
+        RideRestriction.NOT_RECOMMENDED_MOTION_SENSITIVITY,
+        RideRestriction.NOT_RECOMMENDED_HEART_CONDITION,
+        RideRestriction.NOT_RECOMMENDED_BACK_NECK,
+        RideRestriction.NOT_RECOMMENDED_EXPECTANT,
+    },
+}
+SPACE_MOUNTAIN = "b2260923-9315-40fd-9c6b-44dd811dbe64"
+SEVEN_DWARFS = "9d4d5229-7142-44b6-b4fb-528920969a2c"
+SMALL_WORLD = "f5aad2d4-a419-4384-bd9a-42f86385c750"
+
+
+def test_corpus_has_a_version() -> None:
+    assert NOTICE_CORPUS_VERSION
+    assert magic_kingdom_knowledge_store().corpus_version == NOTICE_CORPUS_VERSION
+
+
+def test_magic_kingdom_store_builds_offline() -> None:
+    store = magic_kingdom_knowledge_store()
+
+    assert len(store.covered_attraction_ids()) == len(MAGIC_KINGDOM_SAFETY_NOTICES)
+
+
+def test_corpus_ids_are_unique() -> None:
+    ids = [notice.attraction_id for notice in MAGIC_KINGDOM_SAFETY_NOTICES]
+
+    assert len(ids) == len(set(ids))
+
+
+def test_every_corpus_id_is_in_the_curated_catalog() -> None:
+    corpus_ids = {notice.attraction_id for notice in MAGIC_KINGDOM_SAFETY_NOTICES}
+
+    assert corpus_ids <= set(MAGIC_KINGDOM_ATTRACTION_METADATA)
+
+
+def test_every_entry_has_source_and_review_date() -> None:
+    for notice in MAGIC_KINGDOM_SAFETY_NOTICES:
+        assert notice.source_url.startswith(
+            "https://disneyworld.disney.go.com/attractions/magic-kingdom/"
+        )
+        assert notice.reviewed_on.isoformat() <= NOTICE_CORPUS_VERSION
+        assert notice.evidence
+
+
+def test_every_entry_has_exactly_one_mobility_access_class() -> None:
+    mobility_codes = {
+        "transfer-from-wheelchair",
+        "transfer-to-wheelchair-then-ride",
+        "ambulatory",
+        "transfer-to-wheelchair",
+        "wheelchair-accessibility",
+    }
+    for notice in MAGIC_KINGDOM_SAFETY_NOTICES:
+        assert len(mobility_codes.intersection(notice.evidence)) == 1, (
+            notice.attraction_id
+        )
+
+
+def test_every_entry_flags_exactly_what_its_evidence_publishes() -> None:
+    for notice in MAGIC_KINGDOM_SAFETY_NOTICES:
+        expected = set().union(*(_EVIDENCE_FLAGS[code] for code in notice.evidence))
+
+        assert notice.flags == expected, notice.attraction_id
+
+
+def test_published_notices_spot_check() -> None:
+    store = magic_kingdom_knowledge_store()
+
+    assert store.notice_for(SPACE_MOUNTAIN) == frozenset(RideRestriction)
+    assert store.notice_for(SEVEN_DWARFS) == frozenset(
+        {
+            RideRestriction.NOT_RECOMMENDED_EXPECTANT,
+            TRANSFER,
+            RideRestriction.USES_SERVICE_ANIMAL,
+        }
+    )
+    assert store.notice_for(SMALL_WORLD) == frozenset()

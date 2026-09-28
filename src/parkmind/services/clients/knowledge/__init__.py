@@ -6,5 +6,10 @@ not change either way.
 """
 
 from .in_memory import InMemoryKnowledgeStore
+from .safety_notices import NOTICE_CORPUS_VERSION, magic_kingdom_knowledge_store
 
-__all__ = ["InMemoryKnowledgeStore"]
+__all__ = [
+    "NOTICE_CORPUS_VERSION",
+    "InMemoryKnowledgeStore",
+    "magic_kingdom_knowledge_store",
+]
