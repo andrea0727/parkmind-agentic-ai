@@ -1,15 +1,24 @@
-"""RoutingClient adapter ? implements RoutingPort.
+"""RoutingClient adapter — implements RoutingPort.
 
 Provides walking time estimation between planning nodes with:
 1. Exact zero-duration for same-node queries.
-2. Precomputed matrix lookups for direct paths.
+2. Precomputed matrix lookups for direct paths (if custom matrix provided).
 3. Coordinate-based Haversine calculations with pedestrian detour (tortuosity) factors.
-4. Robust and configurable fallback behavior when nodes or routes are missing.
+4. Strict mode / fail-closed by default, with optional explicit fallback behavior.
 """
 
 import logging
 import math
 from typing import Any
+
+from parkmind.services.ports import (
+    InvalidRouteError,
+    RouteNotFoundError,
+    RoutingError,
+    RoutingNotFoundError,
+    RoutingSchemaError,
+    RoutingUnavailableError,
+)
 
 from .routing_reference_data import (
     MAGIC_KINGDOM_DIRECT_WALKING_TIMES,
@@ -26,25 +35,8 @@ DEFAULT_TORTUOSITY_FACTOR: float = (
 )
 EARTH_RADIUS_METERS: float = 6371000.0
 
-
-class RoutingClientError(Exception):
-    """Base exception for routing client errors."""
-
-
-class InvalidRouteError(RoutingClientError, ValueError):
-    """Raised when origin/destination identifiers or parameters are invalid."""
-
-
-class RouteNotFoundError(RoutingClientError):
-    """Raised when a route between nodes cannot be resolved and fallback is disabled."""
-
-
-class RoutingSchemaError(RoutingClientError):
-    """Raised when routing response payloads are malformed."""
-
-
-class RoutingUnavailableError(RoutingClientError):
-    """Raised when an external routing provider service is unavailable."""
+# Backward compatibility alias
+RoutingClientError = RoutingError
 
 
 def calculate_haversine_distance_meters(
@@ -70,9 +62,10 @@ class RoutingClient:
 
     Estimates walking minutes between nodes using a multi-tiered resolution:
     - Same node: 0.0 minutes
-    - Direct matrix entry: explicit curated value
+    - Direct matrix entry: explicit override value (if provided)
     - Coordinate match: Haversine distance with tortuosity adjustment
-    - Fallback: explicit default duration or typed error depending on configuration
+    - Strict fail-closed by default (RouteNotFoundError/RoutingNotFoundError)
+      or explicit fallback when configured with fallback_enabled=True.
     """
 
     def __init__(
@@ -80,7 +73,7 @@ class RoutingClient:
         walking_speed_meters_per_minute: float = DEFAULT_WALKING_SPEED_METERS_PER_MINUTE,
         default_fallback_minutes: float = DEFAULT_FALLBACK_WALKING_MINUTES,
         tortuosity_factor: float = DEFAULT_TORTUOSITY_FACTOR,
-        fallback_enabled: bool = True,
+        fallback_enabled: bool = False,
         custom_matrix: dict[tuple[str, str], float] | None = None,
         custom_coordinates: dict[str, tuple[float, float]] | None = None,
     ) -> None:

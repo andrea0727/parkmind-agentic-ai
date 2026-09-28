@@ -10,6 +10,8 @@ from .routing_client import (
     RouteNotFoundError,
     RoutingClient,
     RoutingClientError,
+    RoutingError,
+    RoutingNotFoundError,
     RoutingSchemaError,
     RoutingUnavailableError,
 )
@@ -31,6 +33,8 @@ __all__ = [
     "RouteNotFoundError",
     "RoutingClient",
     "RoutingClientError",
+    "RoutingError",
+    "RoutingNotFoundError",
     "RoutingSchemaError",
     "RoutingUnavailableError",
     "ThemeParksClient",
