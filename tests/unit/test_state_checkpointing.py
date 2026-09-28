@@ -1,6 +1,6 @@
-"""LangGraph checkpoint/resume tests for P0-28.
+"""LangGraph checkpoint/resume tests for the ParkMindState schema.
 
-Covers the backlog's Done-when criteria for the ParkMindState schema:
+Covers:
 - state can be checkpointed and resumed via a real LangGraph checkpointer
 - state serialization is stable (round-trips without loss)
 - AccessibilityRequirements is never present in checkpoint payloads [C19]

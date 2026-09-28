@@ -1,4 +1,4 @@
-"""Checkpointer construction for P0-28: msgpack allowlist coverage.
+"""Checkpointer construction: msgpack allowlist coverage.
 
 Guards the fix for LangGraph's permissive default (warn-but-allow on an
 unregistered custom type): every non-excluded contract type must be

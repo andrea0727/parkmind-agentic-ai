@@ -1,7 +1,7 @@
 """AttractionRepository -- catalog and operating windows (section 33 ``Attraction``, ``Park``).
 
 Immutable park topology loaded from the park-data provider (``ParkDataPort``),
-persisted so the planner and ParkGraph (P0-13) can work from a stored catalog.
+persisted so the planner and ParkGraph can work from a stored catalog.
 """
 
 from collections.abc import Sequence

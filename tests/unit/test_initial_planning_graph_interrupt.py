@@ -1,4 +1,4 @@
-"""Interrupt/resume behavior of the initial planning graph for P0-28.
+"""Interrupt/resume behavior of the initial planning graph.
 
 Exercises _propose_plan and _interrupt_for_approval directly and through a
 minimal compiled graph, with ProposePlanUseCase/ResolveProposalUseCase

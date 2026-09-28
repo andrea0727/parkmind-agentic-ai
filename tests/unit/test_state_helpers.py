@@ -1,5 +1,5 @@
-"""State transition invariants for P0-28: an unapproved candidate_plan must
-never become current_plan, and rejection must not silently drop the reason.
+"""State transition invariants: an unapproved candidate_plan must never
+become current_plan, and rejection must not silently drop the reason.
 """
 
 from datetime import datetime
@@ -77,7 +77,7 @@ def test_approve_plan_moves_candidate_to_current():
 
 
 def test_reject_plan_discards_candidate_without_activating_it():
-    """The core P0-28 invariant: an unapproved candidate can never become active."""
+    """The core invariant: an unapproved candidate can never become active."""
     plan = factories.plan()
     state = create_candidate_plan(_empty_state(), plan)
     state = reject_plan(state, RejectionReason.TOO_MUCH_WALKING)
