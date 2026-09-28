@@ -6,15 +6,20 @@ across the workflow. All functions assume state is valid
 (contracts enforce this at boundaries).
 """
 
-from parkmind.core.contracts import Guest, GuestProfile, Plan, Proposal, WeatherHour
+from parkmind.core.contracts import (
+    GuestProfile,
+    LiveContext,
+    PartyConstraints,
+    Plan,
+    Proposal,
+    RejectionReason,
+)
 from parkmind.graph.state import ParkMindState
 
 
-def set_guest(state: ParkMindState, guest: Guest) -> ParkMindState:
-    """Set the guest for this session. Once set, immutable."""
-    if state.get("guest") is not None:
-        raise ValueError("Guest already set; cannot change mid-session")
-    state["guest"] = guest
+def set_constraints(state: ParkMindState, constraints: PartyConstraints) -> ParkMindState:
+    """Set party constraints for this session (may be replaced on ELICIT re-loop)."""
+    state["constraints"] = constraints
     return state
 
 
@@ -24,9 +29,9 @@ def set_guest_profiles(state: ParkMindState, profiles: list[GuestProfile]) -> Pa
     return state
 
 
-def set_weather(state: ParkMindState, weather: list[WeatherHour]) -> ParkMindState:
-    """Set live weather context. Fetched by weather agent."""
-    state["weather"] = weather
+def set_live_context(state: ParkMindState, live_context: LiveContext) -> ParkMindState:
+    """Set the live context snapshot. Fetched by the context loader."""
+    state["live_context"] = live_context
     return state
 
 
@@ -44,16 +49,16 @@ def approve_plan(state: ParkMindState) -> ParkMindState:
         raise ValueError("No candidate plan to approve")
     state["current_plan"] = state["candidate_plan"]
     state["candidate_plan"] = None
-    state["approval"] = "approved"
+    state["approval"] = "APPROVED"
     return state
 
 
-def reject_plan(state: ParkMindState, reason: str = "") -> ParkMindState:
+def reject_plan(state: ParkMindState, reason: RejectionReason) -> ParkMindState:
     """Reject the candidate plan, discard it."""
     if state.get("candidate_plan") is None:
         raise ValueError("No candidate plan to reject")
     state["candidate_plan"] = None
-    state["approval"] = "rejected"
+    state["approval"] = "REJECTED"
     state["rejection_reason"] = reason
     return state
 
@@ -61,7 +66,7 @@ def reject_plan(state: ParkMindState, reason: str = "") -> ParkMindState:
 def propose_plan_change(state: ParkMindState, proposal: Proposal) -> ParkMindState:
     """Create a proposal for plan change, trigger interrupt for human."""
     state["proposal"] = proposal
-    state["approval"] = "pending"
+    state["approval"] = "PENDING"
     return state
 
 

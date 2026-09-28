@@ -1,21 +1,17 @@
 """
 ParkMindState — LangGraph state schema for the orchestration graph.
 
-This is the shared memory for all agents. Fields track:
-1. Session identity & history
-2. Guest model (profile + accessibility)
-3. Live context (weather, park status, wait times)
-4. Plan lifecycle (DRAFT → APPROVED → ACTIVE)
-5. Proposals & interrupts (for human-in-the-loop)
-6. Execution & events (what happened during the plan)
+Implements Architecture v2.2 §34. This is the shared, checkpointed memory
+for the planning and replanning graphs.
 
 Design principles:
-- current_plan and candidate_plan are deliberately separate so a plan
-  can never become active without explicit interrupt()/approval.
-- AccessibilityRequirements is NOT stored here (never checkpointed
-  in LangGraph, only in session store).
-- All timestamps are timezone-aware (America/New_York).
-- Reducer functions merge additions, never overwrite.
+- current_plan / candidate_plan / proposal / approval stay separate so an
+  unapproved candidate can never become the active plan.
+- accessibility_ref holds only guest ids: AccessibilityRequirements (the
+  hard-constraint payload) is never checkpointed here [C19]. It is loaded
+  per run from the session store, keyed by these ids.
+- approval and event_confirmation reuse the same upper-case literals as
+  Proposal.approval_status (ApprovalStatus) [C23].
 """
 
 from typing import Annotated, Literal, TypedDict
@@ -23,17 +19,18 @@ from typing import Annotated, Literal, TypedDict
 from langgraph.graph import add_messages
 
 from parkmind.core.contracts import (
-    AccessibilityCheck,
-    Attraction,
-    BehaviorEntry,
+    CheckResult,
     Event,
-    Guest,
+    GroupObjective,
     GuestProfile,
+    LiveContext,
+    PartyConstraints,
     Plan,
     PlanDiff,
     PlanExecutionState,
     Proposal,
-    WeatherHour,
+    Provenance,
+    RejectionReason,
 )
 
 
@@ -46,34 +43,39 @@ class ParkMindState(TypedDict, total=False):
 
     # Session & Orchestration
     thread_id: str
-    iteration: int
     messages: Annotated[list, add_messages]
+    iteration: int
 
-    # Guest Model (loaded at session start, never updated)
-    guest: Guest | None
+    # Guest & Group Model
+    constraints: PartyConstraints | None
+    constraints_valid: bool
+    pending_hard_constraint_confirmation: list[str] | None
+
     guest_profiles: list[GuestProfile]
-    resolved_preferences: dict | None
+    accessibility_ref: list[str]  # guest ids only; never AccessibilityRequirements [C19]
+    group_objective: GroupObjective | None
 
-    # Live Context (fetched by specialist agents)
-    weather: list[WeatherHour] | None
-    attractions: list[Attraction] | None
-    park_status: dict | None
+    # Live Context & Execution
+    live_context: LiveContext | None
+    execution_state: PlanExecutionState | None
 
-    # Plan Lifecycle (DRAFT → APPROVED → ACTIVE)
-    # These are mutually exclusive; proposal forces decision
+    # Plan Lifecycle (current/candidate stay distinct; only APPROVE activates)
     current_plan: Plan | None
     candidate_plan: Plan | None
 
-    # Proposals & Human-in-the-Loop
-    proposal: Proposal | None
-    approval: Literal["pending", "approved", "rejected", "edited"] | None
-
-    # Execution & Monitoring
-    execution_state: PlanExecutionState | None
+    # Events (monitor / user reports)
     events: list[Event]
-    behavior_signals: list[BehaviorEntry]
+    event_confirmation: Literal["PENDING", "CONFIRMED", "DISMISSED"] | None
 
-    # Validation & Debugging
-    check_results: list[AccessibilityCheck]
-    plan_diff: PlanDiff | None
-    rejection_reason: str | None
+    # Checking & Proposal
+    check_result: CheckResult | None
+    diff: PlanDiff | None
+    proposal: Proposal | None
+
+    # Human Decision
+    approval: Literal["PENDING", "APPROVED", "REJECTED", "EDITED"] | None
+    rejection_reason: RejectionReason | None
+
+    # Provenance & Learning
+    provenance: list[Provenance]
+    preference_model_version: str | None
