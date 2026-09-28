@@ -11,9 +11,6 @@ from .routing_client import (
     RoutingClient,
     RoutingClientError,
     RoutingError,
-    RoutingNotFoundError,
-    RoutingSchemaError,
-    RoutingUnavailableError,
 )
 from .themeparks_client import (
     ThemeParksClient,
@@ -21,6 +18,13 @@ from .themeparks_client import (
     ThemeParksNotFoundError,
     ThemeParksSchemaError,
     ThemeParksUnavailableError,
+)
+
+# Routing exceptions that live at port level — re-exported here for convenience
+from parkmind.services.ports import (
+    RoutingNotFoundError,
+    RoutingSchemaError,
+    RoutingUnavailableError,
 )
 
 __all__ = [
