@@ -69,3 +69,30 @@ class NotApprovedError(RepositoryError):
 
 class ConsentRequiredError(RepositoryError):
     """Accessibility data may only be persisted with explicit consent (section 12)."""
+
+
+# --- Routing port exceptions ---
+
+
+class RoutingError(Exception):
+    """Base class for all routing and walking estimate port failures."""
+
+
+class RoutingNotFoundError(RoutingError):
+    """A route or geographic coordinates could not be resolved for a node."""
+
+
+# Alias for compatibility with previous naming
+RouteNotFoundError = RoutingNotFoundError
+
+
+class InvalidRouteError(RoutingError, ValueError):
+    """Raised when origin/destination identifiers or parameters are invalid."""
+
+
+class RoutingUnavailableError(RoutingError):
+    """External routing provider (e.g. OSRM, GraphHopper) service is unavailable."""
+
+
+class RoutingSchemaError(RoutingError):
+    """External routing provider response payload is malformed or invalid."""
