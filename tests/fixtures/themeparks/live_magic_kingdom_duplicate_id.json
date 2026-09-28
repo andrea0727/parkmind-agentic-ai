@@ -1,0 +1,104 @@
+{
+  "id": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+  "name": "Magic Kingdom Park",
+  "entityType": "PARK",
+  "timezone": "America/New_York",
+  "liveData": [
+    {
+      "id": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "name": "Magic Kingdom Park",
+      "entityType": "PARK",
+      "parkId": null,
+      "queue": {
+        "STANDBY": {
+          "waitTime": null
+        }
+      },
+      "status": "OPERATING",
+      "lastUpdated": "2026-09-16T13:36:04.087Z"
+    },
+    {
+      "id": "b2260923-9315-40fd-9c6b-44dd811dbe64",
+      "name": "Space Mountain",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 60
+        }
+      },
+      "status": "OPERATING",
+      "lastUpdated": "2026-09-16T13:36:04.087Z"
+    },
+    {
+      "id": "de3309ca-97d5-4211-bffe-739fed47e92f",
+      "name": "Big Thunder Mountain Railroad",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "status": "DOWN",
+      "lastUpdated": "2026-09-16T13:36:04.087Z"
+    },
+    {
+      "id": "5a43d1a7-ad53-4d25-abfe-25625f0da304",
+      "name": "TRON Lightcycle / Run",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "status": "REFURBISHMENT",
+      "lastUpdated": "2026-09-16T13:36:04.087Z"
+    },
+    {
+      "id": "796b0a25-c51e-456e-9bb8-50a324e301b3",
+      "name": "Jungle Cruise",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "status": "CLOSED",
+      "queue": {
+        "RETURN_TIME": {
+          "state": "FINISHED"
+        }
+      },
+      "lastUpdated": "2026-09-16T13:36:04.087Z"
+    },
+    {
+      "id": "4c31b3ad-5dc9-437f-ac1a-0fdff36a2818",
+      "name": "Mickey's Magical Friendship Faire",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Performance Time",
+          "startTime": "2026-09-16T10:00:00-04:00",
+          "endTime": "2026-09-16T10:00:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "startTime": "2026-09-16T11:35:00-04:00",
+          "endTime": "2026-09-16T11:35:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-16T13:36:04.087Z"
+    },
+    {
+      "id": "c4b64a31-e855-46a9-9d1a-aa13c99e88af",
+      "name": "The Crystal Palace",
+      "entityType": "RESTAURANT",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "status": "OPERATING",
+      "lastUpdated": "2026-09-16T13:36:04.087Z"
+    },
+    {
+      "id": "b2260923-9315-40fd-9c6b-44dd811dbe64",
+      "name": "Space Mountain",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 95
+        }
+      },
+      "status": "OPERATING",
+      "lastUpdated": "2026-09-16T13:36:04.087Z"
+    }
+  ]
+}
