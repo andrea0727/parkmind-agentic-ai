@@ -582,7 +582,18 @@ class ConstraintChecker:
                 )
 
         age_minutes = (now - live_context.retrieved_at) / timedelta(minutes=1)
-        if age_minutes > self._max_snapshot_age_minutes:
+        if age_minutes < 0:
+            violations.append(
+                ConstraintViolation(
+                    rule=RuleId.DATA_FRESHNESS,
+                    message=(
+                        f"LiveContext snapshot is timestamped {-age_minutes:.0f} minutes in "
+                        f"the future relative to now; snapshot age is unverifiable; failing closed"
+                    ),
+                    suggestion="Reload LiveContext once; fail closed if still stale.",
+                )
+            )
+        elif age_minutes > self._max_snapshot_age_minutes:
             violations.append(
                 ConstraintViolation(
                     rule=RuleId.DATA_FRESHNESS,

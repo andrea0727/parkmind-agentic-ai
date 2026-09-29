@@ -438,6 +438,24 @@ def test_data_freshness_passes_when_snapshot_is_fresh_and_coverage_complete():
     assert not any(v.rule == RuleId.DATA_FRESHNESS for v in result.violations)
 
 
+def test_data_freshness_violation_when_snapshot_is_timestamped_in_the_future():
+    """Done-when: a negative age (clock skew, bad timezone) fails closed rather than passing."""
+    checker = ConstraintChecker()
+    context = live_context(retrieved_at=NOW + timedelta(minutes=10))
+    result = _check(checker, live_context_=context, now=NOW)
+    assert result.valid is False
+    assert any(v.rule == RuleId.DATA_FRESHNESS for v in result.violations)
+
+
+def test_data_freshness_respects_custom_max_snapshot_age_minutes():
+    """Done-when: freshness thresholds are configuration, injected via the constructor."""
+    checker = ConstraintChecker(max_snapshot_age_minutes=5)
+    context = live_context(retrieved_at=NOW - timedelta(minutes=10))
+    result = _check(checker, live_context_=context, now=NOW)
+    assert result.valid is False
+    assert any(v.rule == RuleId.DATA_FRESHNESS for v in result.violations)
+
+
 def test_height_fails_closed_when_attraction_metadata_missing():
     checker = ConstraintChecker()
     result = _check(checker, attractions={})
