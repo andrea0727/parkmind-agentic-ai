@@ -125,6 +125,18 @@ def test_empty_update_is_a_noop() -> None:
     assert service.get_version("g1", 2) is None
 
 
+@pytest.mark.parametrize("field", ["sensitivities", "thematic_affinity"])
+def test_an_empty_dict_update_is_also_a_noop(field: str) -> None:
+    service, _ = _service_with_guests("g1")
+    original = factories.guest_profile(guest_id="g1")
+    service.create(original)
+
+    result = service.update("g1", ProfileUpdate(**{field: {}}))
+
+    assert result == original
+    assert service.get_version("g1", 2) is None
+
+
 def test_sensitivities_and_thematic_affinity_merge_key_wise() -> None:
     service, _ = _service_with_guests("g1")
     service.create(
@@ -291,12 +303,13 @@ def test_a_default_update_is_accepted_for_a_dimension_with_no_prior_value() -> N
 
 
 def test_update_propagates_a_concurrent_version_conflict() -> None:
-    class AlwaysConflictsRepository(FakeProfileRepository):
-        def save(self, profile: GuestProfile) -> None:
-            raise ProfileVersionConflictError("a concurrent update landed first")
+    repo = FakeProfileRepository({"g1"})
+    repo.save(factories.guest_profile(guest_id="g1", profile_version=1))
 
-    repo = AlwaysConflictsRepository({"g1"})
-    repo._history["g1"] = {1: factories.guest_profile(guest_id="g1", profile_version=1)}
+    def _always_conflicts(profile: GuestProfile) -> None:
+        raise ProfileVersionConflictError("a concurrent update landed first")
+
+    repo.save = _always_conflicts  # type: ignore[method-assign]
     service = GuestProfileService(repo)
 
     with pytest.raises(ProfileVersionConflictError):

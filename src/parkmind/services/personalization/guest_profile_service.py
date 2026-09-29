@@ -8,7 +8,7 @@ dimensions a caller meant to change. This service owns that merge: a partial
 dimensions -- and, on every `PreferenceValue`, `stated_value` -- survive.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from parkmind.core.contracts import (
@@ -127,14 +127,19 @@ class GuestProfileService:
 
         Raises `NotFoundError` if the guest has no stored profile yet. Raises
         `ProfileVersionConflictError` (via the repository) if another update
-        was persisted concurrently -- the caller must retry against the new
-        latest version; this update's changes are not lost, they simply
-        never get applied. A `ProfileUpdate` with every field `None` returns
-        the current profile unchanged, without persisting a new version.
+        was persisted concurrently -- nothing is applied; the caller must
+        retry against the latest version. A `ProfileUpdate` with every field
+        `None` returns the current profile unchanged, without persisting a
+        new version.
         """
         current = self._profiles.get_latest(guest_id)
         if current is None:
             raise NotFoundError(f"no stored profile for guest {guest_id!r}")
+
+        if update.sensitivities == {}:
+            update = replace(update, sensitivities=None)
+        if update.thematic_affinity == {}:
+            update = replace(update, thematic_affinity=None)
 
         if update == ProfileUpdate():
             return current
