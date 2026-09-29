@@ -27,7 +27,11 @@ import psycopg
 
 from parkmind.core.contracts.base import PARK_TZ
 from parkmind.services.clients.open_meteo_client import OpenMeteoClient
-from parkmind.services.clients.postgres.connection import connect
+from parkmind.services.clients.postgres.connection import (
+    DATABASE_PROBLEMS,
+    connect,
+    describe_database_problem,
+)
 from parkmind.services.clients.postgres.id_mapping_repository import (
     PostgresIdMappingRepository,
 )
@@ -36,7 +40,6 @@ from parkmind.services.clients.postgres.snapshot_repository import (
 )
 from parkmind.services.clients.themeparks_client import ThemeParksClient
 from parkmind.services.clients.themeparks_errors import ThemeParksClientError
-from parkmind.services.ports import RepositoryUnavailableError
 from parkmind.services.use_cases.collect_snapshot import (
     CollectResult,
     SnapshotCollector,
@@ -44,7 +47,6 @@ from parkmind.services.use_cases.collect_snapshot import (
 from parkmind.services.use_cases.latest_snapshot import latest_valid_snapshot
 
 MAGIC_KINGDOM = "75ea578a-adc8-4116-a54d-dccb60765ef9"
-SCHEMA_HINT = "Run first: poetry run alembic -c database/alembic.ini upgrade head"
 
 logger = logging.getLogger("collect_snapshot")
 
@@ -75,11 +77,8 @@ def collect_once(
     except ThemeParksClientError as exc:
         print(f"park data unavailable, no snapshot stored: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
-    except (psycopg.errors.UndefinedTable, psycopg.errors.UndefinedColumn):
-        print(f"The snapshot schema is missing or outdated. {SCHEMA_HINT}", file=sys.stderr)
-        return 1
-    except (psycopg.OperationalError, RepositoryUnavailableError):
-        print("PostgreSQL is not reachable. Start it with `docker compose up -d`.", file=sys.stderr)
+    except DATABASE_PROBLEMS as exc:
+        print(describe_database_problem(exc), file=sys.stderr)
         return 1
     print(_report(result))
     return 0
@@ -91,11 +90,8 @@ def show_latest(database_url: str | None, now: datetime) -> int:
             snapshots = PostgresSnapshotRepository(conn)
             latest = latest_valid_snapshot(snapshots, now=now)
             stored_any = bool(snapshots.recent_ids(1))
-    except (psycopg.errors.UndefinedTable, psycopg.errors.UndefinedColumn):
-        print(f"The snapshot schema is missing or outdated. {SCHEMA_HINT}", file=sys.stderr)
-        return 1
-    except (psycopg.OperationalError, RepositoryUnavailableError):
-        print("PostgreSQL is not reachable. Start it with `docker compose up -d`.", file=sys.stderr)
+    except DATABASE_PROBLEMS as exc:
+        print(describe_database_problem(exc), file=sys.stderr)
         return 1
     if latest is None:
         if stored_any:

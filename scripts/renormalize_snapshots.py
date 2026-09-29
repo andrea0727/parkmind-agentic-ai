@@ -18,24 +18,23 @@ from collections.abc import Sequence
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-import psycopg
-
 from parkmind.services.clients.normalization import NORMALIZER_VERSION
-from parkmind.services.clients.postgres.connection import connect
+from parkmind.services.clients.postgres.connection import (
+    DATABASE_PROBLEMS,
+    connect,
+    describe_database_problem,
+)
 from parkmind.services.clients.postgres.id_mapping_repository import (
     PostgresIdMappingRepository,
 )
 from parkmind.services.clients.postgres.snapshot_repository import (
     PostgresSnapshotRepository,
 )
-from parkmind.services.ports import RepositoryUnavailableError
 from parkmind.services.use_cases.renormalize_snapshots import (
     all_snapshot_ids,
     renormalize_snapshots,
     stale_snapshot_ids,
 )
-
-SCHEMA_HINT = "Run first: poetry run alembic -c database/alembic.ini upgrade head"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -62,11 +61,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     print(f"  {snapshot_id}")
                 return 0
             report = renormalize_snapshots(snapshots, PostgresIdMappingRepository(conn), ids)
-    except (psycopg.errors.UndefinedTable, psycopg.errors.UndefinedColumn):
-        print(f"The snapshot schema is missing or outdated. {SCHEMA_HINT}", file=sys.stderr)
-        return 1
-    except (psycopg.OperationalError, RepositoryUnavailableError):
-        print("PostgreSQL is not reachable. Start it with `docker compose up -d`.", file=sys.stderr)
+    except DATABASE_PROBLEMS as exc:
+        print(describe_database_problem(exc), file=sys.stderr)
         return 1
 
     print(

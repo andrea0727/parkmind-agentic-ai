@@ -15,10 +15,29 @@ from psycopg.rows import dict_row
 from parkmind.config.settings import settings
 from parkmind.services.ports.errors import NotFoundError, RepositoryUnavailableError
 
+SCHEMA_HINT = "Run first: poetry run alembic -c database/alembic.ini upgrade head"
+
+# What a command-line script can't recover from on its own: a schema that was
+# never migrated, or a database that isn't running. Scripts catch these and
+# print ``describe_database_problem`` instead of a traceback.
+DATABASE_PROBLEMS: tuple[type[Exception], ...] = (
+    psycopg.errors.UndefinedTable,
+    psycopg.errors.UndefinedColumn,
+    psycopg.OperationalError,
+    RepositoryUnavailableError,
+)
+
 
 def connect(url: str | None = None) -> psycopg.Connection[Any]:
     """Open a connection (``DATABASE_URL`` by default). The caller closes it."""
     return psycopg.connect(url or settings.DATABASE_URL)
+
+
+def describe_database_problem(exc: Exception) -> str:
+    """The one-line fix to print for an exception in ``DATABASE_PROBLEMS``."""
+    if isinstance(exc, psycopg.errors.UndefinedTable | psycopg.errors.UndefinedColumn):
+        return f"The snapshot schema is missing or outdated. {SCHEMA_HINT}"
+    return "PostgreSQL is not reachable. Start it with `docker compose up -d`."
 
 
 class PostgresRepositoryBase:
