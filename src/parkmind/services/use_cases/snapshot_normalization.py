@@ -146,6 +146,9 @@ def _park_window(
         gaps.append("no park schedule collected: weather coverage can't be checked")
         return None
     try:
+        # Only the operating window is read (weather coverage below); this Park is
+        # never stored or returned, so park_name=park_id is a placeholder, not the
+        # park's real name -- don't reuse it where the name matters.
         return parse_schedule(
             schedule, service_date, park_id=park_id, park_name=park_id, park_outdoor=True
         )
