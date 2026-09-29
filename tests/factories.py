@@ -9,6 +9,7 @@ from typing import Any
 
 from parkmind.core.contracts import (
     PARK_TZ,
+    AccessibilityCheck,
     AccessibilityRequirements,
     ApprovalStatus,
     Attraction,
@@ -27,6 +28,7 @@ from parkmind.core.contracts import (
     LiveContext,
     MobilityRequirement,
     Park,
+    PartyConstraints,
     Plan,
     PlanDiff,
     PlanExecutionState,
@@ -47,7 +49,11 @@ NOW = datetime(2026, 9, 16, 10, 0, tzinfo=PARK_TZ)
 
 
 def guest(**overrides: Any) -> Guest:
-    fields: dict[str, Any] = {"guest_id": "g1", "role": GuestRole.ADULT, "height_cm": 175.0}
+    fields: dict[str, Any] = {
+        "guest_id": "g1",
+        "role": GuestRole.ADULT,
+        "height_cm": 175.0,
+    }
     return Guest(**{**fields, **overrides})
 
 
@@ -84,6 +90,27 @@ def accessibility(**overrides: Any) -> AccessibilityRequirements:
         "retention_policy": "persisted",
     }
     return AccessibilityRequirements(**{**fields, **overrides})
+
+
+def accessibility_check(**overrides: Any) -> AccessibilityCheck:
+    fields: dict[str, Any] = {
+        "attraction_id": "a1",
+        "guest_id": "g1",
+        "eligible": True,
+        "conflicting_requirement": None,
+        "provenance": {"source": "knowledge_store", "version": 1},
+    }
+    return AccessibilityCheck(**{**fields, **overrides})
+
+
+def party_constraints(**overrides: Any) -> PartyConstraints:
+    fields: dict[str, Any] = {
+        "party_size": 1,
+        "guests": [guest()],
+        "departure_time": NOW + timedelta(hours=8),
+        "constraints_version": 1,
+    }
+    return PartyConstraints(**{**fields, **overrides})
 
 
 def behavior_entry(**overrides: Any) -> BehaviorEntry:
