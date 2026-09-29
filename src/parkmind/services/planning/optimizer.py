@@ -18,11 +18,10 @@ Algorithm overview
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime, timedelta
-from typing import Sequence
 
 from parkmind.core.contracts import (
-    PARK_TZ,
     AccessibilityRequirements,
     Attraction,
     AttractionStatus,
@@ -37,7 +36,6 @@ from parkmind.core.contracts import (
     TimeWindow,
 )
 from parkmind.services.planning.park_graph import ParkGraph
-
 
 # ---------------------------------------------------------------------------
 # Defaults — tunable but intentionally not persisted preferences
@@ -151,7 +149,7 @@ class GreedyInsertionOptimizer:
 
         # Show anchors from must_do that have showtimes
         for show_id in list(constraints.must_do):
-            if show_id in context.showtimes and context.showtimes[show_id]:
+            if context.showtimes.get(show_id):
                 best_time = self._pick_best_showtime(
                     context.showtimes[show_id], start_time, end_time,
                 )
@@ -481,8 +479,7 @@ class GreedyInsertionOptimizer:
         arrival = window.start
         departure = arrival + timedelta(minutes=self._meal_dur)
         # Clamp departure to window end
-        if departure > window.end:
-            departure = window.end
+        departure = min(departure, window.end)
         return Stop(
             node_id=node,
             kind=StopKind.MEAL,

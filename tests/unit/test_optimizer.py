@@ -14,7 +14,7 @@ Coverage:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
 
@@ -25,16 +25,15 @@ from parkmind.core.contracts import (
     AttractionCategory,
     AttractionStatus,
     CoverageReport,
-    GroupObjective,
-    HardConstraintSet,
     EventThresholds,
     FairnessConfig,
+    GroupObjective,
     Guest,
     GuestRole,
+    HardConstraintSet,
     LiveContext,
     Park,
     PartyConstraints,
-    PreferenceSource,
     StopKind,
     TimeWindow,
     WaitEstimate,
