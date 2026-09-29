@@ -43,67 +43,28 @@ from ._retry import (
     RetryPolicy,
     send_with_retry,
 )
+from .open_meteo_errors import (
+    OpenMeteoClientError,
+    OpenMeteoNotFoundError,
+    OpenMeteoSchemaError,
+    OpenMeteoUnavailableError,
+)
+from .open_meteo_normalize import _map_wmo_code_to_condition, parse_hourly_forecast
+
+__all__ = [
+    "OpenMeteoClient",
+    "OpenMeteoClientError",
+    "OpenMeteoNotFoundError",
+    "OpenMeteoSchemaError",
+    "OpenMeteoUnavailableError",
+    "_map_wmo_code_to_condition",
+]
 
 logger = logging.getLogger(__name__)
 
 
-class OpenMeteoClientError(Exception):
-    """Base class for all expected OpenMeteoClient failures."""
-
-    def __init__(
-        self,
-        message: str,
-        status_code: int | None = None,
-        original_error: Exception | None = None,
-    ) -> None:
-        super().__init__(message)
-        self.status_code = status_code
-        self.original_error = original_error
 
 
-class OpenMeteoNotFoundError(OpenMeteoClientError):
-    """Provider returned 404, or no forecast data was found for the requested date."""
-
-
-class OpenMeteoUnavailableError(OpenMeteoClientError):
-    """Transient failure (timeout/connection/5xx/429) survived all retries."""
-
-
-class OpenMeteoSchemaError(OpenMeteoClientError):
-    """Provider response didn't match the expected shape — redirect (3xx),
-    missing field, mismatched array lengths, non-JSON body, ...
-    Contract drift, never silently swallowed or coerced."""
-
-
-def _map_wmo_code_to_condition(code: int) -> str:
-    """
-    Map WMO Weather interpretation codes (WW) to ParkMind condition taxonomy.
-
-    Reference: https://open-meteo.com/en/docs
-    """
-    match code:
-        case 0:
-            return "clear"
-        case 1 | 2:
-            return "partly_cloudy"
-        case 3:
-            return "cloudy"
-        case 45 | 48:
-            return "fog"
-        case 51 | 53 | 55 | 56 | 57:
-            return "drizzle"
-        case 61 | 63 | 65 | 66 | 67:
-            return "rain"
-        case 71 | 73 | 75 | 77:
-            return "snow"
-        case 80 | 81 | 82:
-            return "rain"
-        case 85 | 86:
-            return "snow"
-        case 95 | 96 | 99:
-            return "storm"
-        case _:
-            return "unknown"
 
 
 class OpenMeteoClient:
@@ -245,6 +206,41 @@ class OpenMeteoClient:
         Raises:
             OpenMeteoClientError: If network, HTTP status, or payload parsing fails.
         """
+        return parse_hourly_forecast(
+            self.fetch_hourly_payload(
+                latitude=latitude,
+                longitude=longitude,
+                start_date=start_date,
+                end_date=end_date,
+                forecast_days=forecast_days,
+            )
+        )
+
+    def fetch_hourly_payload(
+        self,
+        latitude: float | None = None,
+        longitude: float | None = None,
+        start_date: date | datetime | str | None = None,
+        end_date: date | datetime | str | None = None,
+        forecast_days: int = 1,
+    ) -> dict[str, Any]:
+        """
+        The raw ``/forecast`` hourly payload, as the provider returned it (P0-11).
+
+        Same request, retry and error policy as ``get_hourly_forecast``; nothing is
+        parsed here, so a snapshot can store it verbatim and re-normalize it later
+        with ``open_meteo_normalize.parse_hourly_forecast``.
+
+        Args:
+            latitude: Latitude of the theme park (defaults to default_latitude).
+            longitude: Longitude of the theme park (defaults to default_longitude).
+            start_date: Optional start date for forecast range.
+            end_date: Optional end date for forecast range.
+            forecast_days: Number of forecast days (default 1 if start/end not provided).
+
+        Raises:
+            OpenMeteoClientError: If the network or the HTTP status fails.
+        """
         lat = latitude if latitude is not None else self.default_latitude
         lon = longitude if longitude is not None else self.default_longitude
 
@@ -277,70 +273,7 @@ class OpenMeteoClient:
         if not start_date and not end_date:
             params["forecast_days"] = forecast_days
 
-        payload = self._request("/forecast", params=params)
-
-        if not isinstance(payload, dict) or "hourly" not in payload:
-            raise OpenMeteoSchemaError(
-                "Malformed response: 'hourly' section missing from Open-Meteo payload"
-            )
-
-        hourly = payload["hourly"]
-        if not isinstance(hourly, dict):
-            raise OpenMeteoSchemaError(
-                "Malformed response: 'hourly' section must be a dictionary"
-            )
-
-        times = hourly.get("time", [])
-        temps = hourly.get("temperature_2m", [])
-        probs = hourly.get("precipitation_probability", [])
-        codes = hourly.get("weather_code", [])
-
-        if not (
-            isinstance(times, list)
-            and isinstance(temps, list)
-            and isinstance(probs, list)
-            and isinstance(codes, list)
-        ):
-            raise OpenMeteoSchemaError(
-                "Malformed response: hourly data fields must be lists"
-            )
-
-        if not (len(times) == len(temps) == len(probs) == len(codes)):
-            raise OpenMeteoSchemaError(
-                f"Mismatched array lengths in hourly weather response: "
-                f"time={len(times)}, temp={len(temps)}, prob={len(probs)}, code={len(codes)}"
-            )
-
-        result: list[WeatherHour] = []
-        for i in range(len(times)):
-            try:
-                dt = datetime.fromisoformat(times[i])
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=PARK_TZ)
-                else:
-                    dt = dt.astimezone(PARK_TZ)
-
-                prob_percent = float(probs[i])
-                prob_normalized = max(0.0, min(1.0, prob_percent / 100.0))
-
-                condition = _map_wmo_code_to_condition(int(codes[i]))
-                temp_f = float(temps[i])
-
-                result.append(
-                    WeatherHour(
-                        timestamp=dt,
-                        condition=condition,
-                        temperature_f=temp_f,
-                        precipitation_probability=prob_normalized,
-                    )
-                )
-            except Exception as e:
-                raise OpenMeteoSchemaError(
-                    f"Failed to parse hourly weather item at index {i}: {e}",
-                    original_error=e,
-                ) from e
-
-        return result
+        return self._request("/forecast", params=params)
 
     def get_weather(
         self,

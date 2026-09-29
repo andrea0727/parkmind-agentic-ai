@@ -19,6 +19,15 @@ from enum import StrEnum
 from parkmind.core.contracts import Attraction, AttractionStatus, DataSource
 from parkmind.services.ports.id_mapping_repository import EntityKind
 
+NORMALIZER_VERSION = 1
+"""Version of the normalized output (``LiveContext``) the normalizers produce.
+
+Stored with every snapshot (P0-11). Bump it whenever a normalizer change alters
+what a raw payload normalizes to -- e.g. which showtimes are kept -- and run
+``scripts/renormalize_snapshots.py`` so older snapshots are rebuilt from their
+raw payloads (Architecture 41, C21).
+"""
+
 
 class IssueKind(StrEnum):
     DUPLICATE_PROVIDER_ID = "DUPLICATE_PROVIDER_ID"
