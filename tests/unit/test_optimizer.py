@@ -658,3 +658,156 @@ class TestResolveRestFrequency:
             AccessibilityRequirements(guest_id="g1", consent=True),
         ]
         assert GreedyInsertionOptimizer._resolve_effective_rest_frequency(reqs) is None
+
+
+class TestCodeReviewRegressions:
+    """Regression test suite for Code Review PR #67 (Bugs 1-4)."""
+
+    def test_must_do_show_unreachable_recorded_in_unmet_must_do(self) -> None:
+        """Bug #1: If a must-do show cannot be reached before departure_time,
+        it must appear in plan.unmet_must_do rather than silently disappearing."""
+        optimizer = _build_optimizer()
+        show_time = DAY.replace(hour=21, minute=20)
+        departure_time = DAY.replace(hour=21, minute=35)
+        utilities = {A1: 100.0, SHOW_1: 1.0}
+        statuses = {
+            A1: AttractionStatus.OPERATING,
+            SHOW_1: AttractionStatus.OPERATING,
+        }
+        context = _live_context(
+            waits={A1: 180.0},
+            statuses=statuses,
+            showtimes={SHOW_1: [show_time]},
+        )
+        constraints = PartyConstraints(
+            party_size=1,
+            guests=_guests("g1"),
+            must_do=[SHOW_1],
+            avoid=[],
+            lunch_window=None,
+            departure_time=departure_time,
+            constraints_version=1,
+        )
+        park = _park(opening_hour=18, closing_hour=23)
+
+        plan = optimizer.build_plan(
+            constraints=constraints,
+            context=context,
+            utilities=utilities,
+            park=park,
+            catalog=_catalog(),
+        )
+
+        show_in_stops = any(s.node_id == SHOW_1 for s in plan.stops)
+        assert not show_in_stops, "Show cannot fit before departure_time"
+        assert SHOW_1 in plan.unmet_must_do, "Unreachable must-do show must be in unmet_must_do"
+
+    def test_greedy_marginal_utility_cost_ratio_selection(self) -> None:
+        """Bug #2: Optimizer selects candidates with higher utility/cost ratio
+        rather than raw utility. 5 cheap attractions (util 8 each, cost 25)
+        yield 40 total utility over 1 expensive attraction (util 10, cost 200)."""
+        optimizer = _build_optimizer()
+        park = _park(opening_hour=9, closing_hour=13)
+        departure = DAY.replace(hour=12, minute=20)
+
+        cheaps = [f"cheap_{i}" for i in range(5)]
+        utilities = {"expensive": 10.0}
+        waits = {"expensive": 180.0}
+        statuses = {"expensive": AttractionStatus.OPERATING}
+        for cid in cheaps:
+            utilities[cid] = 8.0
+            waits[cid] = 5.0
+            statuses[cid] = AttractionStatus.OPERATING
+
+        context = _live_context(waits=waits, statuses=statuses)
+        constraints = PartyConstraints(
+            party_size=1,
+            guests=_guests("g1"),
+            must_do=[],
+            avoid=[],
+            lunch_window=None,
+            departure_time=departure,
+            constraints_version=1,
+        )
+
+        plan = optimizer.build_plan(
+            constraints=constraints,
+            context=context,
+            utilities=utilities,
+            park=park,
+        )
+
+        scheduled_ids = [s.node_id for s in plan.stops if s.kind == StopKind.ATTRACTION]
+        assert set(scheduled_ids) == set(cheaps)
+        assert "expensive" not in scheduled_ids
+        assert plan.objective_value == pytest.approx(40.0)
+
+    def test_show_with_invalid_showtimes_never_becomes_attraction(self) -> None:
+        """Bug #3: A show whose only showtimes fall outside the park hours
+        must NOT fall through and be scheduled as a StopKind.ATTRACTION ride.
+        If it was in must_do, it should be listed in unmet_must_do."""
+        optimizer = _build_optimizer()
+        park = _park(opening_hour=9, closing_hour=22)
+        early_show_time = DAY.replace(hour=8, minute=0)
+
+        statuses = {
+            "show-morning": AttractionStatus.OPERATING,
+            A1: AttractionStatus.OPERATING,
+        }
+        context = _live_context(
+            waits={A1: 10.0},
+            statuses=statuses,
+            showtimes={"show-morning": [early_show_time]},
+        )
+        constraints = _constraints(must_do=["show-morning"])
+        utilities = {"show-morning": 10.0, A1: 5.0}
+
+        plan = optimizer.build_plan(
+            constraints=constraints,
+            context=context,
+            utilities=utilities,
+            park=park,
+            catalog=_catalog(),
+        )
+
+        show_as_attraction = [
+            s for s in plan.stops
+            if s.node_id == "show-morning" and s.kind == StopKind.ATTRACTION
+        ]
+        assert len(show_as_attraction) == 0, "Show must never be scheduled as an ATTRACTION"
+        assert "show-morning" in plan.unmet_must_do
+
+    def test_meal_strictly_within_lunch_window(self) -> None:
+        """Bug #4: When few attractions are available and cursor finishes early
+        (e.g. 09:20), a MEAL stop must start within lunch_window [12:00, 13:30],
+        advancing the cursor to window.start rather than scheduling at 09:25."""
+        optimizer = _build_optimizer()
+        lunch_window = TimeWindow(
+            start=DAY.replace(hour=12, minute=0),
+            end=DAY.replace(hour=13, minute=30),
+        )
+        park = _park(opening_hour=9, closing_hour=22)
+        utilities = {A1: 3.0}
+        statuses = {A1: AttractionStatus.OPERATING}
+        context = _live_context(waits={A1: 0.0}, statuses=statuses)
+
+        plan = optimizer.build_plan(
+            constraints=_constraints(lunch_window=lunch_window),
+            context=context,
+            utilities=utilities,
+            park=park,
+            catalog=_catalog(),
+            restaurant_node_ids=[RESTAURANT_1],
+        )
+
+        meal_stops = [s for s in plan.stops if s.kind == StopKind.MEAL]
+        assert len(meal_stops) == 1
+        meal = meal_stops[0]
+        assert meal.arrival_time >= lunch_window.start, (
+            f"Meal arrival {meal.arrival_time} must be >= {lunch_window.start}"
+        )
+        assert meal.arrival_time <= lunch_window.end, (
+            f"Meal arrival {meal.arrival_time} must be <= {lunch_window.end}"
+        )
+        assert meal.arrival_time == lunch_window.start
+
