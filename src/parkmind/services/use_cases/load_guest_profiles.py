@@ -4,11 +4,15 @@ Wraps the Postgres profile repository so agents/ never imports
 services.clients directly (see .importlinter boundary contract).
 """
 
+import logging
+
 import psycopg
 
 from parkmind.core.contracts import GuestProfile
 from parkmind.services.clients.postgres import PostgresProfileRepository, connect
 from parkmind.services.ports.errors import RepositoryError
+
+logger = logging.getLogger(__name__)
 
 
 class LoadGuestProfilesUseCase:
@@ -18,5 +22,5 @@ class LoadGuestProfilesUseCase:
                 profile = PostgresProfileRepository(conn).get_latest(guest_id)
                 return [profile] if profile is not None else []
         except (psycopg.Error, RepositoryError) as e:
-            print(f"Warning: Could not fetch profiles for {guest_id}: {e}")
+            logger.warning("Could not fetch profiles for %s: %s", guest_id, e)
             return []

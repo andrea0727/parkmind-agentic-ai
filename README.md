@@ -278,11 +278,11 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 |---|---|---|
 | **LangGraph State v2** | ✅ Done | Typed ParkMindState, state helpers, message reducer |
 | **Preference Resolution** | ✅ Done | Weighted aggregation from GuestProfile (queue, walking, categories) |
-| **Plan Synthesis** | ✅ Done | DRAFT plan generation with Provenance, DB persistence |
+| **Plan Synthesis** | 🚧 In progress | DRAFT plan generation (stub algorithm); not yet persisted — persistence happens after ConstraintChecker + approval |
 | **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
 | **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
 | **PostgreSQL Repos** | ✅ Done | Profiles, Plans, Session store (in-memory for accessibility) |
-| **Initial Planning Graph** | ✅ Done | 4-node orchestration: resolve → fetch → synthesize → approve |
+| **Initial Planning Graph** | ✅ Done | 5-node orchestration: resolve → fetch → synthesize → propose → approve |
 | **Constraint Checker** | 🔄 Next | Validation rules, PlanDiff generation |
 | **Replanner** | 🔄 Next | Proposal generation, interrupt flow |
 

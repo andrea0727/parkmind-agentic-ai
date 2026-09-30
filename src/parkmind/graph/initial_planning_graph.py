@@ -16,6 +16,7 @@ from langgraph.types import interrupt
 from parkmind.agents.plan_synthesis_agent import synthesize_plan
 from parkmind.agents.preference_resolver_agent import resolve_guest_preferences
 from parkmind.core.contracts import (
+    PARK_TZ,
     ApprovalStatus,
     CoverageReport,
     LiveContext,
@@ -78,7 +79,7 @@ async def _fetch_context_from_apis(state: ParkMindState) -> ParkMindState:
         latitude=_DEFAULT_LATITUDE,
         longitude=_DEFAULT_LONGITUDE,
     )
-    today = datetime.now(UTC).date()
+    today = datetime.now(PARK_TZ).date()
     weather = use_case.fetch_weather(start_date=today, end_date=today)
     attractions = use_case.fetch_attractions()
 
@@ -156,6 +157,12 @@ def _interrupt_for_approval(state: ParkMindState) -> ParkMindState:
 
     decision = interrupt({"candidate_plan": plan, "proposal": proposal})
     status = ApprovalStatus(decision["decision"])
+
+    if status is ApprovalStatus.EDITED:
+        raise NotImplementedError(
+            "EDITED approval decisions are not supported yet (see P0-32)"
+        )
+
     rejection_reason = (
         RejectionReason(decision["rejection_reason"])
         if decision.get("rejection_reason")

@@ -4,11 +4,15 @@ Wraps the Postgres plan repository so agents/ never imports
 services.clients directly (see .importlinter boundary contract).
 """
 
+import logging
+
 import psycopg
 
 from parkmind.core.contracts import Plan
 from parkmind.services.clients.postgres import PostgresPlanRepository, connect
 from parkmind.services.ports.errors import RepositoryError
+
+logger = logging.getLogger(__name__)
 
 
 class PersistPlanUseCase:
@@ -17,4 +21,4 @@ class PersistPlanUseCase:
             with connect() as conn:
                 PostgresPlanRepository(conn).save(thread_id, plan)
         except (psycopg.Error, RepositoryError) as e:
-            print(f"Warning: Could not save plan to database: {e}")
+            logger.warning("Could not save plan to database: %s", e)

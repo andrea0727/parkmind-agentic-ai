@@ -17,19 +17,28 @@ from langgraph.graph import END, START, StateGraph
 from parkmind.core.contracts import (
     PARK_TZ,
     AccessibilityRequirements,
+    CheckResult,
+    EventThresholds,
+    FairnessConfig,
+    GroupObjective,
+    HardConstraintSet,
     PartyConstraints,
+    PlanDiff,
     RejectionReason,
 )
+from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.state import ParkMindState
 
 SRC_ROOT = Path(__file__).resolve().parents[2] / "src" / "parkmind"
 
 # Field names that only exist on AccessibilityRequirements (the hard-constraint
 # payload) and never on AccessibilityCheck (the derived, checkpoint-safe
-# eligibility result) or any other §33 contract.
+# eligibility result) or any other §33 contract. "ride_restrictions" is
+# deliberately excluded: HardConstraintSet.ride_restrictions is a distinct,
+# aggregate, non-PII field (guest_id -> list[RideRestriction]) that's fine
+# to checkpoint via GroupObjective.
 _ACCESSIBILITY_REQUIREMENTS_MARKERS = (
     "mobility_requirements",
-    "ride_restrictions",
     "daily_walking_limit_minutes",
     "rest_frequency_minutes",
     "retention_policy",
@@ -53,14 +62,27 @@ def _build_full_state() -> ParkMindState:
         "constraints_valid": True,
         "guest_profiles": [factories.guest_profile()],
         "accessibility_ref": ["g1"],  # guest ids only [C19]
+        "group_objective": GroupObjective(
+            objective_version="v1",
+            weights={},
+            hard_constraints=HardConstraintSet(),
+            fairness=FairnessConfig(lambda_fairness=0.5, min_satisfaction_floor=0.5),
+            event_thresholds=EventThresholds(),
+        ),
         "live_context": factories.live_context(),
+        "execution_state": factories.execution_state(),
         "current_plan": plan,
         "candidate_plan": None,
         "events": [factories.event()],
+        "event_confirmation": "PENDING",
+        "check_result": CheckResult(valid=True),
+        "diff": PlanDiff(),
         "proposal": factories.proposal(),
         "approval": "PENDING",
         "rejection_reason": RejectionReason.TOO_MUCH_WALKING,
         "provenance": [factories.provenance()],
+        "preference_model_version": "v1",
+        "pending_hard_constraint_confirmation": None,
     }
 
 
@@ -116,9 +138,38 @@ def test_no_graph_or_agent_code_constructs_accessibility_requirements():
     assert not offending, f"AccessibilityRequirements constructed in: {offending}"
 
 
+def test_only_interrupt_approval_calls_approve_plan():
+    """Only the human-approval node may activate a plan.
+
+    approve_plan() promotes candidate_plan to current_plan; it must never be
+    called from an agent/LLM node or any other graph node, only from the
+    resumed, human-driven path in _interrupt_for_approval.
+    """
+    node_module = SRC_ROOT / "graph" / "initial_planning_graph.py"
+    callers: list[str] = []
+    for directory in ("graph", "agents"):
+        for path in (SRC_ROOT / directory).rglob("*.py"):
+            if path.name == "state_helpers.py":
+                continue  # the definition, not a call site
+            if "approve_plan(" in path.read_text():
+                callers.append(str(path))
+
+    assert callers == [str(node_module)], (
+        f"approve_plan() must only be called from {node_module}, found: {callers}"
+    )
+
+    source = node_module.read_text()
+    start = source.index("def _interrupt_for_approval")
+    end = source.find("\ndef ", start + 1)
+    body = source[start : end if end != -1 else None]
+    assert "approve_plan(" in body, (
+        "approve_plan() call must live inside _interrupt_for_approval"
+    )
+
+
 def test_state_checkpoints_and_resumes():
     """A state written by one invocation is readable via get_state (resume)."""
-    saver = MemorySaver()
+    saver = default_checkpointer()
     compiled = _compile_graph_with_checkpointer(saver)
     config = {"configurable": {"thread_id": "thread_1"}}
 
@@ -132,7 +183,7 @@ def test_state_checkpoints_and_resumes():
 
 def test_state_serialization_is_stable():
     """Round-tripping through the checkpointer must not lose or mutate data."""
-    saver = MemorySaver()
+    saver = default_checkpointer()
     compiled = _compile_graph_with_checkpointer(saver)
     config = {"configurable": {"thread_id": "thread_1"}}
 
@@ -149,7 +200,7 @@ def test_accessibility_requirements_never_appear_in_checkpoint_payload():
     field name (consent, mobility_requirements, ride_restrictions, ...) is
     ever written to a checkpoint, because the schema has no field for it.
     """
-    saver = MemorySaver()
+    saver = default_checkpointer()
     compiled = _compile_graph_with_checkpointer(saver)
     config = {"configurable": {"thread_id": "thread_1"}}
     compiled.invoke(_build_full_state(), config=config)

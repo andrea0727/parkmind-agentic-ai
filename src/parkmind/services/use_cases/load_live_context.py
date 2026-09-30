@@ -4,6 +4,7 @@ Wraps the weather and theme-park clients so graph/ never imports
 services.clients directly (see .importlinter boundary contract).
 """
 
+import logging
 from datetime import date
 
 from parkmind.core.contracts import Attraction, WeatherHour
@@ -15,6 +16,8 @@ from parkmind.services.clients.themeparks_client import (
     ThemeParksClient,
     ThemeParksClientError,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class LoadLiveContextUseCase:
@@ -33,12 +36,12 @@ class LoadLiveContextUseCase:
                 end_date=end_date,
             )
         except OpenMeteoClientError as e:
-            print(f"Warning: Could not fetch weather: {e}")
+            logger.warning("Could not fetch weather: %s", e)
             return []
 
     def fetch_attractions(self) -> list[Attraction]:
         try:
             return self._parks_client.get_catalog()
         except ThemeParksClientError as e:
-            print(f"Warning: Could not fetch attractions: {e}")
+            logger.warning("Could not fetch attractions: %s", e)
             return []
