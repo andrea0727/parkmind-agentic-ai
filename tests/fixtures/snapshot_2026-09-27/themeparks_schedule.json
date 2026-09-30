@@ -1,0 +1,133 @@
+{
+  "id": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+  "name": "Magic Kingdom Park",
+  "entityType": "PARK",
+  "timezone": "America/New_York",
+  "schedule": [
+    {
+      "date": "2026-09-27",
+      "type": "TICKETED_EVENT",
+      "closingTime": "2026-09-27T09:00:00-04:00",
+      "description": "Early Entry",
+      "openingTime": "2026-09-27T08:30:00-04:00"
+    },
+    {
+      "date": "2026-09-27",
+      "type": "OPERATING",
+      "purchases": [
+        {
+          "id": "lightninglane_16767284",
+          "name": "Lightning Lane for Seven Dwarfs Mine Train",
+          "type": "ATTRACTION",
+          "price": {
+            "amount": 1100,
+            "currency": "USD",
+            "formatted": "$11.00"
+          },
+          "available": false
+        },
+        {
+          "id": "lightninglane_411504498",
+          "name": "Lightning Lane for TRON Lightcycle / Run",
+          "type": "ATTRACTION",
+          "price": {
+            "amount": 1900,
+            "currency": "USD",
+            "formatted": "$19.00"
+          },
+          "available": false
+        },
+        {
+          "id": "lightninglanemultipass_80007944",
+          "name": "Lightning Lane Multi Pass",
+          "type": "PACKAGE",
+          "price": {
+            "amount": 2500,
+            "currency": "USD",
+            "formatted": "$25.00"
+          },
+          "available": true
+        },
+        {
+          "id": "premierpass_80007944",
+          "name": "Lightning Lane Premier Pass",
+          "type": "PACKAGE",
+          "price": {
+            "amount": 32900,
+            "currency": "USD",
+            "formatted": "$329.00"
+          },
+          "available": true
+        }
+      ],
+      "closingTime": "2026-09-27T18:00:00-04:00",
+      "openingTime": "2026-09-27T09:00:00-04:00"
+    },
+    {
+      "date": "2026-09-27",
+      "type": "TICKETED_EVENT",
+      "closingTime": "2026-09-28T00:00:00-04:00",
+      "description": "Special Ticketed Event",
+      "openingTime": "2026-09-27T19:00:00-04:00"
+    },
+    {
+      "date": "2026-09-28",
+      "type": "TICKETED_EVENT",
+      "closingTime": "2026-09-28T09:00:00-04:00",
+      "description": "Early Entry",
+      "openingTime": "2026-09-28T08:30:00-04:00"
+    },
+    {
+      "date": "2026-09-28",
+      "type": "OPERATING",
+      "purchases": [
+        {
+          "id": "lightninglane_16767284",
+          "name": "Lightning Lane for Seven Dwarfs Mine Train",
+          "type": "ATTRACTION",
+          "price": {
+            "amount": 1100,
+            "currency": "USD",
+            "formatted": "$11.00"
+          },
+          "available": false
+        },
+        {
+          "id": "lightninglane_411504498",
+          "name": "Lightning Lane for TRON Lightcycle / Run",
+          "type": "ATTRACTION",
+          "price": {
+            "amount": 1900,
+            "currency": "USD",
+            "formatted": "$19.00"
+          },
+          "available": false
+        },
+        {
+          "id": "lightninglanemultipass_80007944",
+          "name": "Lightning Lane Multi Pass",
+          "type": "PACKAGE",
+          "price": {
+            "amount": 2500,
+            "currency": "USD",
+            "formatted": "$25.00"
+          },
+          "available": true
+        },
+        {
+          "id": "premierpass_80007944",
+          "name": "Lightning Lane Premier Pass",
+          "type": "PACKAGE",
+          "price": {
+            "amount": 35900,
+            "currency": "USD",
+            "formatted": "$359.00"
+          },
+          "available": true
+        }
+      ],
+      "closingTime": "2026-09-28T22:00:00-04:00",
+      "openingTime": "2026-09-28T09:00:00-04:00"
+    }
+  ]
+}

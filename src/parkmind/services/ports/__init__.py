@@ -49,7 +49,7 @@ from .proposal_repository import ProposalRepository
 from .provenance_repository import ProvenanceRepository, ProvenanceSubjectKind
 from .routing import RoutingPort
 from .session_store import SessionStore
-from .snapshot_repository import RawPayload, SnapshotRepository
+from .snapshot_repository import RawPayload, SnapshotMeta, SnapshotRepository
 from .weather import WeatherPort
 
 __all__ = [
@@ -89,6 +89,7 @@ __all__ = [
     "RoutingSchemaError",
     "RoutingUnavailableError",
     "SessionStore",
+    "SnapshotMeta",
     "SnapshotRepository",
     "StoredDataError",
     "WeatherPort",

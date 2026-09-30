@@ -198,6 +198,54 @@ shared non-table store.
   Today the 28 SHOW entities show up as `MISSING_METADATA` until they're
   curated in `themeparks_reference_data.py`.
 
+### Snapshots (P0-11)
+
+A snapshot is the park's live data at one moment: ThemeParks waits, statuses and
+showtimes plus the hourly weather, stored as the **raw provider payloads** next
+to the normalized `LiveContext` (Architecture §41, C21). Needs the schema
+(`alembic ... upgrade head`, which now includes migration `0002`).
+
+```bash
+# one snapshot, then exit (exit code 0 ok, 1 database problem, 2 park data unavailable)
+poetry run python scripts/collect_snapshot.py
+
+# keep collecting every 5 minutes in the foreground (Ctrl+C to stop)
+poetry run python scripts/collect_snapshot.py --loop --interval 300
+
+# the latest valid snapshot and its age (fresh = at most 30 minutes old)
+poetry run python scripts/collect_snapshot.py --latest
+```
+
+**Scheduling.** Each run is idempotent within its 5-minute window (same park,
+same window → nothing written, no provider called), so a scheduler can fire it
+freely:
+
+```bash
+# Windows Task Scheduler (run once, from the repo root, in cmd)
+schtasks /Create /SC MINUTE /MO 5 /TN "ParkMind snapshots" ^
+  /TR "cmd /c cd /d %CD% && poetry run python scripts\collect_snapshot.py >> snapshots.log 2>&1"
+
+# cron (Linux/macOS)
+*/5 * * * * cd /path/to/parkmind-agentic-ai && poetry run python scripts/collect_snapshot.py >> snapshots.log 2>&1
+```
+
+**Degrade, don't fail (§43).** Without ThemeParks live data no snapshot is
+stored. If the schedule or the weather is unavailable, the snapshot is still
+stored and the gap is recorded in its `coverage`. A park-wide snapshot never
+claims `accessibility_checks_complete`: those checks are per party and happen
+when planning loads its context.
+
+**Re-normalization.** Every snapshot records the `NORMALIZER_VERSION`
+(`services/clients/normalization.py`) that built it. When a change alters what a
+raw payload normalizes to, bump that constant and rebuild the older snapshots
+from their stored raw payloads — nothing is re-collected:
+
+```bash
+poetry run python scripts/renormalize_snapshots.py --dry-run   # what would be rebuilt
+poetry run python scripts/renormalize_snapshots.py             # rows from an older normalizer
+poetry run python scripts/renormalize_snapshots.py --all       # or every snapshot
+```
+
 ### Using Poetry
 
 If you don't have Poetry installed:
@@ -223,6 +271,20 @@ curl -sSL https://install.python-poetry.org | python3 -
 - `poetry update` — upgrade all dependencies to their latest versions
 
 All four of the above run on every pull request via `.github/workflows/ci.yml` (P0-04).
+
+## Implementation Status
+
+| Component | Status | Details |
+|---|---|---|
+| **LangGraph State v2** | ✅ Done | Typed ParkMindState, state helpers, message reducer |
+| **Preference Resolution** | ✅ Done | Weighted aggregation from GuestProfile (queue, walking, categories) |
+| **Plan Synthesis** | 🚧 In progress | DRAFT plan generation (stub algorithm). The candidate is persisted alongside a PENDING proposal in `_propose_plan`; activation is deferred until the interrupt is resumed with an APPROVED decision. ConstraintChecker gating [P0-20] and real `snapshot_id` provenance [P0-30] are follow-ups. |
+| **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
+| **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
+| **PostgreSQL Repos** | ✅ Done | Profiles, Plans, Session store (in-memory for accessibility) |
+| **Initial Planning Graph** | ✅ Done | 5-node orchestration: resolve → fetch → synthesize → propose → approve |
+| **Constraint Checker** | 🔄 Next | Validation rules, PlanDiff generation |
+| **Replanner** | 🔄 Next | Proposal generation, interrupt flow |
 
 ## Working conventions
 
