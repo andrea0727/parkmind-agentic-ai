@@ -144,6 +144,13 @@ def test_no_graph_or_agent_code_constructs_accessibility_requirements():
 _APPROVAL_PRIVILEGED_MODULE = "initial_planning_graph.py"
 _APPROVAL_PRIVILEGED_FUNCTION = "_interrupt_for_approval"
 
+# State keys whose value decides whether a plan is active. Any write to
+# these keys outside ``_interrupt_for_approval`` (subscript assign, dict
+# literal, ``.update`` kwarg) is treated as a plan-activation route,
+# regardless of the RHS value, because LangGraph merges the returned dict
+# into state exactly like an assignment would.
+_FORBIDDEN_STATE_KEYS = frozenset({"current_plan", "approval"})
+
 
 def _iter_source_files():
     for directory in ("graph", "agents"):
@@ -183,20 +190,24 @@ def _module_scope_statements(module: ast.Module) -> list[ast.stmt]:
 def _find_approval_violations(scope: ast.AST | list[ast.stmt]) -> list[str]:
     """Return descriptions of any plan-activation code inside ``scope``.
 
-    Flags every way a node could activate a plan without going through the
-    resumed, human-driven interrupt path:
-    - calls to ``approve_plan(...)``
-    - references to ``ResolveProposalUseCase`` (the use case that flips a
-      proposal to APPROVED and activates the plan in the repository)
-    - ``.activate(...)`` calls -- deliberately broad. Today the only
-      ``.activate`` in ``graph/`` + ``agents/`` is inside
-      ``_interrupt_for_approval`` (via ``ResolveProposalUseCase`` on the
-      plan repository), so a broad ban catches every hand-rolled path
-      into the ``plans`` table without a heuristic on the receiver
-      name. A future unrelated ``.activate`` API in this tree is a signal
-      to think, not noise.
-    - assignments whose RHS is the string literal ``"APPROVED"`` (a hand-set
-      ``state["approval"] = "APPROVED"`` bypasses ``approve_plan``)
+    The invariant here is not "no `"APPROVED"` string literal exists" -- it
+    is "no code outside ``_interrupt_for_approval`` writes to the state
+    keys that decide plan activation, and no code names
+    ``ApprovalStatus.APPROVED`` where it could reach state." That's what
+    LangGraph actually merges: a node's returned dict is merged into
+    state key-by-key, so a `return {"approval": "APPROVED", ...}` is
+    indistinguishable from a `state["approval"] = "APPROVED"` at runtime.
+
+    Flags:
+    - calls to ``approve_plan(...)`` and ``.activate(...)``
+    - references to ``ResolveProposalUseCase``
+    - references to ``ApprovalStatus.APPROVED`` (attribute access; catches
+      ``ApprovalStatus.APPROVED.value`` too, since the ``.value`` node
+      still visits the ``.APPROVED`` attribute)
+    - any write to a forbidden state key, in three shapes:
+        * subscript assign: ``state["approval"] = ...``
+        * dict literal: ``return {"current_plan": plan, "approval": ...}``
+        * ``.update`` kwarg: ``state.update(approval=..., current_plan=...)``
     """
     nodes: list[ast.AST]
     if isinstance(scope, list):
@@ -216,37 +227,73 @@ def _find_approval_violations(scope: ast.AST | list[ast.stmt]) -> list[str]:
                 findings.append(f"call to .approve_plan() at line {node.lineno}")
             elif isinstance(called, ast.Attribute) and called.attr == "activate":
                 findings.append(f"call to .activate() at line {node.lineno}")
+            elif isinstance(called, ast.Attribute) and called.attr == "update":
+                for kw in node.keywords:
+                    if kw.arg in _FORBIDDEN_STATE_KEYS:
+                        findings.append(
+                            f".update({kw.arg}=...) at line {node.lineno}"
+                        )
         if isinstance(node, ast.Name) and node.id == "ResolveProposalUseCase":
             findings.append(f"reference to ResolveProposalUseCase at line {node.lineno}")
         if (
-            isinstance(node, ast.Assign)
-            and isinstance(node.value, ast.Constant)
-            and node.value.value == "APPROVED"
+            isinstance(node, ast.Attribute)
+            and node.attr == "APPROVED"
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "ApprovalStatus"
         ):
             findings.append(
-                f'assignment of "APPROVED" literal at line {node.lineno}'
+                f"reference to ApprovalStatus.APPROVED at line {node.lineno}"
             )
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if (
+                    isinstance(target, ast.Subscript)
+                    and isinstance(target.slice, ast.Constant)
+                    and target.slice.value in _FORBIDDEN_STATE_KEYS
+                ):
+                    findings.append(
+                        f'subscript assign to [{target.slice.value!r}] '
+                        f'at line {node.lineno}'
+                    )
+        if isinstance(node, ast.Dict):
+            for key in node.keys:
+                if (
+                    isinstance(key, ast.Constant)
+                    and key.value in _FORBIDDEN_STATE_KEYS
+                ):
+                    findings.append(
+                        f'dict literal with key {key.value!r} at line {key.lineno}'
+                    )
     return findings
 
 
 def test_only_interrupt_approval_activates_a_plan():
     """Only ``_interrupt_for_approval`` may activate a plan.
 
-    An AST walk of every top-level function AND module-scope statement in
-    ``graph/`` and ``agents/`` (except ``state_helpers.py``, which owns the
-    primitives) forbids the four routes a node could take to activate a
-    plan without the resumed, human-driven interrupt path:
+    Protects the invariant, not the exact spelling. An AST walk over every
+    top-level function AND module-scope statement in ``graph/`` and
+    ``agents/`` (except ``state_helpers.py``, which owns the primitives)
+    forbids every LangGraph-idiomatic route to plan activation:
 
       (a) ``return approve_plan(state)``
-      (b) ``state["approval"] = "APPROVED"``
+      (b) ``state["approval"] = "APPROVED"`` (subscript assign)
       (c) ``ResolveProposalUseCase().execute(..., ApprovalStatus.APPROVED, ...)``
       (d) ``PostgresPlanRepository(conn).activate(...)``
+      (e) ``return {"current_plan": plan, "approval": "APPROVED"}``
+          -- the canonical LangGraph node shape: node returns a partial
+          dict that the framework merges into state key-by-key, so a
+          returned key is indistinguishable from an assignment.
+      (f) ``state["approval"] = ApprovalStatus.APPROVED.value``
+          -- RHS is not a literal but the key is still forbidden.
+      (g) ``state.update(approval="APPROVED")``
+          -- kwargs on ``.update`` also count as writes.
 
     The one exception is ``_interrupt_for_approval`` inside
     ``initial_planning_graph.py``: that node runs after ``interrupt()``
     resumes with a human decision, and it is the sole legal caller of
-    ``approve_plan`` and ``ResolveProposalUseCase`` in the orchestration
-    layer (invariant: the LLM never activates a plan).
+    ``approve_plan`` and ``ResolveProposalUseCase`` -- and the sole
+    legal reference to ``ApprovalStatus.APPROVED`` -- in the
+    orchestration layer (invariant: the LLM never activates a plan).
     """
     offenders: list[str] = []
     saw_privileged = False
