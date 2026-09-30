@@ -35,9 +35,11 @@ SRC_ROOT = Path(__file__).resolve().parents[2] / "src" / "parkmind"
 # Field names that only exist on AccessibilityRequirements (the hard-constraint
 # payload) and never on AccessibilityCheck (the derived, checkpoint-safe
 # eligibility result) or any other §33 contract. "ride_restrictions" is
-# deliberately excluded: HardConstraintSet.ride_restrictions is a distinct,
-# aggregate, non-PII field (guest_id -> list[RideRestriction]) that's fine
-# to checkpoint via GroupObjective.
+# deliberately excluded: HardConstraintSet.ride_restrictions is a derived,
+# aggregated field (guest_id -> list[RideRestriction]) that reaches the
+# checkpoint through GroupObjective. Whether that derived shape counts as
+# PII is still open under the C19 discussion, so treat it as "derived,
+# pending C19" rather than as decided non-PII.
 _ACCESSIBILITY_REQUIREMENTS_MARKERS = (
     "mobility_requirements",
     "daily_walking_limit_minutes",
