@@ -180,31 +180,6 @@ def _module_scope_statements(module: ast.Module) -> list[ast.stmt]:
     ]
 
 
-def _looks_like_plan_repository_activate(call: ast.Call) -> bool:
-    """True when ``call`` is ``<something>.activate(...)`` on a plan repository.
-
-    Recognizes two shapes so that unrelated ``.activate()`` APIs (feature
-    flags, widgets, ...) don't trip the guard:
-
-    - ``Something(...).activate(...)`` where ``Something`` ends in
-      ``PlanRepository`` -- the direct constructor + method call pattern used
-      today by ``ResolveProposalUseCase``.
-    - ``receiver.activate(...)`` where the receiver name mentions ``plan``
-      and either ``repo`` or ``repository`` -- catches
-      ``plan_repository.activate(...)`` and friends without banning every
-      ``.activate()`` in the file.
-    """
-    if not isinstance(call.func, ast.Attribute) or call.func.attr != "activate":
-        return False
-    receiver = call.func.value
-    if isinstance(receiver, ast.Call) and isinstance(receiver.func, ast.Name):
-        return receiver.func.id.endswith("PlanRepository")
-    if isinstance(receiver, ast.Name):
-        name = receiver.id.lower()
-        return "plan" in name and ("repo" in name or "repository" in name)
-    return False
-
-
 def _find_approval_violations(scope: ast.AST | list[ast.stmt]) -> list[str]:
     """Return descriptions of any plan-activation code inside ``scope``.
 
@@ -213,7 +188,13 @@ def _find_approval_violations(scope: ast.AST | list[ast.stmt]) -> list[str]:
     - calls to ``approve_plan(...)``
     - references to ``ResolveProposalUseCase`` (the use case that flips a
       proposal to APPROVED and activates the plan in the repository)
-    - ``.activate(...)`` calls whose receiver looks like a ``*PlanRepository``
+    - ``.activate(...)`` calls -- deliberately broad. Today the only
+      ``.activate`` in ``graph/`` + ``agents/`` is inside
+      ``_interrupt_for_approval`` (via ``ResolveProposalUseCase`` on the
+      plan repository), so a broad ban catches every hand-rolled path
+      into the ``plans`` table without a heuristic on the receiver
+      name. A future unrelated ``.activate`` API in this tree is a signal
+      to think, not noise.
     - assignments whose RHS is the string literal ``"APPROVED"`` (a hand-set
       ``state["approval"] = "APPROVED"`` bypasses ``approve_plan``)
     """
@@ -233,10 +214,8 @@ def _find_approval_violations(scope: ast.AST | list[ast.stmt]) -> list[str]:
                 findings.append(f"call to approve_plan() at line {node.lineno}")
             elif isinstance(called, ast.Attribute) and called.attr == "approve_plan":
                 findings.append(f"call to .approve_plan() at line {node.lineno}")
-            elif _looks_like_plan_repository_activate(node):
-                findings.append(
-                    f"call to PlanRepository.activate() at line {node.lineno}"
-                )
+            elif isinstance(called, ast.Attribute) and called.attr == "activate":
+                findings.append(f"call to .activate() at line {node.lineno}")
         if isinstance(node, ast.Name) and node.id == "ResolveProposalUseCase":
             findings.append(f"reference to ResolveProposalUseCase at line {node.lineno}")
         if (

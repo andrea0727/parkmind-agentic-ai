@@ -35,7 +35,6 @@ from parkmind.core.contracts import (
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.state import ParkMindState
 from parkmind.graph.state_helpers import approve_plan, propose_plan_change, reject_plan
-from parkmind.services.use_cases.collect_snapshot import snapshot_id_for
 from parkmind.services.use_cases.load_live_context import LoadLiveContextUseCase
 from parkmind.services.use_cases.propose_plan import ProposePlanUseCase
 from parkmind.services.use_cases.resolve_proposal import ResolveProposalUseCase
@@ -90,8 +89,7 @@ async def _fetch_context_from_apis(state: ParkMindState) -> ParkMindState:
         latitude=_DEFAULT_LATITUDE,
         longitude=_DEFAULT_LONGITUDE,
     )
-    now = datetime.now(PARK_TZ)
-    today = now.date()
+    today = datetime.now(PARK_TZ).date()
     weather = use_case.fetch_weather(start_date=today, end_date=today)
     attractions = use_case.fetch_attractions()
 
@@ -103,12 +101,15 @@ async def _fetch_context_from_apis(state: ParkMindState) -> ParkMindState:
     if not attractions:
         coverage_gaps.append("required_attractions")
 
-    # Deterministic snapshot id keyed on (park, collection window) -- same
-    # convention as SnapshotCollector [P0-11], so once P0-30 wires this node
-    # to SnapshotRepository the id already matches an existing row and
-    # provenance stops pointing at a phantom uuid.
+    # snapshot_id is a placeholder uuid until P0-30 wires this node to
+    # SnapshotRepository via SnapshotCollector. On purpose NOT the
+    # collector's deterministic key snapshot_id_for(park, now): that key
+    # would silently collide with a real, differently-sourced row the
+    # collector persisted in the same 5-min window, and Provenance would
+    # then point at a snapshot whose LiveContext is not what this node
+    # observed. A dangling uuid is honest; a colliding real key is not.
     state["live_context"] = LiveContext(
-        snapshot_id=snapshot_id_for(_DEFAULT_PARK_ID, now),
+        snapshot_id=uuid4().hex,
         retrieved_at=datetime.now(UTC),
         waits={},
         statuses={},
