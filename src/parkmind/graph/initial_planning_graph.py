@@ -35,6 +35,7 @@ from parkmind.core.contracts import (
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.state import ParkMindState
 from parkmind.graph.state_helpers import approve_plan, propose_plan_change, reject_plan
+from parkmind.services.use_cases.collect_snapshot import snapshot_id_for
 from parkmind.services.use_cases.load_live_context import LoadLiveContextUseCase
 from parkmind.services.use_cases.propose_plan import ProposePlanUseCase
 from parkmind.services.use_cases.resolve_proposal import ResolveProposalUseCase
@@ -89,7 +90,8 @@ async def _fetch_context_from_apis(state: ParkMindState) -> ParkMindState:
         latitude=_DEFAULT_LATITUDE,
         longitude=_DEFAULT_LONGITUDE,
     )
-    today = datetime.now(PARK_TZ).date()
+    now = datetime.now(PARK_TZ)
+    today = now.date()
     weather = use_case.fetch_weather(start_date=today, end_date=today)
     attractions = use_case.fetch_attractions()
 
@@ -101,8 +103,12 @@ async def _fetch_context_from_apis(state: ParkMindState) -> ParkMindState:
     if not attractions:
         coverage_gaps.append("required_attractions")
 
+    # Deterministic snapshot id keyed on (park, collection window) -- same
+    # convention as SnapshotCollector [P0-11], so once P0-30 wires this node
+    # to SnapshotRepository the id already matches an existing row and
+    # provenance stops pointing at a phantom uuid.
     state["live_context"] = LiveContext(
-        snapshot_id=uuid4().hex,
+        snapshot_id=snapshot_id_for(_DEFAULT_PARK_ID, now),
         retrieved_at=datetime.now(UTC),
         waits={},
         statuses={},
@@ -130,8 +136,10 @@ def _propose_plan(state: ParkMindState) -> ParkMindState:
     _interrupt_for_approval -- LangGraph re-executes a node from the top on
     every resume).
 
-    TODO [P0-20]: gate this on ConstraintChecker passing once CheckPlanUseCase
-    is implemented; today an unchecked candidate is still sent for approval.
+    TODO [P0-20]: gate this on ConstraintChecker passing once
+    ``CheckPlanUseCase.execute`` is implemented (see
+    ``services/use_cases/check_plan.py``, still ``NotImplementedError``).
+    Today an unchecked candidate is still sent for approval.
     """
     plan = state.get("candidate_plan")
     if not plan:

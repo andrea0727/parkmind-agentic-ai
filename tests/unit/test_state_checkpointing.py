@@ -153,35 +153,90 @@ def _iter_source_files():
             yield path
 
 
-def _iter_functions(module: ast.Module):
-    """Yield every function/async-function body (including nested) in a module."""
-    for node in ast.walk(module):
+def _top_level_functions(module: ast.Module):
+    """Yield ``(FunctionDef, name)`` for every function defined at module scope.
+
+    Nested functions are covered when their outer function is walked; yielding
+    only top-level defs (plus the module-scope "function" below) prevents
+    double-reporting the same violation under both the inner and the outer
+    function.
+    """
+    for node in module.body:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-            yield node
+            yield node, node.name
 
 
-def _find_approval_violations(func: ast.AST) -> list[str]:
-    """Return descriptions of any plan-activation code inside ``func``.
+def _module_scope_statements(module: ast.Module) -> list[ast.stmt]:
+    """Module-level statements that are NOT function or class definitions.
+
+    A ``state["approval"] = "APPROVED"`` or a ``PlanRepository(...).activate(...)``
+    at module scope would slip past a function-only walk, so treat everything
+    else at the top level as one synthetic "module init" body.
+    """
+    return [
+        stmt
+        for stmt in module.body
+        if not isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
+    ]
+
+
+def _looks_like_plan_repository_activate(call: ast.Call) -> bool:
+    """True when ``call`` is ``<something>.activate(...)`` on a plan repository.
+
+    Recognizes two shapes so that unrelated ``.activate()`` APIs (feature
+    flags, widgets, ...) don't trip the guard:
+
+    - ``Something(...).activate(...)`` where ``Something`` ends in
+      ``PlanRepository`` -- the direct constructor + method call pattern used
+      today by ``ResolveProposalUseCase``.
+    - ``receiver.activate(...)`` where the receiver name mentions ``plan``
+      and either ``repo`` or ``repository`` -- catches
+      ``plan_repository.activate(...)`` and friends without banning every
+      ``.activate()`` in the file.
+    """
+    if not isinstance(call.func, ast.Attribute) or call.func.attr != "activate":
+        return False
+    receiver = call.func.value
+    if isinstance(receiver, ast.Call) and isinstance(receiver.func, ast.Name):
+        return receiver.func.id.endswith("PlanRepository")
+    if isinstance(receiver, ast.Name):
+        name = receiver.id.lower()
+        return "plan" in name and ("repo" in name or "repository" in name)
+    return False
+
+
+def _find_approval_violations(scope: ast.AST | list[ast.stmt]) -> list[str]:
+    """Return descriptions of any plan-activation code inside ``scope``.
 
     Flags every way a node could activate a plan without going through the
     resumed, human-driven interrupt path:
     - calls to ``approve_plan(...)``
     - references to ``ResolveProposalUseCase`` (the use case that flips a
       proposal to APPROVED and activates the plan in the repository)
-    - ``.activate(...)`` calls (the plan-repository primitive)
+    - ``.activate(...)`` calls whose receiver looks like a ``*PlanRepository``
     - assignments whose RHS is the string literal ``"APPROVED"`` (a hand-set
       ``state["approval"] = "APPROVED"`` bypasses ``approve_plan``)
     """
+    nodes: list[ast.AST]
+    if isinstance(scope, list):
+        nodes = []
+        for stmt in scope:
+            nodes.extend(ast.walk(stmt))
+    else:
+        nodes = list(ast.walk(scope))
+
     findings: list[str] = []
-    for node in ast.walk(func):
+    for node in nodes:
         if isinstance(node, ast.Call):
             called = node.func
             if isinstance(called, ast.Name) and called.id == "approve_plan":
                 findings.append(f"call to approve_plan() at line {node.lineno}")
             elif isinstance(called, ast.Attribute) and called.attr == "approve_plan":
                 findings.append(f"call to .approve_plan() at line {node.lineno}")
-            elif isinstance(called, ast.Attribute) and called.attr == "activate":
-                findings.append(f"call to .activate() at line {node.lineno}")
+            elif _looks_like_plan_repository_activate(node):
+                findings.append(
+                    f"call to PlanRepository.activate() at line {node.lineno}"
+                )
         if isinstance(node, ast.Name) and node.id == "ResolveProposalUseCase":
             findings.append(f"reference to ResolveProposalUseCase at line {node.lineno}")
         if (
@@ -198,10 +253,10 @@ def _find_approval_violations(func: ast.AST) -> list[str]:
 def test_only_interrupt_approval_activates_a_plan():
     """Only ``_interrupt_for_approval`` may activate a plan.
 
-    An AST walk of every function in ``graph/`` and ``agents/`` (except
-    ``state_helpers.py``, which owns the primitives) forbids the four
-    routes a node could take to activate a plan without the resumed,
-    human-driven interrupt path:
+    An AST walk of every top-level function AND module-scope statement in
+    ``graph/`` and ``agents/`` (except ``state_helpers.py``, which owns the
+    primitives) forbids the four routes a node could take to activate a
+    plan without the resumed, human-driven interrupt path:
 
       (a) ``return approve_plan(state)``
       (b) ``state["approval"] = "APPROVED"``
@@ -219,10 +274,15 @@ def test_only_interrupt_approval_activates_a_plan():
 
     for path in _iter_source_files():
         module = ast.parse(path.read_text())
-        for func in _iter_functions(module):
+
+        module_findings = _find_approval_violations(_module_scope_statements(module))
+        for finding in module_findings:
+            offenders.append(f"{path.name}:<module>: {finding}")
+
+        for func, name in _top_level_functions(module):
             privileged = (
                 path.name == _APPROVAL_PRIVILEGED_MODULE
-                and func.name == _APPROVAL_PRIVILEGED_FUNCTION
+                and name == _APPROVAL_PRIVILEGED_FUNCTION
             )
             findings = _find_approval_violations(func)
             if privileged:
@@ -233,7 +293,7 @@ def test_only_interrupt_approval_activates_a_plan():
                 )
                 continue
             for finding in findings:
-                offenders.append(f"{path.name}:{func.name}: {finding}")
+                offenders.append(f"{path.name}:{name}: {finding}")
 
     assert saw_privileged, (
         f"{_APPROVAL_PRIVILEGED_FUNCTION} not found in {_APPROVAL_PRIVILEGED_MODULE}"
