@@ -4,15 +4,16 @@ scores. Month-1 scope: GreedyInsertionOptimizer only.
 
 Algorithm overview
 ------------------
-1. Anchor fixed-time stops (shows with showtimes, lunch in the lunch_window).
-2. Insert must-do attractions greedily around the fixed anchors.
-3. Fill remaining time with the highest marginal-utility attractions.
+1. Anchor fixed-time stops (shows with valid showtimes, lunch in the lunch_window).
+2. Insert must-do attractions greedily around the fixed anchors by marginal utility / cost.
+3. Fill remaining time with the highest marginal-utility / cost attractions.
 4. After every insertion, check the rest-frequency clock and insert a REST
    stop when time since the last break exceeds the most-sensitive guest's
    ``rest_frequency_minutes`` (read from AccessibilityRequirements, loaded
    per run from SessionStore — never from graph state [C19]).
 5. Attractions that cannot fit before ``departure_time`` or that are
-   DOWN/CLOSED are placed in ``unmet_must_do`` (graceful degradation [C18]).
+   DOWN/CLOSED/avoided or have no valid showtimes are placed in ``unmet_must_do``
+   (graceful degradation [C18]).
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from datetime import datetime, timedelta
 from parkmind.core.contracts import (
     AccessibilityRequirements,
     Attraction,
+    AttractionCategory,
     AttractionStatus,
     GroupObjective,
     LiveContext,
@@ -44,6 +46,7 @@ _DEFAULT_ATTRACTION_DURATION_MIN = 15.0
 _DEFAULT_MEAL_DURATION_MIN = 45.0
 _DEFAULT_REST_DURATION_MIN = 20.0
 _DEFAULT_SHOW_DURATION_MIN = 25.0
+_LUNCH_WINDOW_EARLY_BUFFER_MIN = 15.0
 _PARK_ENTRANCE_NODE = "__park_entrance__"
 
 
@@ -124,6 +127,7 @@ class GreedyInsertionOptimizer:
 
         # Sets for filtering
         avoid_set = set(constraints.avoid)
+        must_do_set = set(constraints.must_do)
         visited: set[str] = set()
 
         # Operating status filter
@@ -132,6 +136,15 @@ class GreedyInsertionOptimizer:
             for nid, status in context.statuses.items()
             if status == AttractionStatus.OPERATING
         }
+
+        # Identify all show nodes (entities with showtimes or category SHOW)
+        show_node_ids = set(context.showtimes.keys())
+        if catalog:
+            show_node_ids |= {
+                a.node_id
+                for a in catalog
+                if a.category == AttractionCategory.SHOW
+            }
 
         # Per-guest eligible sets (from GroupObjective if available)
         per_guest_eligible: dict[str, set[str]] | None = None
@@ -148,7 +161,7 @@ class GreedyInsertionOptimizer:
         anchors: list[Stop] = []
 
         # Show anchors from must_do that have showtimes
-        for show_id in list(constraints.must_do):
+        for show_id in constraints.must_do:
             if context.showtimes.get(show_id):
                 best_time = self._pick_best_showtime(
                     context.showtimes[show_id], start_time, end_time,
@@ -165,9 +178,8 @@ class GreedyInsertionOptimizer:
                         utility=utilities.get(show_id, 0.0),
                         served_guests=guest_ids,
                     ))
-                    visited.add(show_id)
 
-        # Lunch anchor
+        # Lunch anchor placeholder
         meal_anchor: Stop | None = None
         if constraints.lunch_window is not None:
             meal_anchor = self._create_meal_anchor(
@@ -179,212 +191,306 @@ class GreedyInsertionOptimizer:
         # Sort anchors chronologically
         anchors.sort(key=lambda s: s.arrival_time)
 
-        # ---- Phase 1: Build ordered candidate list -----------------------
-        # Must-do first (excluding already-anchored shows), then by utility
-        must_do_remaining = [
-            nid for nid in constraints.must_do if nid not in visited
-        ]
-        other_candidates = sorted(
-            (
-                nid
-                for nid in utilities
-                if nid not in avoid_set
-                and nid not in visited
-                and nid not in set(must_do_remaining)
-            ),
-            key=lambda nid: utilities.get(nid, 0.0),
-            reverse=True,
-        )
-
-        # ---- Phase 2: Greedy insertion -----------------------------------
+        # ---- Phase 1 & 2: Dynamic Greedy Insertion -----------------------
         stops: list[Stop] = []
-        unmet_must_do: list[str] = []
         cursor_time = start_time
         cursor_node = _PARK_ENTRANCE_NODE
         active_minutes_since_rest = 0.0
-        total_wait = 0.0
-        total_walk = 0.0
 
-        # Merge must-do + others into a single insertion queue
-        insertion_queue = must_do_remaining + other_candidates
-        anchor_iter = iter(anchors)
-        next_anchor: Stop | None = next(anchor_iter, None)
-
-        # Track whether meal has been inserted
+        anchor_idx = 0
         meal_inserted = False
 
-        for candidate_id in insertion_queue:
-            # Skip if already visited, avoided, or not operating
-            if candidate_id in visited:
-                continue
-            if candidate_id in avoid_set:
-                if candidate_id in set(must_do_remaining):
-                    unmet_must_do.append(candidate_id)
-                continue
-            if candidate_id not in operating_ids and candidate_id in set(must_do_remaining):
-                unmet_must_do.append(candidate_id)
-                continue
-            if candidate_id not in operating_ids:
-                continue
-
-            # Check if we should insert anchors (shows) that fall before this
-            # candidate's projected time
-            while next_anchor is not None:
-                walk_to_anchor = self._walk_time(cursor_node, next_anchor.node_id)
-                earliest_anchor_start = cursor_time + timedelta(minutes=walk_to_anchor)
-
-                if earliest_anchor_start <= next_anchor.arrival_time:
-                    # Insert rest before anchor if needed
+        while True:
+            # 1. Check if next anchor (show) is due now
+            if anchor_idx < len(anchors):
+                curr_anchor = anchors[anchor_idx]
+                walk_to_anchor = self._walk_time(cursor_node, curr_anchor.node_id)
+                earliest_arrival = cursor_time + timedelta(minutes=walk_to_anchor)
+                if earliest_arrival >= curr_anchor.arrival_time:
+                    # Anchor is due now
                     if rest_freq is not None:
                         cursor_time, cursor_node, active_minutes_since_rest = (
                             self._maybe_insert_rest(
-                                stops, cursor_time, cursor_node,
-                                active_minutes_since_rest, rest_freq,
-                                walk_to_anchor, guest_ids, end_time,
+                                stops,
+                                cursor_time,
+                                cursor_node,
+                                active_minutes_since_rest,
+                                rest_freq,
+                                walk_to_anchor + self._show_dur,
+                                guest_ids,
+                                end_time,
                             )
                         )
-
-                    anchor_walk = self._walk_time(cursor_node, next_anchor.node_id)
-                    anchor_stop = next_anchor.model_copy(
-                        update={"walking_minutes": anchor_walk},
-                    )
-                    # Adjust arrival if we arrive early — wait at the venue
+                        walk_to_anchor = self._walk_time(cursor_node, curr_anchor.node_id)
                     actual_arrival = max(
-                        cursor_time + timedelta(minutes=anchor_walk),
-                        next_anchor.arrival_time,
+                        cursor_time + timedelta(minutes=walk_to_anchor),
+                        curr_anchor.arrival_time,
                     )
-                    if actual_arrival + timedelta(minutes=self._show_dur) > end_time:
-                        break
-                    anchor_stop = anchor_stop.model_copy(update={
-                        "arrival_time": actual_arrival,
-                        "departure_time": actual_arrival + timedelta(
-                            minutes=self._show_dur,
-                        ),
-                        "walking_minutes": anchor_walk,
-                    })
-                    stops.append(anchor_stop)
-                    total_walk += anchor_walk
-                    step_time = anchor_walk + self._show_dur
-                    active_minutes_since_rest += step_time
-                    cursor_time = anchor_stop.departure_time
-                    cursor_node = anchor_stop.node_id
-                    next_anchor = next(anchor_iter, None)
-                else:
-                    break  # anchor is still in the future; insert candidates first
-
-            # Insert meal if the lunch window has started and we haven't yet
-            if (
-                not meal_inserted
-                and meal_anchor is not None
-                and cursor_time >= meal_anchor.arrival_time - timedelta(minutes=15)
-            ):
-                cursor_time, cursor_node, active_minutes_since_rest, meal_inserted = (
-                    self._insert_meal(
-                        stops, cursor_time, cursor_node, meal_anchor,
-                        active_minutes_since_rest, guest_ids, end_time,
-                        total_walk,
-                    )
-                )
-                total_walk += stops[-1].walking_minutes if meal_inserted and stops else 0.0
-
-            # Estimate cost to reach this candidate
-            walk_min = self._walk_time(cursor_node, candidate_id)
-            wait_min = self._get_wait(candidate_id, context)
-            duration = self._get_duration(candidate_id, catalog_index)
-
-            projected_end = cursor_time + timedelta(
-                minutes=walk_min + wait_min + duration,
-            )
-            if projected_end > end_time:
-                if candidate_id in set(must_do_remaining):
-                    unmet_must_do.append(candidate_id)
-                continue
-
-            # Check if a rest is needed before this stop
-            if rest_freq is not None:
-                cursor_time, cursor_node, active_minutes_since_rest = (
-                    self._maybe_insert_rest(
-                        stops, cursor_time, cursor_node,
-                        active_minutes_since_rest, rest_freq,
-                        walk_min + wait_min + duration, guest_ids, end_time,
-                    )
-                )
-                # Recompute walk after potential rest
-                walk_min = self._walk_time(cursor_node, candidate_id)
-                projected_end = cursor_time + timedelta(
-                    minutes=walk_min + wait_min + duration,
-                )
-                if projected_end > end_time:
-                    if candidate_id in set(must_do_remaining):
-                        unmet_must_do.append(candidate_id)
+                    show_departure = actual_arrival + timedelta(minutes=self._show_dur)
+                    if show_departure <= end_time:
+                        anchor_stop = curr_anchor.model_copy(
+                            update={
+                                "arrival_time": actual_arrival,
+                                "departure_time": show_departure,
+                                "walking_minutes": walk_to_anchor,
+                            }
+                        )
+                        stops.append(anchor_stop)
+                        visited.add(curr_anchor.node_id)
+                        cursor_time = show_departure
+                        cursor_node = curr_anchor.node_id
+                        active_minutes_since_rest += walk_to_anchor + self._show_dur
+                    anchor_idx += 1
                     continue
 
-            arrival = cursor_time + timedelta(minutes=walk_min)
-            departure = arrival + timedelta(minutes=wait_min + duration)
+            # 2. Check if meal is due now
+            if meal_anchor is not None and not meal_inserted:
+                lunch_win = constraints.lunch_window
+                assert lunch_win is not None
+                walk_to_meal = self._walk_time(cursor_node, meal_anchor.node_id)
+                earliest_meal_arrival = cursor_time + timedelta(minutes=walk_to_meal)
+                if earliest_meal_arrival >= lunch_win.start - timedelta(minutes=_LUNCH_WINDOW_EARLY_BUFFER_MIN):
+                    # We are within or at the lunch window
+                    actual_arrival = max(earliest_meal_arrival, lunch_win.start)
+                    if actual_arrival <= lunch_win.end:
+                        meal_departure = actual_arrival + timedelta(minutes=self._meal_dur)
+                        if meal_departure <= end_time:
+                            meal_stop = Stop(
+                                node_id=meal_anchor.node_id,
+                                kind=StopKind.MEAL,
+                                arrival_time=actual_arrival,
+                                departure_time=meal_departure,
+                                expected_wait_minutes=0.0,
+                                walking_minutes=walk_to_meal,
+                                utility=0.0,
+                                served_guests=guest_ids,
+                            )
+                            stops.append(meal_stop)
+                            cursor_time = meal_departure
+                            cursor_node = meal_anchor.node_id
+                            active_minutes_since_rest = 0.0
+                    meal_inserted = True
+                    continue
 
-            # Determine served_guests based on eligibility
-            served = self._compute_served_guests(
-                candidate_id, guest_ids, per_guest_eligible,
-            )
+            # 3. Find candidates that fit before upcoming deadlines
+            next_anchor = anchors[anchor_idx] if anchor_idx < len(anchors) else None
+            lunch_win = constraints.lunch_window if (meal_anchor is not None and not meal_inserted) else None
 
-            stop = Stop(
-                node_id=candidate_id,
-                kind=StopKind.ATTRACTION,
-                arrival_time=arrival,
-                departure_time=departure,
-                expected_wait_minutes=wait_min,
-                walking_minutes=walk_min,
-                utility=utilities.get(candidate_id, 0.0),
-                served_guests=served,
-            )
-            stops.append(stop)
-            visited.add(candidate_id)
-            total_wait += wait_min
-            total_walk += walk_min
-            step_time = walk_min + wait_min + duration
-            active_minutes_since_rest += step_time
-            cursor_time = departure
-            cursor_node = candidate_id
+            candidate_must_dos = [
+                nid for nid in constraints.must_do
+                if nid not in visited
+                and nid not in avoid_set
+                and nid in operating_ids
+                and nid not in show_node_ids
+            ]
+            other_candidates = [
+                nid for nid in utilities
+                if nid not in visited
+                and nid not in avoid_set
+                and nid in operating_ids
+                and nid not in show_node_ids
+                and nid not in must_do_set
+            ]
 
-        # Flush remaining anchors
-        while next_anchor is not None:
-            anchor_walk = self._walk_time(cursor_node, next_anchor.node_id)
-            actual_arrival = max(
-                cursor_time + timedelta(minutes=anchor_walk),
-                next_anchor.arrival_time,
-            )
-            if actual_arrival + timedelta(minutes=self._show_dur) > end_time:
-                break
-            anchor_stop = next_anchor.model_copy(update={
-                "arrival_time": actual_arrival,
-                "departure_time": actual_arrival + timedelta(
-                    minutes=self._show_dur,
-                ),
-                "walking_minutes": anchor_walk,
-            })
-            stops.append(anchor_stop)
-            total_walk += anchor_walk
-            cursor_time = anchor_stop.departure_time
-            cursor_node = anchor_stop.node_id
-            next_anchor = next(anchor_iter, None)
+            fitting_must_dos: list[tuple[float, float, float, str]] = []
+            fitting_others: list[tuple[float, float, float, str]] = []
 
-        # Insert meal at end if still not inserted and there's time
-        if not meal_inserted and meal_anchor is not None:
-            cursor_time, cursor_node, active_minutes_since_rest, meal_inserted = (
-                self._insert_meal(
-                    stops, cursor_time, cursor_node, meal_anchor,
-                    active_minutes_since_rest, guest_ids, end_time,
-                    total_walk,
+            for pool, target_list in [
+                (candidate_must_dos, fitting_must_dos),
+                (other_candidates, fitting_others),
+            ]:
+                for cid in pool:
+                    walk_min = self._walk_time(cursor_node, cid)
+                    wait_min = self._get_wait(cid, context)
+                    dur_min = self._get_duration(cid, catalog_index)
+                    step_min = walk_min + wait_min + dur_min
+
+                    rest_min = 0.0
+                    if rest_freq is not None and active_minutes_since_rest + step_min > rest_freq:
+                        rest_min = self._rest_dur
+
+                    total_dur = rest_min + step_min
+                    cand_departure = cursor_time + timedelta(minutes=total_dur)
+
+                    # Check deadline 1: departure_time
+                    if cand_departure > end_time:
+                        continue
+
+                    # Check deadline 2: next_anchor
+                    if next_anchor is not None:
+                        walk_after = self._walk_time(cid, next_anchor.node_id)
+                        if cand_departure + timedelta(minutes=walk_after) > next_anchor.arrival_time:
+                            continue
+
+                    # Check deadline 3: lunch window
+                    if lunch_win is not None and cursor_time < lunch_win.start:
+                        walk_to_meal = self._walk_time(cid, meal_anchor.node_id)
+                        if cand_departure + timedelta(minutes=walk_to_meal) > lunch_win.end:
+                            continue
+
+                    util = utilities.get(cid, 0.0)
+                    cost = max(step_min, 0.1)
+                    ratio = util / cost
+                    target_list.append((ratio, util, -total_dur, cid))
+
+            chosen_id: str | None = None
+            if fitting_must_dos:
+                fitting_must_dos.sort(reverse=True)
+                chosen_id = fitting_must_dos[0][3]
+            elif fitting_others:
+                fitting_others.sort(reverse=True)
+                if fitting_others[0][1] >= 0.0:
+                    chosen_id = fitting_others[0][3]
+
+            # 4. If a candidate was chosen, insert it
+            if chosen_id is not None:
+                walk_min = self._walk_time(cursor_node, chosen_id)
+                wait_min = self._get_wait(chosen_id, context)
+                dur_min = self._get_duration(chosen_id, catalog_index)
+                step_min = walk_min + wait_min + dur_min
+
+                if rest_freq is not None:
+                    cursor_time, cursor_node, active_minutes_since_rest = (
+                        self._maybe_insert_rest(
+                            stops,
+                            cursor_time,
+                            cursor_node,
+                            active_minutes_since_rest,
+                            rest_freq,
+                            step_min,
+                            guest_ids,
+                            end_time,
+                        )
+                    )
+                    walk_min = self._walk_time(cursor_node, chosen_id)
+
+                arrival = cursor_time + timedelta(minutes=walk_min)
+                departure = arrival + timedelta(minutes=wait_min + dur_min)
+                served = self._compute_served_guests(
+                    chosen_id, guest_ids, per_guest_eligible,
                 )
+                stop = Stop(
+                    node_id=chosen_id,
+                    kind=StopKind.ATTRACTION,
+                    arrival_time=arrival,
+                    departure_time=departure,
+                    expected_wait_minutes=wait_min,
+                    walking_minutes=walk_min,
+                    utility=utilities.get(chosen_id, 0.0),
+                    served_guests=served,
+                )
+                stops.append(stop)
+                visited.add(chosen_id)
+                active_minutes_since_rest += walk_min + wait_min + dur_min
+                cursor_time = departure
+                cursor_node = chosen_id
+                continue
+
+            # 5. If no candidate fits: advance to anchor or lunch if possible
+            if anchor_idx < len(anchors):
+                curr_anchor = anchors[anchor_idx]
+                walk_to_anchor = self._walk_time(cursor_node, curr_anchor.node_id)
+                if rest_freq is not None:
+                    cursor_time, cursor_node, active_minutes_since_rest = (
+                        self._maybe_insert_rest(
+                            stops,
+                            cursor_time,
+                            cursor_node,
+                            active_minutes_since_rest,
+                            rest_freq,
+                            walk_to_anchor + self._show_dur,
+                            guest_ids,
+                            end_time,
+                        )
+                    )
+                    walk_to_anchor = self._walk_time(cursor_node, curr_anchor.node_id)
+                actual_arrival = max(
+                    cursor_time + timedelta(minutes=walk_to_anchor),
+                    curr_anchor.arrival_time,
+                )
+                show_departure = actual_arrival + timedelta(minutes=self._show_dur)
+                if show_departure <= end_time:
+                    anchor_stop = curr_anchor.model_copy(
+                        update={
+                            "arrival_time": actual_arrival,
+                            "departure_time": show_departure,
+                            "walking_minutes": walk_to_anchor,
+                        }
+                    )
+                    stops.append(anchor_stop)
+                    visited.add(curr_anchor.node_id)
+                    cursor_time = show_departure
+                    cursor_node = curr_anchor.node_id
+                    active_minutes_since_rest += walk_to_anchor + self._show_dur
+                anchor_idx += 1
+                continue
+
+            if meal_anchor is not None and not meal_inserted:
+                lunch_win = constraints.lunch_window
+                assert lunch_win is not None
+                walk_to_meal = self._walk_time(cursor_node, meal_anchor.node_id)
+                actual_arrival = max(
+                    cursor_time + timedelta(minutes=walk_to_meal),
+                    lunch_win.start,
+                )
+                if actual_arrival <= lunch_win.end:
+                    meal_departure = actual_arrival + timedelta(minutes=self._meal_dur)
+                    if meal_departure <= end_time:
+                        meal_stop = Stop(
+                            node_id=meal_anchor.node_id,
+                            kind=StopKind.MEAL,
+                            arrival_time=actual_arrival,
+                            departure_time=meal_departure,
+                            expected_wait_minutes=0.0,
+                            walking_minutes=walk_to_meal,
+                            utility=0.0,
+                            served_guests=guest_ids,
+                        )
+                        stops.append(meal_stop)
+                        cursor_time = meal_departure
+                        cursor_node = meal_anchor.node_id
+                        active_minutes_since_rest = 0.0
+                meal_inserted = True
+                continue
+
+            # Nothing else can be inserted
+            break
+
+        # Flush any remaining anchors (in case any was left)
+        while anchor_idx < len(anchors):
+            curr_anchor = anchors[anchor_idx]
+            walk_to_anchor = self._walk_time(cursor_node, curr_anchor.node_id)
+            actual_arrival = max(
+                cursor_time + timedelta(minutes=walk_to_anchor),
+                curr_anchor.arrival_time,
             )
-            if meal_inserted and stops:
-                total_walk += stops[-1].walking_minutes
+            show_departure = actual_arrival + timedelta(minutes=self._show_dur)
+            if show_departure <= end_time:
+                anchor_stop = curr_anchor.model_copy(
+                    update={
+                        "arrival_time": actual_arrival,
+                        "departure_time": show_departure,
+                        "walking_minutes": walk_to_anchor,
+                    }
+                )
+                stops.append(anchor_stop)
+                visited.add(curr_anchor.node_id)
+                cursor_time = show_departure
+                cursor_node = curr_anchor.node_id
+            anchor_idx += 1
 
         # ---- Phase 3: Totals and satisfaction ----------------------------
+        total_wait = sum(s.expected_wait_minutes for s in stops)
+        total_walk = sum(s.walking_minutes for s in stops)
         objective_value = sum(s.utility for s in stops)
         per_guest_satisfaction = self._calculate_guest_satisfaction(
             stops, constraints, group_objective,
         )
+
+        scheduled_node_ids = {s.node_id for s in stops}
+        unmet_must_do = [
+            nid for nid in constraints.must_do if nid not in scheduled_node_ids
+        ]
 
         plan_provenance = provenance or self._minimal_provenance(context)
 
@@ -449,8 +555,7 @@ class GreedyInsertionOptimizer:
         """Ride/experience duration estimate (excludes wait time)."""
         if node_id in catalog_index:
             attr = catalog_index[node_id]
-            # Shows have a known duration slot; attractions use the default
-            if attr.category.value == "SHOW":
+            if attr.category == AttractionCategory.SHOW:
                 return self._show_dur
         return self._attraction_dur
 
@@ -478,7 +583,6 @@ class GreedyInsertionOptimizer:
         )
         arrival = window.start
         departure = arrival + timedelta(minutes=self._meal_dur)
-        # Clamp departure to window end
         departure = min(departure, window.end)
         return Stop(
             node_id=node,
@@ -510,7 +614,6 @@ class GreedyInsertionOptimizer:
         if active_minutes + upcoming_step_minutes <= rest_freq:
             return cursor_time, cursor_node, active_minutes
 
-        # Not enough time for a rest? Skip it.
         rest_end = cursor_time + timedelta(minutes=self._rest_dur)
         if rest_end > end_time:
             return cursor_time, cursor_node, active_minutes
@@ -527,41 +630,6 @@ class GreedyInsertionOptimizer:
         )
         stops.append(rest_stop)
         return rest_end, cursor_node, 0.0
-
-    def _insert_meal(
-        self,
-        stops: list[Stop],
-        cursor_time: datetime,
-        cursor_node: str,
-        meal_anchor: Stop,
-        active_minutes: float,
-        guest_ids: list[str],
-        end_time: datetime,
-        total_walk: float,
-    ) -> tuple[datetime, str, float, bool]:
-        """Insert the MEAL stop, adjusting timing to current cursor.
-
-        Returns ``(cursor_time, cursor_node, active_minutes, inserted)``.
-        """
-        walk_min = self._walk_time(cursor_node, meal_anchor.node_id)
-        arrival = cursor_time + timedelta(minutes=walk_min)
-        departure = arrival + timedelta(minutes=self._meal_dur)
-
-        if departure > end_time:
-            return cursor_time, cursor_node, active_minutes, False
-
-        meal_stop = Stop(
-            node_id=meal_anchor.node_id,
-            kind=StopKind.MEAL,
-            arrival_time=arrival,
-            departure_time=departure,
-            expected_wait_minutes=0.0,
-            walking_minutes=walk_min,
-            utility=0.0,
-            served_guests=guest_ids,
-        )
-        stops.append(meal_stop)
-        return departure, meal_anchor.node_id, 0.0, True
 
     @staticmethod
     def _compute_served_guests(
@@ -585,18 +653,16 @@ class GreedyInsertionOptimizer:
     ) -> dict[str, float]:
         """Normalized per-guest satisfaction [C20].
 
-        For each guest, satisfaction = (utility obtained from stops the guest
-        was served) / (total utility of the guest's eligible set).
-        Falls back to a uniform ratio when ``GroupObjective`` is absent.
+        When ``GroupObjective.per_guest_eligible`` is present, satisfaction
+        for each guest is:
+            (count of eligible attractions visited where guest was served) /
+            (total count of eligible attractions for that guest).
+        If eligible set is empty, satisfaction is 1.0.
+
+        Fallback (when ``GroupObjective`` is absent):
+            (attractions served to guest) / (total attraction stops in plan).
         """
         guest_ids = [g.guest_id for g in constraints.guests]
-
-        # Utility earned per guest
-        earned: dict[str, float] = {gid: 0.0 for gid in guest_ids}
-        for s in stops:
-            for gid in s.served_guests:
-                if gid in earned:
-                    earned[gid] += s.utility
 
         if group_objective and group_objective.per_guest_eligible:
             satisfaction: dict[str, float] = {}
@@ -607,7 +673,6 @@ class GreedyInsertionOptimizer:
                 if eligible_count == 0:
                     satisfaction[gid] = 1.0  # nothing to satisfy
                 else:
-                    # Count how many eligible attractions were visited
                     eligible_set = set(
                         group_objective.per_guest_eligible.get(gid, []),
                     )
