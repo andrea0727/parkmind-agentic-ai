@@ -323,7 +323,11 @@ class GreedyInsertionOptimizer:
                             continue
 
                     # Check deadline 3: lunch window
-                    if lunch_win is not None and cursor_time < lunch_win.start:
+                    if (
+                        lunch_win is not None
+                        and meal_anchor is not None
+                        and cursor_time < lunch_win.start
+                    ):
                         walk_to_meal = self._walk_time(cid, meal_anchor.node_id)
                         if cand_departure + timedelta(minutes=walk_to_meal) > lunch_win.end:
                             continue
