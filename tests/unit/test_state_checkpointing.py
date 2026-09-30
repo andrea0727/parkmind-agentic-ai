@@ -6,6 +6,7 @@ Covers:
 - AccessibilityRequirements is never present in checkpoint payloads [C19]
 """
 
+import ast
 import typing
 from datetime import datetime
 from pathlib import Path
@@ -138,32 +139,106 @@ def test_no_graph_or_agent_code_constructs_accessibility_requirements():
     assert not offending, f"AccessibilityRequirements constructed in: {offending}"
 
 
-def test_only_interrupt_approval_calls_approve_plan():
-    """Only the human-approval node may activate a plan.
+_APPROVAL_PRIVILEGED_MODULE = "initial_planning_graph.py"
+_APPROVAL_PRIVILEGED_FUNCTION = "_interrupt_for_approval"
 
-    approve_plan() promotes candidate_plan to current_plan; it must never be
-    called from an agent/LLM node or any other graph node, only from the
-    resumed, human-driven path in _interrupt_for_approval.
-    """
-    node_module = SRC_ROOT / "graph" / "initial_planning_graph.py"
-    callers: list[str] = []
+
+def _iter_source_files():
     for directory in ("graph", "agents"):
         for path in (SRC_ROOT / directory).rglob("*.py"):
             if path.name == "state_helpers.py":
-                continue  # the definition, not a call site
-            if "approve_plan(" in path.read_text():
-                callers.append(str(path))
+                continue  # holds the approval helpers themselves
+            yield path
 
-    assert callers == [str(node_module)], (
-        f"approve_plan() must only be called from {node_module}, found: {callers}"
+
+def _iter_functions(module: ast.Module):
+    """Yield every function/async-function body (including nested) in a module."""
+    for node in ast.walk(module):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            yield node
+
+
+def _find_approval_violations(func: ast.AST) -> list[str]:
+    """Return descriptions of any plan-activation code inside ``func``.
+
+    Flags every way a node could activate a plan without going through the
+    resumed, human-driven interrupt path:
+    - calls to ``approve_plan(...)``
+    - references to ``ResolveProposalUseCase`` (the use case that flips a
+      proposal to APPROVED and activates the plan in the repository)
+    - ``.activate(...)`` calls (the plan-repository primitive)
+    - assignments whose RHS is the string literal ``"APPROVED"`` (a hand-set
+      ``state["approval"] = "APPROVED"`` bypasses ``approve_plan``)
+    """
+    findings: list[str] = []
+    for node in ast.walk(func):
+        if isinstance(node, ast.Call):
+            called = node.func
+            if isinstance(called, ast.Name) and called.id == "approve_plan":
+                findings.append(f"call to approve_plan() at line {node.lineno}")
+            elif isinstance(called, ast.Attribute) and called.attr == "approve_plan":
+                findings.append(f"call to .approve_plan() at line {node.lineno}")
+            elif isinstance(called, ast.Attribute) and called.attr == "activate":
+                findings.append(f"call to .activate() at line {node.lineno}")
+        if isinstance(node, ast.Name) and node.id == "ResolveProposalUseCase":
+            findings.append(f"reference to ResolveProposalUseCase at line {node.lineno}")
+        if (
+            isinstance(node, ast.Assign)
+            and isinstance(node.value, ast.Constant)
+            and node.value.value == "APPROVED"
+        ):
+            findings.append(
+                f'assignment of "APPROVED" literal at line {node.lineno}'
+            )
+    return findings
+
+
+def test_only_interrupt_approval_activates_a_plan():
+    """Only ``_interrupt_for_approval`` may activate a plan.
+
+    An AST walk of every function in ``graph/`` and ``agents/`` (except
+    ``state_helpers.py``, which owns the primitives) forbids the four
+    routes a node could take to activate a plan without the resumed,
+    human-driven interrupt path:
+
+      (a) ``return approve_plan(state)``
+      (b) ``state["approval"] = "APPROVED"``
+      (c) ``ResolveProposalUseCase().execute(..., ApprovalStatus.APPROVED, ...)``
+      (d) ``PostgresPlanRepository(conn).activate(...)``
+
+    The one exception is ``_interrupt_for_approval`` inside
+    ``initial_planning_graph.py``: that node runs after ``interrupt()``
+    resumes with a human decision, and it is the sole legal caller of
+    ``approve_plan`` and ``ResolveProposalUseCase`` in the orchestration
+    layer (invariant: the LLM never activates a plan).
+    """
+    offenders: list[str] = []
+    saw_privileged = False
+
+    for path in _iter_source_files():
+        module = ast.parse(path.read_text())
+        for func in _iter_functions(module):
+            privileged = (
+                path.name == _APPROVAL_PRIVILEGED_MODULE
+                and func.name == _APPROVAL_PRIVILEGED_FUNCTION
+            )
+            findings = _find_approval_violations(func)
+            if privileged:
+                saw_privileged = True
+                assert findings, (
+                    f"{_APPROVAL_PRIVILEGED_FUNCTION} must still contain the "
+                    "approval activation path; found none"
+                )
+                continue
+            for finding in findings:
+                offenders.append(f"{path.name}:{func.name}: {finding}")
+
+    assert saw_privileged, (
+        f"{_APPROVAL_PRIVILEGED_FUNCTION} not found in {_APPROVAL_PRIVILEGED_MODULE}"
     )
-
-    source = node_module.read_text()
-    start = source.index("def _interrupt_for_approval")
-    end = source.find("\ndef ", start + 1)
-    body = source[start : end if end != -1 else None]
-    assert "approve_plan(" in body, (
-        "approve_plan() call must live inside _interrupt_for_approval"
+    assert not offenders, (
+        "plan-activation code found outside "
+        f"{_APPROVAL_PRIVILEGED_FUNCTION}:\n" + "\n".join(offenders)
     )
 
 

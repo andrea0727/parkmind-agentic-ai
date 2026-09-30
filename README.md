@@ -278,7 +278,7 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 |---|---|---|
 | **LangGraph State v2** | ✅ Done | Typed ParkMindState, state helpers, message reducer |
 | **Preference Resolution** | ✅ Done | Weighted aggregation from GuestProfile (queue, walking, categories) |
-| **Plan Synthesis** | 🚧 In progress | DRAFT plan generation (stub algorithm); not yet persisted — persistence happens after ConstraintChecker + approval |
+| **Plan Synthesis** | 🚧 In progress | DRAFT plan generation (stub algorithm). The candidate is persisted alongside a PENDING proposal in `_propose_plan`; activation is deferred until the interrupt is resumed with an APPROVED decision. ConstraintChecker gating [P0-20] and real `snapshot_id` provenance [P0-30] are follow-ups. |
 | **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
 | **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
 | **PostgreSQL Repos** | ✅ Done | Profiles, Plans, Session store (in-memory for accessibility) |

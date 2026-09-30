@@ -5,6 +5,16 @@ Workflow: START → resolve_preferences → fetch_context → synthesize_plan �
           propose_plan → interrupt_approval → END
 
 Exposes a module-level compiled `graph` for orchestration.py to use.
+
+Deferred to P0-30 (load_context):
+- Wiring a single process-scoped ``SessionMemory`` through every
+  ``PostgresSessionStore`` the graph opens. Today no node in this graph
+  reads accessibility requirements from the store, so there is nothing to
+  share yet; the wiring lands with ``load_context``, which is where the
+  first read happens. The #42 Done-when criterion "the graph connects
+  exactly one process-scoped ``SessionMemory`` to each
+  ``PostgresSessionStore``" therefore moves to P0-30. See the README
+  section "Wiring the session store" for the required shape.
 """
 
 from datetime import UTC, datetime
