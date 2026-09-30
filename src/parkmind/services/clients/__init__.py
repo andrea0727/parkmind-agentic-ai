@@ -10,8 +10,7 @@ from .routing_client import (
     RouteNotFoundError,
     RoutingClient,
     RoutingClientError,
-    RoutingSchemaError,
-    RoutingUnavailableError,
+    RoutingError,
 )
 from .themeparks_client import (
     ThemeParksClient,
@@ -31,8 +30,7 @@ __all__ = [
     "RouteNotFoundError",
     "RoutingClient",
     "RoutingClientError",
-    "RoutingSchemaError",
-    "RoutingUnavailableError",
+    "RoutingError",
     "ThemeParksClient",
     "ThemeParksClientError",
     "ThemeParksNotFoundError",

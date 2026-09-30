@@ -18,6 +18,7 @@ from .errors import (
     ConflictError,
     ConsentRequiredError,
     IdMappingConflictError,
+    InvalidRouteError,
     InvalidStateTransitionError,
     NotApprovedError,
     NotFoundError,
@@ -28,6 +29,11 @@ from .errors import (
     ProvenanceConflictError,
     RepositoryError,
     RepositoryUnavailableError,
+    RouteNotFoundError,
+    RoutingError,
+    RoutingNotFoundError,
+    RoutingSchemaError,
+    RoutingUnavailableError,
     StoredDataError,
 )
 from .event_repository import EventRepository
@@ -41,7 +47,7 @@ from .proposal_repository import ProposalRepository
 from .provenance_repository import ProvenanceRepository, ProvenanceSubjectKind
 from .routing import RoutingPort
 from .session_store import SessionStore
-from .snapshot_repository import RawPayload, SnapshotRepository
+from .snapshot_repository import RawPayload, SnapshotMeta, SnapshotRepository
 from .weather import WeatherPort
 
 __all__ = [
@@ -55,6 +61,7 @@ __all__ = [
     "GuestRepository",
     "IdMappingConflictError",
     "IdMappingRepository",
+    "InvalidRouteError",
     "InvalidStateTransitionError",
     "NotApprovedError",
     "NotFoundError",
@@ -72,8 +79,14 @@ __all__ = [
     "RawPayload",
     "RepositoryError",
     "RepositoryUnavailableError",
+    "RouteNotFoundError",
+    "RoutingError",
+    "RoutingNotFoundError",
     "RoutingPort",
+    "RoutingSchemaError",
+    "RoutingUnavailableError",
     "SessionStore",
+    "SnapshotMeta",
     "SnapshotRepository",
     "StoredDataError",
     "WeatherPort",

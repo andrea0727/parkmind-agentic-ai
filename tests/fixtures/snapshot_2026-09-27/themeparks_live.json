@@ -1,0 +1,3000 @@
+{
+  "id": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+  "name": "Magic Kingdom Park",
+  "entityType": "PARK",
+  "timezone": "America/New_York",
+  "liveData": [
+    {
+      "id": "30fe3c64-af71-4c66-a54b-aa61fd7af177",
+      "name": "Swiss Family Treehouse",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010196;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 5
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T13:02:04.599Z"
+    },
+    {
+      "id": "52ac3730-b955-452a-a7cc-17e3b06182ac",
+      "name": "Trick-or-Treat Locations at Mickey's Not-So-Scary Halloween Party",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "17511582;entityType=Attraction",
+      "status": "OPERATING",
+      "lastUpdated": "2022-08-12T04:04:22.537Z"
+    },
+    {
+      "id": "352feb94-e52e-45eb-9c92-e4b44c6b1a9d",
+      "name": "Pirates of the Caribbean",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010177;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 25
+        },
+        "RETURN_TIME": {
+          "state": "AVAILABLE",
+          "returnEnd": "2026-09-27T15:25:00-04:00",
+          "returnStart": "2026-09-27T14:25:00-04:00"
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 30,
+          "percentage": 25
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:58:52.974Z"
+    },
+    {
+      "id": "a0613b70-293f-4a5b-8169-357be1777c62",
+      "name": "Casey's Corner Pianist",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "8074;entityType=Entertainment",
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T10:50:00-04:00",
+          "startTime": "2026-09-27T10:50:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T12:00:00-04:00",
+          "startTime": "2026-09-27T12:00:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T13:15:00-04:00",
+          "startTime": "2026-09-27T13:15:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T14:35:00-04:00",
+          "startTime": "2026-09-27T14:35:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T15:15:00-04:00",
+          "startTime": "2026-09-27T15:15:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T16:35:00-04:00",
+          "startTime": "2026-09-27T16:35:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T17:30:00-04:00",
+          "startTime": "2026-09-27T17:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T04:03:33.938Z"
+    },
+    {
+      "id": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "name": "Magic Kingdom Park",
+      "entityType": "PARK",
+      "parkId": null,
+      "externalId": "80007944;entityType=theme-park",
+      "queue": {
+        "STANDBY": {
+          "waitTime": null
+        }
+      },
+      "status": "OPERATING",
+      "lastUpdated": "2024-05-14T13:36:04.087Z"
+    },
+    {
+      "id": "c1f39c15-7845-46b5-b6fd-2ae368a32a37",
+      "name": "Captain Jack’s Buccaneer Bash at Mickey’s Not-So-Scary Halloween Party",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "412734987;entityType=Entertainment",
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T19:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T04:03:33.819Z"
+    },
+    {
+      "id": "97c837c3-4a0f-4d52-b93c-074cf31d6f41",
+      "name": "Stitch’s Masquerade Mashup at Mickey’s Not-So-Scary Halloween Party",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "412734988;entityType=Entertainment",
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T19:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T04:03:33.828Z"
+    },
+    {
+      "id": "4c31b3ad-5dc9-437f-ac1a-0fdff36a2818",
+      "name": "Mickey's Magical Friendship Faire",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "18381020;entityType=Entertainment",
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T10:00:00-04:00",
+          "startTime": "2026-09-27T10:00:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T11:35:00-04:00",
+          "startTime": "2026-09-27T11:35:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T12:45:00-04:00",
+          "startTime": "2026-09-27T12:45:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T14:55:00-04:00",
+          "startTime": "2026-09-27T14:55:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T16:00:00-04:00",
+          "startTime": "2026-09-27T16:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T04:03:33.532Z"
+    },
+    {
+      "id": "86c198b0-7c02-4354-814a-27ad70067d45",
+      "name": "Disney Enchantment at Disney After Hours at Magic Kingdom",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "412040920;entityType=Entertainment",
+      "status": "CLOSED",
+      "showtimes": [],
+      "lastUpdated": "2026-07-28T04:04:15.245Z"
+    },
+    {
+      "id": "ee56b2f3-fd49-4a29-ae1a-2d321549a633",
+      "name": "Disney Festival of Fantasy Parade",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "17718925;entityType=Entertainment",
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T14:00:00-04:00",
+          "startTime": "2026-09-27T14:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T04:03:33.498Z"
+    },
+    {
+      "id": "72c7343a-f7fb-4f66-95df-c91016de7338",
+      "name": "Buzz Lightyear’s Space Ranger Spin",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010114;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 35
+        },
+        "RETURN_TIME": {
+          "state": "FINISHED",
+          "returnEnd": null,
+          "returnStart": null
+        }
+      },
+      "status": "OPERATING",
+      "operatingHours": [
+        {
+          "type": "Early Entry",
+          "endTime": "2026-09-27T09:00:00-04:00",
+          "startTime": "2026-09-27T08:30:00-04:00"
+        },
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T16:01:15.673Z"
+    },
+    {
+      "id": "9221e600-6715-4b4f-b39a-00c318c00e03",
+      "name": "Destination DescenDANCE Party at Mickey’s Not-So-Scary Halloween Party",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "19363777;entityType=Entertainment",
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T19:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T04:03:33.629Z"
+    },
+    {
+      "id": "5c00cd7c-b207-4d9d-9c8c-a8d418fc5425",
+      "name": "Mickey’s Boo-To-You Halloween Parade at Mickey's Not-So-Scary Halloween Party",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "8317;entityType=Entertainment",
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-27T20:15:00-04:00",
+          "startTime": "2026-09-27T20:15:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-27T23:15:00-04:00",
+          "startTime": "2026-09-27T23:15:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T04:03:33.953Z"
+    },
+    {
+      "id": "5564113f-25b4-4646-ac35-aacf983e2fd6",
+      "name": "Meet Mickey Mouse and Minnie Mouse at Mickey's Not-So-Scary Halloween Party",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "411776692;entityType=Entertainment",
+      "queue": {
+        "STANDBY": {
+          "waitTime": null
+        }
+      },
+      "status": "CLOSED",
+      "showtimes": [
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-27T23:30:00-04:00",
+          "startTime": "2026-09-27T19:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T08:13:21.892Z"
+    },
+    {
+      "id": "05ca3e51-580b-44ca-8046-7d3e57a6d248",
+      "name": "Disney’s Not-So-Spooky Spectacular at Mickey's Not-So-Scary Halloween Party",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "61265;entityType=Entertainment",
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-27T22:00:00-04:00",
+          "startTime": "2026-09-27T22:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T04:03:33.850Z"
+    },
+    {
+      "id": "1eee22e8-1d0a-4809-a42b-df3ae55c69d5",
+      "name": "The Dapper Dans",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "8075;entityType=Entertainment",
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T09:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T09:50:00-04:00",
+          "startTime": "2026-09-27T09:50:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T10:40:00-04:00",
+          "startTime": "2026-09-27T10:40:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T12:05:00-04:00",
+          "startTime": "2026-09-27T12:05:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T13:10:00-04:00",
+          "startTime": "2026-09-27T13:10:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T14:55:00-04:00",
+          "startTime": "2026-09-27T14:55:00-04:00"
+        },
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T15:55:00-04:00",
+          "startTime": "2026-09-27T15:55:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T04:03:33.946Z"
+    },
+    {
+      "id": "de3309ca-97d5-4211-bffe-739fed47e92f",
+      "name": "Big Thunder Mountain Railroad",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010110;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 35
+        },
+        "RETURN_TIME": {
+          "state": "FINISHED",
+          "returnEnd": null,
+          "returnStart": null
+        }
+      },
+      "status": "OPERATING",
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T16:00:06.785Z"
+    },
+    {
+      "id": "f010bc01-b450-4476-a5f3-a5f2813104b2",
+      "name": "Casey Jr. Splash 'N' Soak Station",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "16512939;entityType=Attraction",
+      "status": "OPERATING",
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T13:00:00.654Z"
+    },
+    {
+      "id": "ae9a4a79-ccf1-4561-9a95-cf83d3007b98",
+      "name": "Liberty Tree Tavern",
+      "entityType": "RESTAURANT",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "90001819;entityType=restaurant",
+      "status": "OPERATING",
+      "lastUpdated": "2026-09-27T15:45:29.863Z"
+    },
+    {
+      "id": "22b78ed9-a692-47cb-b6a4-6d1224ff67e3",
+      "name": "Happily Ever After",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "18672598;entityType=Entertainment",
+      "status": "CLOSED",
+      "showtimes": [],
+      "lastUpdated": "2026-09-27T04:03:33.553Z"
+    },
+    {
+      "id": "55bdcccc-217b-416c-b8b0-4b6a87d16179",
+      "name": "Cinderella's Royal Table",
+      "entityType": "RESTAURANT",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "90002464;entityType=restaurant",
+      "status": "OPERATING",
+      "lastUpdated": "2026-09-24T12:39:48.897Z"
+    },
+    {
+      "id": "166f2985-7b27-4eff-a8b3-29c3448ba198",
+      "name": "Meet Daring Disney Pals as Circus Stars at Pete's Silly Sideshow",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "387133;entityType=Entertainment",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 10
+        }
+      },
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T17:00:00-04:00",
+          "startTime": "2026-09-27T10:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:12:06.014Z"
+    },
+    {
+      "id": "c4b64a31-e855-46a9-9d1a-aa13c99e88af",
+      "name": "The Crystal Palace",
+      "entityType": "RESTAURANT",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "90002660;entityType=restaurant",
+      "status": "OPERATING",
+      "diningAvailability": [
+        {
+          "waitTime": 10,
+          "partySize": 1
+        },
+        {
+          "waitTime": 10,
+          "partySize": 2
+        },
+        {
+          "waitTime": 10,
+          "partySize": 3
+        },
+        {
+          "waitTime": 10,
+          "partySize": 4
+        },
+        {
+          "waitTime": 10,
+          "partySize": 5
+        },
+        {
+          "waitTime": 10,
+          "partySize": 6
+        },
+        {
+          "waitTime": 45,
+          "partySize": 7
+        },
+        {
+          "waitTime": 45,
+          "partySize": 8
+        },
+        {
+          "waitTime": 55,
+          "partySize": 9
+        }
+      ],
+      "lastUpdated": "2026-09-27T16:00:25.763Z"
+    },
+    {
+      "id": "a74421f2-5de4-4425-bd06-8b4639b29826",
+      "name": "Meet Festive Disney Pals at Mickey’s Not-So-Scary Halloween Party",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "411980018;entityType=Entertainment",
+      "queue": {
+        "STANDBY": {
+          "waitTime": null
+        }
+      },
+      "status": "CLOSED",
+      "showtimes": [
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-27T23:30:00-04:00",
+          "startTime": "2026-09-27T19:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T08:13:21.910Z"
+    },
+    {
+      "id": "947edbee-85a5-4aa0-99f3-14c7de539542",
+      "name": "Meet Jack Skellington and Sally at Mickey's Not-So-Scary Halloween Party",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "17912526;entityType=Entertainment",
+      "queue": {
+        "STANDBY": {
+          "waitTime": null
+        }
+      },
+      "status": "CLOSED",
+      "showtimes": [
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-27T23:30:00-04:00",
+          "startTime": "2026-09-27T19:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T08:13:21.843Z"
+    },
+    {
+      "id": "1c708beb-41e1-43ae-8dd8-1e85075aeb38",
+      "name": "Flag Retreat",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "7922;entityType=Entertainment",
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T17:00:00-04:00",
+          "startTime": "2026-09-27T17:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T04:03:33.871Z"
+    },
+    {
+      "id": "8183f3f2-1b59-4b9c-b634-6a863bdf8d84",
+      "name": "Walt Disney's Carousel of Progress",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010232;entityType=Attraction",
+      "status": "REFURBISHMENT",
+      "operatingHours": [],
+      "lastUpdated": "2026-09-04T18:16:27.839Z"
+    },
+    {
+      "id": "e40ac396-cbac-43f4-8752-764ed60ccceb",
+      "name": "Walt Disney World Railroad - Fantasyland",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "16491299;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 15
+        }
+      },
+      "status": "OPERATING",
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T17:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T13:09:13.426Z"
+    },
+    {
+      "id": "d69261dc-62b8-434c-83bd-93649b43c408",
+      "name": "Disney Starlight: Dream the Night Away",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "412328853;entityType=Entertainment",
+      "status": "CLOSED",
+      "showtimes": [],
+      "lastUpdated": "2026-09-27T04:03:33.775Z"
+    },
+    {
+      "id": "f819079e-644e-4fce-bda3-26b899ac7027",
+      "name": "Disney Adventure Friends Cavalcade",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "411550122;entityType=Entertainment",
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Performance Time",
+          "endTime": "2026-09-27T11:05:00-04:00",
+          "startTime": "2026-09-27T11:05:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T04:03:33.674Z"
+    },
+    {
+      "id": "51392ca4-f824-42d8-8808-8110ec8e0e22",
+      "name": "Main Street Philharmonic at Main Street, U.S.A.",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "8066;entityType=Entertainment",
+      "status": "CLOSED",
+      "showtimes": [],
+      "lastUpdated": "2026-09-27T04:03:33.930Z"
+    },
+    {
+      "id": "6d74b3d9-f977-4c9b-8114-93969b51b105",
+      "name": "Hocus Pocus Villain Spelltacular",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "18161751;entityType=Entertainment",
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-27T21:05:00-04:00",
+          "startTime": "2026-09-27T21:05:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-27T22:35:00-04:00",
+          "startTime": "2026-09-27T22:35:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-27T23:59:00-04:00",
+          "startTime": "2026-09-27T23:59:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T04:03:33.524Z"
+    },
+    {
+      "id": "e0cd6a94-6dbe-4f52-aaa8-b3d2fdf5f2f6",
+      "name": "Jessie’s Roundup: A Rip-Roarin’ Revue!",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "412577081;entityType=Entertainment",
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-08T17:30:00-04:00",
+          "startTime": "2026-09-08T09:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-08T04:02:07.206Z"
+    },
+    {
+      "id": "f163ddcd-43e1-488d-8276-2381c1db0a39",
+      "name": "Tomorrowland Speedway",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010222;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 10
+        },
+        "RETURN_TIME": {
+          "state": "AVAILABLE",
+          "returnEnd": "2026-09-27T13:00:00-04:00",
+          "returnStart": "2026-09-27T12:00:00-04:00"
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 20,
+          "percentage": 17
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 20,
+          "percentage": 17
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 20,
+          "percentage": 17
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Early Entry",
+          "endTime": "2026-09-27T09:00:00-04:00",
+          "startTime": "2026-09-27T08:30:00-04:00"
+        },
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:58:53.024Z"
+    },
+    {
+      "id": "d9d12438-d999-4482-894b-8955fdb20ccf",
+      "name": "Astro Orbiter",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010107;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 25
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Early Entry",
+          "endTime": "2026-09-27T09:00:00-04:00",
+          "startTime": "2026-09-27T08:30:00-04:00"
+        },
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:46:04.803Z"
+    },
+    {
+      "id": "92524eb7-4ee5-4eab-936c-2eb8e6eb0ecd",
+      "name": "The Cadaver Dans Barbershop Quartet at Mickey's Not-So-Scary Halloween Party",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "17506082;entityType=Entertainment",
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-27T19:00:00-04:00",
+          "startTime": "2026-09-27T19:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-27T19:50:00-04:00",
+          "startTime": "2026-09-27T19:50:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-27T20:45:00-04:00",
+          "startTime": "2026-09-27T20:45:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-27T21:30:00-04:00",
+          "startTime": "2026-09-27T21:30:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-27T22:50:00-04:00",
+          "startTime": "2026-09-27T22:50:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-27T23:45:00-04:00",
+          "startTime": "2026-09-27T23:45:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T04:03:33.491Z"
+    },
+    {
+      "id": "697473c5-ae17-4c3f-80c7-09a813248013",
+      "name": "The Diamond Horseshoe",
+      "entityType": "RESTAURANT",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "247904;entityType=restaurant",
+      "status": "OPERATING",
+      "lastUpdated": "2026-06-03T11:34:08.280Z"
+    },
+    {
+      "id": "b5d6d1d1-e960-4c8f-a8a4-b9748b386b64",
+      "name": "Meet Dashing Disney Pals as Circus Stars at Pete's Silly Sideshow",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "15743682;entityType=Entertainment",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 20
+        }
+      },
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T17:00:00-04:00",
+          "startTime": "2026-09-27T10:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T14:38:05.740Z"
+    },
+    {
+      "id": "e39b831b-7731-49bb-815b-289b4f49a9fd",
+      "name": "Walt Disney World Railroad - Main Street, U.S.A.",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010230;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 15
+        }
+      },
+      "status": "OPERATING",
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T17:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T13:09:13.445Z"
+    },
+    {
+      "id": "40737d3d-0ff6-4a9e-a050-beb87bf90120",
+      "name": "Meet Cinderella and a Visiting Princess at Princess Fairytale Hall",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "18498503;entityType=Entertainment",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 40
+        }
+      },
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T17:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:57:16.345Z"
+    },
+    {
+      "id": "f5aad2d4-a419-4384-bd9a-42f86385c750",
+      "name": "\"it's a small world\"",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010149;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 15
+        },
+        "RETURN_TIME": {
+          "state": "AVAILABLE",
+          "returnEnd": "2026-09-27T13:00:00-04:00",
+          "returnStart": "2026-09-27T12:00:00-04:00"
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Early Entry",
+          "endTime": "2026-09-27T09:00:00-04:00",
+          "startTime": "2026-09-27T08:30:00-04:00"
+        },
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:58:52.936Z"
+    },
+    {
+      "id": "de737ffc-306b-4f32-8bbb-34e5d370ec8f",
+      "name": "A Pirate's Adventure ~ Treasures of the Seven Seas",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "17272158;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": null
+        }
+      },
+      "status": "OPERATING",
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T17:00:00-04:00",
+          "startTime": "2026-09-27T12:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T16:01:15.632Z"
+    },
+    {
+      "id": "7c5e1e02-3a44-4151-9005-44066d5ba1da",
+      "name": "Mickey's PhilharMagic",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010170;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 15
+        },
+        "RETURN_TIME": {
+          "state": "AVAILABLE",
+          "returnEnd": "2026-09-27T13:00:00-04:00",
+          "returnStart": "2026-09-27T12:00:00-04:00"
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T17:45:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:58:52.955Z"
+    },
+    {
+      "id": "5a43d1a7-ad53-4d25-abfe-25625f0da304",
+      "name": "TRON Lightcycle / Run",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "411504498;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 40
+        },
+        "PAID_RETURN_TIME": {
+          "price": {
+            "amount": 1900,
+            "currency": "USD",
+            "formatted": "$19.00"
+          },
+          "state": "FINISHED",
+          "returnEnd": null,
+          "returnStart": null
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 55,
+          "percentage": 45
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 33
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 50,
+          "percentage": 41
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 50,
+          "percentage": 41
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 33
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 33
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 50,
+          "percentage": 41
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 50,
+          "percentage": 41
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 55,
+          "percentage": 45
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:50:12.060Z"
+    },
+    {
+      "id": "cf4b2ba4-3626-4de7-9d07-abe8a65b1665",
+      "name": "Meet Princess Tiana and a Visiting Princess at Princess Fairytale Hall",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "17505397;entityType=Entertainment",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 25
+        }
+      },
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T17:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:53:10.344Z"
+    },
+    {
+      "id": "73cb9445-0695-47a3-87ce-d08ae36b5f3c",
+      "name": "Tiana's Bayou Adventure",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "412021364;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 20
+        },
+        "RETURN_TIME": {
+          "state": "AVAILABLE",
+          "returnEnd": "2026-09-27T13:15:00-04:00",
+          "returnStart": "2026-09-27T12:15:00-04:00"
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 34
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 20,
+          "percentage": 17
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 35,
+          "percentage": 30
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 25,
+          "percentage": 21
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 25,
+          "percentage": 21
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 35,
+          "percentage": 30
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:58:52.917Z"
+    },
+    {
+      "id": "6ea670b8-3097-4d60-b69c-94e16071da17",
+      "name": "Jungle Navigation Co. LTD Skipper Canteen",
+      "entityType": "RESTAURANT",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "18185631;entityType=restaurant",
+      "status": "OPERATING",
+      "diningAvailability": [
+        {
+          "waitTime": 55,
+          "partySize": 1
+        },
+        {
+          "waitTime": 55,
+          "partySize": 2
+        },
+        {
+          "waitTime": 60,
+          "partySize": 3
+        },
+        {
+          "waitTime": 60,
+          "partySize": 4
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:57:02.794Z"
+    },
+    {
+      "id": "2551a77d-023f-4ab1-9a19-8afec0190f39",
+      "name": "Haunted Mansion",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010208;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 30
+        },
+        "RETURN_TIME": {
+          "state": "AVAILABLE",
+          "returnEnd": "2026-09-27T14:05:00-04:00",
+          "returnStart": "2026-09-27T13:05:00-04:00"
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 35,
+          "percentage": 30
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 20,
+          "percentage": 17
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 25,
+          "percentage": 21
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 25,
+          "percentage": 21
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 25,
+          "percentage": 21
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 20,
+          "percentage": 17
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 20,
+          "percentage": 17
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 20,
+          "percentage": 17
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:58:53.003Z"
+    },
+    {
+      "id": "0aae716c-af13-4439-b638-d75fb1649df3",
+      "name": "Mad Tea Party",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010162;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 5
+        },
+        "RETURN_TIME": {
+          "state": "AVAILABLE",
+          "returnEnd": "2026-09-27T13:00:00-04:00",
+          "returnStart": "2026-09-27T12:00:00-04:00"
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Early Entry",
+          "endTime": "2026-09-27T09:00:00-04:00",
+          "startTime": "2026-09-27T08:30:00-04:00"
+        },
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:53:37.097Z"
+    },
+    {
+      "id": "890fa430-89c0-4a3f-96c9-11597888005e",
+      "name": "Dumbo the Flying Elephant",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010129;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 25
+        },
+        "RETURN_TIME": {
+          "state": "AVAILABLE",
+          "returnEnd": "2026-09-27T13:00:00-04:00",
+          "returnStart": "2026-09-27T12:00:00-04:00"
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Early Entry",
+          "endTime": "2026-09-27T09:00:00-04:00",
+          "startTime": "2026-09-27T08:30:00-04:00"
+        },
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:58:52.929Z"
+    },
+    {
+      "id": "9d4d5229-7142-44b6-b4fb-528920969a2c",
+      "name": "Seven Dwarfs Mine Train",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "16767284;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 40
+        },
+        "PAID_RETURN_TIME": {
+          "price": {
+            "amount": 1100,
+            "currency": "USD",
+            "formatted": "$11.00"
+          },
+          "state": "FINISHED",
+          "returnEnd": null,
+          "returnStart": null
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 45,
+          "percentage": 38
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 35,
+          "percentage": 30
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 34
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 45,
+          "percentage": 38
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 34
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 34
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 34
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 45,
+          "percentage": 38
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 45,
+          "percentage": 38
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Early Entry",
+          "endTime": "2026-09-27T09:00:00-04:00",
+          "startTime": "2026-09-27T08:30:00-04:00"
+        },
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:55:16.330Z"
+    },
+    {
+      "id": "924a3b2c-6b4b-49e5-99d3-e9dc3f2e8a48",
+      "name": "The Barnstormer",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "16491297;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 10
+        },
+        "RETURN_TIME": {
+          "state": "AVAILABLE",
+          "returnEnd": "2026-09-27T13:30:00-04:00",
+          "returnStart": "2026-09-27T12:30:00-04:00"
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Early Entry",
+          "endTime": "2026-09-27T09:00:00-04:00",
+          "startTime": "2026-09-27T08:30:00-04:00"
+        },
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:58:52.863Z"
+    },
+    {
+      "id": "3cba0cb4-e2a6-402c-93ee-c11ffcb127ef",
+      "name": "Under the Sea - Journey of The Little Mermaid",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "16767263;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 15
+        },
+        "RETURN_TIME": {
+          "state": "AVAILABLE",
+          "returnEnd": "2026-09-27T13:00:00-04:00",
+          "returnStart": "2026-09-27T12:00:00-04:00"
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Early Entry",
+          "endTime": "2026-09-27T09:00:00-04:00",
+          "startTime": "2026-09-27T08:30:00-04:00"
+        },
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:58:52.870Z"
+    },
+    {
+      "id": "86a41273-5f15-4b54-93b6-829f140e5161",
+      "name": "Peter Pan's Flight",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010176;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 45
+        },
+        "RETURN_TIME": {
+          "state": "AVAILABLE",
+          "returnEnd": "2026-09-27T16:45:00-04:00",
+          "returnStart": "2026-09-27T15:45:00-04:00"
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 35,
+          "percentage": 30
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 35,
+          "percentage": 30
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 35,
+          "percentage": 30
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 35,
+          "percentage": 30
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 34
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 35,
+          "percentage": 30
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 45,
+          "percentage": 38
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 34
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 45,
+          "percentage": 38
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Early Entry",
+          "endTime": "2026-09-27T09:00:00-04:00",
+          "startTime": "2026-09-27T08:30:00-04:00"
+        },
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:58:52.967Z"
+    },
+    {
+      "id": "b2260923-9315-40fd-9c6b-44dd811dbe64",
+      "name": "Space Mountain",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010190;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 40
+        },
+        "RETURN_TIME": {
+          "state": "AVAILABLE",
+          "returnEnd": "2026-09-27T13:05:00-04:00",
+          "returnStart": "2026-09-27T12:05:00-04:00"
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 20,
+          "percentage": 17
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 25,
+          "percentage": 21
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 34
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 35,
+          "percentage": 30
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 25,
+          "percentage": 21
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 25,
+          "percentage": 21
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Early Entry",
+          "endTime": "2026-09-27T09:00:00-04:00",
+          "startTime": "2026-09-27T08:30:00-04:00"
+        },
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:58:52.983Z"
+    },
+    {
+      "id": "96455de6-f4f1-403c-9391-bf8396979149",
+      "name": "The Magic Carpets of Aladdin",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010210;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 10
+        },
+        "RETURN_TIME": {
+          "state": "AVAILABLE",
+          "returnEnd": "2026-09-27T13:30:00-04:00",
+          "returnStart": "2026-09-27T12:30:00-04:00"
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 20,
+          "percentage": 17
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:58:53.010Z"
+    },
+    {
+      "id": "796b0a25-c51e-456e-9bb8-50a324e301b3",
+      "name": "Jungle Cruise",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010153;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 20
+        },
+        "RETURN_TIME": {
+          "state": "FINISHED",
+          "returnEnd": null,
+          "returnStart": null
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 34
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 20,
+          "percentage": 17
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 30,
+          "percentage": 25
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 34
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 35,
+          "percentage": 30
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 35,
+          "percentage": 30
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 35,
+          "percentage": 30
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 35,
+          "percentage": 30
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 34
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T16:00:06.891Z"
+    },
+    {
+      "id": "012a211b-4c91-451c-8a0e-5e3ab398eda8",
+      "name": "Meet Ariel at Her Grotto",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "16874126;entityType=Entertainment",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 15
+        }
+      },
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T17:30:00-04:00",
+          "startTime": "2026-09-27T09:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:50:12.094Z"
+    },
+    {
+      "id": "273ddb8d-e7b5-4e34-8657-1113f49262a5",
+      "name": "Prince Charming Regal Carrousel",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010117;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 5
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Early Entry",
+          "endTime": "2026-09-27T09:00:00-04:00",
+          "startTime": "2026-09-27T08:30:00-04:00"
+        },
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T13:00:06.079Z"
+    },
+    {
+      "id": "6fd1e225-53a0-4a80-a577-4bbc9a471075",
+      "name": "Walt Disney's Enchanted Tiki Room",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "16124144;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 10
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T13:02:04.575Z"
+    },
+    {
+      "id": "e76c93df-31af-49a5-8e2f-752c76c937c9",
+      "name": "Enchanted Tales with Belle",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "16767276;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 15
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 25,
+          "percentage": 21
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 20,
+          "percentage": 17
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 20,
+          "percentage": 17
+        },
+        {
+          "time": "2026-09-27T18:00:00-04:00",
+          "waitTime": 25,
+          "percentage": 21
+        },
+        {
+          "time": "2026-09-27T19:00:00-04:00",
+          "waitTime": 25,
+          "percentage": 21
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T17:30:00-04:00",
+          "startTime": "2026-09-27T09:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T14:28:06.124Z"
+    },
+    {
+      "id": "888fb4a4-7adf-47a1-8ba2-c258cc64fd75",
+      "name": "Main Street Vehicles",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010165;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": null
+        }
+      },
+      "status": "OPERATING",
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T16:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T13:01:05.009Z"
+    },
+    {
+      "id": "ffcfeaa2-1416-4920-a1ed-543c1a1695c4",
+      "name": "Tomorrowland Transit Authority PeopleMover",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010224;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 10
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 5,
+          "percentage": 4
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Early Entry",
+          "endTime": "2026-09-27T09:00:00-04:00",
+          "startTime": "2026-09-27T08:30:00-04:00"
+        },
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:17:11.594Z"
+    },
+    {
+      "id": "a2d92647-634d-4eb4-886b-9da858e871f1",
+      "name": "Meet Mickey at Town Square Theater",
+      "entityType": "SHOW",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "15850196;entityType=Entertainment",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 15
+        }
+      },
+      "status": "OPERATING",
+      "showtimes": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T17:30:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:49:14.595Z"
+    },
+    {
+      "id": "2ebfb38c-5cb5-4de1-86c0-f7af14188022",
+      "name": "The Hall of Presidents",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80069754;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 15
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 0,
+          "percentage": 0
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T10:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T14:33:04.948Z"
+    },
+    {
+      "id": "e8f0b426-7645-4ea3-8b41-b94ae7091a41",
+      "name": "Monsters, Inc. Laugh Floor",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "136550;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 10
+        },
+        "RETURN_TIME": {
+          "state": "AVAILABLE",
+          "returnEnd": "2026-09-27T13:00:00-04:00",
+          "returnStart": "2026-09-27T12:00:00-04:00"
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 15,
+          "percentage": 12
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 8
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:53:36.944Z"
+    },
+    {
+      "id": "0f57cecf-5502-4503-8bc3-ba84d3708ace",
+      "name": "Country Bear Musical Jamboree",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80069748;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 10
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 20,
+          "percentage": 33
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 16
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 16
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 16
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 16
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 16
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 16
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 16
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 10,
+          "percentage": 16
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T14:34:08.956Z"
+    },
+    {
+      "id": "0d94ad60-72f0-4551-83a6-ebaecdd89737",
+      "name": "The Many Adventures of Winnie the Pooh",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "80010213;entityType=Attraction",
+      "queue": {
+        "STANDBY": {
+          "waitTime": 25
+        },
+        "RETURN_TIME": {
+          "state": "FINISHED",
+          "returnEnd": null,
+          "returnStart": null
+        }
+      },
+      "status": "OPERATING",
+      "forecast": [
+        {
+          "time": "2026-09-27T09:00:00-04:00",
+          "waitTime": 30,
+          "percentage": 25
+        },
+        {
+          "time": "2026-09-27T10:00:00-04:00",
+          "waitTime": 30,
+          "percentage": 25
+        },
+        {
+          "time": "2026-09-27T11:00:00-04:00",
+          "waitTime": 30,
+          "percentage": 25
+        },
+        {
+          "time": "2026-09-27T12:00:00-04:00",
+          "waitTime": 30,
+          "percentage": 25
+        },
+        {
+          "time": "2026-09-27T13:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 34
+        },
+        {
+          "time": "2026-09-27T14:00:00-04:00",
+          "waitTime": 30,
+          "percentage": 25
+        },
+        {
+          "time": "2026-09-27T15:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 34
+        },
+        {
+          "time": "2026-09-27T16:00:00-04:00",
+          "waitTime": 35,
+          "percentage": 30
+        },
+        {
+          "time": "2026-09-27T17:00:00-04:00",
+          "waitTime": 40,
+          "percentage": 34
+        }
+      ],
+      "operatingHours": [
+        {
+          "type": "Early Entry",
+          "endTime": "2026-09-27T09:00:00-04:00",
+          "startTime": "2026-09-27T08:30:00-04:00"
+        },
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        },
+        {
+          "type": "Special Ticketed Event",
+          "endTime": "2026-09-28T00:00:00-04:00",
+          "startTime": "2026-09-27T18:30:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T15:48:05.914Z"
+    },
+    {
+      "id": "e847a8bd-7d21-432b-a7a1-f483517a22b5",
+      "name": "Be Our Guest Restaurant",
+      "entityType": "RESTAURANT",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "16660079;entityType=restaurant",
+      "status": "OPERATING",
+      "lastUpdated": "2026-09-26T18:21:31.641Z"
+    },
+    {
+      "id": "83201c33-ce99-45ae-a595-f47e61d73739",
+      "name": "Tony's Town Square Restaurant",
+      "entityType": "RESTAURANT",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "90002678;entityType=restaurant",
+      "status": "OPERATING",
+      "diningAvailability": [
+        {
+          "waitTime": 35,
+          "partySize": 1
+        },
+        {
+          "waitTime": 35,
+          "partySize": 2
+        },
+        {
+          "waitTime": 55,
+          "partySize": 3
+        },
+        {
+          "waitTime": 55,
+          "partySize": 4
+        }
+      ],
+      "lastUpdated": "2026-09-27T16:01:03.346Z"
+    },
+    {
+      "id": "75d43698-162c-47af-a607-e879637dc8e7",
+      "name": "The Plaza Restaurant",
+      "entityType": "RESTAURANT",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "90002670;entityType=restaurant",
+      "status": "OPERATING",
+      "diningAvailability": [
+        {
+          "waitTime": 35,
+          "partySize": 4
+        },
+        {
+          "waitTime": 35,
+          "partySize": 5
+        },
+        {
+          "waitTime": 35,
+          "partySize": 6
+        }
+      ],
+      "lastUpdated": "2026-09-27T16:00:06.367Z"
+    },
+    {
+      "id": "90d79335-c907-4069-a021-d0fe1ec73ae2",
+      "name": "Cinderella Castle",
+      "entityType": "ATTRACTION",
+      "parkId": "75ea578a-adc8-4116-a54d-dccb60765ef9",
+      "externalId": "16767209;entityType=Attraction",
+      "status": "OPERATING",
+      "operatingHours": [
+        {
+          "type": "Operating",
+          "endTime": "2026-09-27T18:00:00-04:00",
+          "startTime": "2026-09-27T09:00:00-04:00"
+        }
+      ],
+      "lastUpdated": "2026-09-27T13:00:00.735Z"
+    }
+  ]
+}

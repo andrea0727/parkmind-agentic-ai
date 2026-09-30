@@ -73,6 +73,24 @@ def test_upgrade_refuses_a_database_with_leftover_v1_tables(empty_database_url: 
     assert _tables(empty_database_url) == {"guests", "behavior_signals"}
 
 
+def test_existing_snapshots_default_to_normalizer_version_1(empty_database_url: str) -> None:
+    """0002 adds snapshots.normalizer_version; rows written before it were version 1."""
+    migrate.upgrade(empty_database_url, "0001")
+    with psycopg.connect(empty_database_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO snapshots (snapshot_id, retrieved_at, data_sources, live_context, raw_payload)"
+            " VALUES ('old', now(), '{}', '{}'::jsonb, '{}'::jsonb)"
+        )
+
+    migrate.upgrade(empty_database_url)
+
+    with psycopg.connect(empty_database_url) as conn:
+        row = conn.execute("SELECT normalizer_version FROM snapshots").fetchone()
+        assert row is not None and row[0] == 1
+        with pytest.raises(errors.CheckViolation):
+            conn.execute("UPDATE snapshots SET normalizer_version = 0")
+
+
 def test_upgrade_is_idempotent_when_rerun(empty_database_url: str) -> None:
     migrate.upgrade(empty_database_url)
     migrate.upgrade(empty_database_url)

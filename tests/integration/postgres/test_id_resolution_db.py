@@ -82,7 +82,7 @@ def test_plan_stop_traces_back_to_provider_id(conn: psycopg.Connection) -> None:
     resolver = IdResolver(PostgresIdMappingRepository(conn))
     live = resolver.resolve_live(THEMEPARKS, parse_live(raw), seen_at=NOW)
     PostgresSnapshotRepository(conn).save(
-        factories.live_context(snapshot_id="snap_trace"), raw, [THEMEPARKS]
+        factories.live_context(snapshot_id="snap_trace"), raw, [THEMEPARKS], normalizer_version=1
     )
     plan = factories.plan(
         plan_id="plan_trace",
