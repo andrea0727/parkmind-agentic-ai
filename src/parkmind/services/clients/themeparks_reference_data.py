@@ -305,54 +305,63 @@ MAGIC_KINGDOM_ATTRACTION_METADATA: dict[str, AttractionMetadata] = {
         "height_restriction_cm": None,
         "typical_wait_minutes": 0,
         "outdoor": True,
+        "land": "Main Street, U.S.A.",
     },
     "f819079e-644e-4fce-bda3-26b899ac7027": {  # Disney Adventure Friends Cavalcade
         "category": AttractionCategory.SHOW,
         "height_restriction_cm": None,
         "typical_wait_minutes": 0,
         "outdoor": True,
+        "land": "Main Street, U.S.A.",
     },
     "ee56b2f3-fd49-4a29-ae1a-2d321549a633": {  # Disney Festival of Fantasy Parade
         "category": AttractionCategory.SHOW,
         "height_restriction_cm": None,
         "typical_wait_minutes": 0,
         "outdoor": True,
+        "land": "Main Street, U.S.A.",
     },
     "d69261dc-62b8-434c-83bd-93649b43c408": {  # Disney Starlight: Dream the Night Away
         "category": AttractionCategory.SHOW,
         "height_restriction_cm": None,
         "typical_wait_minutes": 0,
         "outdoor": True,
+        "land": "Main Street, U.S.A.",
     },
     "1c708beb-41e1-43ae-8dd8-1e85075aeb38": {  # Flag Retreat
         "category": AttractionCategory.SHOW,
         "height_restriction_cm": None,
         "typical_wait_minutes": 0,
         "outdoor": True,
+        "land": "Main Street, U.S.A.",
     },
     "22b78ed9-a692-47cb-b6a4-6d1224ff67e3": {  # Happily Ever After
         "category": AttractionCategory.SHOW,
         "height_restriction_cm": None,
         "typical_wait_minutes": 0,
         "outdoor": True,
+        "land": "Main Street, U.S.A.",
     },
     "51392ca4-f824-42d8-8808-8110ec8e0e22": {  # Main Street Philharmonic
         "category": AttractionCategory.SHOW,
         "height_restriction_cm": None,
         "typical_wait_minutes": 0,
         "outdoor": True,
+        "land": "Main Street, U.S.A.",
     },
     "4c31b3ad-5dc9-437f-ac1a-0fdff36a2818": {  # Mickey's Magical Friendship Faire
         "category": AttractionCategory.SHOW,
         "height_restriction_cm": None,
         "typical_wait_minutes": 0,
         "outdoor": True,
+        "land": "Main Street, U.S.A.",
     },
     "1eee22e8-1d0a-4809-a42b-df3ae55c69d5": {  # The Dapper Dans
         "category": AttractionCategory.SHOW,
         "height_restriction_cm": None,
         "typical_wait_minutes": 0,
         "outdoor": True,
+        "land": "Main Street, U.S.A.",
     },
     # Character meet-and-greets (Operating window + STANDBY line; plan as attraction stops)
     "012a211b-4c91-451c-8a0e-5e3ab398eda8": {  # Meet Ariel at Her Grotto
@@ -360,36 +369,42 @@ MAGIC_KINGDOM_ATTRACTION_METADATA: dict[str, AttractionMetadata] = {
         "height_restriction_cm": None,
         "typical_wait_minutes": 20,  # provisional
         "outdoor": True,  # outdoor line
+        "land": "Fantasyland",
     },
     "40737d3d-0ff6-4a9e-a050-beb87bf90120": {  # Meet Cinderella and a Visiting Princess at Princess Fairytale Hall
         "category": AttractionCategory.CHARACTER,
         "height_restriction_cm": None,
         "typical_wait_minutes": 25,  # provisional
         "outdoor": False,  # indoor hall
+        "land": "Fantasyland",
     },
     "cf4b2ba4-3626-4de7-9d07-abe8a65b1665": {  # Meet Princess Tiana and a Visiting Princess at Princess Fairytale Hall
         "category": AttractionCategory.CHARACTER,
         "height_restriction_cm": None,
         "typical_wait_minutes": 25,  # provisional
         "outdoor": False,  # indoor hall
+        "land": "Fantasyland",
     },
     "166f2985-7b27-4eff-a8b3-29c3448ba198": {  # Meet Daring Disney Pals as Circus Stars at Pete's Silly Sideshow
         "category": AttractionCategory.CHARACTER,
         "height_restriction_cm": None,
         "typical_wait_minutes": 20,  # provisional
         "outdoor": True,  # unsure: tent, partly outdoor line
+        "land": "Fantasyland",
     },
     "b5d6d1d1-e960-4c8f-a8a4-b9748b386b64": {  # Meet Dashing Disney Pals as Circus Stars at Pete's Silly Sideshow
         "category": AttractionCategory.CHARACTER,
         "height_restriction_cm": None,
         "typical_wait_minutes": 20,  # provisional
         "outdoor": True,  # unsure: tent, partly outdoor line
+        "land": "Fantasyland",
     },
     "a2d92647-634d-4eb4-886b-9da858e871f1": {  # Meet Mickey at Town Square Theater
         "category": AttractionCategory.CHARACTER,
         "height_restriction_cm": None,
         "typical_wait_minutes": 30,  # provisional
         "outdoor": False,  # indoor theater
+        "land": "Main Street, U.S.A.",
     },
 }
 
