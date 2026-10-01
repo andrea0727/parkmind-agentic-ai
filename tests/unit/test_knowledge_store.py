@@ -16,6 +16,7 @@ from parkmind.services.clients.themeparks_reference_data import (
     MAGIC_KINGDOM_ATTRACTION_METADATA,
 )
 from parkmind.services.ports import KnowledgeStore
+from parkmind.services.use_cases.check_accessibility import notice_coverage
 
 HIGH_G = RideRestriction.NOT_RECOMMENDED_HIGH_G_FORCE
 TRANSFER = RideRestriction.REQUIRES_TRANSFER_FROM_WHEELCHAIR
@@ -120,6 +121,18 @@ def test_every_corpus_id_is_in_the_curated_catalog() -> None:
     corpus_ids = {notice.attraction_id for notice in MAGIC_KINGDOM_SAFETY_NOTICES}
 
     assert corpus_ids <= set(MAGIC_KINGDOM_ATTRACTION_METADATA)
+
+
+def test_no_corpus_entry_is_orphaned_from_the_catalog() -> None:
+    """The other direction of the check above: every entry is still a catalog id.
+
+    A re-issued provider UUID would otherwise leave a notice nobody can look up.
+    """
+    coverage = notice_coverage(
+        magic_kingdom_knowledge_store(), MAGIC_KINGDOM_ATTRACTION_METADATA
+    )
+
+    assert coverage.not_in_catalog == ()
 
 
 def test_every_entry_has_source_and_review_date() -> None:
