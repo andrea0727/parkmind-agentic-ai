@@ -32,12 +32,16 @@ from parkmind.core.contracts import (
     Park,
     PartyConstraints,
     Plan,
+    PlanDiff,
     Provenance,
     Stop,
     StopKind,
     TimeWindow,
 )
 from parkmind.services.planning.park_graph import ParkGraph
+from parkmind.services.planning.plan_diff import diff_plans
+
+__all__ = ["GreedyInsertionOptimizer", "diff_plans"]
 
 # ---------------------------------------------------------------------------
 # Defaults — tunable but intentionally not persisted preferences
@@ -76,6 +80,12 @@ class GreedyInsertionOptimizer:
     # ------------------------------------------------------------------
     # Public entry point
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def diff_plans(old_plan: Plan, new_plan: Plan) -> PlanDiff:
+        """Compare two plan versions and identify added, removed, moved and time-shifted stops (§33)."""
+        return diff_plans(old_plan, new_plan)
+
 
     def build_plan(
         self,

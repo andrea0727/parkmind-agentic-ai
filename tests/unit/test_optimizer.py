@@ -38,7 +38,7 @@ from parkmind.core.contracts import (
     TimeWindow,
     WaitEstimate,
 )
-from parkmind.services.planning.optimizer import GreedyInsertionOptimizer
+from parkmind.services.planning.optimizer import GreedyInsertionOptimizer, diff_plans
 from parkmind.services.planning.park_graph import ParkGraph
 
 # ---------------------------------------------------------------------------
@@ -810,4 +810,45 @@ class TestCodeReviewRegressions:
             f"Meal arrival {meal.arrival_time} must be <= {lunch_window.end}"
         )
         assert meal.arrival_time == lunch_window.start
+
+    def test_plan_diff_between_optimizer_plans(self) -> None:
+        """P0-22: Compare two optimizer plans when park conditions change."""
+        optimizer = _build_optimizer()
+        park = _park(opening_hour=9, closing_hour=22)
+        catalog = _catalog()
+
+        # Plan 1: A1, A2 scheduled (A3 not available/zero utility)
+        context1 = _live_context(
+            waits={A1: 10.0, A2: 15.0},
+            statuses={A1: AttractionStatus.OPERATING, A2: AttractionStatus.OPERATING},
+        )
+        plan1 = optimizer.build_plan(
+            constraints=_constraints(must_do=[A1, A2]),
+            context=context1,
+            utilities={A1: 2.0, A2: 1.0},
+            park=park,
+            catalog=catalog,
+        )
+
+        # Plan 2: A2 goes DOWN, A3 becomes must-do with high utility
+        context2 = _live_context(
+            waits={A1: 10.0, A2: 0.0, A3: 5.0},
+            statuses={
+                A1: AttractionStatus.OPERATING,
+                A2: AttractionStatus.DOWN,
+                A3: AttractionStatus.OPERATING,
+            },
+        )
+        plan2 = optimizer.build_plan(
+            constraints=_constraints(must_do=[A1, A3]),
+            context=context2,
+            utilities={A1: 2.0, A3: 3.0},
+            park=park,
+            catalog=catalog,
+        )
+
+        diff = GreedyInsertionOptimizer.diff_plans(plan1, plan2)
+        assert A2 in diff.stops_removed
+        assert A3 in diff.stops_added
+        assert diff == diff_plans(plan1, plan2)
 
