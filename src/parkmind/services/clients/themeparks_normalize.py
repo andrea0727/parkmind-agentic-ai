@@ -19,7 +19,7 @@ Identity problems are excluded and reported as ``MappingIssue``s (see
 """
 
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from datetime import date, datetime
 from typing import Any
 
@@ -191,12 +191,18 @@ def index_entities(
 
 
 def parse_catalog(
-    payload: Mapping[str, Any], metadata: Mapping[str, AttractionMetadata]
+    payload: Mapping[str, Any],
+    metadata: Mapping[str, AttractionMetadata],
+    *,
+    excluded: Collection[str] = frozenset(),
 ) -> NormalizedCatalog:
     """``/entity/{park}/children`` -> ``Attraction``s for ATTRACTION and SHOW entities.
 
     Entities of other kinds (restaurants, the park itself) are not catalog
-    items and are skipped without an issue. Payload order is preserved.
+    items and are skipped without an issue, and so are the ``excluded`` ids
+    (entities left out on purpose, e.g. party-only entertainment). Any other
+    entity without curated metadata is reported as ``MISSING_METADATA``.
+    Payload order is preserved.
     """
     check_timezone(payload)
     index, issues = index_entities(payload.get("children", []))
@@ -210,7 +216,7 @@ def parse_catalog(
                 _issue(IssueKind.UNKNOWN_ENTITY_KIND, entity_id, None, entity)
             )
             continue
-        if kind not in CATALOG_KINDS:
+        if kind not in CATALOG_KINDS or entity_id in excluded:
             continue
         curated = metadata.get(entity_id)
         if curated is None:

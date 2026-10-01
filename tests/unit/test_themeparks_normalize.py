@@ -28,6 +28,7 @@ from parkmind.services.clients.themeparks_normalize import (
 )
 from parkmind.services.clients.themeparks_reference_data import (
     MAGIC_KINGDOM_ATTRACTION_METADATA,
+    MAGIC_KINGDOM_EXCLUDED_ENTITIES,
 )
 from parkmind.services.ports import EntityKind
 
@@ -220,6 +221,47 @@ def test_catalog_entity_without_metadata_is_reported() -> None:
         JUNGLE_CRUISE,
         FRIENDSHIP_FAIRE,
     }
+
+
+def test_excluded_entities_are_skipped_without_an_issue() -> None:
+    payload = _fixture("children_magic_kingdom.json")
+    unknown = "unknown-attraction-not-in-metadata-table"
+
+    catalog = parse_catalog(
+        payload, MAGIC_KINGDOM_ATTRACTION_METADATA, excluded={unknown}
+    )
+
+    assert catalog.issues == []
+    assert unknown not in {a.node_id for a in catalog.attractions}
+
+
+def test_a_new_party_entity_is_still_reported_until_it_is_excluded() -> None:
+    """The exclusion list is explicit: an unlisted, uncurated entity is reported."""
+    catalog = parse_catalog(
+        _fixture("children_magic_kingdom.json"),
+        MAGIC_KINGDOM_ATTRACTION_METADATA,
+        excluded=MAGIC_KINGDOM_EXCLUDED_ENTITIES,
+    )
+
+    assert [i.kind for i in catalog.issues] == [IssueKind.MISSING_METADATA]
+
+
+def test_live_catalog_curates_every_entity_but_jessies_roundup() -> None:
+    """Against the real /children captured 2026-10-01: 35 attractions and 15 shows
+    curated, 14 party-only entities excluded, and only Jessie's Roundup (stale
+    window, kept out on purpose) reported."""
+    jessies_roundup = "e0cd6a94-6dbe-4f52-aaa8-b3d2fdf5f2f6"
+
+    catalog = parse_catalog(
+        _fixture("children_magic_kingdom_2026-10-01.json"),
+        MAGIC_KINGDOM_ATTRACTION_METADATA,
+        excluded=MAGIC_KINGDOM_EXCLUDED_ENTITIES,
+    )
+
+    assert len(catalog.attractions) == len(MAGIC_KINGDOM_ATTRACTION_METADATA) == 50
+    assert [(i.kind, i.provider_id) for i in catalog.issues] == [
+        (IssueKind.MISSING_METADATA, jessies_roundup)
+    ]
 
 
 def test_restaurants_and_the_park_are_not_catalog_items_and_not_issues() -> None:
