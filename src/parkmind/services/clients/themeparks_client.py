@@ -66,6 +66,7 @@ from .themeparks_normalize import (
 )
 from .themeparks_reference_data import (
     MAGIC_KINGDOM_ATTRACTION_METADATA,
+    MAGIC_KINGDOM_EXCLUDED_ENTITIES,
     AttractionMetadata,
 )
 
@@ -116,7 +117,9 @@ class ThemeParksClient:
 
     def get_catalog(self) -> list[Attraction]:
         payload = self._request(f"/entity/{self._park_id}/children")
-        catalog = parse_catalog(payload, self._attraction_metadata)
+        catalog = parse_catalog(
+            payload, self._attraction_metadata, excluded=MAGIC_KINGDOM_EXCLUDED_ENTITIES
+        )
         for issue in catalog.issues:
             # The port returns attractions only; the collector (P0-11) works on
             # the raw payload and gets these issues as data instead.

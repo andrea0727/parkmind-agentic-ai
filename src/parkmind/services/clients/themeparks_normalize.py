@@ -19,7 +19,7 @@ Identity problems are excluded and reported as ``MappingIssue``s (see
 """
 
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from datetime import date, datetime
 from typing import Any
 
@@ -47,6 +47,12 @@ ENTITY_KINDS: Mapping[str, EntityKind] = {
 }
 CATALOG_KINDS = frozenset({EntityKind.ATTRACTION, EntityKind.SHOW})
 
+# Showtime entry types in ``/live`` (captured 2026-09-24 and 2026-09-29).
+PERFORMANCE_TIME = "Performance Time"
+"""A scheduled performance: ``startTime == endTime``, a start a guest can plan around."""
+NON_PERFORMANCE_SHOWTIME_TYPES = frozenset({"Operating", "Special Ticketed Event"})
+"""Not show starts: ``Operating`` is an open window (a meet-and-greet line, e.g.
+09:30-17:30) and ``Special Ticketed Event`` needs a separate party ticket."""
 
 
 def check_timezone(payload: Mapping[str, Any]) -> None:
@@ -61,13 +67,17 @@ def check_timezone(payload: Mapping[str, Any]) -> None:
 def parse_time(value: object, *, what: str) -> datetime:
     """An ISO-8601 provider time (``Z`` or an offset) as an aware ``PARK_TZ`` datetime."""
     if not isinstance(value, str):
-        raise ThemeParksSchemaError(f"{what}: expected an ISO-8601 string, got {value!r}")
+        raise ThemeParksSchemaError(
+            f"{what}: expected an ISO-8601 string, got {value!r}"
+        )
     try:
         parsed = datetime.fromisoformat(value)
     except ValueError as exc:
         raise ThemeParksSchemaError(f"{what}: not an ISO-8601 time: {value!r}") from exc
     if parsed.tzinfo is None:
-        raise ThemeParksSchemaError(f"{what}: timestamp without a UTC offset: {value!r}")
+        raise ThemeParksSchemaError(
+            f"{what}: timestamp without a UTC offset: {value!r}"
+        )
     return parsed.astimezone(PARK_TZ)
 
 
@@ -95,7 +105,9 @@ def standby_wait(entity: Mapping[str, Any]) -> float | None:
     """
     queue = entity.get("queue") or {}
     if not isinstance(queue, Mapping):
-        raise ThemeParksSchemaError(f"malformed queue for entity {entity.get('id')}: {queue!r}")
+        raise ThemeParksSchemaError(
+            f"malformed queue for entity {entity.get('id')}: {queue!r}"
+        )
     standby = queue.get("STANDBY")
     if standby is None:
         return None
@@ -115,16 +127,33 @@ def standby_wait(entity: Mapping[str, Any]) -> float | None:
 
 
 def parse_showtimes(entity: Mapping[str, Any]) -> list[datetime]:
-    """Show start times, in park time. Empty when the entity has none."""
+    """Scheduled show starts, in park time. Empty when the entity has none.
+
+    Only ``Performance Time`` entries are starts. ``Operating`` windows and
+    ``Special Ticketed Event`` times are dropped: reading a 09:30-17:30
+    meet-and-greet window as "a show at 09:30" would make rule 3 demand arrival
+    by 09:25, and party-only times are not attendable on a day ticket. Any other
+    type (or none) is contract drift and raises, like an unknown status.
+    """
+    starts: list[datetime] = []
     try:
-        return [
-            parse_time(showtime["startTime"], what=f"showtime of {entity.get('id')}")
-            for showtime in entity.get("showtimes") or []
-        ]
-    except (KeyError, TypeError) as exc:
+        for showtime in entity.get("showtimes") or []:
+            kind = showtime.get("type")
+            if kind == PERFORMANCE_TIME:
+                starts.append(
+                    parse_time(
+                        showtime["startTime"], what=f"showtime of {entity.get('id')}"
+                    )
+                )
+            elif kind not in NON_PERFORMANCE_SHOWTIME_TYPES:
+                raise ThemeParksSchemaError(
+                    f"unknown showtime type {kind!r} for entity {entity.get('id')}"
+                )
+    except (KeyError, TypeError, AttributeError) as exc:
         raise ThemeParksSchemaError(
             f"malformed showtimes for entity {entity.get('id')}: {exc}"
         ) from exc
+    return starts
 
 
 def index_entities(
@@ -136,7 +165,9 @@ def index_entities(
     for entity in entities:
         entity_id = entity.get("id")
         if not isinstance(entity_id, str) or not entity_id:
-            raise ThemeParksSchemaError(f"entity without a string id: {entity.get('name')!r}")
+            raise ThemeParksSchemaError(
+                f"entity without a string id: {entity.get('name')!r}"
+            )
         ids.append(entity_id)
 
     counts = Counter(ids)
@@ -160,12 +191,18 @@ def index_entities(
 
 
 def parse_catalog(
-    payload: Mapping[str, Any], metadata: Mapping[str, AttractionMetadata]
+    payload: Mapping[str, Any],
+    metadata: Mapping[str, AttractionMetadata],
+    *,
+    excluded: Collection[str] = frozenset(),
 ) -> NormalizedCatalog:
     """``/entity/{park}/children`` -> ``Attraction``s for ATTRACTION and SHOW entities.
 
     Entities of other kinds (restaurants, the park itself) are not catalog
-    items and are skipped without an issue. Payload order is preserved.
+    items and are skipped without an issue, and so are the ``excluded`` ids
+    (entities left out on purpose, e.g. party-only entertainment). Any other
+    entity without curated metadata is reported as ``MISSING_METADATA``.
+    Payload order is preserved.
     """
     check_timezone(payload)
     index, issues = index_entities(payload.get("children", []))
@@ -175,9 +212,11 @@ def parse_catalog(
     for entity_id, entity in index.items():
         kind = entity_kind(entity)
         if kind is None:
-            issues.append(_issue(IssueKind.UNKNOWN_ENTITY_KIND, entity_id, None, entity))
+            issues.append(
+                _issue(IssueKind.UNKNOWN_ENTITY_KIND, entity_id, None, entity)
+            )
             continue
-        if kind not in CATALOG_KINDS:
+        if kind not in CATALOG_KINDS or entity_id in excluded:
             continue
         curated = metadata.get(entity_id)
         if curated is None:
@@ -217,7 +256,9 @@ def parse_live(payload: Mapping[str, Any]) -> NormalizedLive:
     for entity_id, entity in index.items():
         kind = entity_kind(entity)
         if kind is None:
-            issues.append(_issue(IssueKind.UNKNOWN_ENTITY_KIND, entity_id, None, entity))
+            issues.append(
+                _issue(IssueKind.UNKNOWN_ENTITY_KIND, entity_id, None, entity)
+            )
             continue
         if kind is EntityKind.PARK:
             continue  # the park reports itself in liveData; it is not a plannable node

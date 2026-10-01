@@ -9,17 +9,29 @@ facts (height requirements cross-checked against park.fan's
 centimeters — verified against 7 attractions' published height
 requirements before trusting it).
 
-Scope: the 35 permanent ATTRACTION-type entities only, keyed by their real
-ThemeParks Wiki entity id (captured 2026-09-17). SHOW-type entities
-(parades, fireworks, character meet-and-greets, seasonal event
-entertainment) are intentionally NOT curated here yet — the real capture
-this table is built from included several one-off entries tied to a
-running seasonal event ("Mickey's Not-So-Scary Halloween Party"), and
-sorting permanent shows from seasonal ones needs a follow-up pass rather
-than a guess. ThemeParksClient.get_catalog() skips any entity id missing
-from this table (with a warning), so SHOW entities are simply omitted from
-the catalog until this table is extended — that's the designed
-degradation path, not a bug.
+Scope: the 35 permanent ATTRACTION-type entities (captured 2026-09-17), plus the
+15 SHOW-type entities a day guest can plan around (captured 2026-09-24, re-checked
+2026-09-29; issue #69), all keyed by their real ThemeParks Wiki entity id:
+
+- 9 scheduled shows (parades, fireworks, street musicians, stage shows) -- category
+  ``SHOW``, listed in ``MAGIC_KINGDOM_SCHEDULED_SHOWS``. Their ``/live`` showtimes
+  are ``Performance Time`` starts, so coverage expects showtimes while they operate.
+- 6 character meet-and-greets -- category ``CHARACTER``. The provider reports them as
+  SHOWs, but they are an open window with a STANDBY line, not a scheduled start: plan
+  them like an attraction stop (rule 3 needs showtimes, they have none). Their
+  typical waits are provisional (``PROVISIONAL_TYPICAL_WAITS``).
+
+Not curated on purpose:
+
+- ``MAGIC_KINGDOM_EXCLUDED_ENTITIES``: party-only / separately ticketed entities (12 SHOWs and 2 ATTRACTIONs)
+  (Mickey's Not-So-Scary Halloween Party, Disney After Hours). ``parse_catalog`` skips
+  them without reporting an issue; the list is seasonal and must be revisited.
+- Jessie's Roundup: its only ``Operating`` window is dated 2026-09-08 (stale) and it
+  has no queue, so it stays reported as ``MISSING_METADATA`` until it's clear whether
+  it still runs.
+
+Any other provider id missing from this table is reported as ``MISSING_METADATA``
+and left out of the catalog -- the designed degradation path.
 """
 
 from typing import TypedDict
@@ -287,4 +299,152 @@ MAGIC_KINGDOM_ATTRACTION_METADATA: dict[str, AttractionMetadata] = {
         "outdoor": False,
         "land": "Tomorrowland",
     },
+    # Scheduled shows (Performance Time starts; issue #69)
+    "a0613b70-293f-4a5b-8169-357be1777c62": {  # Casey's Corner Pianist
+        "category": AttractionCategory.SHOW,
+        "height_restriction_cm": None,
+        "typical_wait_minutes": 0,
+        "outdoor": True,
+    },
+    "f819079e-644e-4fce-bda3-26b899ac7027": {  # Disney Adventure Friends Cavalcade
+        "category": AttractionCategory.SHOW,
+        "height_restriction_cm": None,
+        "typical_wait_minutes": 0,
+        "outdoor": True,
+    },
+    "ee56b2f3-fd49-4a29-ae1a-2d321549a633": {  # Disney Festival of Fantasy Parade
+        "category": AttractionCategory.SHOW,
+        "height_restriction_cm": None,
+        "typical_wait_minutes": 0,
+        "outdoor": True,
+    },
+    "d69261dc-62b8-434c-83bd-93649b43c408": {  # Disney Starlight: Dream the Night Away
+        "category": AttractionCategory.SHOW,
+        "height_restriction_cm": None,
+        "typical_wait_minutes": 0,
+        "outdoor": True,
+    },
+    "1c708beb-41e1-43ae-8dd8-1e85075aeb38": {  # Flag Retreat
+        "category": AttractionCategory.SHOW,
+        "height_restriction_cm": None,
+        "typical_wait_minutes": 0,
+        "outdoor": True,
+    },
+    "22b78ed9-a692-47cb-b6a4-6d1224ff67e3": {  # Happily Ever After
+        "category": AttractionCategory.SHOW,
+        "height_restriction_cm": None,
+        "typical_wait_minutes": 0,
+        "outdoor": True,
+    },
+    "51392ca4-f824-42d8-8808-8110ec8e0e22": {  # Main Street Philharmonic
+        "category": AttractionCategory.SHOW,
+        "height_restriction_cm": None,
+        "typical_wait_minutes": 0,
+        "outdoor": True,
+    },
+    "4c31b3ad-5dc9-437f-ac1a-0fdff36a2818": {  # Mickey's Magical Friendship Faire
+        "category": AttractionCategory.SHOW,
+        "height_restriction_cm": None,
+        "typical_wait_minutes": 0,
+        "outdoor": True,
+    },
+    "1eee22e8-1d0a-4809-a42b-df3ae55c69d5": {  # The Dapper Dans
+        "category": AttractionCategory.SHOW,
+        "height_restriction_cm": None,
+        "typical_wait_minutes": 0,
+        "outdoor": True,
+    },
+    # Character meet-and-greets (Operating window + STANDBY line; plan as attraction stops)
+    "012a211b-4c91-451c-8a0e-5e3ab398eda8": {  # Meet Ariel at Her Grotto
+        "category": AttractionCategory.CHARACTER,
+        "height_restriction_cm": None,
+        "typical_wait_minutes": 20,  # provisional
+        "outdoor": True,  # outdoor line
+    },
+    "40737d3d-0ff6-4a9e-a050-beb87bf90120": {  # Meet Cinderella and a Visiting Princess at Princess Fairytale Hall
+        "category": AttractionCategory.CHARACTER,
+        "height_restriction_cm": None,
+        "typical_wait_minutes": 25,  # provisional
+        "outdoor": False,  # indoor hall
+    },
+    "cf4b2ba4-3626-4de7-9d07-abe8a65b1665": {  # Meet Princess Tiana and a Visiting Princess at Princess Fairytale Hall
+        "category": AttractionCategory.CHARACTER,
+        "height_restriction_cm": None,
+        "typical_wait_minutes": 25,  # provisional
+        "outdoor": False,  # indoor hall
+    },
+    "166f2985-7b27-4eff-a8b3-29c3448ba198": {  # Meet Daring Disney Pals as Circus Stars at Pete's Silly Sideshow
+        "category": AttractionCategory.CHARACTER,
+        "height_restriction_cm": None,
+        "typical_wait_minutes": 20,  # provisional
+        "outdoor": True,  # unsure: tent, partly outdoor line
+    },
+    "b5d6d1d1-e960-4c8f-a8a4-b9748b386b64": {  # Meet Dashing Disney Pals as Circus Stars at Pete's Silly Sideshow
+        "category": AttractionCategory.CHARACTER,
+        "height_restriction_cm": None,
+        "typical_wait_minutes": 20,  # provisional
+        "outdoor": True,  # unsure: tent, partly outdoor line
+    },
+    "a2d92647-634d-4eb4-886b-9da858e871f1": {  # Meet Mickey at Town Square Theater
+        "category": AttractionCategory.CHARACTER,
+        "height_restriction_cm": None,
+        "typical_wait_minutes": 30,  # provisional
+        "outdoor": False,  # indoor theater
+    },
 }
+
+
+MAGIC_KINGDOM_SCHEDULED_SHOWS: frozenset[str] = frozenset(
+    {
+        "a0613b70-293f-4a5b-8169-357be1777c62",  # Casey's Corner Pianist
+        "f819079e-644e-4fce-bda3-26b899ac7027",  # Disney Adventure Friends Cavalcade
+        "ee56b2f3-fd49-4a29-ae1a-2d321549a633",  # Disney Festival of Fantasy Parade
+        "d69261dc-62b8-434c-83bd-93649b43c408",  # Disney Starlight: Dream the Night Away
+        "1c708beb-41e1-43ae-8dd8-1e85075aeb38",  # Flag Retreat
+        "22b78ed9-a692-47cb-b6a4-6d1224ff67e3",  # Happily Ever After
+        "51392ca4-f824-42d8-8808-8110ec8e0e22",  # Main Street Philharmonic
+        "4c31b3ad-5dc9-437f-ac1a-0fdff36a2818",  # Mickey's Magical Friendship Faire
+        "1eee22e8-1d0a-4809-a42b-df3ae55c69d5",  # The Dapper Dans
+    }
+)
+"""Curated entities that run on ``Performance Time`` starts. Coverage expects
+showtimes for each one that is OPERATING (Architecture 8.1: "every relevant show
+has showtimes"). Decided from this curated list, never from the live payload's
+``kind``, so a show that vanishes from ``/live`` still counts as missing."""
+
+PROVISIONAL_TYPICAL_WAITS: frozenset[str] = frozenset(
+    {
+        "012a211b-4c91-451c-8a0e-5e3ab398eda8",  # Meet Ariel at Her Grotto
+        "40737d3d-0ff6-4a9e-a050-beb87bf90120",  # Meet Cinderella and a Visiting Princess at Princess Fairytale Hall
+        "cf4b2ba4-3626-4de7-9d07-abe8a65b1665",  # Meet Princess Tiana and a Visiting Princess at Princess Fairytale Hall
+        "166f2985-7b27-4eff-a8b3-29c3448ba198",  # Meet Daring Disney Pals as Circus Stars at Pete's Silly Sideshow
+        "b5d6d1d1-e960-4c8f-a8a4-b9748b386b64",  # Meet Dashing Disney Pals as Circus Stars at Pete's Silly Sideshow
+        "a2d92647-634d-4eb4-886b-9da858e871f1",  # Meet Mickey at Town Square Theater
+    }
+)
+"""Ids whose ``typical_wait_minutes`` is a conservative guess, not a measured value.
+Replace each with the average STANDBY wait from collected snapshots (P0-11) once
+enough have been stored."""
+
+_MNSSHP = "party-only: Mickey's Not-So-Scary Halloween Party (separate ticket)"
+_AFTER_HOURS = "party-only: Disney After Hours (separate ticket)"
+
+MAGIC_KINGDOM_EXCLUDED_ENTITIES: dict[str, str] = {
+    "c1f39c15-7845-46b5-b6fd-2ae368a32a37": _MNSSHP,  # Captain Jack's Buccaneer Bash at Mickey's Not-So-Scary Halloween Party
+    "9140033d-d746-464b-acad-f05f9357f0bd": _MNSSHP,  # Character Greetings at Mickey's Not-So-Scary Halloween Party
+    "9221e600-6715-4b4f-b39a-00c318c00e03": _MNSSHP,  # Destination DescenDANCE Party at Mickey's Not-So-Scary Halloween Party
+    "86c198b0-7c02-4354-814a-27ad70067d45": _AFTER_HOURS,  # Disney Enchantment at Disney After Hours at Magic Kingdom
+    "05ca3e51-580b-44ca-8046-7d3e57a6d248": _MNSSHP,  # Disney's Not-So-Spooky Spectacular at Mickey's Not-So-Scary Halloween Party
+    "6d74b3d9-f977-4c9b-8114-93969b51b105": _MNSSHP,  # Hocus Pocus Villain Spelltacular
+    "a74421f2-5de4-4425-bd06-8b4639b29826": _MNSSHP,  # Meet Festive Disney Pals at Mickey's Not-So-Scary Halloween Party
+    "947edbee-85a5-4aa0-99f3-14c7de539542": _MNSSHP,  # Meet Jack Skellington and Sally at Mickey's Not-So-Scary Halloween Party
+    "5564113f-25b4-4646-ac35-aacf983e2fd6": _MNSSHP,  # Meet Mickey Mouse and Minnie Mouse at Mickey's Not-So-Scary Halloween Party
+    "5c00cd7c-b207-4d9d-9c8c-a8d418fc5425": _MNSSHP,  # Mickey's Boo-To-You Halloween Parade at Mickey's Not-So-Scary Halloween Party
+    "97c837c3-4a0f-4d52-b93c-074cf31d6f41": _MNSSHP,  # Stitch's Masquerade Mashup at Mickey's Not-So-Scary Halloween Party
+    "92524eb7-4ee5-4eab-936c-2eb8e6eb0ecd": _MNSSHP,  # The Cadaver Dans Barbershop Quartet at Mickey's Not-So-Scary Halloween Party
+    "52ac3730-b955-452a-a7cc-17e3b06182ac": _MNSSHP,  # Trick-or-Treat Locations at Mickey's Not-So-Scary Halloween Party (ATTRACTION)
+    "362aa1ba-b1a2-4617-a97c-5a6805f32417": _MNSSHP,  # Allergy Request Trick-or-Treating Experience at Mickey's Not-So-Scary Halloween Party (ATTRACTION)
+}
+"""Provider entities left out of the catalog on purpose, with the reason.
+``parse_catalog`` skips them without a ``MISSING_METADATA`` issue. Seasonal: review
+it when the party calendar changes (a new party entity is still reported as missing)."""

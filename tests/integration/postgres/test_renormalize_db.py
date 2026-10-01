@@ -11,6 +11,7 @@ import factories
 import psycopg
 from capture import NOW, Provider, capture
 
+from parkmind.services.clients.normalization import NORMALIZER_VERSION
 from parkmind.services.clients.postgres.id_mapping_repository import (
     PostgresIdMappingRepository,
 )
@@ -23,6 +24,8 @@ from parkmind.services.use_cases.renormalize_snapshots import (
     renormalize_snapshots,
     stale_snapshot_ids,
 )
+
+NEXT_VERSION = NORMALIZER_VERSION + 1  # a normalizer newer than the one that collected
 
 
 def _collect(conn: psycopg.Connection, *, minutes: int = 0) -> str:
@@ -64,17 +67,19 @@ def test_rebuilds_live_context_from_raw_payload(conn: psycopg.Connection) -> Non
 
 def test_only_rows_below_the_target_version_are_selected(conn: psycopg.Connection) -> None:
     old, current = _collect(conn, minutes=0), _collect(conn, minutes=5)
-    conn.execute("UPDATE snapshots SET normalizer_version = 2 WHERE snapshot_id = %s", (current,))
+    conn.execute(
+        "UPDATE snapshots SET normalizer_version = %s WHERE snapshot_id = %s", (NEXT_VERSION, current)
+    )
     repo = PostgresSnapshotRepository(conn)
 
-    stale = stale_snapshot_ids(repo, target_version=2)
-    report = _renormalize(conn, stale, target_version=2)
+    stale = stale_snapshot_ids(repo, target_version=NEXT_VERSION)
+    report = _renormalize(conn, stale, target_version=NEXT_VERSION)
 
     assert stale == [old]
     assert report.count("rebuilt") == 1
     old_meta = repo.get_meta(old)
-    assert old_meta is not None and old_meta.normalizer_version == 2
-    assert stale_snapshot_ids(repo, target_version=2) == []
+    assert old_meta is not None and old_meta.normalizer_version == NEXT_VERSION
+    assert stale_snapshot_ids(repo, target_version=NEXT_VERSION) == []
 
 
 def test_rerunning_is_a_no_op(conn: psycopg.Connection) -> None:
@@ -96,7 +101,7 @@ def test_one_bad_row_does_not_stop_the_rest(conn: psycopg.Connection) -> None:
         normalizer_version=1,
     )
 
-    report = _renormalize(conn, ["handmade", good, "ghost"], target_version=2)
+    report = _renormalize(conn, ["handmade", good, "ghost"], target_version=NEXT_VERSION)
 
     by_id = {o.snapshot_id: o for o in report.outcomes}
     assert by_id[good].status == "rebuilt"

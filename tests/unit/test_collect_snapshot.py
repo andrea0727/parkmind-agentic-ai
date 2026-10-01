@@ -11,7 +11,7 @@ import pytest
 from capture import NOW, PARK_ID, Provider, capture
 from fakes import InMemoryIdMappingRepository, InMemorySnapshotRepository
 
-from parkmind.core.contracts import AttractionCategory, DataSource
+from parkmind.core.contracts import DataSource
 from parkmind.core.contracts.base import PARK_TZ
 from parkmind.services.clients.normalization import NORMALIZER_VERSION
 from parkmind.services.clients.themeparks_client import (
@@ -108,10 +108,12 @@ def test_coverage_is_honest_for_a_park_wide_snapshot() -> None:
     assert coverage.weather_covered is True  # 24 hourly readings span 09:00-18:00
     assert coverage.accessibility_checks_complete is False  # the collector knows no party
     assert ACCESSIBILITY_GAP in coverage.coverage_gaps
-    assert any("no shows are curated" in gap for gap in coverage.coverage_gaps)
-    # Curated theater attractions (category SHOW) are provider ATTRACTIONs with
-    # no showtimes: they must not count as shows missing their showtimes.
+    # 2026-09-27 was a party night: the 6 operating scheduled shows all have
+    # showtimes; Happily Ever After, Starlight and the Philharmonic are CLOSED, so
+    # they are not relevant today. Theater attractions (category SHOW, e.g. The
+    # Hall of Presidents) are not scheduled shows and need no showtimes.
     assert coverage.required_shows_covered is True
+    assert not any("show" in gap for gap in coverage.coverage_gaps)
 
 
 def test_a_curated_attraction_missing_from_live_data_is_a_coverage_gap() -> None:
@@ -161,27 +163,54 @@ def test_themeparks_outage_raises_and_stores_nothing() -> None:
     assert snapshots.rows == {}
 
 
-def test_curated_provider_shows_must_have_showtimes() -> None:
-    """Once shows are curated, a provider SHOW with no showtimes today is a gap."""
-    dapper_dans = "1eee22e8-1d0a-4809-a42b-df3ae55c69d5"  # 7 performances in the capture
-    happily_ever_after = "22b78ed9-a692-47cb-b6a4-6d1224ff67e3"  # CLOSED, no showtimes
-    show_meta = {
-        "category": AttractionCategory.SHOW,
-        "height_restriction_cm": None,
-        "typical_wait_minutes": 0,
-        "outdoor": True,
-        "land": "Main Street, U.S.A.",
-    }
-    provider = Provider()
+DAPPER_DANS = "1eee22e8-1d0a-4809-a42b-df3ae55c69d5"  # 7 performances in the capture
+HAPPILY_EVER_AFTER = "22b78ed9-a692-47cb-b6a4-6d1224ff67e3"  # CLOSED, no showtimes
 
-    def coverage_for(*show_ids: str):  # type: ignore[no-untyped-def]
-        curated = {**MAGIC_KINGDOM_ATTRACTION_METADATA, **dict.fromkeys(show_ids, show_meta)}
-        collector = SnapshotCollector(
-            provider.parks(), provider.weather(), InMemorySnapshotRepository(), InMemoryIdMappingRepository(), curated=curated
-        )
-        return collector.collect(now=NOW).live_context.coverage  # type: ignore[union-attr]
 
-    assert coverage_for(dapper_dans).required_shows_covered is True
-    missing = coverage_for(dapper_dans, happily_ever_after)
-    assert missing.required_shows_covered is False
-    assert any("1 curated show(s) without showtimes" in gap for gap in missing.coverage_gaps)
+def _coverage_with_live(live: dict, **collector_kwargs):  # type: ignore[no-untyped-def]
+    provider = Provider(live=live)
+    collector = SnapshotCollector(
+        provider.parks(), provider.weather(), InMemorySnapshotRepository(), InMemoryIdMappingRepository(), **collector_kwargs
+    )
+    return collector.collect(now=NOW).live_context.coverage  # type: ignore[union-attr]
+
+
+def test_an_operating_show_without_showtimes_is_a_coverage_gap() -> None:
+    live = capture("themeparks_live.json")
+    for entity in live["liveData"]:
+        if entity["id"] == DAPPER_DANS:
+            entity["showtimes"] = []
+
+    coverage = _coverage_with_live(live)
+
+    assert coverage.required_shows_covered is False
+    assert any("1 operating show(s) without showtimes" in gap for gap in coverage.coverage_gaps)
+
+
+def test_a_closed_show_needs_no_showtimes() -> None:
+    """Architecture 8.1: only *relevant* shows need showtimes. A CLOSED show can't
+    be planned today (rule 1), so its missing showtimes are not a gap."""
+    coverage = _coverage_with_live(
+        capture("themeparks_live.json"), scheduled_shows=frozenset({HAPPILY_EVER_AFTER})
+    )
+
+    assert coverage.required_shows_covered is True
+
+
+def test_a_curated_show_missing_from_live_is_a_coverage_gap() -> None:
+    """Scheduled shows come from curated data, not the payload's kind: a show that
+    vanishes from /live still counts as missing (#64 review)."""
+    live = capture("themeparks_live.json")
+    live["liveData"] = [e for e in live["liveData"] if e["id"] != DAPPER_DANS]
+
+    coverage = _coverage_with_live(live)
+
+    assert coverage.required_shows_covered is False
+    assert coverage.required_attractions_covered is False  # it has no status either
+
+
+def test_no_curated_scheduled_shows_is_reported_as_vacuous() -> None:
+    coverage = _coverage_with_live(capture("themeparks_live.json"), scheduled_shows=frozenset())
+
+    assert coverage.required_shows_covered is True
+    assert any("show coverage is vacuous" in gap for gap in coverage.coverage_gaps)
