@@ -13,6 +13,9 @@ from parkmind.services.clients.routing_client import (
 from parkmind.services.clients.routing_reference_data import (
     MAGIC_KINGDOM_NODE_COORDINATES,
 )
+from parkmind.services.clients.themeparks_reference_data import (
+    MAGIC_KINGDOM_ATTRACTION_METADATA,
+)
 from parkmind.services.planning.park_graph import ParkGraph
 from parkmind.services.ports import (
     InvalidRouteError,
@@ -147,6 +150,17 @@ def test_triangular_inequality_holds_for_all_reference_nodes():
                     violations += 1
 
     assert violations == 0, f"Found {violations} triangular inequality violations"
+
+
+def test_every_curated_catalog_node_is_routable_in_strict_mode():
+    """Strict routing fails closed on an unknown node, so every curated catalog
+    entity -- attractions, shows and meet-and-greets (#69) -- needs coordinates."""
+    client = RoutingClient()  # strict by default
+    hub = "90d79335-c907-4069-a021-d0fe1ec73ae2"  # Cinderella Castle
+
+    assert set(MAGIC_KINGDOM_ATTRACTION_METADATA) <= set(MAGIC_KINGDOM_NODE_COORDINATES)
+    for node_id in MAGIC_KINGDOM_ATTRACTION_METADATA:
+        assert client.walk_minutes(hub, node_id) >= 0.0
 
 
 # ============================================================================
