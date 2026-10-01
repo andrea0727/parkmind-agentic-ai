@@ -12,7 +12,7 @@ One snapshot that can't be rebuilt is reported as ``failed`` with its reason;
 it never stops the rest.
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -20,6 +20,7 @@ from parkmind.services.clients.normalization import NORMALIZER_VERSION
 from parkmind.services.clients.themeparks_errors import ThemeParksClientError
 from parkmind.services.clients.themeparks_reference_data import (
     MAGIC_KINGDOM_ATTRACTION_METADATA,
+    MAGIC_KINGDOM_SCHEDULED_SHOWS,
     AttractionMetadata,
 )
 from parkmind.services.ports import (
@@ -72,10 +73,13 @@ def renormalize_snapshots(
     *,
     target_version: int = NORMALIZER_VERSION,
     curated: Mapping[str, AttractionMetadata] = MAGIC_KINGDOM_ATTRACTION_METADATA,
+    scheduled_shows: Collection[str] = MAGIC_KINGDOM_SCHEDULED_SHOWS,
 ) -> RenormalizeReport:
     resolver = IdResolver(id_mappings)
     outcomes = [
-        _renormalize_one(snapshots, resolver, snapshot_id, target_version, curated)
+        _renormalize_one(
+            snapshots, resolver, snapshot_id, target_version, curated, scheduled_shows
+        )
         for snapshot_id in snapshot_ids
     ]
     return RenormalizeReport(outcomes=outcomes)
@@ -87,6 +91,7 @@ def _renormalize_one(
     snapshot_id: str,
     target_version: int,
     curated: Mapping[str, AttractionMetadata],
+    scheduled_shows: Collection[str],
 ) -> RenormalizeOutcome:
     meta = snapshots.get_meta(snapshot_id)
     raw = snapshots.get_raw_payload(snapshot_id)
@@ -99,6 +104,7 @@ def _renormalize_one(
             retrieved_at=meta.retrieved_at,
             resolver=resolver,
             curated=curated,
+            scheduled_shows=scheduled_shows,
         ).live_context
     except (ValueError, ThemeParksClientError) as exc:
         # ValueError covers RawSnapshotError and pydantic's ValidationError.

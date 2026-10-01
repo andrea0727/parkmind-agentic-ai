@@ -22,11 +22,13 @@ from parkmind.services.clients.themeparks_normalize import (
     parse_catalog,
     parse_live,
     parse_schedule,
+    parse_showtimes,
     parse_time,
     standby_wait,
 )
 from parkmind.services.clients.themeparks_reference_data import (
     MAGIC_KINGDOM_ATTRACTION_METADATA,
+    MAGIC_KINGDOM_EXCLUDED_ENTITIES,
 )
 from parkmind.services.ports import EntityKind
 
@@ -104,6 +106,59 @@ def test_showtimes_are_park_local() -> None:
     assert all(t.tzinfo is PARK_TZ for t in showtimes)
 
 
+def _show(*showtimes: dict[str, str]) -> dict[str, object]:
+    return {"id": "show-1", "showtimes": list(showtimes)}
+
+
+def _entry(kind: str | None, start: str, end: str | None = None) -> dict[str, str]:
+    entry = {"startTime": start, "endTime": end or start}
+    if kind is not None:
+        entry["type"] = kind
+    return entry
+
+
+def test_showtimes_keep_only_performance_times() -> None:
+    show = _show(
+        _entry("Performance Time", "2026-09-29T14:00:00-04:00"),
+        _entry("Operating", "2026-09-29T09:30:00-04:00", "2026-09-29T17:30:00-04:00"),
+        _entry("Special Ticketed Event", "2026-09-29T20:15:00-04:00"),
+        _entry("Performance Time", "2026-09-29T16:00:00-04:00"),
+    )
+
+    assert [t.hour for t in parse_showtimes(show)] == [14, 16]
+
+
+def test_a_meet_and_greet_window_is_not_a_show_start() -> None:
+    meet = _show(
+        _entry("Operating", "2026-09-29T09:30:00-04:00", "2026-09-29T17:30:00-04:00")
+    )
+
+    assert parse_showtimes(meet) == []
+
+
+@pytest.mark.parametrize("kind", ["Parade Time", None])
+def test_an_unknown_or_missing_showtime_type_raises(kind: str | None) -> None:
+    with pytest.raises(ThemeParksSchemaError, match="showtime type"):
+        parse_showtimes(_show(_entry(kind, "2026-09-29T14:00:00-04:00")))
+
+
+def test_captured_snapshot_keeps_no_operating_or_party_times() -> None:
+    capture = json.loads(
+        (FIXTURES.parent / "snapshot_2026-09-27" / "themeparks_live.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    live = parse_live(capture)
+    performances = sum(
+        1
+        for entity in capture["liveData"]
+        for showtime in entity.get("showtimes") or []
+        if showtime["type"] == "Performance Time"
+    )
+
+    assert sum(len(e.showtimes) for e in live.entities.values()) == performances
+
+
 def test_foreign_timezone_raises_schema_error() -> None:
     with pytest.raises(ThemeParksSchemaError):
         parse_live(_fixture("live_magic_kingdom_other_timezone.json"))
@@ -146,20 +201,77 @@ def test_duplicate_provider_id_excludes_every_copy_and_reports_it() -> None:
 
 
 def test_catalog_entity_without_metadata_is_reported() -> None:
-    catalog = parse_catalog(_fixture("children_magic_kingdom.json"), MAGIC_KINGDOM_ATTRACTION_METADATA)
+    catalog = parse_catalog(
+        _fixture("children_magic_kingdom.json"), MAGIC_KINGDOM_ATTRACTION_METADATA
+    )
 
     reported = {(i.kind, i.provider_id, i.entity_kind) for i in catalog.issues}
     assert reported == {
-        (IssueKind.MISSING_METADATA, "unknown-attraction-not-in-metadata-table", EntityKind.ATTRACTION),
-        (IssueKind.MISSING_METADATA, FRIENDSHIP_FAIRE, EntityKind.SHOW),
+        (
+            IssueKind.MISSING_METADATA,
+            "unknown-attraction-not-in-metadata-table",
+            EntityKind.ATTRACTION,
+        ),
     }
-    assert {a.node_id for a in catalog.attractions} == {SPACE_MOUNTAIN, BIG_THUNDER, TRON, JUNGLE_CRUISE}
+    # Mickey's Magical Friendship Faire is a curated scheduled show since #69.
+    assert {a.node_id for a in catalog.attractions} == {
+        SPACE_MOUNTAIN,
+        BIG_THUNDER,
+        TRON,
+        JUNGLE_CRUISE,
+        FRIENDSHIP_FAIRE,
+    }
+
+
+def test_excluded_entities_are_skipped_without_an_issue() -> None:
+    payload = _fixture("children_magic_kingdom.json")
+    unknown = "unknown-attraction-not-in-metadata-table"
+
+    catalog = parse_catalog(
+        payload, MAGIC_KINGDOM_ATTRACTION_METADATA, excluded={unknown}
+    )
+
+    assert catalog.issues == []
+    assert unknown not in {a.node_id for a in catalog.attractions}
+
+
+def test_a_new_party_entity_is_still_reported_until_it_is_excluded() -> None:
+    """The exclusion list is explicit: an unlisted, uncurated entity is reported."""
+    catalog = parse_catalog(
+        _fixture("children_magic_kingdom.json"),
+        MAGIC_KINGDOM_ATTRACTION_METADATA,
+        excluded=MAGIC_KINGDOM_EXCLUDED_ENTITIES,
+    )
+
+    assert [i.kind for i in catalog.issues] == [IssueKind.MISSING_METADATA]
+
+
+def test_live_catalog_curates_every_entity_but_jessies_roundup() -> None:
+    """Against the real /children captured 2026-10-01: 35 attractions and 15 shows
+    curated, 14 party-only entities excluded, and only Jessie's Roundup (stale
+    window, kept out on purpose) reported."""
+    jessies_roundup = "e0cd6a94-6dbe-4f52-aaa8-b3d2fdf5f2f6"
+
+    catalog = parse_catalog(
+        _fixture("children_magic_kingdom_2026-10-01.json"),
+        MAGIC_KINGDOM_ATTRACTION_METADATA,
+        excluded=MAGIC_KINGDOM_EXCLUDED_ENTITIES,
+    )
+
+    assert len(catalog.attractions) == len(MAGIC_KINGDOM_ATTRACTION_METADATA) == 50
+    assert [(i.kind, i.provider_id) for i in catalog.issues] == [
+        (IssueKind.MISSING_METADATA, jessies_roundup)
+    ]
 
 
 def test_restaurants_and_the_park_are_not_catalog_items_and_not_issues() -> None:
-    catalog = parse_catalog(_fixture("children_magic_kingdom.json"), MAGIC_KINGDOM_ATTRACTION_METADATA)
+    catalog = parse_catalog(
+        _fixture("children_magic_kingdom.json"), MAGIC_KINGDOM_ATTRACTION_METADATA
+    )
 
-    ids = {a.node_id for a in catalog.attractions} | {i.provider_id for i in catalog.issues}
+    ids = {a.node_id for a in catalog.attractions} | {
+        i.provider_id for i in catalog.issues
+    }
     assert CRYSTAL_PALACE not in ids
     assert PARK_ID not in ids
 
@@ -167,7 +279,12 @@ def test_restaurants_and_the_park_are_not_catalog_items_and_not_issues() -> None
 def test_unknown_entity_type_is_reported() -> None:
     payload = _fixture("children_magic_kingdom.json")
     payload["children"].append(
-        {"id": "merch-1", "name": "Emporium", "entityType": "MERCHANDISE", "parentId": PARK_ID}
+        {
+            "id": "merch-1",
+            "name": "Emporium",
+            "entityType": "MERCHANDISE",
+            "parentId": PARK_ID,
+        }
     )
 
     catalog = parse_catalog(payload, MAGIC_KINGDOM_ATTRACTION_METADATA)
@@ -180,7 +297,11 @@ def test_unknown_entity_type_is_reported() -> None:
 def test_duplicate_catalog_id_is_excluded_even_when_curated() -> None:
     payload = _fixture("children_magic_kingdom.json")
     payload["children"].append(
-        {"id": SPACE_MOUNTAIN, "name": "Space Mountain (again)", "entityType": "ATTRACTION"}
+        {
+            "id": SPACE_MOUNTAIN,
+            "name": "Space Mountain (again)",
+            "entityType": "ATTRACTION",
+        }
     )
 
     catalog = parse_catalog(payload, MAGIC_KINGDOM_ATTRACTION_METADATA)
@@ -192,15 +313,22 @@ def test_duplicate_catalog_id_is_excluded_even_when_curated() -> None:
 
 
 def test_catalog_fields_come_from_curated_metadata() -> None:
-    catalog = parse_catalog(_fixture("children_magic_kingdom.json"), MAGIC_KINGDOM_ATTRACTION_METADATA)
+    catalog = parse_catalog(
+        _fixture("children_magic_kingdom.json"), MAGIC_KINGDOM_ATTRACTION_METADATA
+    )
 
     space = next(a for a in catalog.attractions if a.node_id == SPACE_MOUNTAIN)
-    assert (space.category, space.height_restriction_cm) == (AttractionCategory.THRILL, 112)
+    assert (space.category, space.height_restriction_cm) == (
+        AttractionCategory.THRILL,
+        112,
+    )
 
 
 def test_entity_without_an_id_raises_schema_error() -> None:
     payload = _fixture("live_magic_kingdom.json")
-    payload["liveData"].append({"name": "ghost", "entityType": "ATTRACTION", "status": "OPERATING"})
+    payload["liveData"].append(
+        {"name": "ghost", "entityType": "ATTRACTION", "status": "OPERATING"}
+    )
 
     with pytest.raises(ThemeParksSchemaError):
         parse_live(payload)

@@ -18,12 +18,13 @@ missing or unreadable schedule or weather payload leaves a coverage gap instead
 of failing the snapshot.
 """
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
 
 from parkmind.core.contracts import (
+    AttractionStatus,
     CoverageReport,
     DataSource,
     LiveContext,
@@ -38,7 +39,6 @@ from parkmind.services.clients.open_meteo_normalize import parse_hourly_forecast
 from parkmind.services.clients.themeparks_errors import ThemeParksClientError
 from parkmind.services.clients.themeparks_normalize import parse_live, parse_schedule
 from parkmind.services.clients.themeparks_reference_data import AttractionMetadata
-from parkmind.services.ports import EntityKind
 from parkmind.services.use_cases.id_resolution import IdResolver
 
 RAW_SCHEMA = 1
@@ -63,12 +63,14 @@ def normalize_raw_snapshot(
     retrieved_at: datetime,
     resolver: IdResolver,
     curated: Mapping[str, AttractionMetadata],
+    scheduled_shows: Collection[str],
 ) -> NormalizedSnapshot:
     """Rebuild the ``LiveContext`` for one raw snapshot payload.
 
     Provider ids become internal ids through ``resolver`` (``seen_at`` is the
     snapshot's own ``retrieved_at``). ``curated`` is the curated catalog the
-    coverage report is measured against.
+    coverage report is measured against; ``scheduled_shows`` are the curated ids
+    that run on scheduled starts and so need showtimes while they operate.
     """
     if raw.get("raw_schema") != RAW_SCHEMA:
         raise RawSnapshotError(f"unsupported raw_schema {raw.get('raw_schema')!r}")
@@ -117,7 +119,7 @@ def normalize_raw_snapshot(
     park = _park_window(themeparks.get("schedule"), service_date, park_id, gaps)
     coverage = _coverage(
         curated=curated,
-        kinds={entity_id: entity.kind for entity_id, entity in entities.items()},
+        scheduled_shows=scheduled_shows,
         statuses=statuses,
         showtimes=showtimes,
         weather=weather,
@@ -160,27 +162,33 @@ def _park_window(
 def _coverage(
     *,
     curated: Mapping[str, AttractionMetadata],
-    kinds: Mapping[str, EntityKind],
+    scheduled_shows: Collection[str],
     statuses: Mapping[str, Any],
     showtimes: Mapping[str, Any],
     weather: list[WeatherHour],
     park: Park | None,
     gaps: list[str],
 ) -> CoverageReport:
-    # Scheduled shows are the entities the provider itself calls SHOW. A curated
-    # theater attraction (category SHOW, e.g. The Hall of Presidents) is a
-    # provider ATTRACTION that runs continuously and has no showtimes.
-    curated_shows = [i for i in curated if kinds.get(i) is EntityKind.SHOW]
+    # Which entities run on scheduled starts comes from curated data, never from
+    # this payload's ``kind``: a curated show that vanished from /live must still
+    # count as missing (#64 review). Only *relevant* shows need showtimes
+    # (Architecture 8.1, "every relevant show has showtimes"): one that is
+    # OPERATING or whose status is unknown. A CLOSED, DOWN or REFURBISHMENT show
+    # can't be planned today -- rule 1 already forbids it -- so on a party night,
+    # when the regular fireworks don't run, its missing showtimes are no gap.
+    relevant_shows = [
+        i for i in scheduled_shows if statuses.get(i) in (None, AttractionStatus.OPERATING)
+    ]
 
     missing_status = sorted(i for i in curated if i not in statuses)
     if missing_status:
         gaps.append(f"{len(missing_status)} curated attraction(s) without a status")
 
-    missing_showtimes = sorted(i for i in curated_shows if i not in showtimes)
-    if not curated_shows:
-        gaps.append("no shows are curated yet: show coverage is vacuous")
+    missing_showtimes = sorted(i for i in relevant_shows if i not in showtimes)
+    if not scheduled_shows:
+        gaps.append("no scheduled shows are curated: show coverage is vacuous")
     elif missing_showtimes:
-        gaps.append(f"{len(missing_showtimes)} curated show(s) without showtimes")
+        gaps.append(f"{len(missing_showtimes)} operating show(s) without showtimes")
 
     weather_covered = False
     if not weather:
