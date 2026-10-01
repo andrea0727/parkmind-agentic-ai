@@ -543,7 +543,7 @@ class ConstraintChecker:
                             rule=RuleId.RIDE_RESTRICTION,
                             message=(
                                 f"Guest {guest_id} is not eligible for stop {stop.node_id} "
-                                f"({check.conflicting_requirement})"
+                                f"({check.conflicting_requirement or 'no notice on file'})"
                             ),
                             stop_id=stop.node_id,
                             suggestion=(

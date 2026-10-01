@@ -213,6 +213,22 @@ def test_ride_restriction_violation_when_check_is_ineligible():
     assert any(v.rule == RuleId.RIDE_RESTRICTION for v in result.violations)
 
 
+def test_ride_restriction_message_names_a_missing_notice():
+    """check_accessibility fails closed with conflicting_requirement=None when no
+    notice is on file; the violation must say so instead of printing "(None)"."""
+    checker = ConstraintChecker()
+    reqs = [accessibility()]
+    context = live_context(
+        accessibility_results=[
+            accessibility_check(eligible=False, conflicting_requirement=None)
+        ]
+    )
+    result = _check(checker, accessibility_reqs=reqs, live_context_=context)
+    [violation] = [v for v in result.violations if v.rule == RuleId.RIDE_RESTRICTION]
+    assert "(None)" not in violation.message
+    assert "no notice on file" in violation.message
+
+
 def test_ride_restriction_passes_when_check_is_eligible():
     checker = ConstraintChecker()
     reqs = [accessibility()]
