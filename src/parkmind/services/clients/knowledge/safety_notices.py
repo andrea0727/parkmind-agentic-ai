@@ -1,11 +1,17 @@
-"""Magic Kingdom safety-notice corpus, version 2026-09-28 (section 30 [C14], P0-26a).
+"""Magic Kingdom safety-notice corpus, version 2026-10-01 (section 30 [C14], P0-26a, #69).
 
-Every entry is read from the attraction's official page on
+Every entry is read from the entity's official page on
 disneyworld.disney.go.com ("Safety, accessibility and guest policies" block;
 the pages were served in Spanish, the text quoted below is Disney's own), for
-all 35 attractions of the curated catalog, on 2026-09-28. Each entry keeps its
-page slug and the evidence codes it was derived from, so a reviewer can re-check
-it against the page. Bump ``NOTICE_CORPUS_VERSION`` whenever an entry changes.
+all 50 entities of the curated catalog: the 35 attractions (``/attractions/``
+pages, reviewed 2026-09-28) and the 15 shows and meet-and-greets
+(``/entertainment/`` pages, reviewed 2026-10-01; issue #69). Each entry keeps its
+page and the evidence codes it was derived from, so a reviewer can re-check it
+against the page. Bump ``NOTICE_CORPUS_VERSION`` whenever an entry changes.
+
+All 15 entertainment pages publish only "Puede seguir en silla de ruedas/ECV" and
+no warning, so their notices are on file and restrict nothing -- which is not the
+same as having no notice (that fails closed).
 
 Mapping from the published wording to ``RideRestriction`` (section 12 [C15]):
 
@@ -56,8 +62,9 @@ from parkmind.core.contracts import RideRestriction
 
 from .in_memory import InMemoryKnowledgeStore
 
-NOTICE_CORPUS_VERSION = "2026-09-28"
-SOURCE_URL = "https://disneyworld.disney.go.com/attractions/magic-kingdom/{slug}/"
+NOTICE_CORPUS_VERSION = "2026-10-01"
+ATTRACTION_PAGE = "https://disneyworld.disney.go.com/attractions/magic-kingdom/{slug}/"
+ENTERTAINMENT_PAGE = "https://disneyworld.disney.go.com/entertainment/magic-kingdom/{slug}/"
 REVIEWED_ON = date(2026, 9, 28)
 
 HIGH_G = RideRestriction.NOT_RECOMMENDED_HIGH_G_FORCE
@@ -86,11 +93,13 @@ def _notice(
     *,
     evidence: tuple[str, ...],
     flags: tuple[RideRestriction, ...],
+    page: str = ATTRACTION_PAGE,
+    reviewed_on: date = REVIEWED_ON,
 ) -> SafetyNotice:
     return SafetyNotice(
         attraction_id=attraction_id,
-        source_url=SOURCE_URL.format(slug=slug),
-        reviewed_on=REVIEWED_ON,
+        source_url=page.format(slug=slug),
+        reviewed_on=reviewed_on,
         evidence=evidence,
         flags=frozenset(flags),
     )
@@ -330,6 +339,127 @@ MAGIC_KINGDOM_SAFETY_NOTICES: tuple[SafetyNotice, ...] = (
         "enchanted-tiki-room",
         evidence=("wheelchair-accessibility",),
         flags=(),
+    ),
+    # Shows and meet-and-greets (issue #69)
+    _notice(
+        "a0613b70-293f-4a5b-8169-357be1777c62",  # Casey's Corner Pianist
+        "caseys-corner-pianist",
+        evidence=("wheelchair-accessibility",),
+        flags=(),
+        page=ENTERTAINMENT_PAGE,
+        reviewed_on=date(2026, 10, 1),
+    ),
+    _notice(
+        "f819079e-644e-4fce-bda3-26b899ac7027",  # Disney Adventure Friends Cavalcade
+        "disney-adventure-friends-cavalcade",
+        evidence=("wheelchair-accessibility",),
+        flags=(),
+        page=ENTERTAINMENT_PAGE,
+        reviewed_on=date(2026, 10, 1),
+    ),
+    _notice(
+        "ee56b2f3-fd49-4a29-ae1a-2d321549a633",  # Disney Festival of Fantasy Parade
+        "festival-fantasy-parade",
+        evidence=("wheelchair-accessibility",),
+        flags=(),
+        page=ENTERTAINMENT_PAGE,
+        reviewed_on=date(2026, 10, 1),
+    ),
+    _notice(
+        "d69261dc-62b8-434c-83bd-93649b43c408",  # Disney Starlight: Dream the Night Away
+        "starlight-dream-night-away-parade",
+        evidence=("wheelchair-accessibility",),
+        flags=(),
+        page=ENTERTAINMENT_PAGE,
+        reviewed_on=date(2026, 10, 1),
+    ),
+    _notice(
+        "1c708beb-41e1-43ae-8dd8-1e85075aeb38",  # Flag Retreat
+        "flag-retreat",
+        evidence=("wheelchair-accessibility",),
+        flags=(),
+        page=ENTERTAINMENT_PAGE,
+        reviewed_on=date(2026, 10, 1),
+    ),
+    _notice(
+        "22b78ed9-a692-47cb-b6a4-6d1224ff67e3",  # Happily Ever After
+        "happily-ever-after-fireworks",
+        evidence=("wheelchair-accessibility",),
+        flags=(),
+        page=ENTERTAINMENT_PAGE,
+        reviewed_on=date(2026, 10, 1),
+    ),
+    _notice(
+        "51392ca4-f824-42d8-8808-8110ec8e0e22",  # Main Street Philharmonic
+        "main-street-philharmonic",
+        evidence=("wheelchair-accessibility",),
+        flags=(),
+        page=ENTERTAINMENT_PAGE,
+        reviewed_on=date(2026, 10, 1),
+    ),
+    _notice(
+        "4c31b3ad-5dc9-437f-ac1a-0fdff36a2818",  # Mickey's Magical Friendship Faire
+        "mickeys-magical-friendship-faire",
+        evidence=("wheelchair-accessibility",),
+        flags=(),
+        page=ENTERTAINMENT_PAGE,
+        reviewed_on=date(2026, 10, 1),
+    ),
+    _notice(
+        "1eee22e8-1d0a-4809-a42b-df3ae55c69d5",  # The Dapper Dans
+        "dapper-dans",
+        evidence=("wheelchair-accessibility",),
+        flags=(),
+        page=ENTERTAINMENT_PAGE,
+        reviewed_on=date(2026, 10, 1),
+    ),
+    _notice(
+        "012a211b-4c91-451c-8a0e-5e3ab398eda8",  # Meet Ariel at Her Grotto
+        "character-meet-ariel-grotto-fantasyland",
+        evidence=("wheelchair-accessibility",),
+        flags=(),
+        page=ENTERTAINMENT_PAGE,
+        reviewed_on=date(2026, 10, 1),
+    ),
+    _notice(
+        "40737d3d-0ff6-4a9e-a050-beb87bf90120",  # Meet Cinderella and a Visiting Princess
+        "character-meet-princess-fantasyland",
+        evidence=("wheelchair-accessibility",),
+        flags=(),
+        page=ENTERTAINMENT_PAGE,
+        reviewed_on=date(2026, 10, 1),
+    ),
+    _notice(
+        "cf4b2ba4-3626-4de7-9d07-abe8a65b1665",  # Meet Princess Tiana and a Visiting Princess
+        "character-meet-princess-fairytale-hall",
+        evidence=("wheelchair-accessibility",),
+        flags=(),
+        page=ENTERTAINMENT_PAGE,
+        reviewed_on=date(2026, 10, 1),
+    ),
+    _notice(
+        "166f2985-7b27-4eff-a8b3-29c3448ba198",  # Meet Daring Disney Pals (Goofy and Donald)
+        "character-meet-goofy-donald",
+        evidence=("wheelchair-accessibility",),
+        flags=(),
+        page=ENTERTAINMENT_PAGE,
+        reviewed_on=date(2026, 10, 1),
+    ),
+    _notice(
+        "b5d6d1d1-e960-4c8f-a8a4-b9748b386b64",  # Meet Dashing Disney Pals (Minnie and Daisy)
+        "character-meet-minnie-daisy",
+        evidence=("wheelchair-accessibility",),
+        flags=(),
+        page=ENTERTAINMENT_PAGE,
+        reviewed_on=date(2026, 10, 1),
+    ),
+    _notice(
+        "a2d92647-634d-4eb4-886b-9da858e871f1",  # Meet Mickey at Town Square Theater
+        "character-meet-mickey-town-square",
+        evidence=("wheelchair-accessibility",),
+        flags=(),
+        page=ENTERTAINMENT_PAGE,
+        reviewed_on=date(2026, 10, 1),
     ),
 )
 

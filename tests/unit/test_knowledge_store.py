@@ -98,6 +98,7 @@ _EVIDENCE_FLAGS = {
 SPACE_MOUNTAIN = "b2260923-9315-40fd-9c6b-44dd811dbe64"
 SEVEN_DWARFS = "9d4d5229-7142-44b6-b4fb-528920969a2c"
 SMALL_WORLD = "f5aad2d4-a419-4384-bd9a-42f86385c750"
+HAPPILY_EVER_AFTER = "22b78ed9-a692-47cb-b6a4-6d1224ff67e3"
 
 
 def test_corpus_has_a_version() -> None:
@@ -135,10 +136,26 @@ def test_no_corpus_entry_is_orphaned_from_the_catalog() -> None:
     assert coverage.not_in_catalog == ()
 
 
+def test_every_curated_catalog_entity_has_a_notice() -> None:
+    """Rule 10 applies to ATTRACTION and SHOW stops, and an uncovered entity fails
+    closed for every guest with restrictions: the corpus covers the whole curated
+    catalog, attractions, shows and meet-and-greets alike (#69)."""
+    coverage = notice_coverage(
+        magic_kingdom_knowledge_store(), MAGIC_KINGDOM_ATTRACTION_METADATA
+    )
+
+    assert coverage.missing == ()
+    assert len(coverage.covered) == 50
+    assert coverage.ratio == 1.0
+
+
 def test_every_entry_has_source_and_review_date() -> None:
     for notice in MAGIC_KINGDOM_SAFETY_NOTICES:
         assert notice.source_url.startswith(
-            "https://disneyworld.disney.go.com/attractions/magic-kingdom/"
+            (
+                "https://disneyworld.disney.go.com/attractions/magic-kingdom/",
+                "https://disneyworld.disney.go.com/entertainment/magic-kingdom/",
+            )
         )
         assert notice.reviewed_on.isoformat() <= NOTICE_CORPUS_VERSION
         assert notice.evidence
@@ -189,3 +206,6 @@ def test_published_notices_spot_check() -> None:
         }
     )
     assert store.notice_for(SMALL_WORLD) == frozenset()
+    # A show page publishes "may remain in wheelchair/ECV" and no warning: a notice
+    # on file that restricts nothing, not a missing notice.
+    assert store.notice_for(HAPPILY_EVER_AFTER) == frozenset()
