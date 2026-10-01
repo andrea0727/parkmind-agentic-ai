@@ -192,6 +192,7 @@ def parse_catalog(
                     height_restriction_cm=curated["height_restriction_cm"],
                     typical_wait_minutes=curated["typical_wait_minutes"],
                     outdoor=curated["outdoor"],
+                    land=curated["land"],
                 )
             )
             kinds[entity_id] = kind

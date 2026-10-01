@@ -227,6 +227,7 @@ class Attraction(ParkMindBaseModel):
     height_restriction_cm: int | None = Field(default=None, ge=0)
     typical_wait_minutes: int = Field(ge=0)
     outdoor: bool = False
+    land: str | None = None
 
 
 class Park(ParkMindBaseModel):

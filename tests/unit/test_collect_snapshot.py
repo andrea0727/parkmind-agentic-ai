@@ -170,6 +170,7 @@ def test_curated_provider_shows_must_have_showtimes() -> None:
         "height_restriction_cm": None,
         "typical_wait_minutes": 0,
         "outdoor": True,
+        "land": "Main Street, U.S.A.",
     }
     provider = Provider()
 
