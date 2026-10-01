@@ -14,6 +14,11 @@ their ``ride_restrictions`` plus one item derived from mobility:
   separate "transfer from ECV to wheelchair" item.
 * ``LIMITED_WALKING`` never conflicts with a notice; walking limits are rule 9.
 
+The other ``AccessibilityRequirements`` fields never cross this path either:
+``daily_walking_limit_minutes``, ``heat_sensitivity`` and ``rest_frequency_minutes``
+are enforced by the ConstraintChecker's rule 9 (walking, weather, rest cadence),
+not by matching a notice.
+
 Fail closed (section 30, section 43): when a guest with any flag meets an
 attraction with no notice on file, the result is *not eligible*. A guest with
 no flags at all is eligible everywhere -- section 30 excludes an uncovered
