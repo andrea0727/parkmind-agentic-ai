@@ -38,6 +38,15 @@ is set where the full rider warning appears ("other conditions that could be
 aggravated by this adventure"), the park's only intensity notice; this is the
 conservative reading -- a guest with that flag is kept off every attraction
 the park warns about, and nowhere else.
+
+Known trade-off, kept on purpose (reviewed in PR #68): the warning is published
+verbatim on five attractions -- Big Thunder Mountain Railroad, Tiana's Bayou
+Adventure, Space Mountain, TRON Lightcycle / Run and Tomorrowland Speedway. The
+Speedway is not a high-G ride, yet it carries ``NOT_RECOMMENDED_HIGH_G_FORCE``
+because its notice is word for word the coasters' notice; telling them apart
+would be our judgment, not the park's text. The cost is fail-closed (a guest with
+that flag loses the Speedway), never fail-open. Splitting the warning into
+intensity tiers is a product decision left as a follow-up.
 """
 
 from dataclasses import dataclass
