@@ -27,15 +27,24 @@ def capture(name: str) -> dict:
 class Provider:
     """Serves the capture; counts calls; can be told to fail."""
 
-    def __init__(self, *, parks_status: int = 200, schedule_status: int = 200, weather_status: int = 200):
+    def __init__(
+        self,
+        *,
+        parks_status: int = 200,
+        schedule_status: int = 200,
+        weather_status: int = 200,
+        live: dict | None = None,
+    ):
         self.calls: list[str] = []
+        self.live = live  # a modified /live payload; the capture when None
         self.parks_status, self.schedule_status, self.weather_status = parks_status, schedule_status, weather_status
 
     def parks(self) -> ThemeParksClient:
         def handler(request: httpx.Request) -> httpx.Response:
             self.calls.append(request.url.path)
             if request.url.path.endswith("/live"):
-                return httpx.Response(self.parks_status, json=capture("themeparks_live.json"))
+                live = self.live if self.live is not None else capture("themeparks_live.json")
+                return httpx.Response(self.parks_status, json=live)
             return httpx.Response(self.schedule_status, json=capture("themeparks_schedule.json"))
 
         return ThemeParksClient(

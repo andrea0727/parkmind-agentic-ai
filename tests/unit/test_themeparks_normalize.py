@@ -211,13 +211,14 @@ def test_catalog_entity_without_metadata_is_reported() -> None:
             "unknown-attraction-not-in-metadata-table",
             EntityKind.ATTRACTION,
         ),
-        (IssueKind.MISSING_METADATA, FRIENDSHIP_FAIRE, EntityKind.SHOW),
     }
+    # Mickey's Magical Friendship Faire is a curated scheduled show since #69.
     assert {a.node_id for a in catalog.attractions} == {
         SPACE_MOUNTAIN,
         BIG_THUNDER,
         TRON,
         JUNGLE_CRUISE,
+        FRIENDSHIP_FAIRE,
     }
 
 

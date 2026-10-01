@@ -17,7 +17,7 @@ in ``degraded`` and as a coverage gap, and the snapshot is still stored.
 ``now`` is always a parameter; nothing here reads the clock.
 """
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
@@ -31,6 +31,7 @@ from parkmind.services.clients.themeparks_client import ThemeParksClient
 from parkmind.services.clients.themeparks_errors import ThemeParksClientError
 from parkmind.services.clients.themeparks_reference_data import (
     MAGIC_KINGDOM_ATTRACTION_METADATA,
+    MAGIC_KINGDOM_SCHEDULED_SHOWS,
     AttractionMetadata,
 )
 from parkmind.services.ports import IdMappingRepository, SnapshotRepository
@@ -77,6 +78,7 @@ class SnapshotCollector:
         latitude: float = OpenMeteoClient.DEFAULT_LATITUDE,
         longitude: float = OpenMeteoClient.DEFAULT_LONGITUDE,
         curated: Mapping[str, AttractionMetadata] = MAGIC_KINGDOM_ATTRACTION_METADATA,
+        scheduled_shows: Collection[str] = MAGIC_KINGDOM_SCHEDULED_SHOWS,
     ) -> None:
         self._parks = parks
         self._weather = weather
@@ -86,6 +88,7 @@ class SnapshotCollector:
         self._latitude = latitude
         self._longitude = longitude
         self._curated = curated
+        self._scheduled_shows = scheduled_shows
 
     def collect(self, *, now: datetime) -> CollectResult:
         """Take one snapshot for the collection window containing ``now``.
@@ -104,6 +107,7 @@ class SnapshotCollector:
             retrieved_at=now,
             resolver=self._resolver,
             curated=self._curated,
+            scheduled_shows=self._scheduled_shows,
         )
         created = self._snapshots.save(
             normalized.live_context,
