@@ -155,7 +155,19 @@ def test_every_entry_flags_exactly_what_its_evidence_publishes() -> None:
 def test_published_notices_spot_check() -> None:
     store = magic_kingdom_knowledge_store()
 
-    assert store.notice_for(SPACE_MOUNTAIN) == frozenset(RideRestriction)
+    # Spelled out, not frozenset(RideRestriction): a new enum member must not
+    # silently change what this spot check asserts.
+    assert store.notice_for(SPACE_MOUNTAIN) == frozenset(
+        {
+            HIGH_G,
+            RideRestriction.NOT_RECOMMENDED_MOTION_SENSITIVITY,
+            RideRestriction.NOT_RECOMMENDED_HEART_CONDITION,
+            RideRestriction.NOT_RECOMMENDED_BACK_NECK,
+            RideRestriction.NOT_RECOMMENDED_EXPECTANT,
+            TRANSFER,
+            RideRestriction.USES_SERVICE_ANIMAL,
+        }
+    )
     assert store.notice_for(SEVEN_DWARFS) == frozenset(
         {
             RideRestriction.NOT_RECOMMENDED_EXPECTANT,
