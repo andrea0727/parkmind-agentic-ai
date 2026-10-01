@@ -7,6 +7,7 @@ silently never matching.
 """
 
 from collections.abc import Iterable, Mapping
+from types import MappingProxyType
 
 from parkmind.core.contracts import RideRestriction
 
@@ -32,7 +33,10 @@ class InMemoryKnowledgeStore:
                     f"RideRestriction members: {', '.join(free_text)}"
                 )
             validated[attraction_id] = flag_set
-        self._notices = validated
+        # Read-only view: a loaded corpus version never changes under its callers.
+        self._notices: Mapping[str, frozenset[RideRestriction]] = MappingProxyType(
+            validated
+        )
         self._corpus_version = corpus_version
 
     @property
