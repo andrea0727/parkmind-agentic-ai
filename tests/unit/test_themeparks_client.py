@@ -115,6 +115,7 @@ class TestGetCatalog:
                 "height_restriction_cm": 100,
                 "typical_wait_minutes": 5,
                 "outdoor": True,
+                "land": "Tomorrowland",
             }
         }
         client = _client(

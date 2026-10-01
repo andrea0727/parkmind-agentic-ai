@@ -188,7 +188,7 @@ def _default_statuses() -> dict[str, AttractionStatus]:
 
 def _build_optimizer(walk_minutes: float = 5.0) -> GreedyInsertionOptimizer:
     routing = _FlatRoutingPort(minutes=walk_minutes)
-    graph = ParkGraph(routing=routing)
+    graph = ParkGraph.from_sources(routing=routing, park=_park(), attractions=_catalog())
     return GreedyInsertionOptimizer(park_graph=graph)
 
 
