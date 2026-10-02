@@ -137,7 +137,10 @@ class ApiForecastStrategy:
             return None
         series = self._points.get(attraction_id, ())
         for i, (start, wait) in enumerate(series):
-            end = series[i + 1][0] if i + 1 < len(series) else start + timedelta(hours=1)
+            # A point covers its hour; a gap in the series is no reading, not a longer hour.
+            end = start + timedelta(hours=1)
+            if i + 1 < len(series):
+                end = min(end, series[i + 1][0])
             if start <= at < end:
                 if wait is None:
                     return None

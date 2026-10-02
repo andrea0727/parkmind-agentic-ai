@@ -201,6 +201,20 @@ def test_api_forecast_uses_the_hour_containing_at() -> None:
     assert api.forecast("other", AT_14, now=NOW) is None
 
 
+def test_a_gap_in_the_api_forecast_is_no_reading() -> None:
+    api = _api(
+        {
+            "a1": [
+                (datetime(2026, 9, 27, 9, 0, tzinfo=PARK_TZ), 10.0),
+                (datetime(2026, 9, 27, 11, 0, tzinfo=PARK_TZ), 30.0),
+            ]
+        }
+    )
+
+    assert api.forecast("a1", datetime(2026, 9, 27, 9, 59, tzinfo=PARK_TZ), now=NOW).wait_minutes == 10.0  # type: ignore[union-attr]
+    assert api.forecast("a1", datetime(2026, 9, 27, 10, 30, tzinfo=PARK_TZ), now=NOW) is None
+
+
 def test_api_forecast_hour_without_a_reading_falls_through() -> None:
     api = _api({"a1": [(datetime(2026, 9, 27, 14, 0, tzinfo=PARK_TZ), None)]})
 
