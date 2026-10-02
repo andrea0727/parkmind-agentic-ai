@@ -237,7 +237,11 @@ _CLOCK_CALLS = {("datetime", "now"), ("datetime", "utcnow"), ("date", "today"), 
 
 @pytest.mark.parametrize(
     "module",
-    ["services/planning/forecast_service.py", "services/ports/forecast.py"],
+    [
+        "services/planning/forecast_service.py",
+        "services/ports/forecast.py",
+        "services/use_cases/forecast.py",
+    ],
 )
 def test_forecast_modules_never_read_the_clock(module: str) -> None:
     tree = ast.parse((SRC / module).read_text(encoding="utf-8"))

@@ -1,13 +1,24 @@
 """Wiring the ForecastService from stored snapshots (P0-18)."""
 
+import copy
 from datetime import datetime, timedelta
 
 import pytest
+from capture import NOW, Provider, capture
 from factories import live_context
-from fakes import InMemorySnapshotRepository
+from fakes import InMemoryIdMappingRepository, InMemorySnapshotRepository
 
 from parkmind.core.contracts import PARK_TZ, AttractionStatus, DataSource, WaitEstimate
-from parkmind.services.use_cases.forecast import build_wait_profile
+from parkmind.services.planning.forecast_service import (
+    API_FORECAST,
+    CACHED_SNAPSHOT,
+    HISTORICAL_PROFILE,
+)
+from parkmind.services.use_cases.collect_snapshot import SnapshotCollector
+from parkmind.services.use_cases.forecast import (
+    build_forecast_service,
+    build_wait_profile,
+)
 
 DAY = datetime(2026, 9, 20, tzinfo=PARK_TZ)
 
@@ -92,3 +103,129 @@ def test_profile_is_deterministic() -> None:
 def test_profile_rejects_naive_now_and_empty_threshold(kwargs: dict) -> None:
     with pytest.raises(ValueError):
         build_wait_profile(InMemorySnapshotRepository(), **kwargs)
+
+
+# --- build_forecast_service over the 2026-09-27 capture ------------------------------
+
+LIVE = capture("themeparks_live.json")
+FORECAST_IDS = sorted(e["id"] for e in LIVE["liveData"] if e.get("forecast"))
+WAIT_ONLY_ID = next(  # an operating ride with a posted wait but no provider forecast
+    e["id"]
+    for e in LIVE["liveData"]
+    if e["entityType"] == "ATTRACTION"
+    and not e.get("forecast")
+    and e.get("status") == "OPERATING"
+    and ((e.get("queue") or {}).get("STANDBY") or {}).get("waitTime") is not None
+)
+SWISS_FAMILY = "30fe3c64-af71-4c66-a54b-aa61fd7af177"  # forecast 09:00 -> 10 min in the capture
+PLAN_NOW = NOW + timedelta(minutes=5)
+AT_14 = NOW.replace(hour=14, minute=15, second=0)
+
+
+def _collected(live: dict | None = None) -> tuple[InMemorySnapshotRepository, InMemoryIdMappingRepository, str]:
+    provider = Provider(live=live)
+    snapshots, ids = InMemorySnapshotRepository(), InMemoryIdMappingRepository()
+    result = SnapshotCollector(provider.parks(), provider.weather(), snapshots, ids).collect(now=NOW)
+    return snapshots, ids, result.snapshot_id
+
+
+def _history(snapshots: InMemorySnapshotRepository, attraction_id: str, wait: float) -> None:
+    """Three earlier days with a reading at 14:xx, so the profile has the cell."""
+    for days in (3, 4, 5):
+        _store(snapshots, AT_14 - timedelta(days=days), {attraction_id: wait})
+
+
+def test_capture_forecast_is_deterministic() -> None:
+    def run() -> list[tuple]:
+        snapshots, ids, _ = _collected()
+        service = build_forecast_service(snapshots, ids, now=PLAN_NOW)
+        return [service.forecast_wait(a, AT_14, now=PLAN_NOW) for a in FORECAST_IDS]
+
+    first, second = run(), run()
+
+    assert first == second
+    assert len(FORECAST_IDS) == 26
+    assert all(f is not None and f.strategy == API_FORECAST for f in first)
+
+
+def test_api_forecast_comes_from_the_snapshot_raw_payload() -> None:
+    snapshots, ids, sid = _collected()
+    service = build_forecast_service(snapshots, ids, now=PLAN_NOW)
+
+    forecast = service.forecast_wait(SWISS_FAMILY, NOW.replace(hour=9, minute=30), now=PLAN_NOW)
+
+    assert forecast is not None
+    assert (forecast.wait_minutes, forecast.strategy, forecast.data_source) == (
+        10.0,
+        API_FORECAST,
+        DataSource.THEMEPARKS_WIKI,
+    )
+    assert (forecast.snapshot_id, forecast.as_of) == (sid, snapshots.get(sid).retrieved_at)  # type: ignore[union-attr]
+
+
+def test_api_source_error_falls_back_to_historical_profile() -> None:
+    snapshots, ids, sid = _collected()
+    snapshots.rows[sid]["raw"] = {"raw_schema": 1}  # the stored /live is gone
+    _history(snapshots, SWISS_FAMILY, 33.0)
+
+    forecast = build_forecast_service(snapshots, ids, now=PLAN_NOW).forecast_wait(
+        SWISS_FAMILY, AT_14, now=PLAN_NOW
+    )
+
+    assert forecast is not None
+    assert (forecast.strategy, forecast.data_source, forecast.wait_minutes) == (
+        HISTORICAL_PROFILE,
+        DataSource.HISTORICAL,
+        33.0,
+    )
+
+
+def test_malformed_raw_forecast_degrades_to_historical() -> None:
+    live = copy.deepcopy(LIVE)
+    entity = next(e for e in live["liveData"] if e["id"] == SWISS_FAMILY)
+    entity["forecast"][0]["waitTime"] = "ten"
+    snapshots, ids, _ = _collected(live)
+    _history(snapshots, SWISS_FAMILY, 33.0)
+
+    service = build_forecast_service(snapshots, ids, now=PLAN_NOW)
+
+    assert API_FORECAST not in service.strategy_names
+    forecast = service.forecast_wait(SWISS_FAMILY, AT_14, now=PLAN_NOW)
+    assert forecast is not None and forecast.strategy == HISTORICAL_PROFILE
+
+
+def test_no_profile_falls_back_to_latest_valid_snapshot_with_cache_provenance() -> None:
+    snapshots, ids, sid = _collected()
+    posted = snapshots.get(sid).waits[WAIT_ONLY_ID].wait_minutes  # type: ignore[union-attr]
+
+    forecast = build_forecast_service(snapshots, ids, now=PLAN_NOW).forecast_wait(
+        WAIT_ONLY_ID, AT_14, now=PLAN_NOW
+    )
+
+    assert forecast is not None
+    assert (forecast.strategy, forecast.data_source, forecast.snapshot_id, forecast.wait_minutes) == (
+        CACHED_SNAPSHOT,
+        DataSource.CACHE,
+        sid,
+        posted,
+    )
+
+
+def test_a_stale_snapshot_is_never_read_as_a_current_forecast() -> None:
+    snapshots, ids, _ = _collected()
+    late = NOW + timedelta(hours=2)  # the only snapshot is 2 h old: past rule 11's window
+    service = build_forecast_service(snapshots, ids, now=late)
+
+    assert service.forecast_wait(WAIT_ONLY_ID, AT_14, now=late) is None
+    assert service.forecast_wait(FORECAST_IDS[0], AT_14, now=late) is None
+    _history(snapshots, WAIT_ONLY_ID, 33.0)
+    rebuilt = build_forecast_service(snapshots, ids, now=late).forecast_wait(WAIT_ONLY_ID, AT_14, now=late)
+    assert rebuilt is not None and rebuilt.strategy == HISTORICAL_PROFILE
+
+
+def test_no_snapshot_at_all_leaves_only_the_profile() -> None:
+    service = build_forecast_service(
+        InMemorySnapshotRepository(), InMemoryIdMappingRepository(), now=PLAN_NOW
+    )
+
+    assert service.strategy_names == (HISTORICAL_PROFILE,)
