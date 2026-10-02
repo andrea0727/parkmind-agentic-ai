@@ -96,3 +96,10 @@ class RoutingUnavailableError(RoutingError):
 
 class RoutingSchemaError(RoutingError):
     """External routing provider response payload is malformed or invalid."""
+
+
+# --- Forecast port exceptions ---
+
+
+class ForecastSourceError(Exception):
+    """A forecast strategy's source failed or is malformed (section 43: fall back)."""
