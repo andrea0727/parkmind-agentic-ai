@@ -194,6 +194,21 @@ def test_malformed_raw_forecast_degrades_to_historical() -> None:
     assert forecast is not None and forecast.strategy == HISTORICAL_PROFILE
 
 
+def test_two_provider_ids_on_one_internal_id_get_no_api_forecast(caplog: pytest.LogCaptureFixture) -> None:
+    snapshots, ids, _ = _collected()
+    kept, first, second = FORECAST_IDS[0], FORECAST_IDS[1], FORECAST_IDS[2]
+    key = next(k for k in ids.rows if k[1] == second)
+    ids.rows[key] = first  # a curated re-map gone wrong: two provider ids, one internal id
+
+    with caplog.at_level("WARNING", logger="parkmind.services.use_cases.forecast"):
+        service = build_forecast_service(snapshots, ids, now=PLAN_NOW)
+
+    collided = service.forecast_wait(first, AT_14, now=PLAN_NOW)
+    assert collided is None or collided.strategy != API_FORECAST
+    assert service.forecast_wait(kept, AT_14, now=PLAN_NOW).strategy == API_FORECAST  # type: ignore[union-attr]
+    assert any(first in r.getMessage() and second in r.getMessage() for r in caplog.records)
+
+
 def test_no_profile_falls_back_to_latest_valid_snapshot_with_cache_provenance() -> None:
     snapshots, ids, sid = _collected()
     posted = snapshots.get(sid).waits[WAIT_ONLY_ID].wait_minutes  # type: ignore[union-attr]

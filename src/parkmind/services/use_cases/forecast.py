@@ -166,15 +166,17 @@ def _forecast_points(
 
     Provider ids become internal ids through a read-only lookup of the mappings
     the collector recorded; an id without a mapping gets no API forecast (it
-    falls back) rather than a guessed one. A duplicated provider id is excluded,
-    as in normalization.
+    falls back) rather than a guessed one. As in normalization, a duplicated
+    provider id is excluded, and so is an internal id that two provider ids
+    resolve to (``DUPLICATE_INTERNAL_ID``): neither series is picked, and the
+    id falls back.
     """
     if raw is None:
         raise KeyError("no raw payload stored for the snapshot")
     live = raw["themeparks"]["live"]
     check_timezone(live)
     index, _issues = index_entities(live.get("liveData", []))
-    points: dict[str, ForecastPoints] = {}
+    by_internal: dict[str, list[tuple[str, ForecastPoints]]] = defaultdict(list)
     for provider_id, entity in sorted(index.items()):
         series = parse_forecast(entity)
         kind = entity_kind(entity)
@@ -182,5 +184,15 @@ def _forecast_points(
             continue
         internal_id = id_mappings.resolve(DataSource.THEMEPARKS_WIKI.value, provider_id, kind)
         if internal_id is not None:
-            points[internal_id] = series
+            by_internal[internal_id].append((provider_id, series))
+    points: dict[str, ForecastPoints] = {}
+    for internal_id, sources in by_internal.items():
+        if len(sources) > 1:
+            logger.warning(
+                "no API forecast for %s: provider ids %s all resolve to it",
+                internal_id,
+                ", ".join(provider_id for provider_id, _ in sources),
+            )
+            continue
+        points[internal_id] = sources[0][1]
     return points
