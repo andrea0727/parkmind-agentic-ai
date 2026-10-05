@@ -21,8 +21,12 @@ from parkmind.services.personalization.group_preference_resolver import (
 
 
 class ResolveGroupPreferencesUseCase:
-    def __init__(self, group_preference_resolver: GroupPreferenceResolver | None = None):
-        self.group_preference_resolver = group_preference_resolver or GroupPreferenceResolver()
+    def __init__(
+        self, group_preference_resolver: GroupPreferenceResolver | None = None
+    ):
+        self.group_preference_resolver = (
+            group_preference_resolver or GroupPreferenceResolver()
+        )
 
     def execute(
         self,

@@ -13,6 +13,7 @@ Covers every "done when" bullet from the ticket:
   silently erased
 """
 
+import pytest
 from factories import (
     accessibility,
     accessibility_check,
@@ -24,11 +25,17 @@ from factories import (
     preference,
 )
 
-from parkmind.core.contracts import FairnessConfig, MobilityRequirement, PreferenceSource, RideRestriction
+from parkmind.core.contracts import (
+    FairnessConfig,
+    MobilityRequirement,
+    PreferenceSource,
+    RideRestriction,
+)
 from parkmind.services.personalization.group_preference_resolver import (
     GroupPreferenceResolver,
-    _scale,
-    _QUEUE_SPIKE_MINUTES_RANGE,
+)
+from parkmind.services.use_cases.resolve_group_preferences import (
+    ResolveGroupPreferencesUseCase,
 )
 
 RESOLVER = GroupPreferenceResolver()
@@ -51,7 +58,8 @@ def _resolve(
         attractions=list(attractions),
         party_constraints=constraints or party_constraints(guests=list(guests)),
         live_context=context or live_context(),
-        fairness=fairness or FairnessConfig(lambda_fairness=0.5, min_satisfaction_floor=0.6),
+        fairness=fairness
+        or FairnessConfig(lambda_fairness=0.5, min_satisfaction_floor=0.6),
     )
 
 
@@ -61,7 +69,10 @@ def _resolve(
 
 
 def test_hard_constraints_preserve_each_guest_distinctly():
-    g1, g2 = guest(guest_id="g1", height_cm=170.0), guest(guest_id="g2", height_cm=100.0)
+    g1, g2 = (
+        guest(guest_id="g1", height_cm=170.0),
+        guest(guest_id="g2", height_cm=100.0),
+    )
     a1 = accessibility(
         guest_id="g1",
         daily_walking_limit_minutes=120,
@@ -83,13 +94,18 @@ def test_hard_constraints_preserve_each_guest_distinctly():
     assert hard.per_guest_daily_walking_limits == {"g1": 120, "g2": 45}
     assert hard.per_guest_rest_frequency == {"g1": 90, "g2": 30}
     assert hard.height_constraints == {"g1": 170.0, "g2": 100.0}
-    assert hard.ride_restrictions == {"g1": [RideRestriction.NOT_RECOMMENDED_HIGH_G_FORCE]}
+    assert hard.ride_restrictions == {
+        "g1": [RideRestriction.NOT_RECOMMENDED_HIGH_G_FORCE]
+    }
 
 
 def test_hard_constraints_pass_through_party_level_fields_unmodified():
     g1 = guest(guest_id="g1")
     constraints = party_constraints(
-        guests=[g1], must_do=["a1", "a2"], avoid=["a3"], party_walking_budget_minutes=300
+        guests=[g1],
+        must_do=["a1", "a2"],
+        avoid=["a3"],
+        party_walking_budget_minutes=300,
     )
 
     objective = _resolve(guests=[g1], constraints=constraints)
@@ -106,13 +122,17 @@ def test_hard_constraints_pass_through_party_level_fields_unmodified():
 
 def test_per_guest_eligible_excludes_attraction_missing_accessibility_result_for_restricted_guest():
     restricted = guest(guest_id="g1", height_cm=170.0)
-    req = accessibility(guest_id="g1", ride_restrictions=[RideRestriction.NOT_RECOMMENDED_HIGH_G_FORCE])
+    req = accessibility(
+        guest_id="g1", ride_restrictions=[RideRestriction.NOT_RECOMMENDED_HIGH_G_FORCE]
+    )
     thrill_ride = attraction(node_id="a1", height_restriction_cm=None)
     gentle_ride = attraction(node_id="a2", height_restriction_cm=None)
 
     # Only a2 has an accessibility result on file for g1; a1 has none.
     context = live_context(
-        accessibility_results=[accessibility_check(attraction_id="a2", guest_id="g1", eligible=True)]
+        accessibility_results=[
+            accessibility_check(attraction_id="a2", guest_id="g1", eligible=True)
+        ]
     )
 
     objective = _resolve(
@@ -127,7 +147,9 @@ def test_per_guest_eligible_excludes_attraction_missing_accessibility_result_for
 
 def test_per_guest_eligible_excludes_attraction_when_accessibility_result_is_not_eligible():
     restricted = guest(guest_id="g1", height_cm=170.0)
-    req = accessibility(guest_id="g1", ride_restrictions=[RideRestriction.NOT_RECOMMENDED_HIGH_G_FORCE])
+    req = accessibility(
+        guest_id="g1", ride_restrictions=[RideRestriction.NOT_RECOMMENDED_HIGH_G_FORCE]
+    )
     ride = attraction(node_id="a1", height_restriction_cm=None)
     context = live_context(
         accessibility_results=[
@@ -141,7 +163,10 @@ def test_per_guest_eligible_excludes_attraction_when_accessibility_result_is_not
     )
 
     objective = _resolve(
-        guests=[restricted], accessibility_reqs=[req], attractions=[ride], context=context
+        guests=[restricted],
+        accessibility_reqs=[req],
+        attractions=[ride],
+        context=context,
     )
 
     assert objective.per_guest_eligible["g1"] == []
@@ -151,7 +176,11 @@ def test_per_guest_eligible_does_not_require_accessibility_result_for_unrestrict
     unrestricted = guest(guest_id="g1", height_cm=170.0)
     ride = attraction(node_id="a1", height_restriction_cm=None)
 
-    objective = _resolve(guests=[unrestricted], attractions=[ride], context=live_context(accessibility_results=[]))
+    objective = _resolve(
+        guests=[unrestricted],
+        attractions=[ride],
+        context=live_context(accessibility_results=[]),
+    )
 
     assert objective.per_guest_eligible["g1"] == ["a1"]
 
@@ -173,8 +202,16 @@ def test_per_guest_eligible_height_rule_fails_closed_on_unknown_guest_height():
 
 
 def test_soft_preferences_aggregate_as_deterministic_mean():
-    p1 = guest_profile(guest_id="g1", queue_tolerance=preference(0.2), walking_tolerance=preference(0.4))
-    p2 = guest_profile(guest_id="g2", queue_tolerance=preference(0.8), walking_tolerance=preference(0.6))
+    p1 = guest_profile(
+        guest_id="g1",
+        queue_tolerance=preference(0.2),
+        walking_tolerance=preference(0.4),
+    )
+    p2 = guest_profile(
+        guest_id="g2",
+        queue_tolerance=preference(0.8),
+        walking_tolerance=preference(0.6),
+    )
 
     objective = _resolve(
         guests=[guest(guest_id="g1"), guest(guest_id="g2")], profiles=[p1, p2]
@@ -191,7 +228,9 @@ def test_weight_provenance_records_weakest_contributing_source():
     p1 = guest_profile(guest_id="g1", queue_tolerance=stated)
     p2 = guest_profile(guest_id="g2", queue_tolerance=learned)
 
-    objective = _resolve(guests=[guest(guest_id="g1"), guest(guest_id="g2")], profiles=[p1, p2])
+    objective = _resolve(
+        guests=[guest(guest_id="g1"), guest(guest_id="g2")], profiles=[p1, p2]
+    )
 
     assert objective.weight_provenance["queue_tolerance"] == PreferenceSource.LEARNED
 
@@ -200,7 +239,9 @@ def test_thematic_affinity_only_aggregated_across_guests_who_stated_it():
     p1 = guest_profile(guest_id="g1", thematic_affinity={"fantasy": preference(0.9)})
     p2 = guest_profile(guest_id="g2", thematic_affinity={})
 
-    objective = _resolve(guests=[guest(guest_id="g1"), guest(guest_id="g2")], profiles=[p1, p2])
+    objective = _resolve(
+        guests=[guest(guest_id="g1"), guest(guest_id="g2")], profiles=[p1, p2]
+    )
 
     assert objective.weights["affinity:fantasy"] == 0.9
 
@@ -242,12 +283,9 @@ def test_event_thresholds_driven_by_most_sensitive_guest_not_average():
         profiles=[tolerant_1, tolerant_2, sensitive],
     )
 
-    expected_from_min = _scale(0.1, *_QUEUE_SPIKE_MINUTES_RANGE)
-    average_tolerance = (0.9 + 0.9 + 0.1) / 3
-    expected_from_average = _scale(average_tolerance, *_QUEUE_SPIKE_MINUTES_RANGE)
-
-    assert objective.event_thresholds.queue_spike_minutes == expected_from_min
-    assert objective.event_thresholds.queue_spike_minutes != expected_from_average
+    # Tolerance 0.1 -> 10 + 0.1 * (30 - 10) = 12 minutes. The average (0.633)
+    # would give ~22.7 minutes and mask the sensitive guest.
+    assert objective.event_thresholds.queue_spike_minutes == pytest.approx(12.0)
 
 
 # ---------------------------------------------------------------------------
@@ -263,9 +301,21 @@ def test_conflicting_personas_are_not_silently_erased():
     g2 = guest(guest_id="g2", height_cm=170.0)
     g3 = guest(guest_id="g3", height_cm=160.0)
 
-    p1 = guest_profile(guest_id="g1", queue_tolerance=preference(0.9), walking_tolerance=preference(0.9))
-    p2 = guest_profile(guest_id="g2", queue_tolerance=preference(0.05), walking_tolerance=preference(0.6))
-    p3 = guest_profile(guest_id="g3", queue_tolerance=preference(0.6), walking_tolerance=preference(0.1))
+    p1 = guest_profile(
+        guest_id="g1",
+        queue_tolerance=preference(0.9),
+        walking_tolerance=preference(0.9),
+    )
+    p2 = guest_profile(
+        guest_id="g2",
+        queue_tolerance=preference(0.05),
+        walking_tolerance=preference(0.6),
+    )
+    p3 = guest_profile(
+        guest_id="g3",
+        queue_tolerance=preference(0.6),
+        walking_tolerance=preference(0.1),
+    )
 
     req3 = accessibility(
         guest_id="g3",
@@ -310,5 +360,153 @@ def test_conflicting_personas_are_not_silently_erased():
 
     # Event thresholds protect the single most sensitive guest (g2's queue
     # tolerance, g3's walking tolerance), not an averaged-away compromise.
-    expected_queue_threshold = _scale(0.05, *_QUEUE_SPIKE_MINUTES_RANGE)
-    assert objective.event_thresholds.queue_spike_minutes == expected_queue_threshold
+    assert objective.event_thresholds.queue_spike_minutes == pytest.approx(11.0)
+    # g3 walking tolerance 0.1 -> 5 + 0.1 * 15 = 6.5; fatigue 0.5 + 0.1 * 0.4 = 0.54.
+    assert objective.event_thresholds.walking_overrun_minutes == pytest.approx(6.5)
+    assert objective.event_thresholds.fatigue_threshold == pytest.approx(0.54)
+
+
+# ---------------------------------------------------------------------------
+# Review follow-ups: fail-closed duplicates, unprofiled guests, determinism
+# ---------------------------------------------------------------------------
+
+
+def test_duplicate_accessibility_results_fail_closed_regardless_of_order():
+    restricted = guest(guest_id="g1", height_cm=170.0)
+    req = accessibility(
+        guest_id="g1", ride_restrictions=[RideRestriction.NOT_RECOMMENDED_HIGH_G_FORCE]
+    )
+    ride = attraction(node_id="a1", height_restriction_cm=None)
+    ineligible = accessibility_check(attraction_id="a1", guest_id="g1", eligible=False)
+    eligible = accessibility_check(attraction_id="a1", guest_id="g1", eligible=True)
+
+    for results in ([ineligible, eligible], [eligible, ineligible]):
+        objective = _resolve(
+            guests=[restricted],
+            accessibility_reqs=[req],
+            attractions=[ride],
+            context=live_context(accessibility_results=results),
+        )
+        assert objective.per_guest_eligible["g1"] == []
+
+
+def test_mobility_only_guest_without_results_is_excluded():
+    g1 = guest(guest_id="g1", height_cm=170.0)
+    req = accessibility(
+        guest_id="g1",
+        ride_restrictions=[],
+        mobility_requirements=[MobilityRequirement.WHEELCHAIR],
+    )
+    ride = attraction(node_id="a1", height_restriction_cm=None)
+
+    objective = _resolve(guests=[g1], accessibility_reqs=[req], attractions=[ride])
+
+    assert objective.per_guest_eligible["g1"] == []
+
+
+def test_height_boundary_is_inclusive():
+    coaster = attraction(node_id="a1", height_restriction_cm=112)
+    exact = guest(guest_id="g1", height_cm=112.0)
+    short = guest(guest_id="g2", height_cm=111.9)
+
+    objective = _resolve(guests=[exact, short], attractions=[coaster])
+
+    assert objective.per_guest_eligible == {"g1": ["a1"], "g2": []}
+
+
+def test_guest_without_profile_contributes_default_tolerance_and_provenance():
+    p1 = guest_profile(
+        guest_id="g1",
+        queue_tolerance=preference(
+            0.9, source=PreferenceSource.STATED, stated_value=0.9
+        ),
+    )
+
+    objective = _resolve(
+        guests=[guest(guest_id="g1"), guest(guest_id="g2")], profiles=[p1]
+    )
+
+    assert objective.weights["queue_tolerance"] == pytest.approx((0.9 + 0.5) / 2)
+    assert objective.weight_provenance["queue_tolerance"] == PreferenceSource.DEFAULT
+
+
+def test_guest_without_profile_can_drive_event_thresholds():
+    tolerant = guest_profile(
+        guest_id="g1",
+        queue_tolerance=preference(0.9),
+        walking_tolerance=preference(0.9),
+    )
+
+    objective = _resolve(
+        guests=[guest(guest_id="g1"), guest(guest_id="g2")], profiles=[tolerant]
+    )
+
+    # g2 has no profile: default queue tolerance 0.5 -> 20 minutes, not 0.9 -> 28.
+    assert objective.event_thresholds.queue_spike_minutes == pytest.approx(20.0)
+
+
+@pytest.mark.parametrize(
+    ("tolerance", "queue", "walking", "fatigue"),
+    [(0.0, 10.0, 5.0, 0.5), (0.5, 20.0, 12.5, 0.7), (1.0, 30.0, 20.0, 0.9)],
+)
+def test_event_threshold_scale_endpoints(tolerance, queue, walking, fatigue):
+    profile = guest_profile(
+        guest_id="g1",
+        queue_tolerance=preference(tolerance),
+        walking_tolerance=preference(tolerance),
+    )
+
+    thresholds = _resolve(
+        guests=[guest(guest_id="g1")], profiles=[profile]
+    ).event_thresholds
+
+    assert thresholds.queue_spike_minutes == pytest.approx(queue)
+    assert thresholds.walking_overrun_minutes == pytest.approx(walking)
+    assert thresholds.fatigue_threshold == pytest.approx(fatigue)
+
+
+def test_resolution_is_independent_of_input_order():
+    g1, g2 = guest(guest_id="g1"), guest(guest_id="g2")
+    p1 = guest_profile(
+        guest_id="g1",
+        queue_tolerance=preference(0.3),
+        thematic_affinity={"a": preference(0.1), "b": preference(0.7)},
+    )
+    p2 = guest_profile(
+        guest_id="g2",
+        queue_tolerance=preference(0.7),
+        thematic_affinity={"b": preference(0.2), "a": preference(0.9)},
+    )
+
+    forward = _resolve(guests=[g1, g2], profiles=[p1, p2])
+    backward = _resolve(guests=[g2, g1], profiles=[p2, p1])
+
+    assert forward == backward
+
+
+def test_resolver_does_not_mutate_or_alias_party_constraints():
+    g1 = guest(guest_id="g1")
+    constraints = party_constraints(guests=[g1], must_do=["a1"])
+
+    objective = _resolve(guests=[g1], constraints=constraints)
+    objective.hard_constraints.must_do.append("zz")
+
+    assert constraints.must_do == ["a1"]
+
+
+def test_use_case_delegates_to_resolver():
+    g1 = guest(guest_id="g1", height_cm=170.0)
+    ride = attraction(node_id="a1", height_restriction_cm=None)
+    kwargs = {
+        "guests": [g1],
+        "profiles": [],
+        "accessibility": [],
+        "attractions": [ride],
+        "party_constraints": party_constraints(guests=[g1]),
+        "live_context": live_context(),
+        "fairness": FairnessConfig(lambda_fairness=1.0, min_satisfaction_floor=0.2),
+    }
+
+    assert ResolveGroupPreferencesUseCase().execute(**kwargs) == RESOLVER.resolve(
+        **kwargs
+    )
