@@ -211,11 +211,39 @@ def test_no_profile_falls_back_to_latest_valid_snapshot_with_cache_provenance() 
     )
 
 
+class _RawReadCounter(InMemorySnapshotRepository):
+    """Counts raw payload reads: the costly step a stale snapshot must skip."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.raw_reads = 0
+
+    def get_raw_payload(self, snapshot_id: str) -> dict | None:
+        self.raw_reads += 1
+        return super().get_raw_payload(snapshot_id)
+
+
+def test_a_stale_snapshot_builds_no_snapshot_strategy_and_reads_no_raw_payload() -> None:
+    snapshots, ids = _RawReadCounter(), InMemoryIdMappingRepository()
+    provider = Provider()
+    SnapshotCollector(provider.parks(), provider.weather(), snapshots, ids).collect(now=NOW)
+
+    fresh = build_forecast_service(snapshots, ids, now=PLAN_NOW)
+    assert (fresh.strategy_names, snapshots.raw_reads) == (
+        (API_FORECAST, HISTORICAL_PROFILE, CACHED_SNAPSHOT),
+        1,
+    )
+
+    stale = build_forecast_service(snapshots, ids, now=NOW + timedelta(hours=2))
+    assert (stale.strategy_names, snapshots.raw_reads) == ((HISTORICAL_PROFILE,), 1)
+
+
 def test_a_stale_snapshot_is_never_read_as_a_current_forecast() -> None:
     snapshots, ids, _ = _collected()
     late = NOW + timedelta(hours=2)  # the only snapshot is 2 h old: past rule 11's window
     service = build_forecast_service(snapshots, ids, now=late)
 
+    assert service.strategy_names == (HISTORICAL_PROFILE,)
     assert service.forecast_wait(WAIT_ONLY_ID, AT_14, now=late) is None
     assert service.forecast_wait(FORECAST_IDS[0], AT_14, now=late) is None
     _history(snapshots, WAIT_ONLY_ID, 33.0)

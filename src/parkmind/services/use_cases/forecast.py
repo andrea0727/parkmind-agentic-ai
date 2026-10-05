@@ -109,16 +109,20 @@ def build_forecast_service(
     """The ``ForecastService`` for one planning run at ``now``.
 
     Strategies, in order: API forecast -> historical profile -> cached snapshot.
-    The two snapshot-based strategies use the latest valid snapshot and only
-    while it is fresh at ``now`` (``max_age``, rule 11's window); with no valid
-    snapshot only the profile is left. A raw payload whose forecast can't be
-    read is an API failure: the API strategy is left out and logged, and the
-    chain falls back (section 43).
+    The two snapshot-based strategies use the latest valid snapshot and are
+    built only when it is fresh at ``now`` (``max_age``, rule 11's window): a
+    stale snapshot can't turn fresh for a later ``now``, so its raw payload is
+    not even read. With no fresh snapshot only the profile is left. Each
+    strategy still re-checks freshness per call, for a service used after it
+    was built. A raw payload whose forecast can't be read is an API failure:
+    the API strategy is left out and logged, and the chain falls back
+    (section 43).
     """
     latest = latest_valid_snapshot(snapshots, now=now, max_age=max_age)
+    fresh = latest if latest is not None and latest.fresh else None
     strategies: list[ForecastStrategy] = []
-    if latest is not None:
-        api = _api_strategy(snapshots, id_mappings, latest.live_context, max_age=max_age)
+    if fresh is not None:
+        api = _api_strategy(snapshots, id_mappings, fresh.live_context, max_age=max_age)
         if api is not None:
             strategies.append(api)
     strategies.append(
@@ -126,8 +130,8 @@ def build_forecast_service(
             build_wait_profile(snapshots, now=now, lookback=lookback, min_samples=min_samples)
         )
     )
-    if latest is not None:
-        strategies.append(CachedSnapshotStrategy(latest.live_context, max_age=max_age))
+    if fresh is not None:
+        strategies.append(CachedSnapshotStrategy(fresh.live_context, max_age=max_age))
     return ForecastService(strategies)
 
 
