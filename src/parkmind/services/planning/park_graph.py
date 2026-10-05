@@ -17,6 +17,7 @@ methods need.
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from types import MappingProxyType
 
 from parkmind.core.contracts import (
     Attraction,
@@ -101,18 +102,23 @@ class ParkGraph:
         the optimizer from scheduling an experience it cannot execute.
 
         Unknown nodes return False (explicit miss); any non-OPERATING status
-        (``DOWN``, ``CLOSED``, ``REFURBISHMENT``) also returns False.
+        (``DOWN``, ``CLOSED``, ``REFURBISHMENT``) also returns False. A node
+        with no status in ``statuses`` fails closed too — this mirrors
+        ``ConstraintChecker``'s rule 1 ("status unknown ... failing closed")
+        and ``Optimizer``, which only admits nodes with an explicit
+        ``OPERATING`` status; defaulting to open here would let a planner
+        propose stops the checker then rejects.
         """
         if node_id not in self.attractions:
             return False
-        if self.statuses.get(node_id, AttractionStatus.OPERATING) is not AttractionStatus.OPERATING:
+        if self.statuses.get(node_id) is not AttractionStatus.OPERATING:
             return False
         return self.park.opening_time <= t < self.park.closing_time
 
     def showtimes(self, show_id: str) -> list[datetime]:
         """Return a fresh list of showtimes for ``show_id``, empty if unknown.
 
-        Showtimes come from ``LiveContext`` (fuente de verdad per P0-11); the
+        Showtimes come from ``LiveContext`` (source of truth per P0-11); the
         curated catalog does not carry permanent show programming yet.
         """
         return list(self.showtimes_by_node.get(show_id, ()))
@@ -120,9 +126,16 @@ class ParkGraph:
     def resolve_location(self, query: str) -> str | None:
         """Resolve a human alias (e.g. ``"near Frontierland"``) to a node id.
 
-        Returns the first node of the resolved land, sorted by attraction
-        name for stability. Returns ``None`` when the alias is unknown or
-        when the resolved land has no catalog nodes (explicit miss).
+        Returns the alphabetically-first attraction node of the resolved
+        land (by ``Attraction.name``), not a dedicated land node. This is a
+        deviation from baseline §16/§25, which model each land as its own
+        graph node (e.g. ``"frontierland"``); P0-13's Done-when only
+        requires "returns a node id", so the representative-attraction
+        approach satisfies it, but ``current_location_node_id`` consumers
+        (e.g. the ``PARTY_RELOCATED`` event in P0-22) will measure walks
+        from that attraction, not from a land-central point. Returns
+        ``None`` when the alias is unknown or when the resolved land has no
+        catalog nodes (explicit miss).
         """
         normalized = _normalize_query(query)
         if not normalized:
@@ -216,10 +229,10 @@ class ParkGraph:
         return cls(
             routing=routing,
             park=park,
-            attractions=by_id,
-            land_of=land_of,
-            nodes_by_land=nodes_by_land,
-            land_aliases=dict(land_aliases) if land_aliases else {},
-            showtimes_by_node=showtimes_by_node,
-            statuses=statuses,
+            attractions=MappingProxyType(by_id),
+            land_of=MappingProxyType(land_of),
+            nodes_by_land=MappingProxyType(nodes_by_land),
+            land_aliases=MappingProxyType(dict(land_aliases) if land_aliases else {}),
+            showtimes_by_node=MappingProxyType(showtimes_by_node),
+            statuses=MappingProxyType(dict(statuses)),
         )

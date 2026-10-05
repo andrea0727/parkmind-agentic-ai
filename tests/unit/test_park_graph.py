@@ -138,7 +138,10 @@ def test_fake_routing_satisfies_port_structurally() -> None:
 def test_open_at_respects_park_window(t: datetime, expected: bool) -> None:
     """A known OPERATING node is open iff t is in [opening_time, closing_time)."""
     graph = ParkGraph.from_sources(
-        routing=FakeRouting(), park=_park(), attractions=[_attraction("a")]
+        routing=FakeRouting(),
+        park=_park(),
+        attractions=[_attraction("a")],
+        live_context=_live(statuses={"a": AttractionStatus.OPERATING}),
     )
     assert graph.open_at("a", t) is expected
 
@@ -168,6 +171,21 @@ def test_open_at_unknown_node_returns_false() -> None:
     """Unknown node ids are an explicit miss, not an exception."""
     graph = ParkGraph.from_sources(routing=FakeRouting(), park=_park(), attractions=())
     assert graph.open_at("ghost", OPENING) is False
+
+
+def test_open_at_fails_closed_when_status_is_unknown() -> None:
+    """A catalog node absent from ``statuses`` is treated as not open.
+
+    Mirrors ConstraintChecker rule 1 ("status unknown ... failing closed")
+    and Optimizer (only explicit OPERATING nodes are admitted): open_at must
+    not be the one place in the core that defaults an unknown status to
+    OPERATING, or planners would propose stops the checker then rejects.
+    """
+    noon = OPENING + timedelta(hours=3)
+    graph = ParkGraph.from_sources(
+        routing=FakeRouting(), park=_park(), attractions=[_attraction("a")]
+    )
+    assert graph.open_at("a", noon) is False
 
 
 # ============================================================================
@@ -450,6 +468,33 @@ def test_from_sources_hydrates_from_live_context() -> None:
     )
     assert graph.showtimes_by_node["show"] == tuple(showtimes["show"])
     assert graph.statuses["a"] is AttractionStatus.DOWN
+
+
+def test_from_sources_returns_immutable_indexes() -> None:
+    """Indexes are read-only mappings, not plain dicts callers could mutate.
+
+    ``frozen=True`` only stops reassigning a ``ParkGraph`` attribute; it does
+    not stop in-place mutation of a mutable object that attribute points to.
+    ``from_sources`` must wrap every index in ``MappingProxyType`` so the
+    class docstring's "its indexes are immutable" is actually true.
+    """
+    graph = ParkGraph.from_sources(
+        routing=FakeRouting(),
+        park=_park(),
+        attractions=[_attraction("a")],
+        live_context=_live(statuses={"a": AttractionStatus.OPERATING}),
+        land_aliases=MAGIC_KINGDOM_LAND_ALIASES,
+    )
+    for index in (
+        graph.attractions,
+        graph.land_of,
+        graph.nodes_by_land,
+        graph.land_aliases,
+        graph.showtimes_by_node,
+        graph.statuses,
+    ):
+        with pytest.raises(TypeError):
+            index["__mutate__"] = None  # type: ignore[index]
 
 
 # ============================================================================
