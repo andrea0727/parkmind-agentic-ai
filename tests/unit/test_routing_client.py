@@ -1,9 +1,12 @@
 """Unit tests for RoutingClient adapter and RoutingPort."""
 
 import logging
+from datetime import datetime
 
 import pytest
 
+from parkmind.core.contracts import Park
+from parkmind.core.contracts.base import PARK_TZ
 from parkmind.services.clients.routing_client import (
     DEFAULT_FALLBACK_WALKING_MINUTES,
     DEFAULT_WALKING_SPEED_METERS_PER_MINUTE,
@@ -12,6 +15,9 @@ from parkmind.services.clients.routing_client import (
 )
 from parkmind.services.clients.routing_reference_data import (
     MAGIC_KINGDOM_NODE_COORDINATES,
+)
+from parkmind.services.clients.themeparks_reference_data import (
+    MAGIC_KINGDOM_ATTRACTION_METADATA,
 )
 from parkmind.services.planning.park_graph import ParkGraph
 from parkmind.services.ports import (
@@ -25,6 +31,17 @@ from parkmind.services.ports import (
 
 def _accepts_port(port: RoutingPort) -> None:
     """mypy-only check that RoutingClient satisfies RoutingPort structurally."""
+
+
+def _park() -> Park:
+    """Minimal Park used by ParkGraph construction tests focused on routing."""
+    return Park(
+        park_id="MK",
+        name="Magic Kingdom",
+        opening_time=datetime(2026, 10, 1, 9, 0, tzinfo=PARK_TZ),
+        closing_time=datetime(2026, 10, 1, 22, 0, tzinfo=PARK_TZ),
+        outdoor=True,
+    )
 
 
 HUB_ID = "90d79335-c907-4069-a021-d0fe1ec73ae2"
@@ -149,6 +166,17 @@ def test_triangular_inequality_holds_for_all_reference_nodes():
     assert violations == 0, f"Found {violations} triangular inequality violations"
 
 
+def test_every_curated_catalog_node_is_routable_in_strict_mode():
+    """Strict routing fails closed on an unknown node, so every curated catalog
+    entity -- attractions, shows and meet-and-greets (#69) -- needs coordinates."""
+    client = RoutingClient()  # strict by default
+    hub = "90d79335-c907-4069-a021-d0fe1ec73ae2"  # Cinderella Castle
+
+    assert set(MAGIC_KINGDOM_ATTRACTION_METADATA) <= set(MAGIC_KINGDOM_NODE_COORDINATES)
+    for node_id in MAGIC_KINGDOM_ATTRACTION_METADATA:
+        assert client.walk_minutes(hub, node_id) >= 0.0
+
+
 # ============================================================================
 # COORDINATE / HAVERSINE TESTS
 # ============================================================================
@@ -240,7 +268,7 @@ def test_invalid_destination_node_id(invalid_id):
 def test_park_graph_delegates_to_routing_port():
     """Planning core (ParkGraph) delegates walk_minutes to RoutingPort."""
     routing = RoutingClient()
-    graph = ParkGraph(routing=routing)
+    graph = ParkGraph.from_sources(routing=routing, park=_park(), attractions=())
     assert graph.walk_minutes(SPACE_MTN_ID, SPACE_MTN_ID) == 0.0
     # Between Space Mtn and TRON
     assert 2.0 <= graph.walk_minutes(SPACE_MTN_ID, TRON_ID) <= 2.5
@@ -249,7 +277,7 @@ def test_park_graph_delegates_to_routing_port():
 def test_park_graph_unconfigured_routing_raises_type_error_at_construction():
     """ParkGraph requires a valid RoutingPort at construction time (fail-fast)."""
     with pytest.raises(TypeError, match="ParkGraph requires a valid RoutingPort"):
-        ParkGraph(routing=None)  # type: ignore[arg-type]
+        ParkGraph.from_sources(routing=None, park=_park(), attractions=())  # type: ignore[arg-type]
 
 
 class DummyFakeRouting:
@@ -263,5 +291,5 @@ def test_park_graph_with_alternative_routing_port():
     """ParkGraph works with any implementation satisfying RoutingPort."""
     fake_routing = DummyFakeRouting()
     _accepts_port(fake_routing)  # type-check
-    graph = ParkGraph(routing=fake_routing)
+    graph = ParkGraph.from_sources(routing=fake_routing, park=_park(), attractions=())
     assert graph.walk_minutes("nodeA", "nodeB") == 42.0

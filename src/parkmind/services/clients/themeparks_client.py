@@ -66,6 +66,7 @@ from .themeparks_normalize import (
 )
 from .themeparks_reference_data import (
     MAGIC_KINGDOM_ATTRACTION_METADATA,
+    MAGIC_KINGDOM_EXCLUDED_ENTITIES,
     AttractionMetadata,
 )
 
@@ -116,7 +117,9 @@ class ThemeParksClient:
 
     def get_catalog(self) -> list[Attraction]:
         payload = self._request(f"/entity/{self._park_id}/children")
-        catalog = parse_catalog(payload, self._attraction_metadata)
+        catalog = parse_catalog(
+            payload, self._attraction_metadata, excluded=MAGIC_KINGDOM_EXCLUDED_ENTITIES
+        )
         for issue in catalog.issues:
             # The port returns attractions only; the collector (P0-11) works on
             # the raw payload and gets these issues as data instead.
@@ -128,8 +131,28 @@ class ThemeParksClient:
             )
         return catalog.attractions
 
-    def get_schedule(self, on_date: date) -> Park:
+    @property
+    def park_id(self) -> str:
+        return self._park_id
+
+    def fetch_live_payload(self) -> dict[str, Any]:
+        """The raw ``/live`` payload, as the provider returned it (P0-11).
+
+        Timezone-checked, otherwise unparsed, so a snapshot can store it verbatim
+        and re-normalize it later with ``themeparks_normalize.parse_live``.
+        """
+        payload = self._request(f"/entity/{self._park_id}/live")
+        check_timezone(payload)
+        return payload
+
+    def fetch_schedule_payload(self) -> dict[str, Any]:
+        """The raw ``/schedule`` payload (timezone-checked, otherwise unparsed)."""
         payload = self._request(f"/entity/{self._park_id}/schedule")
+        check_timezone(payload)
+        return payload
+
+    def get_schedule(self, on_date: date) -> Park:
+        payload = self.fetch_schedule_payload()
         return parse_schedule(
             payload,
             on_date,
@@ -186,8 +209,7 @@ class ThemeParksClient:
         return results
 
     def _fetch_live_entities(self) -> dict[str, Mapping[str, Any]]:
-        payload = self._request(f"/entity/{self._park_id}/live")
-        check_timezone(payload)
+        payload = self.fetch_live_payload()
         entities, issues = index_entities(payload.get("liveData", []))
         for issue in issues:
             logger.warning(

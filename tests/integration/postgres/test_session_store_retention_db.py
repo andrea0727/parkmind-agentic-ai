@@ -111,7 +111,7 @@ def _populate_realistic_data(conn: psycopg.Connection) -> None:
     PostgresProfileRepository(conn).save(factories.guest_profile(guest_id="g1"))
     PostgresBehaviorLogRepository(conn).append("g1", factories.behavior_entry())
     PostgresSnapshotRepository(conn).save(
-        factories.live_context(), {"liveData": []}, [DataSource.THEMEPARKS_WIKI]
+        factories.live_context(), {"liveData": []}, [DataSource.THEMEPARKS_WIKI], normalizer_version=1
     )
     plans = PostgresPlanRepository(conn)
     plans.save("t1", factories.plan())

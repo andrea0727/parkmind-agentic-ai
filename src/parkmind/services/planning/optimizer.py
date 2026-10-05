@@ -86,7 +86,6 @@ class GreedyInsertionOptimizer:
         """Compare two plan versions and identify added, removed, moved and time-shifted stops (§33)."""
         return diff_plans(old_plan, new_plan)
 
-
     def build_plan(
         self,
         constraints: PartyConstraints,

@@ -66,6 +66,10 @@ forbidden_modules =
     parkmind.services.planning
     parkmind.services.personalization
     parkmind.services.clients
+# Direct-import boundary only: use_cases is explicitly allowed to import clients
+# (see the layer summary above), so graph/tools reaching clients *through*
+# use_cases is fine -- only bypassing the use_cases layer is forbidden.
+allow_indirect_imports = true
 
 [importlinter:contract:agents-forbidden-imports]
 name = agents import core.contracts, use_cases, tools.registry and the LLM SDK only, never planning/personalization/clients directly
@@ -76,3 +80,5 @@ forbidden_modules =
     parkmind.services.planning
     parkmind.services.personalization
     parkmind.services.clients
+# Direct-import boundary only: see graph-tools-forbidden-imports above.
+allow_indirect_imports = true

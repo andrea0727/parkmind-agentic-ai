@@ -76,15 +76,15 @@ class TestGetCatalog:
 
         assert all(isinstance(a, Attraction) for a in catalog)
         node_ids = {a.node_id for a in catalog}
-        # Kept: the 4 curated ATTRACTION entries.
+        # Kept: the 4 curated ATTRACTION entries and the curated SHOW (#69).
         assert "b2260923-9315-40fd-9c6b-44dd811dbe64" in node_ids  # Space Mountain
         assert "de3309ca-97d5-4211-bffe-739fed47e92f" in node_ids  # Big Thunder
         assert "5a43d1a7-ad53-4d25-abfe-25625f0da304" in node_ids  # TRON
         assert "796b0a25-c51e-456e-9bb8-50a324e301b3" in node_ids  # Jungle Cruise
-        # Dropped: RESTAURANT, self-referencing PARK, and a SHOW (not yet curated).
+        assert "4c31b3ad-5dc9-437f-ac1a-0fdff36a2818" in node_ids  # Friendship Faire
+        # Dropped: RESTAURANT and the self-referencing PARK.
         assert "c4b64a31-e855-46a9-9d1a-aa13c99e88af" not in node_ids
         assert PARK_ID not in node_ids
-        assert "4c31b3ad-5dc9-437f-ac1a-0fdff36a2818" not in node_ids
         # Dropped: an ATTRACTION-type entity missing from the metadata table.
         assert "unknown-attraction-not-in-metadata-table" not in node_ids
 
@@ -115,6 +115,7 @@ class TestGetCatalog:
                 "height_restriction_cm": 100,
                 "typical_wait_minutes": 5,
                 "outdoor": True,
+                "land": "Tomorrowland",
             }
         }
         client = _client(

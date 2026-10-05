@@ -53,6 +53,7 @@ from parkmind.core.contracts import (
     WaitEstimate,
     WeatherHour,
 )
+from parkmind.services.clients.normalization import NORMALIZER_VERSION
 from parkmind.services.clients.postgres.attraction_repository import (
     PostgresAttractionRepository,
 )
@@ -282,7 +283,12 @@ def seed_dev_scenario(
     )
     context, raw = _live_context(as_of)
     PostgresSnapshotRepository(conn).save(
-        context, raw, [DataSource.THEMEPARKS_WIKI, DataSource.OPEN_METEO]
+        context,
+        raw,
+        [DataSource.THEMEPARKS_WIKI, DataSource.OPEN_METEO],
+        # Hand-built, not normalizer output: recorded at the current version so
+        # re-normalization leaves it alone.
+        normalizer_version=NORMALIZER_VERSION,
     )
 
     # -- guests, profiles, accessibility -------------------------------------------
