@@ -89,7 +89,7 @@ def build_wait_profile(
         for attraction_id, estimate in context.waits.items():
             if estimate.status == AttractionStatus.OPERATING:
                 samples[(attraction_id, hour)].append(estimate.wait_minutes)
-    kept = {cell: waits for cell, waits in sorted(samples.items()) if len(waits) >= min_samples}
+    kept = {cell: waits for cell, waits in samples.items() if len(waits) >= min_samples}
     return WaitProfile(
         medians={cell: float(median(waits)) for cell, waits in kept.items()},
         built_at=now,
