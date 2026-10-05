@@ -249,6 +249,37 @@ def test_forecast_requires_aware_now_and_at(field: str) -> None:
 _CLOCK_CALLS = {("datetime", "now"), ("datetime", "utcnow"), ("date", "today"), ("time", "time")}
 
 
+def _clock_calls(source: str) -> set[tuple[str, str]]:
+    """``(owner, method)`` of every clock call in ``source``.
+
+    The owner is the last name before the method, so ``datetime.now()``,
+    ``datetime.datetime.now()`` and ``dt.datetime.now()`` all count.
+    """
+    calls = set()
+    for node in ast.walk(ast.parse(source)):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        owner = node.func.value
+        if isinstance(owner, ast.Name):
+            calls.add((owner.id, node.func.attr))
+        elif isinstance(owner, ast.Attribute):
+            calls.add((owner.attr, node.func.attr))
+    return calls & _CLOCK_CALLS
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from datetime import datetime\ndatetime.now()",
+        "import datetime\ndatetime.datetime.now()",
+        "import datetime as dt\ndt.date.today()",
+        "import time\ntime.time()",
+    ],
+)
+def test_the_clock_guard_sees_plain_and_dotted_calls(source: str) -> None:
+    assert _clock_calls(source)
+
+
 @pytest.mark.parametrize(
     "module",
     [
@@ -258,13 +289,4 @@ _CLOCK_CALLS = {("datetime", "now"), ("datetime", "utcnow"), ("date", "today"), 
     ],
 )
 def test_forecast_modules_never_read_the_clock(module: str) -> None:
-    tree = ast.parse((SRC / module).read_text(encoding="utf-8"))
-    calls = {
-        (node.func.value.id, node.func.attr)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and isinstance(node.func.value, ast.Name)
-    }
-
-    assert not calls & _CLOCK_CALLS
+    assert not _clock_calls((SRC / module).read_text(encoding="utf-8"))
