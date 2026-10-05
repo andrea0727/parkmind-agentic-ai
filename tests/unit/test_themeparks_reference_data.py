@@ -1,6 +1,7 @@
 """Curated Magic Kingdom catalog: shows, meet-and-greets and exclusions (issue #69)."""
 
 from parkmind.core.contracts import AttractionCategory
+from parkmind.services.clients.land_reference_data import MAGIC_KINGDOM_LANDS
 from parkmind.services.clients.themeparks_reference_data import (
     MAGIC_KINGDOM_ATTRACTION_METADATA,
     MAGIC_KINGDOM_EXCLUDED_ENTITIES,
@@ -9,6 +10,15 @@ from parkmind.services.clients.themeparks_reference_data import (
 )
 
 CURATED = MAGIC_KINGDOM_ATTRACTION_METADATA
+
+
+def test_every_curated_land_is_canonical() -> None:
+    """A typo'd ``land`` value would silently strand an attraction: no alias
+
+    maps to it and no error is raised. Every curated ``land`` must be one of
+    the canonical names in ``MAGIC_KINGDOM_LANDS``.
+    """
+    assert {meta["land"] for meta in CURATED.values()} <= MAGIC_KINGDOM_LANDS
 
 
 def test_every_scheduled_show_is_a_curated_show_with_no_queue() -> None:
