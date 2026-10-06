@@ -350,15 +350,16 @@ def _affinities(
     """The guest's affinities keyed by ``land:``/``category:``, and the keys that match no attraction."""
     if profile is None:
         return {}, []
-    matched: dict[str, float] = {}
+    totals: dict[str, float] = {}
     missing: list[str] = []
     for key in sorted(profile.thematic_affinity):
         target = lookup.get(_normalize(key))
         if target is None or target not in present:
             missing.append(key)
         else:
-            matched[target] = _clamp(matched.get(target, 0.0) + profile.thematic_affinity[key].value)
-    return matched, missing
+            totals[target] = totals.get(target, 0.0) + profile.thematic_affinity[key].value
+    # Sum every key that reaches a target, then clamp once: the order of the keys never matters.
+    return {target: _clamp(total) for target, total in totals.items()}, missing
 
 
 def _affinity_for(attraction: Attraction, affinity: Mapping[str, float]) -> float:

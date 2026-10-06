@@ -316,6 +316,21 @@ def test_affinity_reaching_one_attraction_through_several_keys_stays_within_one(
     assert _u(stacked, "carousel") - _u(plain, "carousel") == pytest.approx(0.5)
 
 
+def test_affinity_keys_are_summed_before_clamping_so_their_order_does_not_matter() -> None:
+    graph = _graph({}, aliases={"fantasy land": "Fantasyland", "fl": "Fantasyland"})
+    plain = _score([guest_profile()])
+    # Sorted key order is "Fantasyland", "fantasy land", "fl": clamping each step would give
+    # 0.8 -> 1.0 (clamped) -> 0.5; summing first gives clamp(1.1) = 1.0.
+    scores = _score(
+        [guest_profile(thematic_affinity={
+            "Fantasyland": preference(0.8), "fantasy land": preference(0.8), "fl": preference(-0.5),
+        })],
+        park_graph=graph,
+    )
+
+    assert _u(scores, "carousel") - _u(plain, "carousel") == pytest.approx(0.5 * 1.0)
+
+
 def test_lands_match_by_normalized_name_and_absent_lands_are_reported() -> None:
     graph = _graph({}, aliases={"fantasy": "FANTASYLAND", "liberty": "Liberty Square"})
     plain = _score([guest_profile()])
