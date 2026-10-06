@@ -31,7 +31,24 @@ Rules:
   guest with the lowest tolerance, including default tolerance for guests
   without a profile), never the group average: the same 35-minute queue
   spike is a MEDIUM event for a low-tolerance guest and shouldn't be masked
-  by a high-tolerance party member.
+  by a high-tolerance party member. The ranges (queue 10-30 min, walking
+  5-20 min, fatigue 0.5-0.9) are a starting point, not specified in §11/§25;
+  calibrate them when EventPolicy (P0-33) consumes them. A group with no
+  profiles at all uses the same scale at the default tolerances, so
+  "everyone defaulted" gives one answer regardless of how many profiles exist.
+- Only profiles of guests in `guests` count; a profile for someone outside
+  the party is ignored, and for a duplicated guest_id the first one wins.
+- Output dicts are keyed in sorted guest_id order and guests are processed in
+  that order, so the result (and its JSON) does not depend on input order.
+- `weights` holds the group-level aggregates (mean tolerances, affinities).
+  Per-guest preferences (sensitivities, preferred/avoided categories, pace)
+  are not carried; per-guest satisfaction is P0-17's concern.
+- `height_constraints` stores each guest's own height in cm (compared by
+  rule 2 against Attraction.height_restriction_cm), not a minimum height.
+- Signature: superset of §11 `resolve_group(guests, profiles, accessibility,
+  live_context, fairness)`; adds `attractions` (catalog height metadata for
+  rule 2), `party_constraints` (must_do/avoid/party budget) and
+  `objective_version`.
 """
 
 from collections.abc import Callable
@@ -144,11 +161,9 @@ def _derive_event_thresholds(
     unprofiled_guest_count: int = 0,
 ) -> EventThresholds:
     """Most-sensitive-guest derivation: driven by the lowest tolerance, not the average."""
-    if not profiles:
-        return EventThresholds()
     queue_tolerances = [p.queue_tolerance.value for p in profiles]
     walking_tolerances = [p.walking_tolerance.value for p in profiles]
-    if unprofiled_guest_count:
+    if unprofiled_guest_count or not profiles:
         queue_tolerances.append(_DEFAULT_QUEUE_TOLERANCE)
         walking_tolerances.append(_DEFAULT_WALKING_TOLERANCE)
     min_queue_tolerance = min(queue_tolerances)
@@ -167,11 +182,13 @@ def _union_hard_constraints(
     accessibility: list[AccessibilityRequirements],
     party_constraints: PartyConstraints,
 ) -> HardConstraintSet:
-    accessibility_by_guest = {req.guest_id: req for req in accessibility}
+    accessibility_by_guest = dict(
+        sorted({req.guest_id: req for req in accessibility}.items())
+    )
 
     height_constraints = {
         guest.guest_id: guest.height_cm
-        for guest in guests
+        for guest in sorted(guests, key=lambda g: g.guest_id)
         if guest.height_cm is not None
     }
     per_guest_daily_walking_limits = {
@@ -244,6 +261,17 @@ def _per_guest_eligible(
     return eligible
 
 
+def _profiles_for_party(
+    guests: list[Guest], profiles: list[GuestProfile]
+) -> list[GuestProfile]:
+    """One profile per party member, in guest_id order; outsiders and repeats dropped."""
+    first_by_guest: dict[str, GuestProfile] = {}
+    for profile in profiles:
+        first_by_guest.setdefault(profile.guest_id, profile)
+    party_ids = sorted({guest.guest_id for guest in guests})
+    return [first_by_guest[gid] for gid in party_ids if gid in first_by_guest]
+
+
 class GroupPreferenceResolver:
     """Combines per-guest profiles and hard constraints into one GroupObjective."""
 
@@ -259,6 +287,8 @@ class GroupPreferenceResolver:
         fairness: FairnessConfig,
         objective_version: str = "1",
     ) -> GroupObjective:
+        guests = sorted(guests, key=lambda g: g.guest_id)
+        profiles = _profiles_for_party(guests, profiles)
         profiled_ids = {profile.guest_id for profile in profiles}
         unprofiled = sum(1 for g in guests if g.guest_id not in profiled_ids)
         weights, weight_provenance = _aggregate_weights(profiles, unprofiled)

@@ -510,3 +510,61 @@ def test_use_case_delegates_to_resolver():
     assert ResolveGroupPreferencesUseCase().execute(**kwargs) == RESOLVER.resolve(
         **kwargs
     )
+
+
+def test_profile_of_guest_outside_the_party_is_ignored():
+    inside = guest_profile(guest_id="g1", queue_tolerance=preference(0.8))
+    outsider = guest_profile(guest_id="gX", queue_tolerance=preference(0.0))
+
+    objective = _resolve(guests=[guest(guest_id="g1")], profiles=[inside, outsider])
+
+    assert objective.weights["queue_tolerance"] == pytest.approx(0.8)
+    assert objective.event_thresholds.queue_spike_minutes == pytest.approx(26.0)
+
+
+def test_duplicate_profile_for_same_guest_counts_once():
+    first = guest_profile(guest_id="g1", queue_tolerance=preference(0.2))
+    repeat = guest_profile(guest_id="g1", queue_tolerance=preference(0.2))
+    other = guest_profile(guest_id="g2", queue_tolerance=preference(0.8))
+
+    objective = _resolve(
+        guests=[guest(guest_id="g1"), guest(guest_id="g2")],
+        profiles=[first, repeat, other],
+    )
+
+    assert objective.weights["queue_tolerance"] == pytest.approx(0.5)
+
+
+def test_thresholds_for_all_default_group_do_not_depend_on_profile_presence():
+    no_profiles = _resolve(guests=[guest(guest_id="g1")], profiles=[])
+    empty_party = _resolve(
+        guests=[],
+        profiles=[],
+        constraints=party_constraints(guests=[guest(guest_id="g1")]),
+    )
+
+    # Default tolerances 0.5 / 0.7 on the shared scale.
+    for objective in (no_profiles, empty_party):
+        assert objective.event_thresholds.queue_spike_minutes == pytest.approx(20.0)
+        assert objective.event_thresholds.walking_overrun_minutes == pytest.approx(15.5)
+        assert objective.event_thresholds.fatigue_threshold == pytest.approx(0.78)
+
+
+def test_output_is_byte_identical_regardless_of_guest_and_profile_order():
+    g1, g2 = (
+        guest(guest_id="g1", height_cm=170.0),
+        guest(guest_id="g2", height_cm=120.0),
+    )
+    p1 = guest_profile(guest_id="g1", queue_tolerance=preference(0.3))
+    p2 = guest_profile(guest_id="g2", queue_tolerance=preference(0.7))
+    reqs = [
+        accessibility(guest_id="g2", daily_walking_limit_minutes=60),
+        accessibility(guest_id="g1", daily_walking_limit_minutes=90),
+    ]
+
+    forward = _resolve(guests=[g1, g2], profiles=[p1, p2], accessibility_reqs=reqs)
+    backward = _resolve(
+        guests=[g2, g1], profiles=[p2, p1], accessibility_reqs=reqs[::-1]
+    )
+
+    assert forward.model_dump_json() == backward.model_dump_json()
