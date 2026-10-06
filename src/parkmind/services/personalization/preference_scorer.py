@@ -30,7 +30,11 @@ Per-guest utility, only over the guest's eligible set
   walks the same minutes; only the comfort differs. A walk with no known
   route is not guessed: the attraction is charged the longest walk that is
   known (so a missing route never makes it look closer) and is listed in
-  ``unrouted``.
+  ``unrouted``. When the scores feed ``GreedyInsertionOptimizer``, leave
+  ``origin_node_id`` out: the optimizer already charges the real walk from
+  the previous stop, so an origin term would count walking twice, on two
+  different bases (issue #75). The origin term is for ranking from where the
+  party is, e.g. replans or explanations.
 - risk: a small penalty when no live wait was read for a queued attraction.
 - change: a small penalty for an attraction outside ``base_plan`` (replans,
   P0-23: minimize unnecessary plan changes).
