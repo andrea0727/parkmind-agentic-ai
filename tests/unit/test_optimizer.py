@@ -1120,6 +1120,20 @@ class TestScorerSatisfaction:
         assert plan.per_guest_satisfaction == per_guest_satisfaction(plan, scores)
         assert plan.provenance.preference_model_version == PREFERENCE_SCORER_VERSION
 
+    def test_scores_for_a_different_party_are_refused(self) -> None:
+        objective, context, scores, _ = self._setup()
+
+        with pytest.raises(ValueError, match="different parties"):
+            _build_optimizer().build_plan(
+                constraints=_constraints(guests=_guests("adult", "child", "grandma")),
+                context=context,
+                utilities=scores.utilities(),
+                park=_park(),
+                catalog=_catalog(),
+                group_objective=objective,
+                scores=scores,
+            )
+
     def test_without_scores_the_count_based_satisfaction_stays(self) -> None:
         objective, context, scores, constraints = self._setup()
 
@@ -1138,4 +1152,124 @@ class TestScorerSatisfaction:
             "child": len(rides & {A1, A2}) / 2,
         }
         assert plan.provenance.preference_model_version == "auto"
+
+
+class _Intermittent:
+    """Answers once per attraction, then has no reading: a source that drops between calls."""
+
+    name = "api_forecast"
+
+    def __init__(self, wait: float) -> None:
+        self._wait = wait
+        self.calls: list[tuple[str, datetime]] = []
+
+    def forecast(self, attraction_id: str, at: datetime, *, now: datetime) -> WaitForecast | None:
+        self.calls.append((attraction_id, at))
+        if any(a == attraction_id for a, _ in self.calls[:-1]):
+            return None
+        return WaitForecast(attraction_id, at, self._wait, self.name, DataSource.THEMEPARKS_WIKI, "snap-test", now)
+
+
+class TestForecastReadsOncePerArrival:
+    """What a candidate is ranked on is exactly what it is charged (Andrea, #76)."""
+
+    @pytest.mark.parametrize("node", [A1, "ghost-ride"], ids=["in catalog", "not in catalog"])
+    def test_a_source_that_drops_between_calls_still_gives_a_coherent_plan(self, node: str) -> None:
+        context = _live_context(statuses={node: AttractionStatus.OPERATING})
+        strategy = _Intermittent(wait=12.0)
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=context,
+            utilities={node: 1.0},
+            park=_park(),
+            catalog=_catalog(),
+            forecast_service=ForecastService([strategy]),
+            now=PLAN_NOW,
+        )
+
+        [stop] = _attraction_stops(plan)
+        assert (stop.node_id, stop.expected_wait_minutes) == (node, 12.0)  # the reading it was ranked on
+        assert plan.provenance.forecast_strategy == "api_forecast"
+
+    def test_each_attraction_and_arrival_is_asked_at_most_once(self) -> None:
+        context = _live_context(statuses={a: AttractionStatus.OPERATING for a in (A1, A2, A3)})
+        counter = _Intermittent(wait=10.0)
+        counter.forecast = _counting(counter.calls)  # type: ignore[method-assign]
+
+        _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=context,
+            utilities={A1: 3.0, A2: 2.0, A3: 1.0},
+            park=_park(),
+            catalog=_catalog(),
+            forecast_service=ForecastService([counter]),
+            now=PLAN_NOW,
+        )
+
+        assert counter.calls
+        assert len(counter.calls) == len(set(counter.calls))
+
+
+def _counting(calls: list[tuple[str, datetime]]):  # type: ignore[no-untyped-def]
+    def forecast(attraction_id: str, at: datetime, *, now: datetime) -> WaitForecast:
+        calls.append((attraction_id, at))
+        return WaitForecast(attraction_id, at, 10.0, "api_forecast", DataSource.THEMEPARKS_WIKI, "snap-test", now)
+
+    return forecast
+
+
+class TestForecastInputsAndEdges:
+    def test_a_naive_now_is_refused_up_front(self) -> None:
+        with pytest.raises(ValueError, match="now must be timezone-aware"):
+            _build_optimizer().build_plan(
+                constraints=_constraints(),
+                context=_live_context(),
+                utilities={},
+                forecast_service=_forecast({}),
+                now=PLAN_NOW.replace(tzinfo=None),
+            )
+
+    @pytest.mark.parametrize("caller", [False, True])
+    def test_a_plan_without_rides_records_no_forecast(self, caller: bool) -> None:
+        provenance = Provenance(
+            snapshot_id="snap-caller",
+            retrieved_at=DAY.replace(hour=8),
+            forecast_strategy="api_forecast",
+            optimizer_strategy="greedy_insertion",
+            constraints_version=1,
+            objective_version="1",
+            preference_model_version="1",
+        ) if caller else None
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=_live_context(),
+            utilities={},
+            park=_park(),
+            provenance=provenance,
+            forecast_service=_forecast({}),
+            now=PLAN_NOW,
+        )
+
+        assert _attraction_stops(plan) == []
+        assert plan.provenance.forecast_strategy == "none"  # replaced: nothing was charged
+
+    def test_a_typical_wait_of_zero_is_charged_not_treated_as_missing(self) -> None:
+        catalog = [a.model_copy(update={"typical_wait_minutes": 0}) if a.node_id == A2 else a for a in _catalog()]
+        context = _live_context(statuses={A2: AttractionStatus.OPERATING})
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=context,
+            utilities={A2: 1.0},
+            park=_park(),
+            catalog=catalog,
+            forecast_service=_forecast({}),
+            now=PLAN_NOW,
+        )
+
+        [stop] = _attraction_stops(plan)
+        assert stop.expected_wait_minutes == 0.0
+        assert plan.provenance.forecast_strategy == "typical_wait"
 

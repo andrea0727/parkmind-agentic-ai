@@ -32,6 +32,9 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from datetime import datetime, timedelta
+from typing import TypeVar
+
+from pydantic import BaseModel
 
 from parkmind.core.contracts import (
     AccessibilityRequirements,
@@ -63,9 +66,19 @@ from parkmind.services.planning.forecast_service import (
 from parkmind.services.planning.park_graph import ParkGraph
 from parkmind.services.ports import WaitForecast
 
+_ModelT = TypeVar("_ModelT", bound=BaseModel)
 _WaitSource = WaitForecast | str
 """Where a charged wait came from: a forecast, ``TYPICAL_WAIT``, or the posted wait."""
 _POSTED_WAIT = "current_wait"
+
+
+def _revalidated(model: _ModelT, **changes: object) -> _ModelT:
+    """``model`` with ``changes``, run through the contract's validators again.
+
+    ``model_copy(update=...)`` skips validation; this keeps every contract check
+    (e.g. timezone-aware datetimes) on the values the optimizer sets.
+    """
+    return type(model).model_validate({**model.model_dump(), **changes})
 
 # ---------------------------------------------------------------------------
 # Defaults — tunable but intentionally not persisted preferences
@@ -158,6 +171,16 @@ class GreedyInsertionOptimizer:
         """
         if forecast_service is not None and now is None:
             raise ValueError("now is required when a forecast_service is given")
+        if now is not None and (now.tzinfo is None or now.utcoffset() is None):
+            raise ValueError("now must be timezone-aware")
+        if scores is not None:
+            party = {g.guest_id for g in constraints.guests}
+            scored = set(scores.per_guest)
+            if scored != party:
+                raise ValueError(
+                    "scores and constraints describe different parties: "
+                    f"only scored {sorted(scored - party)}, only in constraints {sorted(party - scored)}"
+                )
         start_time = self._resolve_start_time(park, context)
         end_time = constraints.departure_time
 
@@ -238,7 +261,20 @@ class GreedyInsertionOptimizer:
 
         # ---- Phase 1 & 2: Dynamic Greedy Insertion -----------------------
         stops: list[Stop] = []
-        wait_sources: list[_WaitSource] = []
+        charged_forecasts: list[WaitForecast] = []
+        typical_wait_used = False
+        # One read per (attraction, arrival) per run: what a candidate was ranked on is
+        # exactly what it is charged when inserted, even if a strategy answers
+        # differently on a second call, and a failing source is asked (and logged) once.
+        wait_readings: dict[tuple[str, datetime], tuple[float, _WaitSource] | None] = {}
+
+        def read_wait(node_id: str, arrival: datetime) -> tuple[float, _WaitSource] | None:
+            key = (node_id, arrival)
+            if key not in wait_readings:
+                wait_readings[key] = self._wait_at(
+                    node_id, arrival, context, catalog_index, forecast_service, now
+                )
+            return wait_readings[key]
         cursor_time = start_time
         cursor_node = _PARK_ENTRANCE_NODE
         active_minutes_since_rest = 0.0
@@ -359,14 +395,7 @@ class GreedyInsertionOptimizer:
             ]:
                 for cid in pool:
                     walk_min = self._walk_time(cursor_node, cid)
-                    reading = self._wait_at(
-                        cid,
-                        cursor_time + timedelta(minutes=walk_min),
-                        context,
-                        catalog_index,
-                        forecast_service,
-                        now,
-                    )
+                    reading = read_wait(cid, cursor_time + timedelta(minutes=walk_min))
                     if reading is None:
                         continue  # no forecast and no typical wait: never charged 0
                     wait_min = reading[0]
@@ -380,13 +409,8 @@ class GreedyInsertionOptimizer:
                     ):
                         rest_min = self._rest_dur
                         # A rest first moves the arrival later: read the wait then.
-                        reading = self._wait_at(
-                            cid,
-                            cursor_time + timedelta(minutes=rest_min + walk_min),
-                            context,
-                            catalog_index,
-                            forecast_service,
-                            now,
+                        reading = read_wait(
+                            cid, cursor_time + timedelta(minutes=rest_min + walk_min)
                         )
                         if reading is None:
                             continue
@@ -439,15 +463,10 @@ class GreedyInsertionOptimizer:
             # 4. If a candidate was chosen, insert it
             if chosen_id is not None:
                 walk_min = self._walk_time(cursor_node, chosen_id)
-                reading = self._wait_at(
-                    chosen_id,
-                    cursor_time + timedelta(minutes=walk_min),
-                    context,
-                    catalog_index,
-                    forecast_service,
-                    now,
-                )
-                assert reading is not None  # it was a candidate, so it has a wait
+                reading = read_wait(chosen_id, cursor_time + timedelta(minutes=walk_min))
+                if reading is None:  # unreachable: the candidate read this same key
+                    visited.add(chosen_id)
+                    continue
                 wait_min = reading[0]
                 dur_min = self._get_duration(chosen_id, catalog_index)
                 step_min = walk_min + wait_min + dur_min
@@ -468,12 +487,15 @@ class GreedyInsertionOptimizer:
                     walk_min = self._walk_time(cursor_node, chosen_id)
 
                 arrival = cursor_time + timedelta(minutes=walk_min)
-                reading = self._wait_at(
-                    chosen_id, arrival, context, catalog_index, forecast_service, now
-                )
-                assert reading is not None  # the typical-wait fallback is time-independent
+                reading = read_wait(chosen_id, arrival)
+                if reading is None:  # unreachable: the candidate read this arrival too
+                    visited.add(chosen_id)
+                    continue
                 wait_min, wait_source = reading
-                wait_sources.append(wait_source)
+                if isinstance(wait_source, WaitForecast):
+                    charged_forecasts.append(wait_source)
+                elif wait_source == TYPICAL_WAIT:
+                    typical_wait_used = True
                 departure = arrival + timedelta(minutes=wait_min + dur_min)
                 served = self._compute_served_guests(
                     chosen_id,
@@ -594,10 +616,10 @@ class GreedyInsertionOptimizer:
         total_wait = sum(s.expected_wait_minutes for s in stops)
         total_walk = sum(s.walking_minutes for s in stops)
         objective_value = sum(s.utility for s in stops)
-        per_guest_satisfaction = self._calculate_guest_satisfaction(
-            stops,
-            constraints,
-            group_objective,
+        per_guest_satisfaction = (
+            {}  # filled from the scorer once the plan is assembled
+            if scores is not None
+            else self._calculate_guest_satisfaction(stops, constraints, group_objective)
         )
 
         scheduled_node_ids = {s.node_id for s in stops}
@@ -607,10 +629,12 @@ class GreedyInsertionOptimizer:
 
         plan_provenance = provenance or self._minimal_provenance(context)
         if forecast_service is not None:
-            plan_provenance = self._with_wait_sources(plan_provenance, wait_sources)
+            plan_provenance = self._with_wait_sources(
+                plan_provenance, charged_forecasts, typical_wait_used=typical_wait_used
+            )
         if scores is not None:
-            plan_provenance = plan_provenance.model_copy(
-                update={"preference_model_version": scores.model_version}
+            plan_provenance = _revalidated(
+                plan_provenance, preference_model_version=scores.model_version
             )
 
         plan = Plan(
@@ -626,9 +650,7 @@ class GreedyInsertionOptimizer:
         )
         if scores is not None:
             # Needs the assembled plan (which stops serve whom), so it comes last.
-            plan = plan.model_copy(
-                update={"per_guest_satisfaction": scorer_satisfaction(plan, scores)}
-            )
+            plan = _revalidated(plan, per_guest_satisfaction=scorer_satisfaction(plan, scores))
         return plan
 
     # ------------------------------------------------------------------
@@ -689,7 +711,11 @@ class GreedyInsertionOptimizer:
         Without a forecast service: the posted wait (0 if none), as before.
         With one: the forecast for ``arrival``; if no strategy has a reading,
         the curated ``typical_wait_minutes`` (``TYPICAL_WAIT``); ``None`` if the
-        attraction is not in the catalog either, so it is not scheduled.
+        attraction is not in the catalog either, so it is not scheduled. The
+        posted wait in ``context`` is not charged directly here: the chain's
+        ``CachedSnapshotStrategy`` serves it while the snapshot is fresh (rule
+        11's window); a stale posted wait is not trusted, so the typical wait
+        is charged instead. A typical wait of 0 is a real value and is charged.
         """
         if forecast_service is None:
             return self._get_wait(node_id, context), _POSTED_WAIT
@@ -857,22 +883,24 @@ class GreedyInsertionOptimizer:
         }
 
     @staticmethod
-    def _with_wait_sources(provenance: Provenance, sources: list[_WaitSource]) -> Provenance:
+    def _with_wait_sources(
+        provenance: Provenance, forecasts: list[WaitForecast], *, typical_wait_used: bool
+    ) -> Provenance:
         """Record where the charged waits came from (section 40).
 
-        ``forecast_strategy`` names every strategy used, plus ``typical_wait``
-        when a stop fell back to the curated typical wait; ``data_sources``
-        adds the providers behind the forecasts. The typical wait is curated
-        reference data, not a provider, so it adds no data source.
+        ``forecast_strategy`` is **replaced**, also on a caller's provenance: it
+        names the strategies of the waits actually charged, plus ``typical_wait``
+        when a stop fell back to the curated typical wait, and is ``"none"`` when
+        the plan charged no queue at all. ``data_sources`` keeps the caller's
+        sources and adds the providers behind the forecasts; the typical wait is
+        curated reference data, not a provider, so it adds none.
         """
-        forecasts = [s for s in sources if isinstance(s, WaitForecast)]
-        also = [TYPICAL_WAIT] if TYPICAL_WAIT in sources else []
+        also = [TYPICAL_WAIT] if typical_wait_used else []
         data_sources = set(provenance.data_sources) | set(forecast_data_sources(forecasts))
-        return provenance.model_copy(
-            update={
-                "forecast_strategy": forecast_strategy_label(forecasts, also=also),
-                "data_sources": sorted(data_sources, key=lambda d: d.value),
-            }
+        return _revalidated(
+            provenance,
+            forecast_strategy=forecast_strategy_label(forecasts, also=also),
+            data_sources=sorted(data_sources, key=lambda d: d.value),
         )
 
     @staticmethod
