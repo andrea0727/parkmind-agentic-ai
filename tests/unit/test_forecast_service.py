@@ -14,6 +14,7 @@ from parkmind.services.planning.forecast_service import (
     API_FORECAST,
     CACHED_SNAPSHOT,
     HISTORICAL_PROFILE,
+    TYPICAL_WAIT,
     ApiForecastStrategy,
     CachedSnapshotStrategy,
     ForecastService,
@@ -160,6 +161,14 @@ def test_forecast_strategy_label_feeds_provenance() -> None:
     assert record.forecast_strategy == "api_forecast+cached_snapshot"
     assert record.data_sources == [DataSource.CACHE, DataSource.THEMEPARKS_WIKI]
     assert forecast_strategy_label([]) == "none"
+
+
+def test_forecast_strategy_label_adds_labels_for_waits_no_strategy_produced() -> None:
+    readings = [f for f in (_api().forecast("a1", AT_14, now=NOW),) if f is not None]
+
+    assert forecast_strategy_label(readings, also=[TYPICAL_WAIT]) == "api_forecast+typical_wait"
+    assert forecast_strategy_label([], also=[TYPICAL_WAIT]) == "typical_wait"
+    assert forecast_strategy_label(readings, also=[]) == forecast_strategy_label(readings)
 
 
 # --- Done-when: a stale reading is never a current forecast -----------------------
