@@ -339,13 +339,26 @@ def test_satisfaction_counts_only_stops_the_guest_is_served_at() -> None:
     assert fairness_gap(satisfaction) == pytest.approx(satisfaction["g1"])
 
 
-def test_a_guest_with_nothing_to_enjoy_and_an_empty_plan_score_one() -> None:
+def test_a_guest_with_nothing_positive_to_enjoy_scores_one() -> None:
     gloomy = guest_profile(avoided_categories=list(AttractionCategory), queue_tolerance=preference(0.0))
-    scores = _score([gloomy], context=_context({"coaster": 240.0, "carousel": 240.0, "dark": 240.0}),
-                    config=ScoringConfig(risk_penalty=5.0))
+    scores = _score([gloomy], {"g1": ["coaster", "carousel", "dark"]},
+                    context=_context({"coaster": 240.0, "carousel": 240.0, "dark": 240.0}))
+    assert all(u <= 0 for u in scores.per_guest["g1"].values())
 
-    assert per_guest_satisfaction(plan(stops=[]), scores) == {"g1": 1.0}
+    assert per_guest_satisfaction(plan(stops=[stop(node_id="carousel")]), scores) == {"g1": 1.0}
     assert fairness_gap({}) == 0.0
+
+
+@pytest.mark.parametrize(
+    "stops",
+    [[], [stop(node_id="carousel", kind=StopKind.MEAL), stop(node_id="dark", kind=StopKind.REST)]],
+    ids=["empty plan", "only meals and rests"],
+)
+def test_a_guest_with_options_scores_zero_on_a_plan_with_no_rides(stops) -> None:  # type: ignore[no-untyped-def]
+    scores = _score([guest_profile()])
+    assert any(u > 0 for u in scores.per_guest["g1"].values())
+
+    assert per_guest_satisfaction(plan(stops=stops), scores) == {"g1": 0.0}
 
 
 # --- Edge cases --------------------------------------------------------------------------

@@ -255,16 +255,24 @@ def per_guest_satisfaction(plan: Plan, scores: PreferenceScores) -> dict[str, fl
     the positive utility of the distinct stops g is served at, over the sum of
     g's k best positive utilities in their eligible set (or fewer, if the set
     is smaller). A guest with nothing positive to enjoy scores 1.0: there was
-    nothing more the plan could give them.
+    nothing more the plan could give them. A guest who had options but got a
+    plan with no ATTRACTION/SHOW stop (empty, or only meals and rests) scores
+    0.0, so the worst plan never reads as a fair one.
     """
     stops = [s for s in plan.stops if s.kind in _SCORED_STOP_KINDS]
     k = len({s.node_id for s in stops})
     satisfaction: dict[str, float] = {}
     for guest_id, utilities in scores.per_guest.items():
+        positive = sorted((u for u in utilities.values() if u > 0), reverse=True)
+        if not positive:
+            satisfaction[guest_id] = 1.0
+            continue
+        if k == 0:
+            satisfaction[guest_id] = 0.0
+            continue
         served = {s.node_id for s in stops if guest_id in s.served_guests}
         got = sum(max(utilities.get(node_id, 0.0), 0.0) for node_id in served)
-        best = sorted((u for u in utilities.values() if u > 0), reverse=True)[:k]
-        satisfaction[guest_id] = 1.0 if not best else min(got / sum(best), 1.0)
+        satisfaction[guest_id] = min(got / sum(positive[:k]), 1.0)
     return satisfaction
 
 
