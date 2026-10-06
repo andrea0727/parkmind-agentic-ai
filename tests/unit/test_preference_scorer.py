@@ -278,6 +278,17 @@ def test_an_unknown_route_is_charged_the_longest_known_walk_and_reported() -> No
     assert _u(scores, "show") == pytest.approx(_u(_score([profile]), "show"))  # the origin itself: 0 min
 
 
+def test_when_only_the_origin_is_routed_no_ride_looks_closer_than_another() -> None:
+    graph = _graph({})  # no route anywhere; the origin "show" is itself in the catalog
+    profile = guest_profile(walking_tolerance=preference(0.0))
+
+    scores = _score([profile], park_graph=graph, origin_node_id="show")
+    plain = _score([profile])
+
+    assert scores.unrouted == ("carousel", "coaster", "dark")
+    assert all(_u(scores, n) == pytest.approx(_u(plain, n)) for n in ("carousel", "coaster", "dark", "show"))
+
+
 @pytest.mark.parametrize("value", [1.0, -1.0])
 def test_a_land_affinity_lifts_or_lowers_that_land(value: float) -> None:
     plain = _score([guest_profile()])

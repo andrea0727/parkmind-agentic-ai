@@ -271,8 +271,12 @@ class PreferenceScorer:
                 walks[node_id] = park_graph.walk_minutes(origin_node_id, node_id)
             except RoutingError:
                 unrouted.append(node_id)
-        if walks and unrouted:
-            longest = max(walks.values())
+        # An unrouted ride is charged the longest walk to another routed ride. If the origin is
+        # the only routed node, there is no such walk: every other ride is then equally
+        # unrouted and unpenalized, so none looks closer than another; they stay reported.
+        routed = [minutes for node_id, minutes in walks.items() if node_id != origin_node_id]
+        if routed and unrouted:
+            longest = max(routed)
             walks.update({node_id: longest for node_id in unrouted})
         return walks, unrouted
 
