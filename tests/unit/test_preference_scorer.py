@@ -25,6 +25,7 @@ from parkmind.core.contracts import (
     RideRestriction,
     SensitivityKind,
     SensitivityLevel,
+    StopKind,
     WaitEstimate,
 )
 from parkmind.services.clients.knowledge.in_memory import InMemoryKnowledgeStore
@@ -42,6 +43,8 @@ from parkmind.services.personalization.preference_scorer import (
     PREFERENCE_SCORER_VERSION,
     PreferenceScorer,
     ScoringConfig,
+    fairness_gap,
+    per_guest_satisfaction,
 )
 from parkmind.services.planning.park_graph import ParkGraph
 from parkmind.services.ports import RoutingNotFoundError
@@ -296,6 +299,52 @@ def test_leaving_a_guest_out_costs_lambda_times_the_unserved_share(lambda_fairne
     shared = scores.group["carousel"]
     partial = scores.group["coaster"]
     assert shared - partial == pytest.approx(_u(scores, "carousel", "g2") / 2 + lambda_fairness / 2)
+
+
+# --- Done-when: a smaller eligible set is not structurally penalized (C20) ------------
+
+
+def test_a_child_with_few_eligible_rides_is_not_behind_in_the_fairness_gap() -> None:
+    rides = [f"r{i}" for i in range(6)]
+    catalog = [
+        attraction(node_id=r, category=AttractionCategory.FAMILY, height_restriction_cm=None) for r in rides
+    ]
+    context = _context({r: 10.0 + i for i, r in enumerate(rides)})
+    party = {"adult": rides, "child": rides[:2]}  # the child may ride two of six
+    profiles = [guest_profile(guest_id="adult"), guest_profile(guest_id="child")]
+    scores = _score(profiles, party, context=context, attractions=catalog)
+    day = plan(stops=[stop(node_id=r, served_guests=["adult", "child"]) for r in rides[:2]])
+
+    satisfaction = per_guest_satisfaction(day, scores)
+
+    assert satisfaction == pytest.approx({"adult": 1.0, "child": 1.0})
+    assert fairness_gap(satisfaction) == pytest.approx(0.0)
+    count_based = {"adult": 2 / len(rides), "child": 2 / 2}  # visited / eligible-set size
+    assert fairness_gap(count_based) > 0.5  # the normalization this replaces
+
+
+def test_satisfaction_counts_only_stops_the_guest_is_served_at() -> None:
+    profiles = [guest_profile(guest_id="g1"), guest_profile(guest_id="g2")]
+    scores = _score(profiles, {"g1": ["coaster", "carousel"], "g2": ["carousel"]})
+    day = plan(stops=[
+        stop(node_id="carousel", served_guests=["g1"]),  # g2 may ride it, but the plan leaves g2 out
+        stop(node_id="carousel", kind=StopKind.REST, served_guests=["g1", "g2"]),
+    ])
+
+    satisfaction = per_guest_satisfaction(day, scores)
+
+    assert satisfaction["g2"] == pytest.approx(0.0)  # not served; a REST at the same node is not a ride
+    assert satisfaction["g1"] > 0
+    assert fairness_gap(satisfaction) == pytest.approx(satisfaction["g1"])
+
+
+def test_a_guest_with_nothing_to_enjoy_and_an_empty_plan_score_one() -> None:
+    gloomy = guest_profile(avoided_categories=list(AttractionCategory), queue_tolerance=preference(0.0))
+    scores = _score([gloomy], context=_context({"coaster": 240.0, "carousel": 240.0, "dark": 240.0}),
+                    config=ScoringConfig(risk_penalty=5.0))
+
+    assert per_guest_satisfaction(plan(stops=[]), scores) == {"g1": 1.0}
+    assert fairness_gap({}) == 0.0
 
 
 # --- Edge cases --------------------------------------------------------------------------

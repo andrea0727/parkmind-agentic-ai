@@ -37,7 +37,10 @@ the party that can't ride. Hard constraints are never score penalties: an
 ineligible guest contributes nothing, and an attraction nobody is eligible for
 is left out, so the optimizer never sees it.
 
-The coefficients live in ``ScoringConfig``; a learned model may
+Per-guest satisfaction (C20) compares what a plan gives each guest with the
+best that guest could get from the same number of stops in their own eligible
+set, so a child with few eligible rides is not structurally behind an adult
+with many. The coefficients live in ``ScoringConfig``; a learned model may
 adjust them later (section 17).
 """
 
@@ -56,6 +59,7 @@ from parkmind.core.contracts import (
     RideRestriction,
     SensitivityKind,
     SensitivityLevel,
+    StopKind,
 )
 from parkmind.services.personalization.group_preference_resolver import (
     DEFAULT_QUEUE_TOLERANCE,
@@ -78,6 +82,7 @@ _INTENSE_NOTICE_FLAGS = frozenset(
         RideRestriction.NOT_RECOMMENDED_MOTION_SENSITIVITY,
     }
 )
+_SCORED_STOP_KINDS = frozenset({StopKind.ATTRACTION, StopKind.SHOW})
 
 
 @dataclass(frozen=True)
@@ -241,6 +246,31 @@ class PreferenceScorer:
             except RoutingError:
                 unrouted.append(node_id)
         return walks, unrouted
+
+
+def per_guest_satisfaction(plan: Plan, scores: PreferenceScores) -> dict[str, float]:
+    """Satisfaction per guest in 0..1, normalized by each guest's own eligible set (C20).
+
+    For guest g with k = the number of ATTRACTION/SHOW stops in the plan:
+    the positive utility of the distinct stops g is served at, over the sum of
+    g's k best positive utilities in their eligible set (or fewer, if the set
+    is smaller). A guest with nothing positive to enjoy scores 1.0: there was
+    nothing more the plan could give them.
+    """
+    stops = [s for s in plan.stops if s.kind in _SCORED_STOP_KINDS]
+    k = len({s.node_id for s in stops})
+    satisfaction: dict[str, float] = {}
+    for guest_id, utilities in scores.per_guest.items():
+        served = {s.node_id for s in stops if guest_id in s.served_guests}
+        got = sum(max(utilities.get(node_id, 0.0), 0.0) for node_id in served)
+        best = sorted((u for u in utilities.values() if u > 0), reverse=True)[:k]
+        satisfaction[guest_id] = 1.0 if not best else min(got / sum(best), 1.0)
+    return satisfaction
+
+
+def fairness_gap(satisfaction: Mapping[str, float]) -> float:
+    """Spread between the best- and worst-served guest (section 45)."""
+    return max(satisfaction.values()) - min(satisfaction.values()) if satisfaction else 0.0
 
 
 def _normalize(text: str) -> str:
