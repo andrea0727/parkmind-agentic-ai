@@ -31,11 +31,13 @@ Per-guest utility, only over the guest's eligible set
 - change: a small penalty for an attraction outside ``base_plan`` (replans,
   P0-23: minimize unnecessary plan changes).
 
-Group utility is the party mean of the per-guest utilities minus section 17's
-"guest left unserved" fairness penalty, ``lambda_fairness`` times the share of
-the party that can't ride. Hard constraints are never score penalties: an
-ineligible guest contributes nothing, and an attraction nobody is eligible for
-is left out, so the optimizer never sees it.
+Group utility keeps two levers apart: how much the riders enjoy it (the mean
+utility among the guests eligible to ride) and section 17's "guest left
+unserved" fairness penalty, ``lambda_fairness`` times the share of the party
+that can't ride. Leaving someone out costs exactly that penalty, once. Hard
+constraints are never score penalties: an ineligible guest neither raises nor
+dilutes the riders' mean, and an attraction nobody is eligible for is left
+out, so the optimizer never sees it.
 
 Per-guest satisfaction (C20) compares what a plan gives each guest with the
 best that guest could get from the same number of stops in their own eligible
@@ -180,7 +182,7 @@ class PreferenceScorer:
             riders = [g for g in party if node_id in per_guest[g]]
             if not riders:
                 continue  # nobody may ride it: left out, not penalized
-            mean = sum(per_guest[g][node_id] for g in riders) / len(party)
+            mean = sum(per_guest[g][node_id] for g in riders) / len(riders)
             unserved_share = (len(party) - len(riders)) / len(party)
             group[node_id] = mean - lambda_fairness * unserved_share
 

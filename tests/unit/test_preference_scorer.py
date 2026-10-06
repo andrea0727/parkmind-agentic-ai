@@ -268,15 +268,15 @@ def test_preferred_and_avoided_categories_move_the_ranking() -> None:
 # --- Done-when: hard constraints are not encoded as score penalties -------------------
 
 
-def test_an_ineligible_guest_adds_nothing_and_takes_nothing_away() -> None:
+def test_an_ineligible_guest_neither_raises_nor_dilutes_the_riders_mean() -> None:
     adult = guest_profile(guest_id="g1")
     child = guest_profile(guest_id="g2", avoided_categories=[AttractionCategory.THRILL])
     party = {"g1": ["coaster", "carousel"], "g2": ["carousel"]}
 
-    scores = _score([adult, child], party)
+    scores = _score([adult, child], party)  # lambda_fairness = 0: no unserved cost
 
     assert "coaster" not in scores.per_guest["g2"]  # never scored for the child, not scored negative
-    assert scores.group["coaster"] == pytest.approx(_u(scores, "coaster", "g1") / 2)
+    assert scores.group["coaster"] == pytest.approx(_u(scores, "coaster", "g1"))
 
 
 def test_an_attraction_nobody_may_ride_is_left_out_not_penalized() -> None:
@@ -299,7 +299,8 @@ def test_leaving_a_guest_out_costs_lambda_times_the_unserved_share(lambda_fairne
 
     shared = scores.group["carousel"]
     partial = scores.group["coaster"]
-    assert shared - partial == pytest.approx(_u(scores, "carousel", "g2") / 2 + lambda_fairness / 2)
+    assert _u(scores, "carousel", "g1") == pytest.approx(_u(scores, "coaster", "g1"))  # equal enjoyment
+    assert shared - partial == pytest.approx(lambda_fairness / 2)  # one guest of two left out, charged once
 
 
 # --- Done-when: a smaller eligible set is not structurally penalized (C20) ------------
