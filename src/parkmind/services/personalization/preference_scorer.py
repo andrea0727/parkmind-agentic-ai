@@ -26,7 +26,9 @@ Per-guest utility, only over the guest's eligible set
 - walking: the walk from ``origin_node_id`` through ``ParkGraph``, weighted
   by ``1 - walking_tolerance``. The party moves together (C20), so every guest
   walks the same minutes; only the comfort differs. A walk with no known
-  route gets no term and the attraction is listed in ``unrouted``.
+  route is not guessed: the attraction is charged the longest walk that is
+  known (so a missing route never makes it look closer) and is listed in
+  ``unrouted``.
 - risk: a small penalty when no live wait was read for a queued attraction.
 - change: a small penalty for an attraction outside ``base_plan`` (replans,
   P0-23: minimize unnecessary plan changes).
@@ -124,7 +126,7 @@ class PreferenceScores:
     unmatched_affinities: tuple[str, ...] = ()
     """``guest_id:key`` for affinity keys that matched no land or category."""
     unrouted: tuple[str, ...] = ()
-    """Attractions with no known walk from the origin (no walking term)."""
+    """Attractions with no known walk from the origin (charged the longest known walk)."""
     model_version: str = PREFERENCE_SCORER_VERSION
 
     def utilities(self) -> dict[str, float]:
@@ -253,6 +255,9 @@ class PreferenceScorer:
                 walks[node_id] = park_graph.walk_minutes(origin_node_id, node_id)
             except RoutingError:
                 unrouted.append(node_id)
+        if walks and unrouted:
+            longest = max(walks.values())
+            walks.update({node_id: longest for node_id in unrouted})
         return walks, unrouted
 
 

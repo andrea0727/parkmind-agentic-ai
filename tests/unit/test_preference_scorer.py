@@ -235,14 +235,17 @@ def test_without_an_origin_there_is_no_walking_term() -> None:
     assert _score([profile], park_graph=graph) == _score([profile])
 
 
-def test_an_unknown_route_gets_no_walking_term_and_is_reported() -> None:
-    graph = _graph({"carousel": 2.0, "dark": 10.0})
+def test_an_unknown_route_is_charged_the_longest_known_walk_and_reported() -> None:
+    graph = _graph({"carousel": 2.0, "dark": 10.0})  # no route to coaster
+    far = _graph({"carousel": 2.0, "dark": 10.0, "coaster": 10.0})
     profile = guest_profile(walking_tolerance=preference(0.0))
 
     scores = _score([profile], park_graph=graph, origin_node_id="show")
 
     assert scores.unrouted == ("coaster",)
-    assert _u(scores, "coaster") == pytest.approx(_u(_score([profile]), "coaster"))
+    assert _u(scores, "coaster") == pytest.approx(
+        _u(_score([profile], park_graph=far, origin_node_id="show"), "coaster")
+    )  # no better than the farthest known ride
     assert _u(scores, "show") == pytest.approx(_u(_score([profile]), "show"))  # the origin itself: 0 min
 
 
