@@ -295,6 +295,7 @@ def test_the_clock_guard_sees_plain_and_dotted_calls(source: str) -> None:
         "services/planning/forecast_service.py",
         "services/ports/forecast.py",
         "services/use_cases/forecast.py",
+        "services/planning/optimizer.py",  # asks forecasts with the caller's `now` (#75)
     ],
 )
 def test_forecast_modules_never_read_the_clock(module: str) -> None:
