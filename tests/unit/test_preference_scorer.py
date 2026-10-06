@@ -198,6 +198,35 @@ def test_intensity_comes_from_the_notice_then_the_category() -> None:
     assert (penalty("barn"), penalty("mild"), penalty("unknown")) == pytest.approx((1.0, 0.5, 0.5))
 
 
+class _CountingNotices:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    @property
+    def corpus_version(self) -> str:
+        return "test"
+
+    def notice_for(self, attraction_id: str):  # type: ignore[no-untyped-def]
+        self.calls.append(attraction_id)
+        return NOTICES.notice_for(attraction_id)
+
+    def covered_attraction_ids(self) -> frozenset[str]:
+        return NOTICES.covered_attraction_ids()
+
+
+def test_each_notice_is_read_once_per_attraction_not_per_guest() -> None:
+    knowledge = _CountingNotices()
+    party = ("g1", "g2", "g3")
+    profiles = [
+        guest_profile(guest_id=g, sensitivities={SensitivityKind.INTENSITY: SensitivityLevel.HIGH})
+        for g in party
+    ]
+
+    _score(profiles, {g: ["coaster", "carousel", "dark", "show"] for g in party}, knowledge=knowledge)
+
+    assert sorted(knowledge.calls) == sorted(a.node_id for a in CATALOG)
+
+
 def test_darkness_and_water_sensitivities_follow_the_category() -> None:
     plain = _score([guest_profile()])
     afraid = _score([guest_profile(sensitivities={SensitivityKind.DARKNESS: SensitivityLevel.HIGH})])

@@ -168,6 +168,8 @@ class PreferenceScorer:
         walks, unrouted = self._walks(catalog, park_graph, origin_node_id)
         in_base = {s.node_id for s in base_plan.stops} if base_plan is not None else None
         lands = _land_lookup(catalog.values(), park_graph)
+        # One notice read per attraction (the port may be the pgvector adapter).
+        intensity = {node_id: _intensity(a, knowledge) for node_id, a in catalog.items()}
 
         per_guest: dict[str, dict[str, float]] = {}
         unmatched: list[str] = []
@@ -178,7 +180,7 @@ class PreferenceScorer:
             eligible = set(objective.per_guest_eligible[guest_id])
             per_guest[guest_id] = {
                 node_id: self._guest_utility(
-                    attraction, profile, affinity, live_context, knowledge, walks, in_base
+                    attraction, profile, affinity, live_context, intensity[node_id], walks, in_base
                 )
                 for node_id, attraction in catalog.items()
                 if node_id in eligible
@@ -209,7 +211,7 @@ class PreferenceScorer:
         profile: GuestProfile | None,
         affinity: Mapping[str, float],
         live_context: LiveContext,
-        knowledge: KnowledgeStore,
+        intensity: float,
         walks: Mapping[str, float],
         in_base: set[str] | None,
     ) -> float:
@@ -225,7 +227,7 @@ class PreferenceScorer:
             if attraction.category in profile.avoided_categories:
                 utility -= c.category_weight
             utility += c.affinity_weight * _affinity_for(attraction, affinity)
-            utility -= c.sensitivity_weight * _sensitivity_load(attraction, profile, knowledge)
+            utility -= c.sensitivity_weight * _sensitivity_load(attraction, profile, intensity)
 
         wait, live_reading = _wait_minutes(attraction, live_context)
         utility -= c.queue_weight * (1.0 - queue_tolerance) * wait / 60.0
@@ -344,17 +346,15 @@ def _intensity(attraction: Attraction, knowledge: KnowledgeStore) -> float:
     return 0.5 if attraction.category == AttractionCategory.THRILL else 0.0
 
 
-def _sensitivity_load(
-    attraction: Attraction, profile: GuestProfile, knowledge: KnowledgeStore
-) -> float:
+def _sensitivity_load(attraction: Attraction, profile: GuestProfile, intensity: float) -> float:
     """Sum over the guest's sensitivities of (guest level x attraction level)."""
     levels = {
-        SensitivityKind.INTENSITY: lambda: _intensity(attraction, knowledge),
-        SensitivityKind.DARKNESS: lambda: float(attraction.category == AttractionCategory.DARK_RIDE),
-        SensitivityKind.WATER: lambda: float(attraction.category == AttractionCategory.WATER),
+        SensitivityKind.INTENSITY: intensity,
+        SensitivityKind.DARKNESS: float(attraction.category == AttractionCategory.DARK_RIDE),
+        SensitivityKind.WATER: float(attraction.category == AttractionCategory.WATER),
     }
     return sum(
-        _GUEST_SENSITIVITY[level] * levels[kind]()
+        _GUEST_SENSITIVITY[level] * levels[kind]
         for kind, level in sorted(profile.sensitivities.items())
         if kind in levels
     )
