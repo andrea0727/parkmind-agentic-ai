@@ -547,13 +547,33 @@ def test_a_repeated_guest_profile_keeps_the_first_as_the_resolver_does() -> None
 def test_use_case_delegates_to_the_scorer() -> None:
     kwargs = {
         "objective": _objective(ALL, 0.5),
-        "profiles": [guest_profile()],
+        "profiles": [guest_profile(walking_tolerance=preference(0.0))],
         "attractions": CATALOG,
         "live_context": _context(),
         "knowledge": NOTICES,
     }
 
     assert ScorePreferencesUseCase().execute(**kwargs) == PreferenceScorer().score(**kwargs)
+
+
+def test_use_case_forwards_the_origin_graph_and_base_plan() -> None:
+    kwargs = {
+        "objective": _objective(ALL, 0.5),
+        "profiles": [guest_profile(walking_tolerance=preference(0.0))],
+        "attractions": CATALOG,
+        "live_context": _context(),
+        "knowledge": NOTICES,
+    }
+    extras = {
+        "park_graph": _graph({"coaster": 25.0, "carousel": 2.0, "dark": 10.0, "show": 5.0}),
+        "origin_node_id": "show",
+        "base_plan": plan(stops=[stop(node_id="carousel")]),
+    }
+
+    with_extras = ScorePreferencesUseCase().execute(**kwargs, **extras)
+
+    assert with_extras == PreferenceScorer().score(**kwargs, **extras)
+    assert with_extras != ScorePreferencesUseCase().execute(**kwargs)
 
 
 # --- Real data: the P0-26a notices over the curated Magic Kingdom catalog ---------------
