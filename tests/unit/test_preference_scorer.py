@@ -526,9 +526,22 @@ def test_result_carries_the_model_version_and_a_plain_utilities_dict() -> None:
     assert type(scores.utilities()) is dict and scores.utilities() == dict(scores.group)
 
 
-def test_negative_coefficients_are_refused() -> None:
+@pytest.mark.parametrize("value", [-1.0, float("nan"), float("inf")])
+def test_negative_or_non_finite_coefficients_are_refused(value: float) -> None:
     with pytest.raises(ValueError, match="queue_weight"):
-        ScoringConfig(queue_weight=-1.0)
+        ScoringConfig(queue_weight=value)
+
+
+def test_a_repeated_attraction_id_is_refused() -> None:
+    with pytest.raises(ValueError, match="carousel"):
+        _score([guest_profile()], attractions=[*CATALOG, CAROUSEL.model_copy(update={"name": "Other"})])
+
+
+def test_a_repeated_guest_profile_keeps_the_first_as_the_resolver_does() -> None:
+    first = guest_profile(preferred_categories=[AttractionCategory.DARK_RIDE])
+    second = guest_profile(avoided_categories=[AttractionCategory.DARK_RIDE])
+
+    assert _score([first, second]) == _score([first])
 
 
 def test_use_case_delegates_to_the_scorer() -> None:

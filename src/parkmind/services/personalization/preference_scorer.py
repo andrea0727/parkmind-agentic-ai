@@ -56,6 +56,8 @@ with many. The coefficients live in ``ScoringConfig``; a learned model may
 adjust them later (section 17).
 """
 
+import math
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -112,9 +114,11 @@ class ScoringConfig:
     change_penalty: float = 0.2
 
     def __post_init__(self) -> None:
-        negative = sorted(name for name, value in vars(self).items() if value < 0)
-        if negative:
-            raise ValueError(f"scoring coefficients must be >= 0: {', '.join(negative)}")
+        invalid = sorted(
+            name for name, value in vars(self).items() if not math.isfinite(value) or value < 0
+        )
+        if invalid:
+            raise ValueError(f"scoring coefficients must be finite and >= 0: {', '.join(invalid)}")
 
 
 @dataclass(frozen=True)
@@ -159,13 +163,20 @@ class PreferenceScorer:
         """Utility per attraction for the party in ``objective``.
 
         The party is the guests in ``objective.per_guest_eligible``; a profile
-        for anyone else is ignored, and a guest without a profile gets the
-        resolver's default tolerances and no preferences.
+        for anyone else is ignored, a repeated ``guest_id`` keeps its first
+        profile (as GroupPreferenceResolver does), and a guest without a
+        profile gets the resolver's default tolerances and no preferences. A
+        repeated attraction id is refused: two catalog entries for one node
+        can't both be right.
         """
         party = sorted(objective.per_guest_eligible)
         profile_of: dict[str, GuestProfile] = {}
         for candidate in profiles:
             profile_of.setdefault(candidate.guest_id, candidate)
+        counts = Counter(a.node_id for a in attractions)
+        repeated = sorted(node_id for node_id, n in counts.items() if n > 1)
+        if repeated:
+            raise ValueError(f"attractions repeat node ids: {', '.join(repeated)}")
         catalog = {a.node_id: a for a in sorted(attractions, key=lambda a: a.node_id)}
         walks, unrouted = self._walks(catalog, park_graph, origin_node_id)
         in_base = {s.node_id for s in base_plan.stops} if base_plan is not None else None
