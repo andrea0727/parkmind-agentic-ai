@@ -14,7 +14,7 @@ Coverage:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -25,6 +25,7 @@ from parkmind.core.contracts import (
     AttractionCategory,
     AttractionStatus,
     CoverageReport,
+    DataSource,
     EventThresholds,
     FairnessConfig,
     GroupObjective,
@@ -38,8 +39,10 @@ from parkmind.core.contracts import (
     TimeWindow,
     WaitEstimate,
 )
+from parkmind.services.planning.forecast_service import ForecastService
 from parkmind.services.planning.optimizer import GreedyInsertionOptimizer
 from parkmind.services.planning.park_graph import ParkGraph
+from parkmind.services.ports import WaitForecast
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -817,3 +820,194 @@ class TestCodeReviewRegressions:
             f"Meal arrival {meal.arrival_time} must be <= {lunch_window.end}"
         )
         assert meal.arrival_time == lunch_window.start
+
+
+# ===================================================================
+# Issue #75: forecast waits per stop
+# ===================================================================
+PLAN_NOW = DAY.replace(hour=9)
+
+
+class _ByHour:
+    """A forecast strategy: ``morning`` before 13:00, ``afternoon`` after; ``None`` for unknown rides."""
+
+    def __init__(
+        self,
+        waits: dict[str, tuple[float, float]],
+        *,
+        name: str = "api_forecast",
+        source: DataSource = DataSource.THEMEPARKS_WIKI,
+    ) -> None:
+        self.name = name
+        self._waits = waits
+        self._source = source
+
+    def forecast(self, attraction_id: str, at: datetime, *, now: datetime) -> WaitForecast | None:
+        if attraction_id not in self._waits:
+            return None
+        morning, afternoon = self._waits[attraction_id]
+        wait = morning if at.hour < 13 else afternoon
+        return WaitForecast(attraction_id, at, wait, self.name, self._source, "snap-test", now)
+
+
+def _forecast(waits: dict[str, tuple[float, float]]) -> ForecastService:
+    return ForecastService([_ByHour(waits)])
+
+
+def _attraction_stops(plan) -> list:  # type: ignore[no-untyped-def]
+    return [s for s in plan.stops if s.kind == StopKind.ATTRACTION]
+
+
+class TestForecastWaits:
+    """A stop is charged the wait expected when the party gets there."""
+
+    @pytest.mark.parametrize(("opening_hour", "expected"), [(9, 10.0), (14, 60.0)])
+    def test_stop_is_charged_the_forecast_for_its_arrival(self, opening_hour: int, expected: float) -> None:
+        context = _live_context(waits={A1: 5.0}, statuses={A1: AttractionStatus.OPERATING})
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=context,
+            utilities={A1: 1.0},
+            park=_park(opening_hour=opening_hour),
+            catalog=_catalog(),
+            forecast_service=_forecast({A1: (10.0, 60.0)}),
+            now=PLAN_NOW,
+        )
+
+        [stop] = _attraction_stops(plan)
+        assert stop.expected_wait_minutes == expected  # not the posted 5
+        assert stop.departure_time - stop.arrival_time == timedelta(minutes=expected + 15)
+
+    def test_candidates_are_ranked_by_their_forecast_not_the_posted_wait(self) -> None:
+        context = _live_context(
+            waits={A1: 5.0, A2: 60.0},
+            statuses={A1: AttractionStatus.OPERATING, A2: AttractionStatus.OPERATING},
+        )
+        kwargs = {
+            "constraints": _constraints(),
+            "context": context,
+            "utilities": {A1: 1.0, A2: 1.0},
+            "park": _park(),
+            "catalog": _catalog(),
+        }
+
+        posted = _build_optimizer().build_plan(**kwargs)
+        forecast = _build_optimizer().build_plan(
+            **kwargs, forecast_service=_forecast({A1: (60.0, 60.0), A2: (5.0, 5.0)}), now=PLAN_NOW
+        )
+
+        assert _attraction_stops(posted)[0].node_id == A1
+        assert _attraction_stops(forecast)[0].node_id == A2
+
+    def test_a_rest_that_moves_the_arrival_past_the_hour_is_charged_then(self) -> None:
+        # Open 12:25. A1: walk 5, wait 0, ride 15 -> leaves 12:45 with 20 active minutes.
+        # A2 at 12:50 would be a morning wait, but rest_frequency 25 forces a 20-minute
+        # REST first, so the party reaches A2 at 13:10: the afternoon forecast applies.
+        context = _live_context(
+            waits={A1: 0.0, A2: 0.0},
+            statuses={A1: AttractionStatus.OPERATING, A2: AttractionStatus.OPERATING},
+        )
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=context,
+            utilities={A1: 2.0, A2: 1.0},
+            accessibility_reqs=[
+                AccessibilityRequirements(guest_id="g1", rest_frequency_minutes=25, consent=True)
+            ],
+            park=Park(
+                park_id="park-1",
+                name="Test Park",
+                opening_time=DAY.replace(hour=12, minute=25),
+                closing_time=DAY.replace(hour=22),
+            ),
+            catalog=_catalog(),
+            forecast_service=_forecast({A1: (0.0, 0.0), A2: (10.0, 60.0)}),
+            now=PLAN_NOW,
+        )
+
+        kinds = [(s.kind, s.node_id) for s in plan.stops]
+        assert kinds[:3] == [(StopKind.ATTRACTION, A1), (StopKind.REST, A1), (StopKind.ATTRACTION, A2)]
+        a2 = plan.stops[2]
+        assert a2.arrival_time == DAY.replace(hour=13, minute=10)
+        assert a2.expected_wait_minutes == 60.0
+
+    def test_same_inputs_and_forecasts_give_the_same_stops(self) -> None:
+        context = _live_context(
+            waits={A1: 5.0, A2: 30.0, A3: 20.0}, statuses=_default_statuses()
+        )
+
+        def run() -> list:
+            return _build_optimizer().build_plan(
+                constraints=_constraints(),
+                context=context,
+                utilities={A1: 3.0, A2: 2.0, A3: 1.0},
+                park=_park(),
+                catalog=_catalog(),
+                forecast_service=_forecast({A1: (10.0, 60.0), A2: (20.0, 5.0)}),
+                now=PLAN_NOW,
+            ).stops
+
+        assert run() == run()
+
+
+class TestNoReading:
+    """No forecast reading: the curated typical wait, never 0; nothing at all: not scheduled."""
+
+    def test_no_reading_is_charged_the_typical_wait_not_zero(self) -> None:
+        context = _live_context(statuses={A2: AttractionStatus.OPERATING})  # no posted wait either
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=context,
+            utilities={A2: 1.0},
+            park=_park(),
+            catalog=_catalog(),
+            forecast_service=_forecast({}),
+            now=PLAN_NOW,
+        )
+
+        [stop] = _attraction_stops(plan)
+        assert stop.expected_wait_minutes == 15.0  # Ride Beta's typical_wait_minutes
+
+    @pytest.mark.parametrize("must_do", [False, True])
+    def test_no_reading_and_no_catalog_entry_is_not_scheduled(self, must_do: bool) -> None:
+        ghost = "ghost-ride"
+        context = _live_context(waits={ghost: 5.0}, statuses={ghost: AttractionStatus.OPERATING})
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(must_do=[ghost] if must_do else None),
+            context=context,
+            utilities={ghost: 1.0},
+            park=_park(),
+            catalog=_catalog(),
+            forecast_service=_forecast({}),
+            now=PLAN_NOW,
+        )
+
+        assert _attraction_stops(plan) == []
+        assert plan.unmet_must_do == ([ghost] if must_do else [])
+
+
+class TestForecastOptIn:
+    """Without a forecast service nothing changes; with one, ``now`` is required."""
+
+    def test_forecast_service_requires_now(self) -> None:
+        with pytest.raises(ValueError, match="now is required"):
+            _build_optimizer().build_plan(
+                constraints=_constraints(),
+                context=_live_context(),
+                utilities={},
+                forecast_service=_forecast({}),
+            )
+
+    def test_without_a_forecast_service_the_posted_wait_is_charged(self) -> None:
+        context = _live_context(waits={A1: 5.0}, statuses={A1: AttractionStatus.OPERATING})
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(), context=context, utilities={A1: 1.0}, park=_park(opening_hour=14)
+        )
+
+        assert _attraction_stops(plan)[0].expected_wait_minutes == 5.0
+
