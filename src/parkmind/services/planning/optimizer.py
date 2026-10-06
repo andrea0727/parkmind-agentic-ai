@@ -48,6 +48,12 @@ from parkmind.core.contracts import (
     StopKind,
     TimeWindow,
 )
+from parkmind.services.personalization.preference_scorer import (
+    PreferenceScores,
+)
+from parkmind.services.personalization.preference_scorer import (
+    per_guest_satisfaction as scorer_satisfaction,
+)
 from parkmind.services.planning.forecast_service import (
     TYPICAL_WAIT,
     ForecastService,
@@ -113,6 +119,7 @@ class GreedyInsertionOptimizer:
         group_objective: GroupObjective | None = None,
         forecast_service: ForecastService | None = None,
         now: datetime | None = None,
+        scores: PreferenceScores | None = None,
     ) -> Plan:
         """Build a candidate plan.
 
@@ -143,6 +150,11 @@ class GreedyInsertionOptimizer:
         now:
             The planning moment, required with ``forecast_service``; the
             optimizer never reads the clock.
+        scores:
+            The ``PreferenceScorer`` result the utilities came from. With it,
+            per-guest satisfaction is the scorer's (each guest against the
+            best of their own eligible set, C20) and the plan's
+            ``preference_model_version`` is the scorer's version.
         """
         if forecast_service is not None and now is None:
             raise ValueError("now is required when a forecast_service is given")
@@ -596,8 +608,12 @@ class GreedyInsertionOptimizer:
         plan_provenance = provenance or self._minimal_provenance(context)
         if forecast_service is not None:
             plan_provenance = self._with_wait_sources(plan_provenance, wait_sources)
+        if scores is not None:
+            plan_provenance = plan_provenance.model_copy(
+                update={"preference_model_version": scores.model_version}
+            )
 
-        return Plan(
+        plan = Plan(
             plan_id=f"plan_{uuid.uuid4().hex[:12]}",
             version=1,
             stops=stops,
@@ -608,6 +624,12 @@ class GreedyInsertionOptimizer:
             unmet_must_do=unmet_must_do,
             provenance=plan_provenance,
         )
+        if scores is not None:
+            # Needs the assembled plan (which stops serve whom), so it comes last.
+            plan = plan.model_copy(
+                update={"per_guest_satisfaction": scorer_satisfaction(plan, scores)}
+            )
+        return plan
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -781,7 +803,12 @@ class GreedyInsertionOptimizer:
         constraints: PartyConstraints,
         group_objective: GroupObjective | None,
     ) -> dict[str, float]:
-        """Normalized per-guest satisfaction [C20].
+        """Normalized per-guest satisfaction [C20], when no ``PreferenceScores`` are given.
+
+        With scores, ``build_plan`` uses the scorer's ``per_guest_satisfaction``
+        instead: this count-based version makes a guest with a large eligible
+        set look less satisfied than one with a small set, whatever the plan
+        gives each of them.
 
         When ``GroupObjective.per_guest_eligible`` is present, satisfaction
         for each guest is:

@@ -40,6 +40,12 @@ from parkmind.core.contracts import (
     TimeWindow,
     WaitEstimate,
 )
+from parkmind.services.clients.knowledge.in_memory import InMemoryKnowledgeStore
+from parkmind.services.personalization.preference_scorer import (
+    PREFERENCE_SCORER_VERSION,
+    PreferenceScorer,
+    per_guest_satisfaction,
+)
 from parkmind.services.planning.forecast_service import ForecastService
 from parkmind.services.planning.optimizer import GreedyInsertionOptimizer
 from parkmind.services.planning.park_graph import ParkGraph
@@ -1071,4 +1077,65 @@ class TestForecastOptIn:
         )
 
         assert _attraction_stops(plan)[0].expected_wait_minutes == 5.0
+
+
+class TestScorerSatisfaction:
+    """With scores, satisfaction and the model version come from the PreferenceScorer (#74)."""
+
+    def _setup(self):  # type: ignore[no-untyped-def]
+        eligible = {"adult": [A1, A2, A3], "child": [A1, A2]}  # the child is too short for A3
+        objective = GroupObjective(
+            objective_version="1",
+            weights={},
+            per_guest_eligible=eligible,
+            hard_constraints=HardConstraintSet(),
+            fairness=FairnessConfig(lambda_fairness=0.0, min_satisfaction_floor=0.0),
+            event_thresholds=EventThresholds(),
+        )
+        statuses = {a: AttractionStatus.OPERATING for a in (A1, A2, A3)}
+        context = _live_context(waits={A1: 10.0, A2: 10.0, A3: 10.0}, statuses=statuses)
+        scores = PreferenceScorer().score(
+            objective=objective,
+            profiles=[],
+            attractions=[a for a in _catalog() if a.node_id in (A1, A2, A3)],
+            live_context=context,
+            knowledge=InMemoryKnowledgeStore({}, corpus_version="test"),
+        )
+        constraints = _constraints(guests=_guests("adult", "child"), departure_hour=10)
+        return objective, context, scores, constraints
+
+    def test_satisfaction_and_version_come_from_the_scorer(self) -> None:
+        objective, context, scores, constraints = self._setup()
+
+        plan = _build_optimizer().build_plan(
+            constraints=constraints,
+            context=context,
+            utilities=scores.utilities(),
+            park=_park(),
+            catalog=_catalog(),
+            group_objective=objective,
+            scores=scores,
+        )
+
+        assert plan.per_guest_satisfaction == per_guest_satisfaction(plan, scores)
+        assert plan.provenance.preference_model_version == PREFERENCE_SCORER_VERSION
+
+    def test_without_scores_the_count_based_satisfaction_stays(self) -> None:
+        objective, context, scores, constraints = self._setup()
+
+        plan = _build_optimizer().build_plan(
+            constraints=constraints,
+            context=context,
+            utilities=scores.utilities(),
+            park=_park(),
+            catalog=_catalog(),
+            group_objective=objective,
+        )
+
+        rides = {s.node_id for s in plan.stops if s.kind == StopKind.ATTRACTION}
+        assert plan.per_guest_satisfaction == {
+            "adult": len(rides & {A1, A2, A3}) / 3,
+            "child": len(rides & {A1, A2}) / 2,
+        }
+        assert plan.provenance.preference_model_version == "auto"
 
