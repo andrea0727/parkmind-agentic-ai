@@ -48,7 +48,12 @@ from parkmind.core.contracts import (
     StopKind,
     TimeWindow,
 )
-from parkmind.services.planning.forecast_service import TYPICAL_WAIT, ForecastService
+from parkmind.services.planning.forecast_service import (
+    TYPICAL_WAIT,
+    ForecastService,
+    forecast_data_sources,
+    forecast_strategy_label,
+)
 from parkmind.services.planning.park_graph import ParkGraph
 from parkmind.services.ports import WaitForecast
 
@@ -589,6 +594,8 @@ class GreedyInsertionOptimizer:
         ]
 
         plan_provenance = provenance or self._minimal_provenance(context)
+        if forecast_service is not None:
+            plan_provenance = self._with_wait_sources(plan_provenance, wait_sources)
 
         return Plan(
             plan_id=f"plan_{uuid.uuid4().hex[:12]}",
@@ -821,6 +828,25 @@ class GreedyInsertionOptimizer:
             / total_stops
             for gid in guest_ids
         }
+
+    @staticmethod
+    def _with_wait_sources(provenance: Provenance, sources: list[_WaitSource]) -> Provenance:
+        """Record where the charged waits came from (section 40).
+
+        ``forecast_strategy`` names every strategy used, plus ``typical_wait``
+        when a stop fell back to the curated typical wait; ``data_sources``
+        adds the providers behind the forecasts. The typical wait is curated
+        reference data, not a provider, so it adds no data source.
+        """
+        forecasts = [s for s in sources if isinstance(s, WaitForecast)]
+        also = [TYPICAL_WAIT] if TYPICAL_WAIT in sources else []
+        data_sources = set(provenance.data_sources) | set(forecast_data_sources(forecasts))
+        return provenance.model_copy(
+            update={
+                "forecast_strategy": forecast_strategy_label(forecasts, also=also),
+                "data_sources": sorted(data_sources, key=lambda d: d.value),
+            }
+        )
 
     @staticmethod
     def _minimal_provenance(context: LiveContext) -> Provenance:

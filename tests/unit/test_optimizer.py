@@ -35,6 +35,7 @@ from parkmind.core.contracts import (
     LiveContext,
     Park,
     PartyConstraints,
+    Provenance,
     StopKind,
     TimeWindow,
     WaitEstimate,
@@ -988,6 +989,66 @@ class TestNoReading:
 
         assert _attraction_stops(plan) == []
         assert plan.unmet_must_do == ([ghost] if must_do else [])
+
+
+class TestForecastProvenance:
+    """The plan says where every wait it charged came from."""
+
+    def _plan(self, *, provenance=None):  # type: ignore[no-untyped-def]
+        context = _live_context(
+            statuses={A1: AttractionStatus.OPERATING, A2: AttractionStatus.OPERATING, A3: AttractionStatus.OPERATING}
+        )
+        service = ForecastService([
+            _ByHour({A1: (10.0, 10.0)}, name="api_forecast", source=DataSource.THEMEPARKS_WIKI),
+            _ByHour({A2: (10.0, 10.0)}, name="cached_snapshot", source=DataSource.CACHE),
+        ])  # A3 has no reading anywhere: typical wait
+        return _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=context,
+            utilities={A1: 1.0, A2: 1.0, A3: 1.0},
+            park=_park(),
+            catalog=_catalog(),
+            provenance=provenance,
+            forecast_service=service,
+            now=PLAN_NOW,
+        )
+
+    def test_label_and_sources_come_from_the_waits_actually_charged(self) -> None:
+        plan = self._plan()
+
+        assert {s.node_id for s in _attraction_stops(plan)} == {A1, A2, A3}
+        assert plan.provenance.forecast_strategy == "api_forecast+cached_snapshot+typical_wait"
+        assert plan.provenance.data_sources == [DataSource.CACHE, DataSource.THEMEPARKS_WIKI]
+
+    def test_a_caller_provenance_keeps_its_other_fields(self) -> None:
+        caller = Provenance(
+            snapshot_id="snap-caller",
+            retrieved_at=DAY.replace(hour=8),
+            data_sources=[DataSource.OPEN_METEO],
+            forecast_strategy="unset",
+            optimizer_strategy="greedy_insertion",
+            constraints_version=7,
+            objective_version="obj-7",
+            preference_model_version="pm-7",
+        )
+
+        recorded = self._plan(provenance=caller).provenance
+
+        assert recorded.forecast_strategy == "api_forecast+cached_snapshot+typical_wait"
+        assert recorded.data_sources == [DataSource.CACHE, DataSource.OPEN_METEO, DataSource.THEMEPARKS_WIKI]
+        assert recorded.model_dump(exclude={"forecast_strategy", "data_sources"}) == caller.model_dump(
+            exclude={"forecast_strategy", "data_sources"}
+        )
+
+    def test_without_a_forecast_service_provenance_says_current_wait(self) -> None:
+        context = _live_context(waits={A1: 5.0}, statuses={A1: AttractionStatus.OPERATING})
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(), context=context, utilities={A1: 1.0}, park=_park()
+        )
+
+        assert plan.provenance.forecast_strategy == "current_wait"
+        assert plan.provenance.data_sources == []
 
 
 class TestForecastOptIn:
