@@ -188,7 +188,9 @@ def _default_statuses() -> dict[str, AttractionStatus]:
 
 def _build_optimizer(walk_minutes: float = 5.0) -> GreedyInsertionOptimizer:
     routing = _FlatRoutingPort(minutes=walk_minutes)
-    graph = ParkGraph.from_sources(routing=routing, park=_park(), attractions=_catalog())
+    graph = ParkGraph.from_sources(
+        routing=routing, park=_park(), attractions=_catalog()
+    )
     return GreedyInsertionOptimizer(park_graph=graph)
 
 
@@ -256,9 +258,7 @@ class TestBasicFlow:
         )
 
         expected_wait = sum(
-            s.expected_wait_minutes
-            for s in plan.stops
-            if s.kind == StopKind.ATTRACTION
+            s.expected_wait_minutes for s in plan.stops if s.kind == StopKind.ATTRACTION
         )
         assert plan.total_wait_minutes == pytest.approx(expected_wait)
         assert plan.total_walking_minutes >= 0
@@ -290,9 +290,7 @@ class TestMustDoAndAvoid:
             catalog=_catalog(),
         )
 
-        attraction_stops = [
-            s for s in plan.stops if s.kind == StopKind.ATTRACTION
-        ]
+        attraction_stops = [s for s in plan.stops if s.kind == StopKind.ATTRACTION]
         assert len(attraction_stops) >= 1
         assert attraction_stops[0].node_id == A3
 
@@ -641,10 +639,14 @@ class TestResolveRestFrequency:
     def test_returns_minimum(self) -> None:
         reqs = [
             AccessibilityRequirements(
-                guest_id="g1", rest_frequency_minutes=90, consent=True,
+                guest_id="g1",
+                rest_frequency_minutes=90,
+                consent=True,
             ),
             AccessibilityRequirements(
-                guest_id="g2", rest_frequency_minutes=60, consent=True,
+                guest_id="g2",
+                rest_frequency_minutes=60,
+                consent=True,
             ),
         ]
         result = GreedyInsertionOptimizer._resolve_effective_rest_frequency(reqs)
@@ -700,7 +702,9 @@ class TestCodeReviewRegressions:
 
         show_in_stops = any(s.node_id == SHOW_1 for s in plan.stops)
         assert not show_in_stops, "Show cannot fit before departure_time"
-        assert SHOW_1 in plan.unmet_must_do, "Unreachable must-do show must be in unmet_must_do"
+        assert SHOW_1 in plan.unmet_must_do, (
+            "Unreachable must-do show must be in unmet_must_do"
+        )
 
     def test_greedy_marginal_utility_cost_ratio_selection(self) -> None:
         """Bug #2: Optimizer selects candidates with higher utility/cost ratio
@@ -771,10 +775,13 @@ class TestCodeReviewRegressions:
         )
 
         show_as_attraction = [
-            s for s in plan.stops
+            s
+            for s in plan.stops
             if s.node_id == "show-morning" and s.kind == StopKind.ATTRACTION
         ]
-        assert len(show_as_attraction) == 0, "Show must never be scheduled as an ATTRACTION"
+        assert len(show_as_attraction) == 0, (
+            "Show must never be scheduled as an ATTRACTION"
+        )
         assert "show-morning" in plan.unmet_must_do
 
     def test_meal_strictly_within_lunch_window(self) -> None:
@@ -810,4 +817,3 @@ class TestCodeReviewRegressions:
             f"Meal arrival {meal.arrival_time} must be <= {lunch_window.end}"
         )
         assert meal.arrival_time == lunch_window.start
-
