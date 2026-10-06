@@ -12,9 +12,11 @@ Per-guest utility, only over the guest's eligible set
 ``preference - queue - walking - risk - change``:
 
 - preference: a base of 1, plus or minus the guest's preferred/avoided
-  categories, plus ``thematic_affinity`` (-1..1) matched to the attraction's
-  land (canonical name or a ``ParkGraph`` alias) or category. Affinity keys
-  that match nothing are reported in the result, never dropped silently.
+  categories, plus ``thematic_affinity`` matched to the attraction's land
+  (canonical name or a ``ParkGraph`` alias, case- and space-insensitive) or
+  category. The affinity an attraction gets stays within -1..1 however many
+  keys reach it. Keys that match no land or category of an attraction in the
+  catalog are reported in the result, never dropped silently.
 - sensitivity penalties, from attraction attributes we actually have:
   INTENSITY is HIGH when the park's published notice (P0-26a, through the
   ``KnowledgeStore`` port) flags high g-force or motion sensitivity, MEDIUM
@@ -124,7 +126,7 @@ class PreferenceScores:
     per_guest: Mapping[str, Mapping[str, float]]
     """``guest_id -> node_id -> utility``, over that guest's eligible set only."""
     unmatched_affinities: tuple[str, ...] = ()
-    """``guest_id:key`` for affinity keys that matched no land or category."""
+    """``guest_id:key`` for affinity keys that match no land or category in the catalog."""
     unrouted: tuple[str, ...] = ()
     """Attractions with no known walk from the origin (charged the longest known walk)."""
     model_version: str = PREFERENCE_SCORER_VERSION
@@ -168,6 +170,7 @@ class PreferenceScorer:
         walks, unrouted = self._walks(catalog, park_graph, origin_node_id)
         in_base = {s.node_id for s in base_plan.stops} if base_plan is not None else None
         lands = _land_lookup(catalog.values(), park_graph)
+        present = _catalog_targets(catalog.values())
         # One notice read per attraction (the port may be the pgvector adapter).
         intensity = {node_id: _intensity(a, knowledge) for node_id, a in catalog.items()}
 
@@ -175,7 +178,7 @@ class PreferenceScorer:
         unmatched: list[str] = []
         for guest_id in party:
             profile = profile_of.get(guest_id)
-            affinity, missing = _affinities(profile, lands)
+            affinity, missing = _affinities(profile, lands, present)
             unmatched.extend(f"{guest_id}:{key}" for key in missing)
             eligible = set(objective.per_guest_eligible[guest_id])
             per_guest[guest_id] = {
@@ -305,38 +308,53 @@ def _land_lookup(attractions: Iterable[Attraction], park_graph: ParkGraph | None
     lookup: dict[str, str] = {}
     for attraction in attractions:
         if attraction.land:
-            lookup[_normalize(attraction.land)] = f"land:{attraction.land}"
+            lookup[_normalize(attraction.land)] = _land_key(attraction.land)
     if park_graph is not None:
         for alias, land in park_graph.land_aliases.items():
-            lookup.setdefault(_normalize(alias), f"land:{land}")
+            lookup.setdefault(_normalize(alias), _land_key(land))
     for category in AttractionCategory:
         lookup.setdefault(_normalize(category.value), f"category:{category.value}")
         lookup.setdefault(_normalize(category.value.replace("_", " ")), f"category:{category.value}")
     return lookup
 
 
+def _land_key(land: str) -> str:
+    return f"land:{_normalize(land)}"
+
+
+def _catalog_targets(attractions: Iterable[Attraction]) -> frozenset[str]:
+    """Every ``land:``/``category:`` key some attraction in the catalog can be matched on."""
+    targets = {f"category:{a.category.value}" for a in attractions}
+    targets |= {_land_key(a.land) for a in attractions if a.land}
+    return frozenset(targets)
+
+
+def _clamp(value: float) -> float:
+    return max(-1.0, min(1.0, value))
+
+
 def _affinities(
-    profile: GuestProfile | None, lookup: Mapping[str, str]
+    profile: GuestProfile | None, lookup: Mapping[str, str], present: frozenset[str]
 ) -> tuple[dict[str, float], list[str]]:
-    """The guest's affinities keyed by ``land:``/``category:``, and the keys that matched nothing."""
+    """The guest's affinities keyed by ``land:``/``category:``, and the keys that match no attraction."""
     if profile is None:
         return {}, []
     matched: dict[str, float] = {}
     missing: list[str] = []
     for key in sorted(profile.thematic_affinity):
         target = lookup.get(_normalize(key))
-        if target is None:
+        if target is None or target not in present:
             missing.append(key)
         else:
-            matched[target] = matched.get(target, 0.0) + profile.thematic_affinity[key].value
+            matched[target] = _clamp(matched.get(target, 0.0) + profile.thematic_affinity[key].value)
     return matched, missing
 
 
 def _affinity_for(attraction: Attraction, affinity: Mapping[str, float]) -> float:
     total = affinity.get(f"category:{attraction.category.value}", 0.0)
     if attraction.land:
-        total += affinity.get(f"land:{attraction.land}", 0.0)
-    return total
+        total += affinity.get(_land_key(attraction.land), 0.0)
+    return _clamp(total)
 
 
 def _intensity(attraction: Attraction, knowledge: KnowledgeStore) -> float:

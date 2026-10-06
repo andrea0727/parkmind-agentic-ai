@@ -302,6 +302,33 @@ def test_affinity_keys_match_park_aliases_and_categories_and_report_the_rest() -
     assert scores.unmatched_affinities == ("g1:Narnia",)
 
 
+def test_affinity_reaching_one_attraction_through_several_keys_stays_within_one() -> None:
+    graph = _graph({}, aliases={"fantasy land": "Fantasyland"})
+    plain = _score([guest_profile()])
+    stacked = _score(
+        [guest_profile(thematic_affinity={
+            "Fantasyland": preference(1.0), "fantasy land": preference(1.0), "dark ride": preference(1.0),
+        })],
+        park_graph=graph,
+    )
+
+    assert _u(stacked, "dark") - _u(plain, "dark") == pytest.approx(0.5)  # 0.5 x clamp(3.0) = 0.5 x 1
+    assert _u(stacked, "carousel") - _u(plain, "carousel") == pytest.approx(0.5)
+
+
+def test_lands_match_by_normalized_name_and_absent_lands_are_reported() -> None:
+    graph = _graph({}, aliases={"fantasy": "FANTASYLAND", "liberty": "Liberty Square"})
+    plain = _score([guest_profile()])
+
+    scores = _score(
+        [guest_profile(thematic_affinity={"fantasy": preference(1.0), "liberty": preference(1.0)})],
+        park_graph=graph,
+    )
+
+    assert _u(scores, "carousel") - _u(plain, "carousel") == pytest.approx(0.5)  # case differs, still a match
+    assert scores.unmatched_affinities == ("g1:liberty",)  # Liberty Square has no ride in this catalog
+
+
 def test_preferred_and_avoided_categories_move_the_ranking() -> None:
     likes = _score([guest_profile(preferred_categories=[AttractionCategory.DARK_RIDE])])
     dislikes = _score([guest_profile(avoided_categories=[AttractionCategory.DARK_RIDE])])
