@@ -156,6 +156,35 @@ def parse_showtimes(entity: Mapping[str, Any]) -> list[datetime]:
     return starts
 
 
+def parse_forecast(entity: Mapping[str, Any]) -> list[tuple[datetime, float | None]]:
+    """The provider's hourly standby forecast as ``(hour start, wait)`` pairs, sorted.
+
+    Shape verified against the live API (2026-09-27 capture and 2026-10-01):
+    ``forecast: [{"time": "...T09:00:00-04:00", "waitTime": 25, "percentage": 21}, ...]``,
+    one point per park hour. ``percentage`` is not a wait and is not read. A
+    missing ``forecast`` is ``[]`` (most entities have none at any given time); a
+    null ``waitTime`` is kept as ``None`` (no reading for that hour). Anything
+    else that isn't a non-negative number raises, like a malformed STANDBY wait.
+    """
+    points: list[tuple[datetime, float | None]] = []
+    try:
+        for point in entity.get("forecast") or []:
+            start = parse_time(point["time"], what=f"forecast time of {entity.get('id')}")
+            wait = point.get("waitTime")
+            if wait is not None and (
+                isinstance(wait, bool) or not isinstance(wait, int | float) or wait < 0
+            ):
+                raise ThemeParksSchemaError(
+                    f"malformed forecast waitTime for entity {entity.get('id')}: {wait!r}"
+                )
+            points.append((start, None if wait is None else float(wait)))
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise ThemeParksSchemaError(
+            f"malformed forecast for entity {entity.get('id')}: {exc}"
+        ) from exc
+    return sorted(points, key=lambda p: p[0])
+
+
 def index_entities(
     entities: Iterable[Mapping[str, Any]],
 ) -> tuple[dict[str, Mapping[str, Any]], list[MappingIssue]]:
