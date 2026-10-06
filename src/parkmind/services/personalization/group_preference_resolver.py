@@ -68,8 +68,9 @@ from parkmind.core.contracts import (
     PreferenceValue,
 )
 
-_DEFAULT_QUEUE_TOLERANCE = 0.5
-_DEFAULT_WALKING_TOLERANCE = 0.7
+# Tolerances a guest without a profile contributes; PreferenceScorer uses the same.
+DEFAULT_QUEUE_TOLERANCE = 0.5
+DEFAULT_WALKING_TOLERANCE = 0.7
 
 # (value_at_tolerance_0, value_at_tolerance_1) — the most sensitive guest
 # (lowest tolerance) drives the low end of each range.
@@ -121,11 +122,11 @@ def _aggregate_weights(
     weight_provenance: dict[str, PreferenceSource] = {}
 
     for key, getter, default in (
-        ("queue_tolerance", lambda p: p.queue_tolerance, _DEFAULT_QUEUE_TOLERANCE),
+        ("queue_tolerance", lambda p: p.queue_tolerance, DEFAULT_QUEUE_TOLERANCE),
         (
             "walking_tolerance",
             lambda p: p.walking_tolerance,
-            _DEFAULT_WALKING_TOLERANCE,
+            DEFAULT_WALKING_TOLERANCE,
         ),
     ):
         entries = _entries(profiles, getter)
@@ -164,8 +165,8 @@ def _derive_event_thresholds(
     queue_tolerances = [p.queue_tolerance.value for p in profiles]
     walking_tolerances = [p.walking_tolerance.value for p in profiles]
     if unprofiled_guest_count or not profiles:
-        queue_tolerances.append(_DEFAULT_QUEUE_TOLERANCE)
-        walking_tolerances.append(_DEFAULT_WALKING_TOLERANCE)
+        queue_tolerances.append(DEFAULT_QUEUE_TOLERANCE)
+        walking_tolerances.append(DEFAULT_WALKING_TOLERANCE)
     min_queue_tolerance = min(queue_tolerances)
     min_walking_tolerance = min(walking_tolerances)
     return EventThresholds(
