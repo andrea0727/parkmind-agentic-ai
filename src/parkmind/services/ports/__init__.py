@@ -7,7 +7,8 @@ weather.py, routing.py, ...), re-exported here so callers do
 lives in this package — it is the seam .importlinter's core-forbidden-imports
 contract protects.
 
-P0-12 adds the repository ports and SessionStore; P0-26a adds KnowledgeStore.
+P0-12 adds the repository ports and SessionStore; P0-26a adds KnowledgeStore;
+P0-18 adds ForecastStrategy.
 ``errors.py`` is the one
 non-Protocol module: exceptions only, so callers can catch adapter failures
 without importing an adapter (and therefore a DB driver).
@@ -18,6 +19,7 @@ from .behavior_log_repository import BehaviorLogRepository
 from .errors import (
     ConflictError,
     ConsentRequiredError,
+    ForecastSourceError,
     IdMappingConflictError,
     InvalidRouteError,
     InvalidStateTransitionError,
@@ -39,6 +41,7 @@ from .errors import (
 )
 from .event_repository import EventRepository
 from .execution_state_repository import ExecutionStateRepository
+from .forecast import ForecastStrategy, WaitForecast
 from .guest_repository import GuestRepository
 from .id_mapping_repository import EntityKind, IdMappingRepository
 from .knowledge_store import KnowledgeStore
@@ -60,6 +63,8 @@ __all__ = [
     "EntityKind",
     "EventRepository",
     "ExecutionStateRepository",
+    "ForecastSourceError",
+    "ForecastStrategy",
     "GuestRepository",
     "IdMappingConflictError",
     "IdMappingRepository",
@@ -92,5 +97,6 @@ __all__ = [
     "SnapshotMeta",
     "SnapshotRepository",
     "StoredDataError",
+    "WaitForecast",
     "WeatherPort",
 ]
