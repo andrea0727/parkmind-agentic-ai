@@ -14,7 +14,7 @@ Coverage:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -25,6 +25,7 @@ from parkmind.core.contracts import (
     AttractionCategory,
     AttractionStatus,
     CoverageReport,
+    DataSource,
     EventThresholds,
     FairnessConfig,
     GroupObjective,
@@ -34,12 +35,21 @@ from parkmind.core.contracts import (
     LiveContext,
     Park,
     PartyConstraints,
+    Provenance,
     StopKind,
     TimeWindow,
     WaitEstimate,
 )
+from parkmind.services.clients.knowledge.in_memory import InMemoryKnowledgeStore
+from parkmind.services.personalization.preference_scorer import (
+    PREFERENCE_SCORER_VERSION,
+    PreferenceScorer,
+    per_guest_satisfaction,
+)
+from parkmind.services.planning.forecast_service import ForecastService
 from parkmind.services.planning.optimizer import GreedyInsertionOptimizer
 from parkmind.services.planning.park_graph import ParkGraph
+from parkmind.services.ports import WaitForecast
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -817,3 +827,449 @@ class TestCodeReviewRegressions:
             f"Meal arrival {meal.arrival_time} must be <= {lunch_window.end}"
         )
         assert meal.arrival_time == lunch_window.start
+
+
+# ===================================================================
+# Issue #75: forecast waits per stop
+# ===================================================================
+PLAN_NOW = DAY.replace(hour=9)
+
+
+class _ByHour:
+    """A forecast strategy: ``morning`` before 13:00, ``afternoon`` after; ``None`` for unknown rides."""
+
+    def __init__(
+        self,
+        waits: dict[str, tuple[float, float]],
+        *,
+        name: str = "api_forecast",
+        source: DataSource = DataSource.THEMEPARKS_WIKI,
+    ) -> None:
+        self.name = name
+        self._waits = waits
+        self._source = source
+
+    def forecast(self, attraction_id: str, at: datetime, *, now: datetime) -> WaitForecast | None:
+        if attraction_id not in self._waits:
+            return None
+        morning, afternoon = self._waits[attraction_id]
+        wait = morning if at.hour < 13 else afternoon
+        return WaitForecast(attraction_id, at, wait, self.name, self._source, "snap-test", now)
+
+
+def _forecast(waits: dict[str, tuple[float, float]]) -> ForecastService:
+    return ForecastService([_ByHour(waits)])
+
+
+def _attraction_stops(plan) -> list:  # type: ignore[no-untyped-def]
+    return [s for s in plan.stops if s.kind == StopKind.ATTRACTION]
+
+
+class TestForecastWaits:
+    """A stop is charged the wait expected when the party gets there."""
+
+    @pytest.mark.parametrize(("opening_hour", "expected"), [(9, 10.0), (14, 60.0)])
+    def test_stop_is_charged_the_forecast_for_its_arrival(self, opening_hour: int, expected: float) -> None:
+        context = _live_context(waits={A1: 5.0}, statuses={A1: AttractionStatus.OPERATING})
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=context,
+            utilities={A1: 1.0},
+            park=_park(opening_hour=opening_hour),
+            catalog=_catalog(),
+            forecast_service=_forecast({A1: (10.0, 60.0)}),
+            now=PLAN_NOW,
+        )
+
+        [stop] = _attraction_stops(plan)
+        assert stop.expected_wait_minutes == expected  # not the posted 5
+        assert stop.departure_time - stop.arrival_time == timedelta(minutes=expected + 15)
+
+    def test_candidates_are_ranked_by_their_forecast_not_the_posted_wait(self) -> None:
+        context = _live_context(
+            waits={A1: 5.0, A2: 60.0},
+            statuses={A1: AttractionStatus.OPERATING, A2: AttractionStatus.OPERATING},
+        )
+        kwargs = {
+            "constraints": _constraints(),
+            "context": context,
+            "utilities": {A1: 1.0, A2: 1.0},
+            "park": _park(),
+            "catalog": _catalog(),
+        }
+
+        posted = _build_optimizer().build_plan(**kwargs)
+        forecast = _build_optimizer().build_plan(
+            **kwargs, forecast_service=_forecast({A1: (60.0, 60.0), A2: (5.0, 5.0)}), now=PLAN_NOW
+        )
+
+        assert _attraction_stops(posted)[0].node_id == A1
+        assert _attraction_stops(forecast)[0].node_id == A2
+
+    def test_a_rest_that_moves_the_arrival_past_the_hour_is_charged_then(self) -> None:
+        # Open 12:25. A1: walk 5, wait 0, ride 15 -> leaves 12:45 with 20 active minutes.
+        # A2 at 12:50 would be a morning wait, but rest_frequency 25 forces a 20-minute
+        # REST first, so the party reaches A2 at 13:10: the afternoon forecast applies.
+        context = _live_context(
+            waits={A1: 0.0, A2: 0.0},
+            statuses={A1: AttractionStatus.OPERATING, A2: AttractionStatus.OPERATING},
+        )
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=context,
+            utilities={A1: 2.0, A2: 1.0},
+            accessibility_reqs=[
+                AccessibilityRequirements(guest_id="g1", rest_frequency_minutes=25, consent=True)
+            ],
+            park=Park(
+                park_id="park-1",
+                name="Test Park",
+                opening_time=DAY.replace(hour=12, minute=25),
+                closing_time=DAY.replace(hour=22),
+            ),
+            catalog=_catalog(),
+            forecast_service=_forecast({A1: (0.0, 0.0), A2: (10.0, 60.0)}),
+            now=PLAN_NOW,
+        )
+
+        kinds = [(s.kind, s.node_id) for s in plan.stops]
+        assert kinds[:3] == [(StopKind.ATTRACTION, A1), (StopKind.REST, A1), (StopKind.ATTRACTION, A2)]
+        a2 = plan.stops[2]
+        assert a2.arrival_time == DAY.replace(hour=13, minute=10)
+        assert a2.expected_wait_minutes == 60.0
+
+    def test_same_inputs_and_forecasts_give_the_same_stops(self) -> None:
+        context = _live_context(
+            waits={A1: 5.0, A2: 30.0, A3: 20.0}, statuses=_default_statuses()
+        )
+
+        def run() -> list:
+            return _build_optimizer().build_plan(
+                constraints=_constraints(),
+                context=context,
+                utilities={A1: 3.0, A2: 2.0, A3: 1.0},
+                park=_park(),
+                catalog=_catalog(),
+                forecast_service=_forecast({A1: (10.0, 60.0), A2: (20.0, 5.0)}),
+                now=PLAN_NOW,
+            ).stops
+
+        assert run() == run()
+
+
+class TestNoReading:
+    """No forecast reading: the curated typical wait, never 0; nothing at all: not scheduled."""
+
+    def test_no_reading_is_charged_the_typical_wait_not_zero(self) -> None:
+        context = _live_context(statuses={A2: AttractionStatus.OPERATING})  # no posted wait either
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=context,
+            utilities={A2: 1.0},
+            park=_park(),
+            catalog=_catalog(),
+            forecast_service=_forecast({}),
+            now=PLAN_NOW,
+        )
+
+        [stop] = _attraction_stops(plan)
+        assert stop.expected_wait_minutes == 15.0  # Ride Beta's typical_wait_minutes
+
+    @pytest.mark.parametrize("must_do", [False, True])
+    def test_no_reading_and_no_catalog_entry_is_not_scheduled(self, must_do: bool) -> None:
+        ghost = "ghost-ride"
+        context = _live_context(waits={ghost: 5.0}, statuses={ghost: AttractionStatus.OPERATING})
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(must_do=[ghost] if must_do else None),
+            context=context,
+            utilities={ghost: 1.0},
+            park=_park(),
+            catalog=_catalog(),
+            forecast_service=_forecast({}),
+            now=PLAN_NOW,
+        )
+
+        assert _attraction_stops(plan) == []
+        assert plan.unmet_must_do == ([ghost] if must_do else [])
+
+
+class TestForecastProvenance:
+    """The plan says where every wait it charged came from."""
+
+    def _plan(self, *, provenance=None):  # type: ignore[no-untyped-def]
+        context = _live_context(
+            statuses={A1: AttractionStatus.OPERATING, A2: AttractionStatus.OPERATING, A3: AttractionStatus.OPERATING}
+        )
+        service = ForecastService([
+            _ByHour({A1: (10.0, 10.0)}, name="api_forecast", source=DataSource.THEMEPARKS_WIKI),
+            _ByHour({A2: (10.0, 10.0)}, name="cached_snapshot", source=DataSource.CACHE),
+        ])  # A3 has no reading anywhere: typical wait
+        return _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=context,
+            utilities={A1: 1.0, A2: 1.0, A3: 1.0},
+            park=_park(),
+            catalog=_catalog(),
+            provenance=provenance,
+            forecast_service=service,
+            now=PLAN_NOW,
+        )
+
+    def test_label_and_sources_come_from_the_waits_actually_charged(self) -> None:
+        plan = self._plan()
+
+        assert {s.node_id for s in _attraction_stops(plan)} == {A1, A2, A3}
+        assert plan.provenance.forecast_strategy == "api_forecast+cached_snapshot+typical_wait"
+        assert plan.provenance.data_sources == [DataSource.CACHE, DataSource.THEMEPARKS_WIKI]
+
+    def test_a_caller_provenance_keeps_its_other_fields(self) -> None:
+        caller = Provenance(
+            snapshot_id="snap-caller",
+            retrieved_at=DAY.replace(hour=8),
+            data_sources=[DataSource.OPEN_METEO],
+            forecast_strategy="unset",
+            optimizer_strategy="greedy_insertion",
+            constraints_version=7,
+            objective_version="obj-7",
+            preference_model_version="pm-7",
+        )
+
+        recorded = self._plan(provenance=caller).provenance
+
+        assert recorded.forecast_strategy == "api_forecast+cached_snapshot+typical_wait"
+        assert recorded.data_sources == [DataSource.CACHE, DataSource.OPEN_METEO, DataSource.THEMEPARKS_WIKI]
+        assert recorded.model_dump(exclude={"forecast_strategy", "data_sources"}) == caller.model_dump(
+            exclude={"forecast_strategy", "data_sources"}
+        )
+
+    def test_without_a_forecast_service_provenance_says_current_wait(self) -> None:
+        context = _live_context(waits={A1: 5.0}, statuses={A1: AttractionStatus.OPERATING})
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(), context=context, utilities={A1: 1.0}, park=_park()
+        )
+
+        assert plan.provenance.forecast_strategy == "current_wait"
+        assert plan.provenance.data_sources == []
+
+
+class TestForecastOptIn:
+    """Without a forecast service nothing changes; with one, ``now`` is required."""
+
+    def test_forecast_service_requires_now(self) -> None:
+        with pytest.raises(ValueError, match="now is required"):
+            _build_optimizer().build_plan(
+                constraints=_constraints(),
+                context=_live_context(),
+                utilities={},
+                forecast_service=_forecast({}),
+            )
+
+    def test_without_a_forecast_service_the_posted_wait_is_charged(self) -> None:
+        context = _live_context(waits={A1: 5.0}, statuses={A1: AttractionStatus.OPERATING})
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(), context=context, utilities={A1: 1.0}, park=_park(opening_hour=14)
+        )
+
+        assert _attraction_stops(plan)[0].expected_wait_minutes == 5.0
+
+
+class TestScorerSatisfaction:
+    """With scores, satisfaction and the model version come from the PreferenceScorer (#74)."""
+
+    def _setup(self):  # type: ignore[no-untyped-def]
+        eligible = {"adult": [A1, A2, A3], "child": [A1, A2]}  # the child is too short for A3
+        objective = GroupObjective(
+            objective_version="1",
+            weights={},
+            per_guest_eligible=eligible,
+            hard_constraints=HardConstraintSet(),
+            fairness=FairnessConfig(lambda_fairness=0.0, min_satisfaction_floor=0.0),
+            event_thresholds=EventThresholds(),
+        )
+        statuses = {a: AttractionStatus.OPERATING for a in (A1, A2, A3)}
+        context = _live_context(waits={A1: 10.0, A2: 10.0, A3: 10.0}, statuses=statuses)
+        scores = PreferenceScorer().score(
+            objective=objective,
+            profiles=[],
+            attractions=[a for a in _catalog() if a.node_id in (A1, A2, A3)],
+            live_context=context,
+            knowledge=InMemoryKnowledgeStore({}, corpus_version="test"),
+        )
+        constraints = _constraints(guests=_guests("adult", "child"), departure_hour=10)
+        return objective, context, scores, constraints
+
+    def test_satisfaction_and_version_come_from_the_scorer(self) -> None:
+        objective, context, scores, constraints = self._setup()
+
+        plan = _build_optimizer().build_plan(
+            constraints=constraints,
+            context=context,
+            utilities=scores.utilities(),
+            park=_park(),
+            catalog=_catalog(),
+            group_objective=objective,
+            scores=scores,
+        )
+
+        assert plan.per_guest_satisfaction == per_guest_satisfaction(plan, scores)
+        assert plan.provenance.preference_model_version == PREFERENCE_SCORER_VERSION
+
+    def test_scores_for_a_different_party_are_refused(self) -> None:
+        objective, context, scores, _ = self._setup()
+
+        with pytest.raises(ValueError, match="different parties"):
+            _build_optimizer().build_plan(
+                constraints=_constraints(guests=_guests("adult", "child", "grandma")),
+                context=context,
+                utilities=scores.utilities(),
+                park=_park(),
+                catalog=_catalog(),
+                group_objective=objective,
+                scores=scores,
+            )
+
+    def test_without_scores_the_count_based_satisfaction_stays(self) -> None:
+        objective, context, scores, constraints = self._setup()
+
+        plan = _build_optimizer().build_plan(
+            constraints=constraints,
+            context=context,
+            utilities=scores.utilities(),
+            park=_park(),
+            catalog=_catalog(),
+            group_objective=objective,
+        )
+
+        rides = {s.node_id for s in plan.stops if s.kind == StopKind.ATTRACTION}
+        assert plan.per_guest_satisfaction == {
+            "adult": len(rides & {A1, A2, A3}) / 3,
+            "child": len(rides & {A1, A2}) / 2,
+        }
+        assert plan.provenance.preference_model_version == "auto"
+
+
+class _Intermittent:
+    """Answers once per attraction, then has no reading: a source that drops between calls."""
+
+    name = "api_forecast"
+
+    def __init__(self, wait: float) -> None:
+        self._wait = wait
+        self.calls: list[tuple[str, datetime]] = []
+
+    def forecast(self, attraction_id: str, at: datetime, *, now: datetime) -> WaitForecast | None:
+        self.calls.append((attraction_id, at))
+        if any(a == attraction_id for a, _ in self.calls[:-1]):
+            return None
+        return WaitForecast(attraction_id, at, self._wait, self.name, DataSource.THEMEPARKS_WIKI, "snap-test", now)
+
+
+class TestForecastReadsOncePerArrival:
+    """What a candidate is ranked on is exactly what it is charged (Andrea, #76)."""
+
+    @pytest.mark.parametrize("node", [A1, "ghost-ride"], ids=["in catalog", "not in catalog"])
+    def test_a_source_that_drops_between_calls_still_gives_a_coherent_plan(self, node: str) -> None:
+        context = _live_context(statuses={node: AttractionStatus.OPERATING})
+        strategy = _Intermittent(wait=12.0)
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=context,
+            utilities={node: 1.0},
+            park=_park(),
+            catalog=_catalog(),
+            forecast_service=ForecastService([strategy]),
+            now=PLAN_NOW,
+        )
+
+        [stop] = _attraction_stops(plan)
+        assert (stop.node_id, stop.expected_wait_minutes) == (node, 12.0)  # the reading it was ranked on
+        assert plan.provenance.forecast_strategy == "api_forecast"
+
+    def test_each_attraction_and_arrival_is_asked_at_most_once(self) -> None:
+        context = _live_context(statuses={a: AttractionStatus.OPERATING for a in (A1, A2, A3)})
+        counter = _Intermittent(wait=10.0)
+        counter.forecast = _counting(counter.calls)  # type: ignore[method-assign]
+
+        _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=context,
+            utilities={A1: 3.0, A2: 2.0, A3: 1.0},
+            park=_park(),
+            catalog=_catalog(),
+            forecast_service=ForecastService([counter]),
+            now=PLAN_NOW,
+        )
+
+        assert counter.calls
+        assert len(counter.calls) == len(set(counter.calls))
+
+
+def _counting(calls: list[tuple[str, datetime]]):  # type: ignore[no-untyped-def]
+    def forecast(attraction_id: str, at: datetime, *, now: datetime) -> WaitForecast:
+        calls.append((attraction_id, at))
+        return WaitForecast(attraction_id, at, 10.0, "api_forecast", DataSource.THEMEPARKS_WIKI, "snap-test", now)
+
+    return forecast
+
+
+class TestForecastInputsAndEdges:
+    def test_a_naive_now_is_refused_up_front(self) -> None:
+        with pytest.raises(ValueError, match="now must be timezone-aware"):
+            _build_optimizer().build_plan(
+                constraints=_constraints(),
+                context=_live_context(),
+                utilities={},
+                forecast_service=_forecast({}),
+                now=PLAN_NOW.replace(tzinfo=None),
+            )
+
+    @pytest.mark.parametrize("caller", [False, True])
+    def test_a_plan_without_rides_records_no_forecast(self, caller: bool) -> None:
+        provenance = Provenance(
+            snapshot_id="snap-caller",
+            retrieved_at=DAY.replace(hour=8),
+            forecast_strategy="api_forecast",
+            optimizer_strategy="greedy_insertion",
+            constraints_version=1,
+            objective_version="1",
+            preference_model_version="1",
+        ) if caller else None
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=_live_context(),
+            utilities={},
+            park=_park(),
+            provenance=provenance,
+            forecast_service=_forecast({}),
+            now=PLAN_NOW,
+        )
+
+        assert _attraction_stops(plan) == []
+        assert plan.provenance.forecast_strategy == "none"  # replaced: nothing was charged
+
+    def test_a_typical_wait_of_zero_is_charged_not_treated_as_missing(self) -> None:
+        catalog = [a.model_copy(update={"typical_wait_minutes": 0}) if a.node_id == A2 else a for a in _catalog()]
+        context = _live_context(statuses={A2: AttractionStatus.OPERATING})
+
+        plan = _build_optimizer().build_plan(
+            constraints=_constraints(),
+            context=context,
+            utilities={A2: 1.0},
+            park=_park(),
+            catalog=catalog,
+            forecast_service=_forecast({}),
+            now=PLAN_NOW,
+        )
+
+        [stop] = _attraction_stops(plan)
+        assert stop.expected_wait_minutes == 0.0
+        assert plan.provenance.forecast_strategy == "typical_wait"
+

@@ -39,6 +39,9 @@ logger = logging.getLogger(__name__)
 API_FORECAST = "api_forecast"
 HISTORICAL_PROFILE = "historical_profile"
 CACHED_SNAPSHOT = "cached_snapshot"
+TYPICAL_WAIT = "typical_wait"
+"""Not a strategy: the label a caller records when no strategy had a reading and
+it fell back to the curated typical wait (the optimizer does, issue #75)."""
 
 ForecastPoints = Sequence[tuple[datetime, float | None]]
 """Hourly ``(hour start, wait)`` pairs; ``None`` is an hour with no reading."""
@@ -92,14 +95,15 @@ class ForecastService:
         return None
 
 
-def forecast_strategy_label(forecasts: Iterable[WaitForecast]) -> str:
+def forecast_strategy_label(forecasts: Iterable[WaitForecast], *, also: Iterable[str] = ()) -> str:
     """``Provenance.forecast_strategy`` for a set of forecasts.
 
     The distinct strategy names, sorted and joined with ``+`` (e.g.
     ``"api_forecast+cached_snapshot"``), so the label is deterministic; ``"none"``
-    when nothing was forecast.
+    when nothing was forecast. ``also`` adds labels for waits that did not come
+    from a strategy, such as ``TYPICAL_WAIT``.
     """
-    names = sorted({f.strategy for f in forecasts})
+    names = sorted({f.strategy for f in forecasts} | set(also))
     return "+".join(names) if names else "none"
 
 
