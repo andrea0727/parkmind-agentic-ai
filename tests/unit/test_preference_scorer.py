@@ -48,6 +48,7 @@ from parkmind.services.personalization.preference_scorer import (
 )
 from parkmind.services.planning.park_graph import ParkGraph
 from parkmind.services.ports import RoutingNotFoundError
+from parkmind.services.use_cases.score_preferences import ScorePreferencesUseCase
 
 SRC = Path(__file__).resolve().parents[2] / "src" / "parkmind"
 
@@ -398,6 +399,18 @@ def test_result_carries_the_model_version_and_a_plain_utilities_dict() -> None:
 def test_negative_coefficients_are_refused() -> None:
     with pytest.raises(ValueError, match="queue_weight"):
         ScoringConfig(queue_weight=-1.0)
+
+
+def test_use_case_delegates_to_the_scorer() -> None:
+    kwargs = {
+        "objective": _objective(ALL, 0.5),
+        "profiles": [guest_profile()],
+        "attractions": CATALOG,
+        "live_context": _context(),
+        "knowledge": NOTICES,
+    }
+
+    assert ScorePreferencesUseCase().execute(**kwargs) == PreferenceScorer().score(**kwargs)
 
 
 # --- Real data: the P0-26a notices over the curated Magic Kingdom catalog ---------------
