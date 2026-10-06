@@ -32,16 +32,12 @@ from parkmind.core.contracts import (
     Park,
     PartyConstraints,
     Plan,
-    PlanDiff,
     Provenance,
     Stop,
     StopKind,
     TimeWindow,
 )
 from parkmind.services.planning.park_graph import ParkGraph
-from parkmind.services.planning.plan_diff import diff_plans
-
-__all__ = ["GreedyInsertionOptimizer", "diff_plans"]
 
 # ---------------------------------------------------------------------------
 # Defaults — tunable but intentionally not persisted preferences
@@ -80,11 +76,6 @@ class GreedyInsertionOptimizer:
     # ------------------------------------------------------------------
     # Public entry point
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def diff_plans(old_plan: Plan, new_plan: Plan) -> PlanDiff:
-        """Compare two plan versions and identify added, removed, moved and time-shifted stops (§33)."""
-        return diff_plans(old_plan, new_plan)
 
     def build_plan(
         self,
@@ -150,17 +141,14 @@ class GreedyInsertionOptimizer:
         show_node_ids = set(context.showtimes.keys())
         if catalog:
             show_node_ids |= {
-                a.node_id
-                for a in catalog
-                if a.category == AttractionCategory.SHOW
+                a.node_id for a in catalog if a.category == AttractionCategory.SHOW
             }
 
         # Per-guest eligible sets (from GroupObjective if available)
         per_guest_eligible: dict[str, set[str]] | None = None
         if group_objective and group_objective.per_guest_eligible:
             per_guest_eligible = {
-                gid: set(ids)
-                for gid, ids in group_objective.per_guest_eligible.items()
+                gid: set(ids) for gid, ids in group_objective.per_guest_eligible.items()
             }
 
         # Guest ids for served_guests on stops
@@ -173,20 +161,24 @@ class GreedyInsertionOptimizer:
         for show_id in constraints.must_do:
             if context.showtimes.get(show_id):
                 best_time = self._pick_best_showtime(
-                    context.showtimes[show_id], start_time, end_time,
+                    context.showtimes[show_id],
+                    start_time,
+                    end_time,
                 )
                 if best_time is not None:
                     dur = self._show_dur
-                    anchors.append(Stop(
-                        node_id=show_id,
-                        kind=StopKind.SHOW,
-                        arrival_time=best_time,
-                        departure_time=best_time + timedelta(minutes=dur),
-                        expected_wait_minutes=0.0,
-                        walking_minutes=0.0,  # placeholder, recomputed later
-                        utility=utilities.get(show_id, 0.0),
-                        served_guests=guest_ids,
-                    ))
+                    anchors.append(
+                        Stop(
+                            node_id=show_id,
+                            kind=StopKind.SHOW,
+                            arrival_time=best_time,
+                            departure_time=best_time + timedelta(minutes=dur),
+                            expected_wait_minutes=0.0,
+                            walking_minutes=0.0,  # placeholder, recomputed later
+                            utility=utilities.get(show_id, 0.0),
+                            served_guests=guest_ids,
+                        )
+                    )
 
         # Lunch anchor placeholder
         meal_anchor: Stop | None = None
@@ -230,7 +222,9 @@ class GreedyInsertionOptimizer:
                                 end_time,
                             )
                         )
-                        walk_to_anchor = self._walk_time(cursor_node, curr_anchor.node_id)
+                        walk_to_anchor = self._walk_time(
+                            cursor_node, curr_anchor.node_id
+                        )
                     actual_arrival = max(
                         cursor_time + timedelta(minutes=walk_to_anchor),
                         curr_anchor.arrival_time,
@@ -258,11 +252,15 @@ class GreedyInsertionOptimizer:
                 assert lunch_win is not None
                 walk_to_meal = self._walk_time(cursor_node, meal_anchor.node_id)
                 earliest_meal_arrival = cursor_time + timedelta(minutes=walk_to_meal)
-                if earliest_meal_arrival >= lunch_win.start - timedelta(minutes=_LUNCH_WINDOW_EARLY_BUFFER_MIN):
+                if earliest_meal_arrival >= lunch_win.start - timedelta(
+                    minutes=_LUNCH_WINDOW_EARLY_BUFFER_MIN
+                ):
                     # We are within or at the lunch window
                     actual_arrival = max(earliest_meal_arrival, lunch_win.start)
                     if actual_arrival <= lunch_win.end:
-                        meal_departure = actual_arrival + timedelta(minutes=self._meal_dur)
+                        meal_departure = actual_arrival + timedelta(
+                            minutes=self._meal_dur
+                        )
                         if meal_departure <= end_time:
                             meal_stop = Stop(
                                 node_id=meal_anchor.node_id,
@@ -283,17 +281,23 @@ class GreedyInsertionOptimizer:
 
             # 3. Find candidates that fit before upcoming deadlines
             next_anchor = anchors[anchor_idx] if anchor_idx < len(anchors) else None
-            lunch_win = constraints.lunch_window if (meal_anchor is not None and not meal_inserted) else None
+            lunch_win = (
+                constraints.lunch_window
+                if (meal_anchor is not None and not meal_inserted)
+                else None
+            )
 
             candidate_must_dos = [
-                nid for nid in constraints.must_do
+                nid
+                for nid in constraints.must_do
                 if nid not in visited
                 and nid not in avoid_set
                 and nid in operating_ids
                 and nid not in show_node_ids
             ]
             other_candidates = [
-                nid for nid in utilities
+                nid
+                for nid in utilities
                 if nid not in visited
                 and nid not in avoid_set
                 and nid in operating_ids
@@ -315,7 +319,10 @@ class GreedyInsertionOptimizer:
                     step_min = walk_min + wait_min + dur_min
 
                     rest_min = 0.0
-                    if rest_freq is not None and active_minutes_since_rest + step_min > rest_freq:
+                    if (
+                        rest_freq is not None
+                        and active_minutes_since_rest + step_min > rest_freq
+                    ):
                         rest_min = self._rest_dur
 
                     total_dur = rest_min + step_min
@@ -328,7 +335,10 @@ class GreedyInsertionOptimizer:
                     # Check deadline 2: next_anchor
                     if next_anchor is not None:
                         walk_after = self._walk_time(cid, next_anchor.node_id)
-                        if cand_departure + timedelta(minutes=walk_after) > next_anchor.arrival_time:
+                        if (
+                            cand_departure + timedelta(minutes=walk_after)
+                            > next_anchor.arrival_time
+                        ):
                             continue
 
                     # Check deadline 3: lunch window
@@ -338,7 +348,10 @@ class GreedyInsertionOptimizer:
                         and cursor_time < lunch_win.start
                     ):
                         walk_to_meal = self._walk_time(cid, meal_anchor.node_id)
-                        if cand_departure + timedelta(minutes=walk_to_meal) > lunch_win.end:
+                        if (
+                            cand_departure + timedelta(minutes=walk_to_meal)
+                            > lunch_win.end
+                        ):
                             continue
 
                     util = utilities.get(cid, 0.0)
@@ -380,7 +393,9 @@ class GreedyInsertionOptimizer:
                 arrival = cursor_time + timedelta(minutes=walk_min)
                 departure = arrival + timedelta(minutes=wait_min + dur_min)
                 served = self._compute_served_guests(
-                    chosen_id, guest_ids, per_guest_eligible,
+                    chosen_id,
+                    guest_ids,
+                    per_guest_eligible,
                 )
                 stop = Stop(
                     node_id=chosen_id,
@@ -497,7 +512,9 @@ class GreedyInsertionOptimizer:
         total_walk = sum(s.walking_minutes for s in stops)
         objective_value = sum(s.utility for s in stops)
         per_guest_satisfaction = self._calculate_guest_satisfaction(
-            stops, constraints, group_objective,
+            stops,
+            constraints,
+            group_objective,
         )
 
         scheduled_node_ids = {s.node_id for s in stops}
@@ -524,7 +541,9 @@ class GreedyInsertionOptimizer:
     # ------------------------------------------------------------------
 
     def _resolve_start_time(
-        self, park: Park | None, context: LiveContext,
+        self,
+        park: Park | None,
+        context: LiveContext,
     ) -> datetime:
         if park is not None:
             return park.opening_time
@@ -544,8 +563,7 @@ class GreedyInsertionOptimizer:
         values = [
             req.rest_frequency_minutes
             for req in accessibility_reqs
-            if req.rest_frequency_minutes is not None
-            and req.rest_frequency_minutes > 0
+            if req.rest_frequency_minutes is not None and req.rest_frequency_minutes > 0
         ]
         return min(values) if values else None
 
@@ -563,7 +581,9 @@ class GreedyInsertionOptimizer:
         return 0.0
 
     def _get_duration(
-        self, node_id: str, catalog_index: dict[str, Attraction],
+        self,
+        node_id: str,
+        catalog_index: dict[str, Attraction],
     ) -> float:
         """Ride/experience duration estimate (excludes wait time)."""
         if node_id in catalog_index:
@@ -589,11 +609,7 @@ class GreedyInsertionOptimizer:
         guest_ids: list[str],
     ) -> Stop:
         """Build a MEAL stop placeholder inside the lunch window."""
-        node = (
-            restaurant_node_ids[0]
-            if restaurant_node_ids
-            else "__restaurant__"
-        )
+        node = restaurant_node_ids[0] if restaurant_node_ids else "__restaurant__"
         arrival = window.start
         departure = arrival + timedelta(minutes=self._meal_dur)
         departure = min(departure, window.end)
@@ -654,7 +670,8 @@ class GreedyInsertionOptimizer:
         if per_guest_eligible is None:
             return list(all_guests)
         return [
-            gid for gid in all_guests
+            gid
+            for gid in all_guests
             if gid not in per_guest_eligible or node_id in per_guest_eligible[gid]
         ]
 
@@ -699,13 +716,16 @@ class GreedyInsertionOptimizer:
 
         # Fallback: ratio of attractions served vs total stops
         total_stops = max(
-            sum(1 for s in stops if s.kind == StopKind.ATTRACTION), 1,
+            sum(1 for s in stops if s.kind == StopKind.ATTRACTION),
+            1,
         )
         return {
             gid: sum(
-                1 for s in stops
+                1
+                for s in stops
                 if s.kind == StopKind.ATTRACTION and gid in s.served_guests
-            ) / total_stops
+            )
+            / total_stops
             for gid in guest_ids
         }
 
