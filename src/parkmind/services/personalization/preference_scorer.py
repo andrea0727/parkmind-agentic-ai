@@ -39,6 +39,12 @@ constraints are never score penalties: an ineligible guest neither raises nor
 dilutes the riders' mean, and an attraction nobody is eligible for is left
 out, so the optimizer never sees it.
 
+A group utility can be negative, and that is intended: it means the party is
+better off skipping the stop (the riders themselves dislike it, or the cost of
+leaving others out outweighs the riders' enjoyment). The optimizer never adds a
+non-must-do candidate with a negative utility, so such a stop drops out of the
+plan rather than only down the ranking; must-dos are scheduled regardless.
+
 Per-guest satisfaction (C20) compares what a plan gives each guest with the
 best that guest could get from the same number of stops in their own eligible
 set, so a child with few eligible rides is not structurally behind an adult

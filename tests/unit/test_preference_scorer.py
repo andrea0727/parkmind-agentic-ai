@@ -7,9 +7,11 @@ from pathlib import Path
 import pytest
 from factories import (
     attraction,
+    guest,
     guest_profile,
     live_context,
     park,
+    party_constraints,
     plan,
     preference,
     stop,
@@ -46,6 +48,7 @@ from parkmind.services.personalization.preference_scorer import (
     fairness_gap,
     per_guest_satisfaction,
 )
+from parkmind.services.planning.optimizer import GreedyInsertionOptimizer
 from parkmind.services.planning.park_graph import ParkGraph
 from parkmind.services.ports import RoutingNotFoundError
 from parkmind.services.use_cases.score_preferences import ScorePreferencesUseCase
@@ -117,9 +120,19 @@ class _Routing:
         return self.minutes[destination_node_id]
 
 
-def _graph(minutes: dict[str, float], aliases: dict[str, str] | None = None) -> ParkGraph:
+class _FlatRouting:
+    def walk_minutes(self, origin_node_id: str, destination_node_id: str) -> float:
+        return 5.0
+
+
+def _graph(
+    minutes: dict[str, float], aliases: dict[str, str] | None = None, routing: object | None = None
+) -> ParkGraph:
     return ParkGraph.from_sources(
-        routing=_Routing(minutes), park=park(), attractions=CATALOG, land_aliases=aliases
+        routing=routing or _Routing(minutes),  # type: ignore[arg-type]
+        park=park(),
+        attractions=CATALOG,
+        land_aliases=aliases,
     )
 
 
@@ -301,6 +314,50 @@ def test_leaving_a_guest_out_costs_lambda_times_the_unserved_share(lambda_fairne
     partial = scores.group["coaster"]
     assert _u(scores, "carousel", "g1") == pytest.approx(_u(scores, "coaster", "g1"))  # equal enjoyment
     assert shared - partial == pytest.approx(lambda_fairness / 2)  # one guest of two left out, charged once
+
+
+# --- Scorer -> optimizer: what a negative group utility means -------------------------
+
+
+def test_the_optimizer_keeps_a_ride_its_riders_like_and_drops_one_nobody_wants() -> None:
+    party = ["g1", "g2", "g3", "g4"]
+    eligible = {g: ["coaster", "carousel", "dark"] if g in ("g1", "g2") else ["carousel", "dark"] for g in party}
+    profiles = [
+        guest_profile(
+            guest_id=g,
+            avoided_categories=[AttractionCategory.DARK_RIDE],
+            preferred_categories=[AttractionCategory.THRILL] if g in ("g1", "g2") else [],
+        )
+        for g in party
+    ]
+    context = _context({"coaster": 30.0, "carousel": 20.0, "dark": 120.0})
+    scores = _score(profiles, eligible, lambda_fairness=0.5, context=context,
+                    attractions=[COASTER, CAROUSEL, DARK])
+    assert scores.group["coaster"] > 0 > scores.group["dark"]  # 2 of 4 ride it and like it; nobody wants dark
+
+    optimizer = GreedyInsertionOptimizer(_graph({}, routing=_FlatRouting()))
+    day = optimizer.build_plan(
+        party_constraints(party_size=4, guests=[guest(guest_id=g) for g in party]),
+        context,
+        scores.utilities(),
+        park=park(),
+        catalog=[COASTER, CAROUSEL, DARK],
+        group_objective=_objective(eligible, 0.5),
+    )
+    rides = {s.node_id for s in day.stops if s.kind == StopKind.ATTRACTION}
+
+    assert {"coaster", "carousel"} <= rides
+    assert "dark" not in rides
+
+    must = optimizer.build_plan(
+        party_constraints(party_size=4, guests=[guest(guest_id=g) for g in party], must_do=["dark"]),
+        context,
+        scores.utilities(),
+        park=park(),
+        catalog=[COASTER, CAROUSEL, DARK],
+        group_objective=_objective(eligible, 0.5),
+    )
+    assert "dark" in {s.node_id for s in must.stops}  # a must-do is scheduled whatever its utility
 
 
 # --- Done-when: a smaller eligible set is not structurally penalized (C20) ------------
