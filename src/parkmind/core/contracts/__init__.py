@@ -69,7 +69,7 @@ from .models import (
     Stop,
 )
 
-__all__ = [
+__all__ = [  # noqa: RUF022
     "PARK_TZ",
     "AccessibilityCheck",
     "AccessibilityRequirements",

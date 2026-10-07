@@ -14,7 +14,7 @@ Coverage:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
 
@@ -25,7 +25,6 @@ from parkmind.core.contracts import (
     AttractionCategory,
     AttractionStatus,
     CoverageReport,
-    DataSource,
     EventThresholds,
     FairnessConfig,
     GroupObjective,
@@ -35,21 +34,12 @@ from parkmind.core.contracts import (
     LiveContext,
     Park,
     PartyConstraints,
-    Provenance,
     StopKind,
     TimeWindow,
     WaitEstimate,
 )
-from parkmind.services.clients.knowledge.in_memory import InMemoryKnowledgeStore
-from parkmind.services.personalization.preference_scorer import (
-    PREFERENCE_SCORER_VERSION,
-    PreferenceScorer,
-    per_guest_satisfaction,
-)
-from parkmind.services.planning.forecast_service import ForecastService
 from parkmind.services.planning.optimizer import GreedyInsertionOptimizer
 from parkmind.services.planning.park_graph import ParkGraph
-from parkmind.services.ports import WaitForecast
 
 # ---------------------------------------------------------------------------
 # Constants
