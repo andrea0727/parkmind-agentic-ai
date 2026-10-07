@@ -5,10 +5,10 @@ Handles the iterative repair of plans that fail the ConstraintChecker.
 §21 [C23]
 """
 
+import logging
+from collections.abc import Callable, Sequence
 from copy import deepcopy
 from datetime import datetime, timedelta
-import logging
-from typing import Callable, Sequence
 
 from parkmind.core.contracts import (
     AccessibilityRequirements,
@@ -21,6 +21,7 @@ from parkmind.core.contracts import (
 )
 from parkmind.core.contracts.base import PlannerResolveResult
 from parkmind.services.planning.constraint_checker import ConstraintChecker
+from parkmind.services.planning.errors import ContextReloadError
 from parkmind.services.planning.optimizer import GreedyInsertionOptimizer
 from parkmind.services.planning.repair_moves import RepairAction, get_repair_move
 
@@ -59,13 +60,13 @@ class PlannerResolveLoop:
     ) -> PlannerResolveResult:
         """
         Run the repair loop up to max_attempts.
-        
+
         If DATA_FRESHNESS fails, the context_reloader is invoked once.
         Returns a PlannerResolveResult.
         """
         current_constraints = deepcopy(constraints)
         current_context = context
-        
+
         catalog_index = {a.node_id: a for a in catalog} if catalog else {}
 
         for attempt in range(self._max_attempts):
@@ -88,7 +89,7 @@ class PlannerResolveLoop:
                 constraints=current_constraints,
                 accessibility=list(accessibility_reqs) if accessibility_reqs else [],
                 attractions=catalog_index,
-                park=park, # type: ignore
+                park=park,  # type: ignore[arg-type]
                 live_context=current_context,
                 now=now,
             )
@@ -99,16 +100,16 @@ class PlannerResolveLoop:
                     valid=True,
                     plan=plan,
                     unmet_must_do=plan.unmet_must_do,
-                    fatal_error=None
+                    fatal_error=None,
                 )
 
             # 4. If invalid, map the first violation to a repair move
             violation = check_result.violations[0]
             repair_move = get_repair_move(violation.rule, violation.stop_id)
-            
+
             logger.info(
-                f"Resolve loop attempt {attempt + 1}: violation {violation.rule}, "
-                f"executing repair {repair_move.action}"
+                f"Resolve loop attempt {attempt + 1}: violation {violation.rule.value}, "
+                f"executing repair {repair_move.action.value}"
             )
 
             # 5. Apply the repair move
@@ -117,48 +118,48 @@ class PlannerResolveLoop:
                     valid=False,
                     plan=None,
                     unmet_must_do=[],
-                    fatal_error=f"Infeasible constraint set: {violation.rule} - {violation.message}"
+                    fatal_error=f"Infeasible constraint set: {violation.rule.value} - {violation.message}",
                 )
-            
+
             if repair_move.action == RepairAction.RELOAD_CONTEXT:
                 if context_reloader is None:
                     return PlannerResolveResult(
                         valid=False,
                         plan=None,
                         unmet_must_do=[],
-                        fatal_error="DATA_FRESHNESS violation but no context_reloader provided."
+                        fatal_error="DATA_FRESHNESS violation but no context_reloader provided.",
                     )
                 try:
                     current_context = context_reloader()
-                except Exception as e:
+                except ContextReloadError as e:
                     return PlannerResolveResult(
                         valid=False,
                         plan=None,
                         unmet_must_do=[],
-                        fatal_error=f"Context reload failed: {e}"
+                        fatal_error=f"Context reload failed: {e}",
                     )
-                # Disable context reloading for future attempts to fail closed
+                # Disable context reloading for future attempts to fail closed [C23]
                 context_reloader = None
                 continue
-                
+
             if repair_move.action == RepairAction.FORBID_NODE:
                 if not repair_move.target_id:
                     return PlannerResolveResult(
                         valid=False,
                         plan=None,
                         unmet_must_do=[],
-                        fatal_error="FORBID_NODE missing target_id."
+                        fatal_error="FORBID_NODE missing target_id.",
                     )
                 current_constraints.avoid.append(repair_move.target_id)
                 continue
-                
+
             if repair_move.action == RepairAction.RELAX_LUNCH_WINDOW:
                 if not current_constraints.lunch_window:
                     return PlannerResolveResult(
                         valid=False,
                         plan=None,
                         unmet_must_do=[],
-                        fatal_error="Cannot relax lunch window: not set."
+                        fatal_error="Cannot relax lunch window: not set.",
                     )
                 # Expand by 15 mins both sides
                 new_start = current_constraints.lunch_window.start - timedelta(minutes=15)
@@ -167,14 +168,14 @@ class PlannerResolveLoop:
                     update={"start": new_start, "end": new_end}
                 )
                 continue
-                
+
             if repair_move.action == RepairAction.RELAX_WALKING_BUDGET:
                 if current_constraints.party_walking_budget_minutes is None:
                     return PlannerResolveResult(
                         valid=False,
                         plan=None,
                         unmet_must_do=[],
-                        fatal_error="Cannot relax walking budget: not set."
+                        fatal_error="Cannot relax walking budget: not set.",
                     )
                 # Increase by 20%
                 current_budget = current_constraints.party_walking_budget_minutes
@@ -186,5 +187,5 @@ class PlannerResolveLoop:
             valid=False,
             plan=None,
             unmet_must_do=[],
-            fatal_error=f"Failed to find valid plan after {self._max_attempts} attempts."
+            fatal_error=f"Failed to find valid plan after {self._max_attempts} attempts.",
         )
