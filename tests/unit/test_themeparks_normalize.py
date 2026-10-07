@@ -20,6 +20,7 @@ from parkmind.services.clients.themeparks_client import (
 )
 from parkmind.services.clients.themeparks_normalize import (
     parse_catalog,
+    parse_forecast,
     parse_live,
     parse_schedule,
     parse_showtimes,
@@ -391,3 +392,58 @@ def test_malformed_standby_wait_raises_schema_error(queue: object) -> None:
 )
 def test_valid_or_absent_standby_wait(queue: object, expected: float | None) -> None:
     assert standby_wait({"id": SPACE_MOUNTAIN, "queue": queue}) == expected
+
+
+def test_forecast_is_hourly_park_local_and_sorted() -> None:
+    entity = {
+        "id": SPACE_MOUNTAIN,
+        "forecast": [
+            {"time": "2026-09-27T10:00:00-04:00", "waitTime": 45, "percentage": 38},
+            {"time": "2026-09-27T13:00:00Z", "waitTime": 30, "percentage": 25},
+        ],
+    }
+
+    assert parse_forecast(entity) == [
+        (datetime(2026, 9, 27, 9, 0, tzinfo=PARK_TZ), 30.0),
+        (datetime(2026, 9, 27, 10, 0, tzinfo=PARK_TZ), 45.0),
+    ]
+
+
+def test_missing_forecast_is_empty_and_null_wait_is_no_reading() -> None:
+    assert parse_forecast({"id": SPACE_MOUNTAIN}) == []
+    assert parse_forecast({"id": SPACE_MOUNTAIN, "forecast": None}) == []
+    assert parse_forecast(
+        {"id": SPACE_MOUNTAIN, "forecast": [{"time": "2026-09-27T09:00:00-04:00", "waitTime": None}]}
+    ) == [(datetime(2026, 9, 27, 9, 0, tzinfo=PARK_TZ), None)]
+
+
+@pytest.mark.parametrize(
+    "point",
+    [
+        {"waitTime": 10},  # no time
+        {"time": "2026-09-27T09:00:00", "waitTime": 10},  # no offset
+        {"time": "2026-09-27T09:00:00-04:00", "waitTime": "10"},
+        {"time": "2026-09-27T09:00:00-04:00", "waitTime": -5},
+        {"time": "2026-09-27T09:00:00-04:00", "waitTime": True},
+        "09:00",
+    ],
+)
+def test_malformed_forecast_raises_schema_error(point: object) -> None:
+    with pytest.raises(ThemeParksSchemaError, match="forecast"):
+        parse_forecast({"id": SPACE_MOUNTAIN, "forecast": [point]})
+
+
+def test_captured_snapshot_forecasts_parse() -> None:
+    capture = json.loads(
+        (FIXTURES.parent / "snapshot_2026-09-27" / "themeparks_live.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    forecasts = {e["id"]: parse_forecast(e) for e in capture["liveData"] if e.get("forecast")}
+
+    assert len(forecasts) == 26
+    assert all(
+        start.tzinfo is not None and start.minute == 0 and wait is not None
+        for points in forecasts.values()
+        for start, wait in points
+    )
