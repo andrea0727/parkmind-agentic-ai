@@ -201,3 +201,16 @@ class EventThresholds(ParkMindBaseModel):
     fatigue_threshold: float = Field(
         ge=0, le=1, default=0.7
     )  # confidence level for GUEST_FATIGUE to require replan
+
+
+class PlannerResolveResult(ParkMindBaseModel):
+    """
+    Result of the repair loop after applying architecture §21 moves.
+
+    §21 [C23]
+    """
+
+    valid: bool
+    plan: Any | None = None
+    unmet_must_do: list[str] = Field(default_factory=list)
+    fatal_error: str | None = None
