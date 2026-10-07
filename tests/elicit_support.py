@@ -6,8 +6,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from parkmind.core.contracts import AccessibilityRequirements
+from parkmind.core.contracts import (
+    AccessibilityRequirements,
+    Attraction,
+    AttractionCategory,
+)
 from parkmind.services.use_cases.accessibility_intake import AccessibilityIntakeUseCase
+from parkmind.services.use_cases.resolve_attraction_names import AttractionNameResolver
 
 SCENARIOS_PATH = Path(__file__).parent / "fixtures" / "elicit" / "scenarios.json"
 
@@ -61,3 +66,42 @@ def make_intake() -> tuple[AccessibilityIntakeUseCase, FakeSessionStore]:
         yield store
 
     return AccessibilityIntakeUseCase(store_factory=factory), store
+
+
+PARK_ID = "mk"
+
+
+def catalog() -> list[Attraction]:
+    """Names match the scenarios; no height limits, so only name resolution is exercised."""
+
+    def make(node_id: str, name: str, category: AttractionCategory, wait: int) -> Attraction:
+        return Attraction(
+            node_id=node_id,
+            name=name,
+            category=category,
+            height_restriction_cm=None,
+            typical_wait_minutes=wait,
+            outdoor=False,
+        )
+
+    return [
+        make("id-tron", "TRON", AttractionCategory.THRILL, 30),
+        make("id-space", "Space Mountain", AttractionCategory.THRILL, 40),
+        make("id-splash", "Splash Mountain", AttractionCategory.WATER, 25),
+        make("id-teacups", "Teacups", AttractionCategory.FAMILY, 10),
+        make("id-carousel", "Carousel", AttractionCategory.FAMILY, 5),
+        make("id-haunted", "Haunted Mansion", AttractionCategory.DARK_RIDE, 20),
+        make("id-coaster", "Big Thunder Mountain", AttractionCategory.THRILL, 35),
+    ]
+
+
+class FakeAttractionRepository:
+    def __init__(self, attractions: Sequence[Attraction] | None = None) -> None:
+        self._attractions = list(catalog() if attractions is None else attractions)
+
+    def list_attractions(self, park_id: str) -> list[Attraction]:
+        return sorted(self._attractions, key=lambda a: a.node_id) if park_id == PARK_ID else []
+
+
+def make_names(attractions: Sequence[Attraction] | None = None) -> AttractionNameResolver:
+    return AttractionNameResolver(FakeAttractionRepository(attractions), PARK_ID)  # type: ignore[arg-type]

@@ -3,7 +3,7 @@
 from typing import Any
 
 import pytest
-from elicit_support import FakeExtractor, make_intake, scenario
+from elicit_support import FakeExtractor, make_intake, make_names, scenario
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
@@ -45,7 +45,7 @@ def _graph(extractor: FakeExtractor, saver: MemorySaver | None = None):
     intake, store = make_intake()
     downstream = Downstream()
     saver = saver or default_checkpointer()
-    graph = build_elicitation_graph(extractor, intake, saver, downstream)
+    graph = build_elicitation_graph(extractor, intake, saver, downstream, names=make_names())
     return graph, intake, store, downstream, saver
 
 
@@ -97,7 +97,7 @@ def test_confirmation_releases_validated_constraints_downstream() -> None:
     assert reached["constraints_valid"] is True
     assert reached["pending_hard_constraint_confirmation"] == []
     assert reached["accessibility_ref"] == ["g2"]
-    assert reached["constraints"].must_do == ["TRON", "Space Mountain"]
+    assert reached["constraints"].must_do == ["id-tron", "id-space"]
 
 
 def test_ensure_confirmed_rejects_every_unconfirmed_shape() -> None:
@@ -174,6 +174,26 @@ def test_missing_information_interrupts_and_resumes_with_the_answer() -> None:
     assert _interrupt_value(result)["kind"] == "hard_constraint_confirmation"
     assert extractor.calls[1][0][-1] == "We leave the park at 8 PM."
     assert len(extractor.calls[1][0]) == 2
+
+
+def test_an_unresolved_attraction_name_is_asked_before_anything_is_confirmed() -> None:
+    unknown = {**COMPLETE["extraction"], "avoid": ["Death Star"]}
+    fixed = {**COMPLETE["extraction"], "avoid": ["Splash Mountain"]}
+    extractor = FakeExtractor(unknown, fixed)
+    graph, _, _, downstream, _ = _graph(extractor)
+
+    result = _start(graph, *COMPLETE["messages"])
+
+    payload = _interrupt_value(result)
+    assert payload["kind"] == "missing_information"
+    assert payload["missing"] == ["unknown_attraction:Death Star"]
+    assert downstream.seen == []
+
+    result = _resume(graph, "I meant Splash Mountain.")
+
+    payload = _interrupt_value(result)
+    assert payload["kind"] == "hard_constraint_confirmation"
+    assert "avoid: Splash Mountain" in payload["pending"]
 
 
 # --- schema failure is recoverable -----------------------------------------------

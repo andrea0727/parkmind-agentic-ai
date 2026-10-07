@@ -39,6 +39,10 @@ from parkmind.services.use_cases.accessibility_intake import (
     AccessibilityIntakeUseCase,
     StagedAccessibility,
 )
+from parkmind.services.use_cases.resolve_attraction_names import (
+    AttractionNameResolver,
+    NameResolution,
+)
 
 __all__ = [
     "ELICIT_PROMPT_VERSION",
@@ -55,6 +59,7 @@ __all__ = [
     "make_elicit_node",
     "missing_information",
     "pending_confirmations",
+    "unresolved_names",
 ]
 
 DEFAULT_MAX_ATTEMPTS = 2
@@ -184,11 +189,31 @@ def missing_information(extraction: ElicitationExtraction) -> list[str]:
     return missing
 
 
-def _question_for(missing: Sequence[str]) -> str:
+_UNKNOWN_ATTRACTION = "unknown_attraction:"
+_AMBIGUOUS_ATTRACTION = "ambiguous_attraction:"
+
+
+def unresolved_names(resolution: NameResolution) -> list[str]:
+    """Missing-information keys for must-do/avoid names that match no single attraction."""
+    return [f"{_UNKNOWN_ATTRACTION}{name}" for name in resolution.unknown] + [
+        f"{_AMBIGUOUS_ATTRACTION}{name}" for name in resolution.ambiguous
+    ]
+
+
+def _question_for(missing: Sequence[str], resolution: NameResolution | None = None) -> str:
     questions: list[str] = []
     for key in missing:
         if key.startswith("guest_role:"):
             questions.append(f"Is {key.split(':', 1)[1]} an adult or a child?")
+        elif key.startswith(_UNKNOWN_ATTRACTION):
+            name = key.removeprefix(_UNKNOWN_ATTRACTION)
+            questions.append(
+                f"I couldn't find '{name}' among this park's attractions. Which attraction do you mean?"
+            )
+        elif key.startswith(_AMBIGUOUS_ATTRACTION):
+            name = key.removeprefix(_AMBIGUOUS_ATTRACTION)
+            options = resolution.ambiguous[name] if resolution is not None else ()
+            questions.append(f"'{name}' could be {', '.join(options)}. Which one do you mean?")
         else:
             questions.append(_MISSING_QUESTIONS.get(key, f"Could you tell me about {key}?"))
     return " ".join(questions)
@@ -199,9 +224,14 @@ def _at(day: date, hhmm: str) -> datetime:
 
 
 def build_party_constraints(
-    extraction: ElicitationExtraction, *, today: date, constraints_version: int = 1
+    extraction: ElicitationExtraction,
+    *,
+    today: date,
+    resolution: NameResolution,
+    constraints_version: int = 1,
 ) -> PartyConstraints:
-    """Build the contract. Call only when ``missing_information`` is empty."""
+    """Build the contract. Call only when ``missing_information`` is empty and
+    ``resolution`` is complete: must_do/avoid hold catalog ``node_id``s."""
     guests = [
         Guest(guest_id=f"g{i}", role=g.role, height_cm=g.height_cm)  # type: ignore[arg-type]
         for i, g in enumerate(extraction.guests, start=1)
@@ -211,8 +241,8 @@ def build_party_constraints(
     return PartyConstraints(
         party_size=extraction.party_size or len(guests),
         guests=guests,
-        must_do=list(dict.fromkeys(extraction.must_do)),
-        avoid=list(dict.fromkeys(extraction.avoid)),
+        must_do=resolution.node_ids(extraction.must_do),
+        avoid=resolution.node_ids(extraction.avoid),
         lunch_window=TimeWindow(start=_at(today, window.start), end=_at(today, window.end))
         if window
         else None,
@@ -264,15 +294,19 @@ def build_guest_profiles(extraction: ElicitationExtraction, *, now: datetime) ->
     return profiles
 
 
-def pending_confirmations(extraction: ElicitationExtraction) -> list[str]:
+def pending_confirmations(extraction: ElicitationExtraction, resolution: NameResolution) -> list[str]:
     """Every hard item the human must confirm before the checker may use it.
+
+    must_do/avoid entries carry the attraction's official name, so the human
+    confirms what will actually be enforced.
 
     Accessibility entries are guest-id tokens only (``accessibility:g2``): the
     list is checkpointed state and must not carry the flags themselves [C19].
     """
     pending: list[str] = []
-    pending.extend(f"must_do: {name}" for name in dict.fromkeys(extraction.must_do))
-    pending.extend(f"avoid: {name}" for name in dict.fromkeys(extraction.avoid))
+    for kind, spoken in (("must_do", extraction.must_do), ("avoid", extraction.avoid)):
+        official = dict.fromkeys(resolution.resolved[name].name for name in spoken)
+        pending.extend(f"{kind}: {name}" for name in official)
     if extraction.departure_time is not None:
         pending.append(f"departure_time: {extraction.departure_time}")
     if extraction.lunch_window is not None:
@@ -341,6 +375,7 @@ def _staged(extraction: ElicitationExtraction) -> list[StagedAccessibility]:
 def make_elicit_node(
     extractor: GuestInfoExtractor,
     intake: AccessibilityIntakeUseCase,
+    names: AttractionNameResolver,
     *,
     today: Callable[[], date] = lambda: datetime.now(PARK_TZ).date(),
     now: Callable[[], datetime] = lambda: datetime.now(PARK_TZ),
@@ -349,8 +384,9 @@ def make_elicit_node(
     """Node factory. The node never marks constraints valid: it only proposes them.
 
     Outputs:
-    * missing information or an unreadable answer -> ``constraints=None`` plus an
-      AI question (its ``additional_kwargs["missing_information"]`` lists the keys);
+    * missing information, an unreadable answer, or a must-do/avoid name that is
+      not exactly one catalog attraction -> ``constraints=None`` plus an AI
+      question (its ``additional_kwargs["missing_information"]`` lists the keys);
     * otherwise ``constraints``, ``guest_profiles``, ``constraints_valid=False``
       and ``pending_hard_constraint_confirmation``.
     """
@@ -365,11 +401,12 @@ def make_elicit_node(
         intake.discard(session_id)
 
         outcome = extract_with_recovery(extractor, texts, max_attempts=max_attempts)
-        missing = (
-            ["unreadable_response"]
-            if outcome.extraction is None
-            else missing_information(outcome.extraction)
-        )
+        resolution = NameResolution()
+        if outcome.extraction is None:
+            missing = ["unreadable_response"]
+        else:
+            resolution = names.resolve([*outcome.extraction.must_do, *outcome.extraction.avoid])
+            missing = missing_information(outcome.extraction) + unresolved_names(resolution)
         if outcome.extraction is None or missing:
             return {
                 "constraints": None,
@@ -377,7 +414,7 @@ def make_elicit_node(
                 "pending_hard_constraint_confirmation": None,
                 "messages": [
                     AIMessage(
-                        content=_question_for(missing),
+                        content=_question_for(missing, resolution),
                         additional_kwargs={"missing_information": missing},
                     )
                 ],
@@ -387,10 +424,12 @@ def make_elicit_node(
         for staged in _staged(extraction):
             intake.stage(session_id, staged)
         return {
-            "constraints": build_party_constraints(extraction, today=today()),
+            "constraints": build_party_constraints(
+                extraction, today=today(), resolution=resolution
+            ),
             "guest_profiles": build_guest_profiles(extraction, now=now()),
             "constraints_valid": False,
-            "pending_hard_constraint_confirmation": pending_confirmations(extraction),
+            "pending_hard_constraint_confirmation": pending_confirmations(extraction, resolution),
         }
 
     return elicit

@@ -3,7 +3,7 @@
 from datetime import date, datetime
 
 import pytest
-from elicit_support import FakeExtractor, make_intake, scenario
+from elicit_support import FakeExtractor, make_intake, make_names, scenario
 from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
 
@@ -24,6 +24,7 @@ from parkmind.core.contracts import (
     SensitivityKind,
     SensitivityLevel,
 )
+from parkmind.services.use_cases.resolve_attraction_names import CatalogUnavailableError
 
 TODAY = date(2026, 10, 6)
 NOW = datetime(2026, 10, 6, 9, 0, tzinfo=PARK_TZ)
@@ -42,7 +43,7 @@ def _state(*texts: str) -> dict:
 
 def _node(extractor: FakeExtractor):
     intake, store = make_intake()
-    node = make_elicit_node(extractor, intake, today=lambda: TODAY, now=lambda: NOW)
+    node = make_elicit_node(extractor, intake, make_names(), today=lambda: TODAY, now=lambda: NOW)
     return node, intake, store
 
 
@@ -123,11 +124,13 @@ def test_no_guests_is_reported() -> None:
 
 
 def test_wiki_example_builds_party_constraints() -> None:
-    constraints = build_party_constraints(_extraction(COMPLETE), today=TODAY)
+    extraction = _extraction(COMPLETE)
+    resolution = make_names().resolve(extraction.must_do)
+    constraints = build_party_constraints(extraction, today=TODAY, resolution=resolution)
 
     assert constraints.party_size == 4
     assert [g.guest_id for g in constraints.guests] == ["g1", "g2", "g3", "g4"]
-    assert constraints.must_do == ["TRON", "Space Mountain"]
+    assert constraints.must_do == ["id-tron", "id-space"]
     assert constraints.lunch_window is not None
     assert (constraints.lunch_window.start.hour, constraints.lunch_window.start.minute) == (12, 30)
     assert (constraints.lunch_window.end.hour, constraints.lunch_window.end.minute) == (13, 30)
@@ -180,7 +183,9 @@ def test_accessibility_statement_is_staged_and_listed_as_a_token_only() -> None:
 
 
 def test_every_hard_item_is_pending() -> None:
-    assert pending_confirmations(_extraction(COMPLETE)) == COMPLETE["expect_pending"]
+    extraction = _extraction(COMPLETE)
+    resolution = make_names().resolve([*extraction.must_do, *extraction.avoid])
+    assert pending_confirmations(extraction, resolution) == COMPLETE["expect_pending"]
 
 
 def test_a_new_extraction_replaces_stale_staging() -> None:
@@ -210,3 +215,85 @@ def test_echo_is_plain_language() -> None:
 def test_validation_error_type_is_what_is_retried() -> None:
     with pytest.raises(ValidationError):
         ElicitationExtraction.model_validate(BAD_OUTPUT)
+
+
+# --- must-do / avoid names become catalog node ids, or go back to the human ------
+
+
+def _with(extraction: dict, **changes) -> dict:
+    return {**extraction, **changes}
+
+
+def test_confirmed_names_become_node_ids_and_the_echo_shows_the_official_name() -> None:
+    node, _, _ = _node(FakeExtractor(_with(
+        COMPLETE["extraction"], must_do=["tron"], avoid=["Splash"]
+    )))
+
+    update = node(_state(*COMPLETE["messages"]))
+
+    assert update["constraints"].must_do == ["id-tron"]
+    assert update["constraints"].avoid == ["id-splash"]
+    pending = update["pending_hard_constraint_confirmation"]
+    assert "must_do: TRON" in pending and "avoid: Splash Mountain" in pending
+
+
+def test_two_spoken_names_for_one_attraction_become_one_id() -> None:
+    node, _, _ = _node(FakeExtractor(_with(
+        COMPLETE["extraction"], must_do=["TRON", "tron"]
+    )))
+
+    update = node(_state(*COMPLETE["messages"]))
+
+    assert update["constraints"].must_do == ["id-tron"]
+
+
+def test_unknown_attraction_is_asked_not_stored() -> None:
+    node, intake, _ = _node(FakeExtractor(_with(
+        COMPLETE["extraction"], avoid=["Death Star"]
+    )))
+
+    update = node(_state(*COMPLETE["messages"]))
+
+    assert update["constraints"] is None
+    assert update["pending_hard_constraint_confirmation"] is None
+    message = update["messages"][0]
+    assert message.additional_kwargs["missing_information"] == ["unknown_attraction:Death Star"]
+    assert "Death Star" in message.content
+    assert intake.pending_guest_ids("t1") == []
+
+
+def test_ambiguous_attraction_lists_the_options() -> None:
+    node, _, _ = _node(FakeExtractor(_with(
+        COMPLETE["extraction"], must_do=["Mountain"]
+    )))
+
+    update = node(_state(*COMPLETE["messages"]))
+
+    assert update["constraints"] is None
+    message = update["messages"][0]
+    assert message.additional_kwargs["missing_information"] == ["ambiguous_attraction:Mountain"]
+    for official in ("Space Mountain", "Splash Mountain", "Big Thunder Mountain"):
+        assert official in message.content
+
+
+def test_unresolved_names_are_asked_together_with_other_missing_information() -> None:
+    node, _, _ = _node(FakeExtractor(_with(
+        MISSING_DEPARTURE["extraction"], avoid=["Death Star"]
+    )))
+
+    update = node(_state(*MISSING_DEPARTURE["messages"]))
+
+    assert update["messages"][0].additional_kwargs["missing_information"] == [
+        "departure_time",
+        "unknown_attraction:Death Star",
+    ]
+
+
+def test_an_empty_catalog_is_an_error_not_a_question_to_the_guests() -> None:
+    intake, _ = make_intake()
+    node = make_elicit_node(
+        FakeExtractor(COMPLETE["extraction"]), intake, make_names([]), today=lambda: TODAY, now=lambda: NOW
+    )
+
+    with pytest.raises(CatalogUnavailableError):
+        node(_state(*COMPLETE["messages"]))

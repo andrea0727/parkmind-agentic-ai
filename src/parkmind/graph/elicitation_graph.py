@@ -50,6 +50,7 @@ from parkmind.services.use_cases.accessibility_intake import (
     DEFAULT_RETENTION,
     AccessibilityIntakeUseCase,
 )
+from parkmind.services.use_cases.resolve_attraction_names import AttractionNameResolver
 
 _ACCESSIBILITY_PREFIX = "accessibility:"
 _RETENTION_POLICIES = ("session_only", "persisted")
@@ -200,8 +201,13 @@ def build_elicitation_graph(
     intake: AccessibilityIntakeUseCase | None = None,
     checkpointer: Any = None,
     downstream: StateNode = _proceed,
+    *,
+    names: AttractionNameResolver,
 ) -> Any:
     """Compile the elicit -> confirm -> validate graph.
+
+    ``names`` turns the must-do/avoid names the guests say into catalog
+    ``node_id``s; the confirmed ``constraints.must_do``/``avoid`` hold ids.
 
     ``downstream`` runs only once constraints are confirmed and valid; give it
     the next stage of the initial planning graph [P0-30]. It should call
@@ -210,7 +216,7 @@ def build_elicitation_graph(
     intake = intake or AccessibilityIntakeUseCase()
     graph = StateGraph(ParkMindState)
 
-    graph.add_node("elicit", make_elicit_node(extractor or AnthropicExtractor(), intake))
+    graph.add_node("elicit", make_elicit_node(extractor or AnthropicExtractor(), intake, names))
     graph.add_node("ask_missing", _ask_missing)
     graph.add_node("confirm_hard_constraints", _make_confirm_node(intake))
     graph.add_node("validate_constraints", _validate_constraints)
