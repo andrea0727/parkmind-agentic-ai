@@ -20,6 +20,7 @@ happens once ConstraintChecker [P0-20] and human approval have run
 
 from uuid import uuid4
 
+from parkmind.agents.elicit_prompt import ELICIT_PROMPT_VERSION
 from parkmind.core.contracts import Plan, Provenance
 from parkmind.graph.state import ParkMindState
 
@@ -59,6 +60,7 @@ async def synthesize_plan(state: ParkMindState) -> ParkMindState:
             constraints_version=constraints.constraints_version,
             objective_version=objective_version,
             preference_model_version=state.get("preference_model_version") or "0-placeholder",
+            prompt_versions={"elicit": ELICIT_PROMPT_VERSION},
         ),
     )
 

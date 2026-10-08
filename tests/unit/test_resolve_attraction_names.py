@@ -88,6 +88,21 @@ def test_normalizing_does_not_merge_different_attractions() -> None:
     assert resolution.ambiguous["Peter Pan"] == ("Peter Pan Mini Golf", "Peter Pan's Flight")
 
 
+def test_a_spelling_variant_does_not_hide_an_ambiguous_name() -> None:
+    catalog = [
+        make_attraction("id-regal", "Prince Charming Regal Carrousel"),
+        make_attraction("id-progress", "Walt Disney's Carousel of Progress"),
+    ]
+
+    resolution = make_names(catalog).resolve(["Carousel"])
+
+    assert resolution.resolved == {}
+    assert resolution.ambiguous["Carousel"] == (
+        "Prince Charming Regal Carrousel",
+        "Walt Disney's Carousel of Progress",
+    )
+
+
 def test_node_ids_are_deduplicated_in_order() -> None:
     resolution = make_names().resolve(["tron", "TRON", "Teacups"])
 
