@@ -616,10 +616,10 @@ class GreedyInsertionOptimizer:
         total_wait = sum(s.expected_wait_minutes for s in stops)
         total_walk = sum(s.walking_minutes for s in stops)
         objective_value = sum(s.utility for s in stops)
-        per_guest_satisfaction = self._calculate_guest_satisfaction(
-            stops,
-            constraints,
-            group_objective,
+        per_guest_satisfaction = (
+            {}  # filled from the scorer once the plan is assembled
+            if scores is not None
+            else self._calculate_guest_satisfaction(stops, constraints, group_objective)
         )
 
         scheduled_node_ids = {s.node_id for s in stops}
