@@ -21,7 +21,6 @@ from parkmind.services.planning.errors import ContextReloadError
 from parkmind.services.planning.repair_moves import RULE_TO_REPAIR_ACTION, RepairAction
 from parkmind.services.planning.resolve_loop import PlannerResolveLoop
 
-
 # ---------------------------------------------------------------------------
 # Helpers — Provenance / Stop / Plan mínimos reales (sin MagicMock)
 # ---------------------------------------------------------------------------
