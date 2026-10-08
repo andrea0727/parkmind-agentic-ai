@@ -1,6 +1,6 @@
 """Versioned system prompt of the ``elicit`` step."""
 
-ELICIT_PROMPT_VERSION = "elicit-v1"
+ELICIT_PROMPT_VERSION = "elicit-v2"
 
 ELICIT_SYSTEM_PROMPT = """\
 You extract structured planning information for a theme-park visit from what the \
@@ -29,6 +29,9 @@ HARD CONSTRAINTS (never traded off) are only:
 - `departure_time` ("HH:MM", 24h park-local time) and `lunch_window` \
 ("HH:MM" start/end; "lunch around 1 PM" -> 12:30 to 13:30).
 - `party_walking_budget_minutes` when the party states a total walking limit.
+- `height_cm` on a guest, only when the guests state it ("he is about 4 feet \
+tall" -> 122). Convert to centimetres. Never estimate it from age or role. It \
+decides which rides a guest may ride, so the guests confirm it.
 - `accessibility`: a guest who cannot do something physically \
 ("can't walk long distances", uses a wheelchair, needs rest breaks, is \
 sensitive to heat, ride restrictions the guest states).

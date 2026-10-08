@@ -3,7 +3,13 @@
 from datetime import date, datetime
 
 import pytest
-from elicit_support import FakeExtractor, make_intake, make_names, scenario
+from elicit_support import (
+    FakeExtractor,
+    load_scenarios,
+    make_intake,
+    make_names,
+    scenario,
+)
 from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
 
@@ -182,10 +188,45 @@ def test_accessibility_statement_is_staged_and_listed_as_a_token_only() -> None:
     assert "accessibility_ref" not in update
 
 
-def test_every_hard_item_is_pending() -> None:
+@pytest.mark.parametrize(
+    "case",
+    [s for s in load_scenarios() if not s["expect_missing"]],
+    ids=lambda s: s["id"],
+)
+def test_every_hard_item_is_pending(case: dict) -> None:
+    extraction = _extraction(case)
+    resolution = make_names().resolve([*extraction.must_do, *extraction.avoid])
+    assert pending_confirmations(extraction, resolution) == case["expect_pending"]
+
+
+@pytest.mark.parametrize("case", load_scenarios(), ids=lambda s: s["id"])
+def test_every_hard_labeled_item_in_the_fixtures_is_a_hard_classification(case: dict) -> None:
+    classified = _extraction(case).classified_items()
+    assert {k: v for k, v in case["expected"].items() if v == "hard"}.items() <= classified.items()
+
+
+def test_a_stated_height_is_pending_and_never_reaches_the_checker_unconfirmed() -> None:
+    case = scenario("stated_child_height")
+    node, _, _ = _node(FakeExtractor(case["extraction"]))
+
+    update = node(_state(*case["messages"]))
+
+    assert "height:g2: 122" in update["pending_hard_constraint_confirmation"]
+    assert update["constraints_valid"] is False
+
+
+def test_a_height_is_echoed_in_cm_and_feet_so_the_guests_can_check_it() -> None:
+    echo = echo_for("height:g2: 122")
+
+    assert "Guest 2" in echo and "122 cm" in echo and "4'0\"" in echo
+    assert "skipped" in echo
+
+
+def test_no_stated_height_means_no_height_confirmation() -> None:
     extraction = _extraction(COMPLETE)
     resolution = make_names().resolve([*extraction.must_do, *extraction.avoid])
-    assert pending_confirmations(extraction, resolution) == COMPLETE["expect_pending"]
+
+    assert not any(e.startswith("height:") for e in pending_confirmations(extraction, resolution))
 
 
 def test_a_new_extraction_replaces_stale_staging() -> None:
@@ -287,6 +328,51 @@ def test_unresolved_names_are_asked_together_with_other_missing_information() ->
         "departure_time",
         "unknown_attraction:Death Star",
     ]
+
+
+def test_the_same_attraction_as_must_do_and_avoid_is_asked_not_planned() -> None:
+    node, intake, _ = _node(FakeExtractor(_with(COMPLETE["extraction"], avoid=["TRON"])))
+
+    update = node(_state(*COMPLETE["messages"]))
+
+    assert update["constraints"] is None
+    assert update["pending_hard_constraint_confirmation"] is None
+    message = update["messages"][0]
+    assert message.additional_kwargs["missing_information"] == ["conflicting_attraction:TRON"]
+    assert "TRON" in message.content and "must-do" in message.content and "avoid" in message.content
+    assert intake.pending_guest_ids("t1") == []
+
+
+def test_a_conflict_is_found_even_when_the_two_lists_use_different_spoken_names() -> None:
+    node, _, _ = _node(
+        FakeExtractor(_with(COMPLETE["extraction"], must_do=["tron"], avoid=["TRON"]))
+    )
+
+    update = node(_state(*COMPLETE["messages"]))
+
+    assert update["messages"][0].additional_kwargs["missing_information"] == [
+        "conflicting_attraction:TRON"
+    ]
+
+
+def test_different_attractions_in_must_do_and_avoid_are_not_a_conflict() -> None:
+    node, _, _ = _node(FakeExtractor(_with(COMPLETE["extraction"], avoid=["Splash"])))
+
+    update = node(_state(*COMPLETE["messages"]))
+
+    assert update["constraints"] is not None
+
+
+def test_a_bad_time_is_repaired_without_echoing_what_the_guests_said() -> None:
+    bad = _with(COMPLETE["extraction"], departure_time="around 1pm for sure")
+    extractor = FakeExtractor(bad, COMPLETE["extraction"])
+
+    outcome = extract_with_recovery(extractor, ["hi"])
+
+    hint = extractor.calls[1][1] or ""
+    assert outcome.extraction is not None
+    assert "departure_time" in hint and "HH:MM" in hint
+    assert "around" not in hint and "1pm" not in hint
 
 
 def test_an_empty_catalog_is_an_error_not_a_question_to_the_guests() -> None:

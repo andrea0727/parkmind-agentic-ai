@@ -8,11 +8,13 @@ before it becomes a hard constraint.
 
 Fail closed, never guess: a name that matches no attraction, or more than one,
 is reported back so the human can say which one they mean. Matching is by
-normalized name: first an exact match, then a unique match where every word the
-guest said is a word of the attraction's name ("splash" -> "Splash Mountain").
+normalized name (lowercase, no punctuation or possessive 's): first an exact
+match, then a unique match where every word the guest said is a word of the
+attraction's name ("splash" -> "Splash Mountain").
 The human sees the resolved official name when they confirm.
 """
 
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
@@ -47,8 +49,18 @@ class NameResolution:
         return list(dict.fromkeys(self.resolved[name].node_id for name in names))
 
 
+_POSSESSIVE = re.compile(r"['’`]s\b")
+_PUNCTUATION = re.compile(r"[^\w\s]")
+
+
 def _normalize(text: str) -> str:
-    return " ".join(text.lower().split())
+    """Case, possessive 's and punctuation do not tell attractions apart.
+
+    "Peter Pan" -> "Peter Pan's Flight" and "small world" -> '"it's a small
+    world"' only match once both sides are normalized the same way.
+    """
+    without_possessive = _POSSESSIVE.sub("", text.lower())
+    return " ".join(_PUNCTUATION.sub(" ", without_possessive).split())
 
 
 class AttractionNameResolver:

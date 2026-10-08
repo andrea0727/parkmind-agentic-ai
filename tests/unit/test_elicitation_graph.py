@@ -155,6 +155,25 @@ def test_only_hard_items_without_accessibility_still_need_confirmation() -> None
     assert len(downstream.seen) == 1 and store.puts == 0
 
 
+def test_a_stated_height_is_echoed_and_only_reaches_downstream_once_confirmed() -> None:
+    height = scenario("stated_child_height")
+    graph, _, _, downstream, _ = _graph(FakeExtractor(height["extraction"]))
+
+    result = _start(graph, *height["messages"])
+
+    payload = _interrupt_value(result)
+    assert "height:g2: 122" in payload["pending"]
+    assert any("122 cm" in line for line in payload["echo"])
+    assert downstream.seen == []
+    assert graph.get_state(CONFIG).values["constraints_valid"] is False
+
+    _resume(graph, {"confirmed": True})
+
+    reached = downstream.seen[0]
+    assert reached["constraints_valid"] is True
+    assert [g.height_cm for g in reached["constraints"].guests] == [None, 122]
+
+
 # --- missing information is surfaced ---------------------------------------------
 
 

@@ -71,19 +71,22 @@ def make_intake() -> tuple[AccessibilityIntakeUseCase, FakeSessionStore]:
 PARK_ID = "mk"
 
 
+def make_attraction(
+    node_id: str, name: str, category: AttractionCategory = AttractionCategory.THRILL, wait: int = 20
+) -> Attraction:
+    return Attraction(
+        node_id=node_id,
+        name=name,
+        category=category,
+        height_restriction_cm=None,
+        typical_wait_minutes=wait,
+        outdoor=False,
+    )
+
+
 def catalog() -> list[Attraction]:
     """Names match the scenarios; no height limits, so only name resolution is exercised."""
-
-    def make(node_id: str, name: str, category: AttractionCategory, wait: int) -> Attraction:
-        return Attraction(
-            node_id=node_id,
-            name=name,
-            category=category,
-            height_restriction_cm=None,
-            typical_wait_minutes=wait,
-            outdoor=False,
-        )
-
+    make = make_attraction
     return [
         make("id-tron", "TRON", AttractionCategory.THRILL, 30),
         make("id-space", "Space Mountain", AttractionCategory.THRILL, 40),

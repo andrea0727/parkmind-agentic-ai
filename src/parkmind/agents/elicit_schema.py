@@ -9,9 +9,11 @@ in the schema at all: they are given by the human, never by the model.
 Statements are split into two disjoint groups:
 
 * soft preferences (``ExtractedGuest``) -- tradeable, scored by the planner;
-* hard constraints (must-do, avoid, fixed times, walking budget and every
-  ``ExtractedAccessibility`` flag) -- never traded off, so each one must be
-  confirmed by the human before it can reach the checker.
+* hard constraints (must-do, avoid, fixed times, walking budget, a guest's
+  stated height and every ``ExtractedAccessibility`` flag) -- never traded off,
+  so each one must be confirmed by the human before it can reach the checker.
+  Height is the input of the height-minimum safety rule, so it is hard even
+  though it sits on ``ExtractedGuest``.
 """
 
 import re
@@ -39,9 +41,11 @@ def normalize_name(name: str) -> str:
     return " ".join(name.lower().split())
 
 
-def _check_hhmm(value: str | None) -> str | None:
+def _check_hhmm(value: str | None, field: str) -> str | None:
     if value is not None and not _HHMM.match(value):
-        raise ValueError(f"expected a 24h 'HH:MM' time, got {value!r}")
+        # Name the field, never the value: the value may be the guest's own words,
+        # and this text is sent back to the model as the repair hint.
+        raise ValueError(f"{field} must be a 24h 'HH:MM' time")
     return value
 
 
@@ -60,11 +64,16 @@ class ExtractedAffinity(_Strict):
 
 
 class ExtractedGuest(_Strict):
-    """One person in the party, with soft preferences only."""
+    """One person in the party: soft preferences, plus the stated height (hard)."""
 
     label: str | None = None
     role: GuestRole | None = None
-    height_cm: float | None = Field(default=None, ge=50, le=250)
+    height_cm: float | None = Field(
+        default=None,
+        ge=50,
+        le=250,
+        description="Height in cm, only if the guests stated it (1 ft = 30.48 cm, 1 in = 2.54 cm)",
+    )
     pace: PlanningPace | None = None
     planning_style: PlanningStyle | None = None
     queue_tolerance: float | None = Field(default=None, ge=0, le=1)
@@ -104,8 +113,8 @@ class ExtractedWindow(_Strict):
 
     @model_validator(mode="after")
     def _valid(self) -> "ExtractedWindow":
-        _check_hhmm(self.start)
-        _check_hhmm(self.end)
+        _check_hhmm(self.start, "lunch_window.start")
+        _check_hhmm(self.end, "lunch_window.end")
         if self.end <= self.start:
             raise ValueError("window end must be after its start")
         return self
@@ -123,7 +132,7 @@ class ElicitationExtraction(_Strict):
 
     @model_validator(mode="after")
     def _consistent(self) -> "ElicitationExtraction":
-        _check_hhmm(self.departure_time)
+        _check_hhmm(self.departure_time, "departure_time")
         if self.guests and self.party_size is not None and self.party_size != len(self.guests):
             raise ValueError(
                 f"party_size={self.party_size} but {len(self.guests)} guests were listed"
@@ -164,6 +173,8 @@ class ElicitationExtraction(_Strict):
 
         for index, guest in enumerate(self.guests, start=1):
             ref = f"g{index}"
+            if guest.height_cm is not None:
+                items[f"height:{ref}"] = "hard"
             if guest.pace is not None:
                 items[f"pace:{ref}"] = "soft"
             if guest.planning_style is not None:

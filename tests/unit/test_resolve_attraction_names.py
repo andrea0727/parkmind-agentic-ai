@@ -1,7 +1,7 @@
 """Spoken attraction names -> catalog node ids, failing closed."""
 
 import pytest
-from elicit_support import FakeAttractionRepository, make_names
+from elicit_support import FakeAttractionRepository, make_attraction, make_names
 
 from parkmind.services.use_cases.resolve_attraction_names import (
     AttractionNameResolver,
@@ -48,6 +48,44 @@ def test_an_unknown_name_is_reported() -> None:
     assert resolution.unknown == ("Death Star", "")
     assert not resolution.complete
     assert "TRON" in resolution.resolved
+
+
+@pytest.mark.parametrize(
+    ("official", "spoken"),
+    [
+        ("Peter Pan's Flight", ["Peter Pan", "peter pan flight", "Peter Pan’s Flight"]),
+        ('"it\'s a small world"', ["small world", "it's a small world", "it’s a small world"]),
+        (
+            "Buzz Lightyear’s Space Ranger Spin",
+            ["Buzz Lightyear", "buzz lightyear's space ranger spin"],
+        ),
+        ("Winnie-the-Pooh", ["winnie the pooh", "Winnie-the-Pooh"]),
+    ],
+)
+def test_punctuation_and_possessives_do_not_stop_a_name_from_resolving(
+    official: str, spoken: list[str]
+) -> None:
+    catalog = [
+        make_attraction("id-target", official),
+        make_attraction("id-other", "Haunted Mansion"),
+    ]
+
+    resolution = make_names(catalog).resolve(spoken)
+
+    assert resolution.complete, resolution
+    assert {r.node_id for r in resolution.resolved.values()} == {"id-target"}
+
+
+def test_normalizing_does_not_merge_different_attractions() -> None:
+    catalog = [
+        make_attraction("id-a", "Peter Pan's Flight"),
+        make_attraction("id-b", "Peter Pan Mini Golf"),
+    ]
+
+    resolution = make_names(catalog).resolve(["Peter Pan"])
+
+    assert resolution.resolved == {}
+    assert resolution.ambiguous["Peter Pan"] == ("Peter Pan Mini Golf", "Peter Pan's Flight")
 
 
 def test_node_ids_are_deduplicated_in_order() -> None:

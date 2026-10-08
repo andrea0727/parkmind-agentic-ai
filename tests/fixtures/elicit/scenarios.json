@@ -227,6 +227,22 @@
       },
       "expect_missing": ["guest_role:g2"],
       "expect_pending": []
+    },
+    {
+      "id": "stated_child_height",
+      "messages": ["Me and my son, he is about 4 feet tall. He hates waiting in long queues. We leave at 6 PM."],
+      "extraction": {
+        "party_size": 2,
+        "guests": [{"role": "adult"}, {"role": "child", "height_cm": 122, "queue_tolerance": 0.1}],
+        "departure_time": "18:00"
+      },
+      "expected": {
+        "height:g2": "hard",
+        "queue_tolerance:g2": "soft",
+        "departure_time": "hard"
+      },
+      "expect_missing": [],
+      "expect_pending": ["departure_time: 18:00", "height:g2: 122"]
     }
   ]
 }

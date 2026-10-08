@@ -5,7 +5,7 @@ module then turns the validated extraction into contracts and decides what is
 still missing. It never decides what the checker enforces:
 
 * soft preferences become ``GuestProfile`` values (stated, tradeable);
-* every hard item -- including all accessibility flags -- is only *pending*:
+* every hard item -- including a stated height and all accessibility flags -- is only *pending*:
   it is listed in ``pending_hard_constraint_confirmation`` and the graph
   confirms it with the human before ``constraints_valid`` can become True.
 * accessibility flags are staged through ``AccessibilityIntakeUseCase``, never
@@ -53,6 +53,7 @@ __all__ = [
     "GuestInfoExtractor",
     "build_guest_profiles",
     "build_party_constraints",
+    "conflicting_names",
     "echo_for",
     "extract_with_recovery",
     "human_texts",
@@ -191,6 +192,8 @@ def missing_information(extraction: ElicitationExtraction) -> list[str]:
 
 _UNKNOWN_ATTRACTION = "unknown_attraction:"
 _AMBIGUOUS_ATTRACTION = "ambiguous_attraction:"
+_CONFLICTING_ATTRACTION = "conflicting_attraction:"
+_HEIGHT = "height:"
 
 
 def unresolved_names(resolution: NameResolution) -> list[str]:
@@ -198,6 +201,25 @@ def unresolved_names(resolution: NameResolution) -> list[str]:
     return [f"{_UNKNOWN_ATTRACTION}{name}" for name in resolution.unknown] + [
         f"{_AMBIGUOUS_ATTRACTION}{name}" for name in resolution.ambiguous
     ]
+
+
+def conflicting_names(extraction: ElicitationExtraction, resolution: NameResolution) -> list[str]:
+    """Missing-information keys for attractions that are both must-do and avoid.
+
+    Compared by resolved ``node_id`` (two spoken names can be one attraction).
+    Such a request has no valid plan, so the guests are asked which one they meant.
+    """
+    wanted = {
+        resolution.resolved[name].node_id
+        for name in extraction.must_do
+        if name in resolution.resolved
+    }
+    official = dict.fromkeys(
+        resolution.resolved[name].name
+        for name in extraction.avoid
+        if name in resolution.resolved and resolution.resolved[name].node_id in wanted
+    )
+    return [f"{_CONFLICTING_ATTRACTION}{name}" for name in official]
 
 
 def _question_for(missing: Sequence[str], resolution: NameResolution | None = None) -> str:
@@ -214,6 +236,12 @@ def _question_for(missing: Sequence[str], resolution: NameResolution | None = No
             name = key.removeprefix(_AMBIGUOUS_ATTRACTION)
             options = resolution.ambiguous[name] if resolution is not None else ()
             questions.append(f"'{name}' could be {', '.join(options)}. Which one do you mean?")
+        elif key.startswith(_CONFLICTING_ATTRACTION):
+            name = key.removeprefix(_CONFLICTING_ATTRACTION)
+            questions.append(
+                f"'{name}' is on both your must-do and your avoid list. "
+                "Do you want it in the plan, or kept out of it?"
+            )
         else:
             questions.append(_MISSING_QUESTIONS.get(key, f"Could you tell me about {key}?"))
     return " ".join(questions)
@@ -315,6 +343,11 @@ def pending_confirmations(extraction: ElicitationExtraction, resolution: NameRes
     if extraction.party_walking_budget_minutes is not None:
         pending.append(f"walking_budget: {extraction.party_walking_budget_minutes}")
     pending.extend(
+        f"{_HEIGHT}g{index}: {guest.height_cm:g}"
+        for index, guest in enumerate(extraction.guests, start=1)
+        if guest.height_cm is not None
+    )
+    pending.extend(
         f"accessibility:g{ref}" for ref in sorted({a.guest_ref for a in extraction.accessibility})
     )
     return pending
@@ -334,7 +367,18 @@ def echo_for(entry: str) -> str:
         return f"Lunch is fixed between {start} and {end}."
     if kind == "walking_budget":
         return f"The party's total walking must not exceed {value} minutes."
+    if kind.startswith(_HEIGHT):
+        guest = kind.removeprefix(_HEIGHT).removeprefix("g")
+        return (
+            f"Guest {guest} is {value} cm tall (about {_feet_inches(float(value))}): "
+            "rides with a higher minimum will be skipped."
+        )
     return entry
+
+
+def _feet_inches(cm: float) -> str:
+    total_inches = round(cm / 2.54)
+    return f"{total_inches // 12}'{total_inches % 12}\""
 
 
 def human_texts(state: ParkMindState) -> list[str]:
@@ -384,8 +428,9 @@ def make_elicit_node(
     """Node factory. The node never marks constraints valid: it only proposes them.
 
     Outputs:
-    * missing information, an unreadable answer, or a must-do/avoid name that is
-      not exactly one catalog attraction -> ``constraints=None`` plus an AI
+    * missing information, an unreadable answer, a must-do/avoid name that is
+      not exactly one catalog attraction, or one attraction that is both must-do
+      and avoid -> ``constraints=None`` plus an AI
       question (its ``additional_kwargs["missing_information"]`` lists the keys);
     * otherwise ``constraints``, ``guest_profiles``, ``constraints_valid=False``
       and ``pending_hard_constraint_confirmation``.
@@ -406,7 +451,11 @@ def make_elicit_node(
             missing = ["unreadable_response"]
         else:
             resolution = names.resolve([*outcome.extraction.must_do, *outcome.extraction.avoid])
-            missing = missing_information(outcome.extraction) + unresolved_names(resolution)
+            missing = (
+                missing_information(outcome.extraction)
+                + unresolved_names(resolution)
+                + conflicting_names(outcome.extraction, resolution)
+            )
         if outcome.extraction is None or missing:
             return {
                 "constraints": None,
