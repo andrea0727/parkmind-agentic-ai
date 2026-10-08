@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ParkMind · Prototipo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --dusk:#241A54;
+  --twilight:#4A2FA8;
+  --flamingo:#E0218A;
+  --lagoon:#12938C;
+  --marigold:#FFB627;
+
+  --ink:#241A54;
+  --muted:#6F6893;
+  --faint:#9B95B5;
+  --wash:#F4F2FB;
+  --line:#E7E3F4;
+  --card:#FFFFFF;
+
+  --page:#E9E6F3;
+  --page-ink:#241A54;
+
+  --radius-s:10px;
+  --radius-m:16px;
+  --radius-l:22px;
+
+  --font:'Plus Jakarta Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --page:#17122F; --page-ink:#E8E4F6; }
+}
+:root[data-theme="dark"]{ --page:#17122F; --page-ink:#E8E4F6; }
+
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{
+  margin:0;font-family:var(--font);background:var(--page);color:var(--page-ink);
+  -webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;align-items:center;gap:18px;
+  padding:28px 16px 40px;min-height:100%;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--flamingo);outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion: reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* ---------- page chrome around the device ---------- */
+.stage-head{width:100%;max-width:430px;display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.stage-head h1{font-size:15px;font-weight:800;letter-spacing:-.01em;margin:0}
+.stage-head p{margin:0;font-size:12px;color:var(--page-ink);opacity:.62}
+.stage-foot{width:100%;max-width:430px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.ghost-btn{font-size:12px;font-weight:600;padding:7px 13px;border-radius:999px;border:1px solid currentColor;opacity:.6}
+.ghost-btn:hover{opacity:1}
+
+/* ---------- device ---------- */
+.device{
+  width:100%;max-width:390px;height:min(844px,calc(100vh - 170px));min-height:620px;
+  background:#fff;border-radius:42px;position:relative;overflow:hidden;
+  box-shadow:0 0 0 11px #1B1626, 0 0 0 13px #2E2840, 0 36px 70px -24px rgba(26,16,60,.55);
+  color:var(--ink);display:flex;flex-direction:column;
+}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:132px;height:28px;background:#1B1626;border-radius:0 0 17px 17px;z-index:60}
+.statusbar{flex:0 0 auto;height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:700;z-index:55;position:relative}
+.statusbar .sig{display:flex;gap:5px;align-items:center;font-size:11px;letter-spacing:.08em}
+
+/* ---------- screens ---------- */
+.viewport{flex:1 1 auto;position:relative;overflow:hidden}
+.screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;padding:0 20px 18px;display:none;scrollbar-width:thin}
+.screen.on{display:block}
+.screen::-webkit-scrollbar{width:0}
+
+/* ---------- home ---------- */
+.brandbar{display:flex;align-items:center;justify-content:space-between;padding:4px 0 14px;position:sticky;top:0;background:#fff;z-index:20}
+.wordmark{font-size:23px;font-weight:800;letter-spacing:-.04em;color:var(--dusk)}
+.wordmark i{font-style:normal;color:var(--flamingo)}
+.brand-actions{display:flex;align-items:center;gap:9px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--wash);color:var(--twilight);display:grid;place-items:center;font-weight:800;font-size:14px}
+.spark-btn{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;
+  background:conic-gradient(from 210deg,var(--flamingo),var(--marigold),var(--lagoon),var(--twilight),var(--flamingo));}
+.spark-btn span{width:32px;height:32px;border-radius:50%;background:var(--dusk);display:grid;place-items:center;color:#fff;font-size:15px}
+.spark-btn.ping span{animation:ping 1.6s ease-in-out infinite}
+@keyframes ping{0%,100%{transform:scale(1)}50%{transform:scale(1.09)}}
+
+h2.greet{font-size:33px;line-height:1.08;letter-spacing:-.035em;font-weight:800;margin:4px 0 6px}
+.subline{font-size:14px;color:var(--muted);margin:0 0 13px;font-weight:500}
+.pills{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:22px}
+.pill{font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:999px;background:var(--wash);color:var(--ink);display:flex;align-items:center;gap:5px}
+.pill.warn{background:#FFF4DC;color:#7A5200}
+.pill.live{background:#E2F4F2;color:#0A6B66}
+.pill.live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--lagoon)}
+
+.sect{font-size:19px;font-weight:800;letter-spacing:-.02em;margin:0 0 11px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.tile{border-radius:var(--radius-l);padding:16px;min-height:136px;display:flex;flex-direction:column;justify-content:space-between;color:#fff;text-align:left}
+.tile.plan{background:linear-gradient(155deg,var(--twilight),var(--dusk))}
+.tile.waits{background:linear-gradient(155deg,#17A79F,#0C6F6A)}
+.tile .ico{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.17);display:grid;place-items:center;font-size:15px}
+.tile b{display:block;font-size:17px;font-weight:800;letter-spacing:-.02em}
+.tile .big{font-size:38px;font-weight:800;line-height:1;letter-spacing:-.04em}
+.tile small{display:block;font-size:12.5px;opacity:.78;font-weight:500;margin-top:3px;line-height:1.35}
+
+.panel{border:1px solid var(--line);border-radius:var(--radius-l);padding:15px 16px;margin-bottom:14px}
+.panel-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:11px}
+.panel-head b{font-size:17px;font-weight:800;letter-spacing:-.02em}
+.panel-head span{font-size:11.5px;color:var(--faint);font-weight:500}
+
+.nowrow{display:grid;grid-template-columns:48px 16px 1fr;gap:4px;align-items:start}
+.nowrow .t{font-size:14px;font-weight:800;color:var(--twilight);padding-top:1px}
+.nowrow .rail{display:flex;flex-direction:column;align-items:center;padding-top:5px}
+.nowrow .dot{width:11px;height:11px;border-radius:50%;background:var(--marigold);flex:0 0 auto}
+.nowrow .line{width:2px;flex:1;background:var(--line);margin-top:3px}
+.nowrow .b{font-size:16px;font-weight:800;letter-spacing:-.015em}
+.nowrow .m{font-size:12.5px;color:var(--muted);font-weight:500;margin-top:2px;line-height:1.4}
+
+.a11y{display:inline-flex;align-items:center;gap:6px;background:#E2F4F2;color:#0A6B66;font-size:12px;font-weight:700;padding:6px 10px;border-radius:9px;margin-top:8px}
+
+.alert{display:flex;gap:12px;align-items:flex-start;background:#FFF4DC;border-radius:var(--radius-l);padding:15px;margin-bottom:12px}
+.alert .ic{font-size:22px;line-height:1}
+.alert b{display:block;font-size:15.5px;font-weight:800;color:#5A3D00;letter-spacing:-.01em}
+.alert p{margin:3px 0 0;font-size:13px;color:#7A5200;font-weight:500;line-height:1.42}
+.alert .cta{flex:0 0 auto;align-self:center;background:#4A3200;color:#fff;font-size:13.5px;font-weight:700;padding:10px 15px;border-radius:999px}
+.alert.kept{background:var(--wash)}
+.alert.kept b{color:var(--dusk)} .alert.kept p{color:var(--muted)}
+.alert.kept .cta{background:var(--dusk)}
+
+/* ---------- plan timeline ---------- */
+.screen-head{position:sticky;top:0;background:#fff;padding:4px 0 12px;z-index:20}
+.screen-head h2{font-size:27px;font-weight:800;letter-spacing:-.03em;margin:0}
+.screen-head p{margin:3px 0 0;font-size:13.5px;color:var(--muted);font-weight:500}
+.status-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;background:#E2F4F2;color:#0A6B66;margin-top:10px}
+.status-chip::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--lagoon)}
+
+.stop{display:grid;grid-template-columns:50px 16px 1fr;gap:4px;padding-bottom:4px}
+.stop .t{font-size:13.5px;font-weight:800;color:var(--twilight);padding-top:2px}
+.stop .rail{display:flex;flex-direction:column;align-items:center;padding-top:6px}
+.stop .dot{width:10px;height:10px;border-radius:50%;background:var(--line);border:2px solid var(--line);flex:0 0 auto}
+.stop.done .dot{background:var(--lagoon);border-color:var(--lagoon)}
+.stop.current .dot{background:var(--marigold);border-color:var(--marigold);box-shadow:0 0 0 4px #FFF0CF}
+.stop .line{width:2px;flex:1;background:var(--line);margin:4px 0}
+.stop:last-child .line{background:transparent}
+.stop .body{padding:0 0 20px 4px}
+.stop .b{font-size:15.5px;font-weight:800;letter-spacing:-.015em}
+.stop .m{font-size:12.5px;color:var(--muted);font-weight:500;margin-top:2px;line-height:1.4}
+.stop.changed .body{background:#F0FAF8;border-radius:12px;padding:10px 12px 14px;margin-bottom:8px}
+.tagnew{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.02em;color:#0A6B66;background:#CFEDE9;padding:3px 7px;border-radius:6px;margin-bottom:5px}
+
+/* ---------- park ---------- */
+.ride{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+.ride b{font-size:15px;font-weight:700;letter-spacing:-.01em;display:block}
+.ride small{font-size:12px;color:var(--muted);font-weight:500}
+.wait{font-size:19px;font-weight:800;letter-spacing:-.02em;flex:0 0 auto;text-align:right;line-height:1.1}
+.wait small{display:block;font-size:10.5px;font-weight:600;color:var(--faint)}
+.wait.low{color:var(--lagoon)} .wait.mid{color:#B87A00} .wait.high{color:var(--flamingo)}
+.wait.closed{color:var(--faint);font-size:14px}
+
+/* ---------- more / eval ---------- */
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 0;border-bottom:1px solid var(--line);font-size:15px;font-weight:600;width:100%;text-align:left}
+.row small{display:block;font-size:12px;color:var(--muted);font-weight:500;margin-top:2px}
+.row .chev{color:var(--faint);font-size:16px}
+.metric{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:13px 0;border-bottom:1px solid var(--line)}
+.metric .n{font-size:13.5px;font-weight:700}
+.metric .n small{display:block;font-size:11.5px;color:var(--muted);font-weight:500;margin-top:2px}
+.metric .v{font-size:17px;font-weight:800;color:var(--lagoon);text-align:right}
+.metric .base{font-size:12px;font-weight:600;color:var(--faint);text-align:right;min-width:52px}
+.note{font-size:12px;color:var(--muted);line-height:1.5;font-weight:500;margin:14px 0 0}
+.switch{display:flex;gap:6px;background:var(--wash);padding:4px;border-radius:999px}
+.switch button{flex:1;font-size:12.5px;font-weight:700;padding:8px;border-radius:999px;color:var(--muted)}
+.switch button.on{background:#fff;color:var(--dusk);box-shadow:0 1px 3px rgba(36,26,84,.14)}
+
+/* ---------- assistant sheet ---------- */
+.scrim{position:absolute;inset:0;background:rgba(27,18,56,.42);opacity:0;pointer-events:none;transition:opacity .26s ease;z-index:70}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{
+  position:absolute;left:0;right:0;bottom:0;top:52px;z-index:80;
+  background:#fff;border-radius:26px 26px 0 0;display:flex;flex-direction:column;
+  transform:translateY(102%);transition:transform .34s cubic-bezier(.22,.9,.26,1);
+  box-shadow:0 -14px 40px rgba(27,18,56,.22);overflow:hidden;
+}
+.sheet.on{transform:translateY(0)}
+.sheet.tall{top:28px}
+.grab{width:44px;height:4px;border-radius:999px;background:#DCD7EC;margin:11px auto 0;flex:0 0 auto}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;padding:12px 20px 14px;flex:0 0 auto}
+.sheet-head h3{font-size:25px;font-weight:800;letter-spacing:-.03em;margin:0}
+.sheet-head .sub{font-size:12.5px;color:var(--lagoon);font-weight:700;margin-top:1px}
+.xbtn{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;font-size:17px;color:var(--ink);flex:0 0 auto}
+
+.chat{flex:1 1 auto;overflow-y:auto;padding:4px 20px 14px;
+  background:
+    radial-gradient(120% 70% at 0% 0%, #DCEEFB 0%, rgba(220,238,251,0) 58%),
+    radial-gradient(110% 60% at 100% 22%, #FFE9D6 0%, rgba(255,233,214,0) 55%),
+    radial-gradient(130% 50% at 50% 100%, #E4E0F7 0%, rgba(228,224,247,0) 60%),
+    #fff;
+}
+.chat::-webkit-scrollbar{width:0}
+.msg{margin:0 0 14px;max-width:84%;font-size:14.5px;line-height:1.45;font-weight:500}
+.msg.me{margin-left:auto;background:var(--dusk);color:#fff;padding:12px 15px;border-radius:17px 17px 5px 17px;font-weight:600}
+.bot-wrap{display:flex;gap:8px;align-items:flex-end;margin-bottom:14px}
+.bot-av{width:29px;height:29px;border-radius:50%;background:var(--dusk);color:#fff;display:grid;place-items:center;font-size:12px;flex:0 0 auto;margin-bottom:2px}
+.bot{background:#fff;border-radius:17px 17px 17px 5px;padding:13px 15px;max-width:84%;box-shadow:0 2px 10px rgba(36,26,84,.07)}
+.bot .tag{font-size:10px;font-weight:800;letter-spacing:.06em;color:var(--twilight);margin-bottom:5px}
+.bot .tag i{font-style:normal;color:var(--flamingo)}
+.bot p{margin:0;font-size:14.5px;line-height:1.45;font-weight:500}
+.meta{text-align:center;font-size:12px;color:var(--faint);font-weight:500;margin:2px 0 14px}
+
+.constraints{margin-top:11px;display:flex;flex-direction:column;gap:7px;align-items:flex-start}
+.cst{font-size:13px;font-weight:700;padding:9px 12px;border-radius:11px;display:flex;align-items:center;gap:7px}
+.cst.hard{background:#E2F4F2;color:#0A6B66;border:1px solid #BFE6E1}
+.cst.soft{background:#FDECF5;color:#A3156A;border:1px solid #F8D3E6}
+.cst.plain{background:#fff;color:var(--ink);border:1px solid var(--line)}
+
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px 37px}
+.chip{font-size:13.5px;font-weight:700;padding:10px 15px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--muted);position:relative}
+.chip:hover{border-color:var(--twilight);color:var(--twilight)}
+.chip.picked{border-color:var(--twilight);color:var(--dusk);background:#fff}
+.chip.picked::after{content:"✓";position:absolute;top:-7px;right:-7px;width:19px;height:19px;border-radius:50%;background:var(--dusk);color:#fff;font-size:11px;display:grid;place-items:center;font-weight:800}
+.chip[disabled]{opacity:.45;pointer-events:none}
+
+.suggest-label{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:700;margin:2px 0 10px 37px}
+.suggest-label .sp{font-size:15px}
+.suggest{display:flex;gap:10px;overflow-x:auto;padding:0 20px 16px;margin:0 -20px;scrollbar-width:none}
+.suggest::-webkit-scrollbar{height:0}
+.scard{flex:0 0 auto;width:208px;text-align:left;border-radius:14px;padding:14px;border:1px solid #CFE6F7;
+  background:linear-gradient(150deg,#F0F8FF 0%,#FFF7F0 100%)}
+.scard b{display:block;font-size:14px;font-weight:800;letter-spacing:-.01em;line-height:1.3}
+.scard span{font-size:13px;color:var(--muted);font-weight:500;line-height:1.35;display:block;margin-top:2px}
+
+.propcard{margin-top:12px;border:1px solid var(--line);border-radius:14px;padding:13px}
+.propcard b{font-size:14.5px;font-weight:800;display:block;margin-bottom:8px}
+.propline{display:grid;grid-template-columns:48px 1fr;gap:8px;font-size:13.5px;padding:3px 0;font-weight:500}
+.propline .t{font-weight:800;color:var(--twilight)}
+.propcard .go{margin-top:11px;width:100%;background:var(--dusk);color:#fff;font-size:13.5px;font-weight:700;padding:11px;border-radius:11px}
+
+.composer{flex:0 0 auto;padding:10px 16px 16px;background:#fff;border-top:1px solid var(--line);display:flex;gap:9px;align-items:center}
+.composer input{flex:1;border:1px solid var(--line);border-radius:999px;padding:13px 17px;font-size:14.5px;font-family:inherit;font-weight:500;color:var(--ink);background:#fff;min-width:0}
+.composer input::placeholder{color:var(--faint)}
+.composer input:focus{outline:none;border-color:var(--twilight)}
+.composer .send{width:42px;height:42px;border-radius:50%;background:var(--dusk);color:#fff;font-size:16px;display:grid;place-items:center;flex:0 0 auto}
+
+.typing{display:flex;gap:4px;padding:4px 2px}
+.typing i{width:6px;height:6px;border-radius:50%;background:var(--faint);animation:bob 1.1s infinite}
+.typing i:nth-child(2){animation-delay:.16s}.typing i:nth-child(3){animation-delay:.32s}
+@keyframes bob{0%,60%,100%{transform:translateY(0);opacity:.45}30%{transform:translateY(-4px);opacity:1}}
+
+/* ---------- proposal sheet ---------- */
+.psheet{position:absolute;left:0;right:0;bottom:0;top:96px;z-index:90;background:#fff;border-radius:26px 26px 0 0;
+  display:flex;flex-direction:column;transform:translateY(102%);transition:transform .34s cubic-bezier(.22,.9,.26,1);
+  box-shadow:0 -14px 40px rgba(27,18,56,.22);overflow:hidden}
+.psheet.on{transform:translateY(0)}
+.pbody{flex:1 1 auto;overflow-y:auto;padding:4px 20px 10px}
+.pbody::-webkit-scrollbar{width:0}
+.pbody h3{font-size:28px;font-weight:800;letter-spacing:-.035em;margin:8px 0 7px}
+.pbody .why{font-size:14.5px;color:var(--muted);font-weight:500;line-height:1.46;margin:0 0 16px}
+.diff{border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:14px}
+.drow{display:grid;grid-template-columns:24px 1fr;gap:8px;padding:13px 14px;border-bottom:1px solid var(--line)}
+.drow:last-child{border-bottom:none}
+.drow .s{font-size:16px;font-weight:800;line-height:1.2}
+.drow .b{font-size:15px;font-weight:800;letter-spacing:-.015em}
+.drow .m{font-size:12.5px;color:var(--muted);font-weight:500;margin-top:2px;line-height:1.4}
+.drow.rm{background:#FDF0F5}.drow.rm .s,.drow.rm .b{color:#A3156A}
+.drow.add{background:#EEF9F7}.drow.add .s,.drow.add .b{color:#0A6B66}
+.drow.mv .s{color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:14px}
+.stat{border:1px solid var(--line);border-radius:13px;padding:13px 6px;text-align:center}
+.stat b{display:block;font-size:21px;font-weight:800;letter-spacing:-.03em}
+.stat small{display:block;font-size:11.5px;color:var(--muted);font-weight:500;line-height:1.3;margin-top:3px}
+.verified{background:#E2F4F2;border-radius:14px;padding:14px;margin-bottom:8px}
+.verified b{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800;color:#0A6B66}
+.verified p{margin:5px 0 0;font-size:13px;color:#0A6B66;font-weight:500;line-height:1.45;opacity:.92}
+.pfoot{flex:0 0 auto;padding:12px 20px 18px;background:#fff;border-top:1px solid var(--line)}
+.pactions{display:grid;grid-template-columns:1fr 1.35fr;gap:11px}
+.btn{padding:15px 12px;border-radius:14px;font-size:15px;font-weight:800;letter-spacing:-.01em}
+.btn.keep{background:var(--wash);color:var(--ink)}
+.btn.apply{background:var(--flamingo);color:#fff}
+.btn.apply:hover{background:#C81B7A}
+.pfoot .fine{text-align:center;font-size:12px;color:var(--muted);font-weight:500;margin:11px 0 0}
+
+/* ---------- tab bar ---------- */
+.tabs{flex:0 0 auto;display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line);
+  padding:9px 6px calc(10px + env(safe-area-inset-bottom,0px));background:#fff;z-index:65;position:relative}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--faint);padding:3px 0}
+.tab .g{font-size:17px;line-height:1}
+.tab.on{color:var(--twilight);font-weight:800}
+.tab .badge{position:absolute;top:2px;margin-left:26px;width:8px;height:8px;border-radius:50%;background:var(--flamingo)}
+
+/* ---------- toast ---------- */
+.toast{position:absolute;left:20px;right:20px;bottom:86px;background:var(--dusk);color:#fff;border-radius:14px;
+  padding:14px 16px;font-size:14px;font-weight:600;z-index:95;opacity:0;transform:translateY(10px);
+  transition:opacity .25s,transform .25s;pointer-events:none;line-height:1.4}
+.toast.on{opacity:1;transform:translateY(0)}
+
+.demotag{position:absolute;top:52px;left:50%;transform:translateX(-50%);z-index:58;
+  font-size:10px;font-weight:700;letter-spacing:.03em;color:var(--faint);background:rgba(255,255,255,.92);
+  padding:3px 10px;border-radius:999px;border:1px solid var(--line);pointer-events:none}
+</style>
+</head>
+<body>
+
+<div class="stage-head">
+  <h1>ParkMind · prototipo navegable</h1>
+  <p>Parque Aurora</p>
+</div>
+
+<div class="device" id="device">
+  <div class="notch"></div>
+  <div class="statusbar"><span id="clock">10:47</span><span class="sig">▂▄▆ ᯤ ▮</span></div>
+  <div class="demotag">Datos de demostración</div>
+
+  <div class="viewport">
+
+    <!-- INICIO -->
+    <section class="screen on" id="s-home">
+      <div class="brandbar">
+        <div class="wordmark">park<i>mind</i></div>
+        <div class="brand-actions">
+          <div class="avatar">A</div>
+          <button class="spark-btn ping" id="openAssistant" aria-label="Abrir asistente"><span>✦</span></button>
+        </div>
+      </div>
+      <h2 class="greet">Buenos días,<br>Andrea</h2>
+      <p class="subline">Parque Aurora · día 1 de 1 · grupo de 3</p>
+      <div class="pills">
+        <span class="pill">☀️ 29°</span>
+        <span class="pill warn">Lluvia 60% · 15:00</span>
+        <span class="pill live">Afluencia alta</span>
+      </div>
+
+      <h3 class="sect">Tu día</h3>
+      <div class="tiles">
+        <button class="tile plan" data-go="plan">
+          <div class="ico">🗺️</div>
+          <div><span class="big" id="tileStops">6</span><b>Mi plan</b><small>paradas · salida 18:00</small></div>
+        </button>
+        <button class="tile waits" data-go="park">
+          <div class="ico">⏱️</div>
+          <div><b>Tiempos de espera</b><small>en vivo · 32 atracciones</small></div>
+        </button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><b>Ahora</b><span>actualizado hace 2 min</span></div>
+        <div class="nowrow">
+          <div class="t" id="nowTime">10:55</div>
+          <div class="rail"><div class="dot"></div><div class="line"></div></div>
+          <div>
+            <div class="b" id="nowName">Cohete Nebulosa</div>
+            <div class="m" id="nowMeta">espera 25 min · 350 m · rampa por el lado este</div>
+            <div class="a11y">♿ Ruta sin escaleras</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="homeAlert"></div>
+    </section>
+
+    <!-- MI PLAN -->
+    <section class="screen" id="s-plan">
+      <div class="screen-head">
+        <h2>Mi plan</h2>
+        <p>Parque Aurora · <span id="planCount">6</span> paradas · salida 18:00</p>
+        <span class="status-chip" id="planStatus">Plan válido · 11 reglas verificadas</span>
+      </div>
+      <div id="timeline"></div>
+      <p class="note">Toda parada pasó por la puerta de restricciones antes de proponerse. Accesibilidad falla cerrado: si no se puede verificar, el plan se aborta.</p>
+    </section>
+
+    <!-- PARQUE -->
+    <section class="screen" id="s-park">
+      <div class="screen-head">
+        <h2>Parque</h2>
+        <p>Esperas en vivo · ThemeParks.wiki</p>
+      </div>
+      <div id="rides"></div>
+      <p class="note">Las atracciones sin acceso en silla de ruedas quedan excluidas del optimizador, no penalizadas.</p>
+    </section>
+
+    <!-- MÁS -->
+    <section class="screen" id="s-more">
+      <div class="screen-head">
+        <h2>Más</h2>
+        <p>Grupo, accesibilidad y medición</p>
+      </div>
+
+      <button class="row" data-go="eval"><span>Panel de evaluación<small>ParkMind vs. baseline LLM-only</small></span><span class="chev">›</span></button>
+      <button class="row" id="rowConstraints"><span>Restricciones del grupo<small>2 obligatorias · 3 preferencias</small></span><span class="chev">›</span></button>
+      <button class="row" id="rowReset"><span>Reiniciar demostración<small>Vuelve al estado inicial</small></span><span class="chev">↺</span></button>
+
+      <p class="note" style="margin-top:22px">Fuente de datos</p>
+      <div class="switch" style="margin-top:8px">
+        <button class="on" id="modeMock">Mock (fixture)</button>
+        <button id="modeLive">Live (API)</button>
+      </div>
+      <p class="note">En <b>mock</b> la UI lee un fixture JSON que serializa los contratos del dominio. En <b>live</b> el mismo adaptador apunta al backend. La capa de presentación no cambia.</p>
+    </section>
+
+    <!-- EVALUACIÓN -->
+    <section class="screen" id="s-eval">
+      <div class="screen-head">
+        <h2>Evaluación</h2>
+        <p>Mismo escenario, mismas herramientas</p>
+      </div>
+      <div class="metric"><div class="n">Preference Alignment Score<small>qué tanto el plan refleja al grupo</small></div><div class="v">0.87</div><div class="base">0.61</div></div>
+      <div class="metric"><div class="n">Personalization Lift<small>distancia Jaccard vs. plan genérico</small></div><div class="v">+0.34</div><div class="base">—</div></div>
+      <div class="metric"><div class="n">Violaciones de restricciones<small>sobre 40 escenarios</small></div><div class="v">0</div><div class="base">7</div></div>
+      <div class="metric"><div class="n">Replanes aceptados<small>sin editar a mano</small></div><div class="v">91%</div><div class="base">—</div></div>
+      <p class="note">La columna gris es el baseline LLM-only con acceso a las mismas herramientas. Si ParkMind no le gana en violaciones y en lift, la complejidad no se justificó. Cifras ilustrativas del prototipo.</p>
+      <button class="row" data-go="more" style="margin-top:14px"><span>Volver</span><span class="chev">‹</span></button>
+    </section>
+
+  </div>
+
+  <!-- ASSISTANT SHEET -->
+  <div class="scrim" id="scrim"></div>
+  <div class="sheet" id="sheet">
+    <div class="grab"></div>
+    <div class="sheet-head">
+      <div><h3>Asistente</h3><div class="sub" id="assistStatus">escuchando</div></div>
+      <button class="xbtn" id="closeSheet" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="chat" id="chat"></div>
+    <div class="composer">
+      <input id="chatInput" placeholder="Escribe o habla…" autocomplete="off">
+      <button class="send" id="sendBtn" aria-label="Enviar">↑</button>
+    </div>
+  </div>
+
+  <!-- PROPOSAL SHEET -->
+  <div class="psheet" id="psheet">
+    <div class="grab"></div>
+    <div class="pbody">
+      <h3>Cambio propuesto</h3>
+      <p class="why" id="pWhy"></p>
+      <div class="diff" id="pDiff"></div>
+      <div class="stats" id="pStats"></div>
+      <div class="verified">
+        <b>♿ Accesibilidad verificada</b>
+        <p id="pA11y"></p>
+      </div>
+      <p class="note" id="pProv"></p>
+    </div>
+    <div class="pfoot">
+      <div class="pactions">
+        <button class="btn keep" id="btnKeep">Mantener</button>
+        <button class="btn apply" id="btnApply">Aplicar cambios</button>
+      </div>
+      <p class="fine">Nada cambia en tu día hasta que toques Aplicar.</p>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- TABS -->
+  <nav class="tabs">
+    <button class="tab on" data-go="home"><span class="g">⌂</span>Inicio</button>
+    <button class="tab" data-go="park"><span class="g">▲</span>Parque</button>
+    <button class="tab" data-go="plan"><span class="g">◷</span>Mi plan</button>
+    <button class="tab" data-go="assistant"><span class="g">✦</span>Asistente</button>
+    <button class="tab" data-go="more"><span class="g">☰</span>Más</button>
+  </nav>
+</div>
+
+<div class="stage-foot">
+  <span style="font-size:12px;opacity:.6;font-weight:500">Maqueta de interfaz · marca y datos ilustrativos · no es una implementación productiva</span>
+  <button class="ghost-btn" id="resetBtn">Reiniciar</button>
+</div>
+
+<script>
+/* =========================================================================
+   FIXTURE — serializes the domain contracts in core/contracts/.
+   Field names mirror the Pydantic models so the live adapter can drop in
+   without touching any rendering code.
+   ========================================================================= */
+const FIXTURE = {
+  guest_profile: {
+    guest_id: "g_aurora_001",
+    display_name: "Andrea",
+    party_size: 3
+  },
+  party_constraints: {
+    exit_by: "18:00",
+    accessibility: [
+      { code: "wheelchair_access", label: "Silla de ruedas", mandatory: true },
+      { code: "no_stairs",         label: "Sin escaleras",   mandatory: true }
+    ],
+    preferences: [
+      { code: "thrill",  label: "Prefiere montañas rusas", weight: 0.9 },
+      { code: "shade",   label: "Evitar sol del mediodía", weight: 0.5 }
+    ]
+  },
+  plan: {
+    plan_id: "pl_7f31",
+    park: "Parque Aurora",
+    status: "valid",
+    rules_checked: 11,
+    events: [
+      { event_id:"e1", start:"10:55", title:"Cohete Nebulosa",      meta:"espera 25 min · 350 m · rampa lado este", kind:"ride",  state:"current" },
+      { event_id:"e2", start:"12:10", title:"Jardín de Faroles",    meta:"almuerzo · bajo techo · 45 min",          kind:"meal",  state:"upcoming" },
+      { event_id:"e3", start:"13:20", title:"Senda de Luciérnagas", meta:"espectáculo · espera 10 min",             kind:"show",  state:"upcoming" },
+      { event_id:"e4", start:"15:10", title:"Río Perdido",          meta:"al aire libre · espera 20 min",           kind:"ride",  state:"upcoming" },
+      { event_id:"e5", start:"16:00", title:"Torre Aurora",         meta:"mirador · espera 15 min",                 kind:"ride",  state:"upcoming" },
+      { event_id:"e6", start:"17:10", title:"Mirador del Lago",     meta:"cierre del día · 20 min",                 kind:"view",  state:"upcoming" }
+    ]
+  },
+  proposal: {
+    proposal_id: "pr_a18c",
+    trigger: "Lluvia 60% desde las 15:00 y cierre temporal de Río Perdido.",
+    explanation: "Río Perdido es al aire libre y cierra por clima. Teatro Solar está bajo techo, tiene acceso en silla de ruedas y mantiene el perfil del grupo. Torre Aurora se corre 40 minutos para no comprometer la salida a las 18:00.",
+    provenance: "Clima: Open-Meteo (pronóstico horario, 14:40). Estado de atracciones: ThemeParks.wiki (14:52). Decisión: Replanner + ConstraintChecker, 11 reglas.",
+    diff: {
+      removed: [{ ref:"e4", start:"15:10", title:"Río Perdido",  meta:"al aire libre · cerrado por clima" }],
+      added:   [{ ref:"e7", start:"15:10", title:"Teatro Solar", meta:"bajo techo · espera 15 min · acceso silla de ruedas", kind:"show" }],
+      moved:   [{ ref:"e5", from:"16:00", to:"16:40", title:"Torre Aurora", meta:"movido para mantener la salida a las 18:00" }]
+    },
+    metrics: { unchanged:"4/6", unchanged_label:"paradas sin cambio", walk_delta:"+12", walk_label:"min caminando", affinity:"92%", affinity_label:"afinidad con tus gustos" },
+    accessibility_verified: true,
+    accessibility_note: "Ruta sin escaleras y acceso en silla de ruedas confirmados en las 6 paradas."
+  },
+  rides: [
+    { name:"Cohete Nebulosa",      zone:"Ala este · acceso silla de ruedas", wait:25, access:true },
+    { name:"Teatro Solar",         zone:"Plaza central · bajo techo",        wait:15, access:true },
+    { name:"Río Perdido",          zone:"Ribera · al aire libre",            wait:null, access:true, closed:"Cerrado" },
+    { name:"Torre Aurora",         zone:"Ala norte · ascensor",              wait:15, access:true },
+    { name:"Caída de Cometas",     zone:"Ala sur · escaleras de acceso",     wait:65, access:false },
+    { name:"Senda de Luciérnagas", zone:"Bosque · ruta plana",               wait:10, access:true },
+    { name:"Carrusel de Nubes",    zone:"Plaza central",                     wait:5,  access:true },
+    { name:"Vértigo Solar",        zone:"Ala sur · escaleras de acceso",     wait:80, access:false }
+  ]
+};
+
+/* =========================================================================
+   ADAPTER — the only thing that changes when the LangGraph backend is ready.
+   Swap MODE to 'live' and point BASE at the FastAPI layer. Every method
+   returns the same shape the mock returns, so no view code is touched.
+   ========================================================================= */
+const BASE = "/api";
+const Adapter = {
+  mode: "mock",
+  async getPlan(){
+    if (this.mode === "live") return (await fetch(`${BASE}/plan`)).json();
+    return structuredClone(FIXTURE.plan);
+  },
+  async getProposal(){
+    if (this.mode === "live") return (await fetch(`${BASE}/proposal`)).json();
+    return structuredClone(FIXTURE.proposal);
+  },
+  async decide(proposalId, decision){            // decision: "approve" | "reject"
+    if (this.mode === "live")
+      return (await fetch(`${BASE}/proposal/${proposalId}/${decision}`, {method:"POST"})).json();
+    return { ok:true, proposal_id:proposalId, decision };
+  },
+  async sendMessage(text){
+    if (this.mode === "live")
+      return (await fetch(`${BASE}/assistant`, {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ message:text, thread_id: STATE.threadId })
+      })).json();
+    return mockReply(text);                       // scripted conversation below
+  }
+};
+
+/* ========================= STATE ========================= */
+const STATE = {
+  threadId: "th_demo_001",
+  plan: structuredClone(FIXTURE.plan),
+  proposal: structuredClone(FIXTURE.proposal),
+  proposalState: "pending",   // pending | applied | kept
+  screen: "home",
+  chatStep: 0
+};
+
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const el = (t,c,h) => { const n=document.createElement(t); if(c)n.className=c; if(h!==undefined)n.innerHTML=h; return n; };
+
+/* ========================= NAVIGATION ========================= */
+function go(screen){
+  if (screen === "assistant"){ openSheet(); return; }
+  STATE.screen = screen;
+  $$(".screen").forEach(s => s.classList.toggle("on", s.id === "s-"+screen));
+  $$(".tab").forEach(t => t.classList.toggle("on", t.dataset.go === screen ||
+     (screen === "eval" && t.dataset.go === "more")));
+  const sc = $("#s-"+screen); if (sc) sc.scrollTop = 0;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-go]");
+  if (b) go(b.dataset.go);
+});
+
+/* ========================= RENDER: PLAN ========================= */
+function renderPlan(){
+  const wrap = $("#timeline"); wrap.innerHTML = "";
+  STATE.plan.events.forEach(ev => {
+    const cls = ["stop", ev.state === "current" ? "current" : (ev.state === "done" ? "done" : ""), ev.changed ? "changed" : ""].join(" ");
+    const stop = el("div", cls);
+    stop.innerHTML = `
+      <div class="t">${ev.start}</div>
+      <div class="rail"><div class="dot"></div><div class="line"></div></div>
+      <div class="body">
+        ${ev.changed ? `<span class="tagnew">${ev.changed}</span>` : ""}
+        <div class="b">${ev.title}</div>
+        <div class="m">${ev.meta}</div>
+      </div>`;
+    wrap.appendChild(stop);
+  });
+  $("#planCount").textContent = STATE.plan.events.length;
+  $("#tileStops").textContent = STATE.plan.events.length;
+  const first = STATE.plan.events.find(e => e.state === "current") || STATE.plan.events[0];
+  $("#nowTime").textContent = first.start;
+  $("#nowName").textContent = first.title;
+  $("#nowMeta").textContent = first.meta;
+}
+
+/* ========================= RENDER: HOME ALERT ========================= */
+function renderAlert(){
+  const box = $("#homeAlert"); box.innerHTML = "";
+  if (STATE.proposalState === "pending"){
+    const a = el("div","alert");
+    a.innerHTML = `<div class="ic">🌧️</div>
+      <div><b>Hay un cambio propuesto</b><p>La lluvia de las 15:00 afecta 2 paradas al aire libre.</p></div>
+      <button class="cta" id="reviewBtn">Revisar</button>`;
+    box.appendChild(a);
+    $("#reviewBtn").onclick = openProposal;
+    $("#openAssistant").classList.add("ping");
+  } else if (STATE.proposalState === "kept"){
+    const a = el("div","alert kept");
+    a.innerHTML = `<div class="ic">🌧️</div>
+      <div><b>Mantuviste tu plan</b><p>Río Perdido sigue en tu día. Te aviso si cierra de verdad.</p></div>
+      <button class="cta" id="reviewBtn">Revisar</button>`;
+    box.appendChild(a);
+    $("#reviewBtn").onclick = openProposal;
+    $("#openAssistant").classList.remove("ping");
+  } else {
+    $("#openAssistant").classList.remove("ping");
+  }
+  $("#planStatus").textContent = STATE.proposalState === "applied"
+    ? "Plan actualizado · 11 reglas verificadas"
+    : "Plan válido · 11 reglas verificadas";
+}
+
+/* ========================= RENDER: PARK ========================= */
+function renderRides(){
+  const wrap = $("#rides"); wrap.innerHTML = "";
+  FIXTURE.rides.forEach(r => {
+    let cls = "wait low", txt = `${r.wait}<small>min</small>`;
+    if (r.closed){ cls = "wait closed"; txt = "Cerrado"; }
+    else if (r.wait >= 60) cls = "wait high";
+    else if (r.wait >= 20) cls = "wait mid";
+    const row = el("div","ride");
+    row.innerHTML = `<div><b>${r.name}</b><small>${r.zone}${r.access ? "" : " · sin acceso silla de ruedas"}</small></div>
+                     <div class="${cls}">${txt}</div>`;
+    if (!r.access) row.style.opacity = ".5";
+    wrap.appendChild(row);
+  });
+}
+
+/* ========================= PROPOSAL SHEET ========================= */
+function openProposal(){
+  const p = STATE.proposal;
+  $("#pWhy").textContent = p.trigger + " " + p.explanation;
+
+  const d = $("#pDiff"); d.innerHTML = "";
+  p.diff.removed.forEach(x => d.appendChild(el("div","drow rm",
+    `<div class="s">−</div><div><div class="b">${x.start} · ${x.title}</div><div class="m">${x.meta}</div></div>`)));
+  p.diff.added.forEach(x => d.appendChild(el("div","drow add",
+    `<div class="s">+</div><div><div class="b">${x.start} · ${x.title}</div><div class="m">${x.meta}</div></div>`)));
+  p.diff.moved.forEach(x => d.appendChild(el("div","drow mv",
+    `<div class="s">↻</div><div><div class="b">${x.from} → ${x.to} · ${x.title}</div><div class="m">${x.meta}</div></div>`)));
+
+  const m = p.metrics;
+  $("#pStats").innerHTML =
+    `<div class="stat"><b>${m.unchanged}</b><small>${m.unchanged_label}</small></div>
+     <div class="stat"><b>${m.walk_delta}</b><small>${m.walk_label}</small></div>
+     <div class="stat"><b>${m.affinity}</b><small>${m.affinity_label}</small></div>`;
+  $("#pA11y").textContent = p.accessibility_note;
+  $("#pProv").textContent = p.provenance;
+
+  $("#scrim").classList.add("on");
+  $("#psheet").classList.add("on");
+}
+function closeProposal(){ $("#psheet").classList.remove("on"); if(!$("#sheet").classList.contains("on")) $("#scrim").classList.remove("on"); }
+
+async function applyProposal(){
+  const p = STATE.proposal;
+  await Adapter.decide(p.proposal_id, "approve");
+
+  const removedRefs = p.diff.removed.map(x => x.ref);
+  let events = STATE.plan.events.filter(e => !removedRefs.includes(e.event_id));
+  p.diff.added.forEach(a => events.push({
+    event_id:a.ref, start:a.start, title:a.title, meta:a.meta, kind:a.kind, state:"upcoming", changed:"Nuevo"
+  }));
+  p.diff.moved.forEach(mv => {
+    const e = events.find(x => x.event_id === mv.ref);
+    if (e){ e.start = mv.to; e.meta = mv.meta; e.changed = "Movido"; }
+  });
+  events.sort((a,b) => a.start.localeCompare(b.start));
+  STATE.plan.events = events;
+  STATE.proposalState = "applied";
+
+  closeProposal();
+  renderPlan(); renderAlert();
+  go("plan");
+  toast("Cambios aplicados. Tu plan quedó en " + events.length + " paradas.");
+}
+
+async function keepPlan(){
+  await Adapter.decide(STATE.proposal.proposal_id, "reject");
+  STATE.proposalState = "kept";
+  closeProposal(); renderAlert();
+  toast("Mantuviste tu plan. Nada cambió.");
+}
+
+/* ========================= ASSISTANT SHEET ========================= */
+function openSheet(){
+  $("#scrim").classList.add("on");
+  $("#sheet").classList.add("on");
+  $$(".tab").forEach(t => t.classList.toggle("on", t.dataset.go === "assistant"));
+  if (!$("#chat").children.length) seedChat();
+  setTimeout(() => $("#chatInput").focus(), 340);
+}
+function closeSheet(){
+  $("#sheet").classList.remove("on");
+  if(!$("#psheet").classList.contains("on")) $("#scrim").classList.remove("on");
+  $$(".tab").forEach(t => t.classList.toggle("on", t.dataset.go === STATE.screen));
+}
+
+function bubbleMe(text){
+  $("#chat").appendChild(el("div","msg me", esc(text)));
+  scrollChat();
+}
+function bubbleBot(html){
+  const w = el("div","bot-wrap");
+  w.innerHTML = `<div class="bot-av">✦</div><div class="bot"><div class="tag">PARK<i>MIND</i></div>${html}</div>`;
+  $("#chat").appendChild(w);
+  scrollChat();
+  return w;
+}
+function metaLine(text){ $("#chat").appendChild(el("div","meta", esc(text))); scrollChat(); }
+function scrollChat(){ const c=$("#chat"); c.scrollTop = c.scrollHeight; }
+function esc(s){ return String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+function typing(){
+  const w = el("div","bot-wrap");
+  w.innerHTML = `<div class="bot-av">✦</div><div class="bot"><div class="typing"><i></i><i></i><i></i></div></div>`;
+  $("#chat").appendChild(w); scrollChat();
+  return w;
+}
+
+function seedChat(){
+  bubbleBot(`<p>Hola Andrea. Cuéntame con quién vienes y qué necesitan, y armo el día.</p>`);
+  renderChips([
+    "Vamos con mi mamá, usa silla de ruedas",
+    "Somos 3 y salimos a las 6",
+    "¿Qué hago con la lluvia?"
+  ]);
+}
+
+function renderChips(options){
+  const row = el("div","chips");
+  options.forEach(o => {
+    const b = el("button","chip", esc(o));
+    b.onclick = () => {
+      $$(".chip").forEach(c => { c.disabled = true; });
+      b.classList.add("picked");
+      setTimeout(() => { row.remove(); send(o); }, 240);
+    };
+    row.appendChild(b);
+  });
+  $("#chat").appendChild(row); scrollChat();
+}
+
+function renderSuggestions(items){
+  const lab = el("div","suggest-label", `<span class="sp">✨</span> ¿Necesitas más información?`);
+  const car = el("div","suggest");
+  items.forEach(it => {
+    const c = el("button","scard", `<b>${esc(it.title)}</b><span>${esc(it.sub)}</span>`);
+    c.onclick = () => { lab.remove(); car.remove(); send(it.title); };
+    car.appendChild(c);
+  });
+  $("#chat").appendChild(lab); $("#chat").appendChild(car); scrollChat();
+}
+
+/* scripted mock conversation — replaced by the real agent in live mode */
+function mockReply(text){
+  const t = text.toLowerCase();
+  if (t.includes("silla") || t.includes("mamá") || t.includes("mama") || t.includes("3") || t.includes("salimos")){
+    return {
+      text: "Listo. Guardé esto para tu grupo:",
+      constraints: [
+        { kind:"hard",  label:"♿ Silla de ruedas · obligatorio" },
+        { kind:"hard",  label:"Sin escaleras · obligatorio" },
+        { kind:"plain", label:"Salida 18:00" },
+        { kind:"soft",  label:"Prefiere montañas rusas" }
+      ],
+      follow: "Con eso armé el día. Empieza temprano por el ala este para evitar la fila de mediodía.",
+      plan_preview: true,
+      suggestions: [
+        { title:"Ver el plan completo", sub:"6 paradas y la ruta sin escaleras" },
+        { title:"¿Por qué ese orden?",  sub:"la explicación detrás de la decisión" }
+      ]
+    };
+  }
+  if (t.includes("lluvia") || t.includes("clima") || t.includes("por qué") || t.includes("porque") || t.includes("orden")){
+    return {
+      text: "Hay 60% de lluvia desde las 15:00 y Río Perdido ya reportó cierre temporal. Preparé un cambio: entra Teatro Solar, que está bajo techo y tiene acceso en silla de ruedas. No lo aplico hasta que lo revises.",
+      open_proposal: true
+    };
+  }
+  if (t.includes("plan completo") || t.includes("ver el plan")){
+    return { text:"Te llevo al plan. Las paradas marcadas en verde son las que cambiaron.", goto:"plan" };
+  }
+  return {
+    text: "Lo anoté. Puedo ajustar el plan con eso, pero cualquier cambio te lo propongo primero — nunca lo aplico solo.",
+    suggestions: [
+      { title:"¿Qué hago con la lluvia?", sub:"afecta 2 paradas al aire libre" },
+      { title:"Ver el plan completo",     sub:"6 paradas y la ruta sin escaleras" }
+    ]
+  };
+}
+
+async function send(text){
+  if (!text || !text.trim()) return;
+  bubbleMe(text);
+  $("#chatInput").value = "";
+  $("#assistStatus").textContent = "pensando";
+  const t = typing();
+
+  const r = await Adapter.sendMessage(text);
+  await new Promise(res => setTimeout(res, 820));
+  t.remove();
+  $("#assistStatus").textContent = "escuchando";
+
+  let html = `<p>${esc(r.text)}</p>`;
+  if (r.constraints){
+    html += `<div class="constraints">` + r.constraints.map(c =>
+      `<span class="cst ${c.kind}">${esc(c.label)}</span>`).join("") + `</div>`;
+  }
+  bubbleBot(html);
+
+  if (r.follow){
+    await new Promise(res => setTimeout(res, 520));
+    let h = `<p>${esc(r.follow)}</p>`;
+    if (r.plan_preview){
+      h += `<div class="propcard"><b>Propuesta · ${STATE.plan.events.length} paradas</b>` +
+        STATE.plan.events.slice(0,3).map(e =>
+          `<div class="propline"><span class="t">${e.start}</span><span>${esc(e.title)}</span></div>`).join("") +
+        `<button class="go" onclick="closeSheet();go('plan')">Ver el día completo</button></div>`;
+    }
+    bubbleBot(h);
+  }
+  if (r.suggestions) renderSuggestions(r.suggestions);
+  if (r.goto){ setTimeout(() => { closeSheet(); go(r.goto); }, 700); }
+  if (r.open_proposal){
+    await new Promise(res => setTimeout(res, 500));
+    metaLine("ParkMind preparó un cambio · espera tu aprobación");
+    openProposal();
+  }
+}
+
+/* ========================= MISC ========================= */
+let toastT;
+function toast(msg){
+  const t = $("#toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 3200);
+}
+
+function reset(){
+  STATE.plan = structuredClone(FIXTURE.plan);
+  STATE.proposal = structuredClone(FIXTURE.proposal);
+  STATE.proposalState = "pending";
+  $("#chat").innerHTML = "";
+  closeSheet(); closeProposal();
+  renderPlan(); renderAlert(); go("home");
+  toast("Demostración reiniciada.");
+}
+
+$("#closeSheet").onclick = closeSheet;
+$("#scrim").onclick = () => { if($("#psheet").classList.contains("on")) closeProposal(); else closeSheet(); };
+$("#sendBtn").onclick = () => send($("#chatInput").value);
+$("#chatInput").addEventListener("keydown", e => { if (e.key === "Enter") send($("#chatInput").value); });
+$("#btnApply").onclick = applyProposal;
+$("#btnKeep").onclick  = keepPlan;
+$("#resetBtn").onclick = reset;
+$("#rowReset").onclick = reset;
+$("#rowConstraints").onclick = () => {
+  const c = FIXTURE.party_constraints;
+  toast(c.accessibility.map(a => a.label).join(" · ") + " (obligatorias) · salida " + c.exit_by);
+};
+$("#modeMock").onclick = function(){ Adapter.mode="mock"; this.classList.add("on"); $("#modeLive").classList.remove("on"); toast("Leyendo del fixture local."); };
+$("#modeLive").onclick = function(){ this.classList.add("on"); $("#modeMock").classList.remove("on");
+  toast("El backend aún no está conectado. El adaptador ya apunta a /api."); 
+  setTimeout(()=>{ $("#modeMock").click(); }, 2600); };
+
+document.addEventListener("keydown", e => { if (e.key === "Escape"){ closeProposal(); closeSheet(); } });
+
+renderPlan(); renderAlert(); renderRides();
+</script>
+</body>
+</html>
