@@ -1,0 +1,248 @@
+{
+  "description": "Labeled elicit scenarios. 'extraction' is a recorded, canned extractor output (no LLM call); 'expected' is the hand-labeled hard/soft label of every statement the guests made, written independently of the extraction. Run the live eval with ANTHROPIC_API_KEY set (tests/unit/test_elicit_eval.py).",
+  "scenarios": [
+    {
+      "id": "wiki_example_missing_departure",
+      "messages": [
+        "We are four people, two adults and two kids. We definitely want TRON and Space Mountain. The kids don't like very intense rides. My father can't walk long distances. We want lunch around 1 PM."
+      ],
+      "extraction": {
+        "party_size": 4,
+        "guests": [
+          {"role": "adult"},
+          {"role": "adult"},
+          {"role": "child", "sensitivities": [{"kind": "INTENSITY", "level": "LOW"}]},
+          {"role": "child", "sensitivities": [{"kind": "INTENSITY", "level": "LOW"}]}
+        ],
+        "must_do": ["TRON", "Space Mountain"],
+        "lunch_window": {"start": "12:30", "end": "13:30"},
+        "accessibility": [{"guest_ref": 2, "mobility_requirements": ["LIMITED_WALKING"]}]
+      },
+      "expected": {
+        "must_do:tron": "hard",
+        "must_do:space mountain": "hard",
+        "lunch_window": "hard",
+        "accessibility:g2:LIMITED_WALKING": "hard",
+        "sensitivity:g3:INTENSITY": "soft",
+        "sensitivity:g4:INTENSITY": "soft"
+      },
+      "expect_missing": ["departure_time"],
+      "expect_pending": []
+    },
+    {
+      "id": "wiki_example_complete",
+      "messages": [
+        "We are four people, two adults and two kids. We definitely want TRON and Space Mountain. The kids don't like very intense rides. My father can't walk long distances. We want lunch around 1 PM.",
+        "We leave the park at 8 PM."
+      ],
+      "extraction": {
+        "party_size": 4,
+        "guests": [
+          {"role": "adult"},
+          {"role": "adult"},
+          {"role": "child", "sensitivities": [{"kind": "INTENSITY", "level": "LOW"}]},
+          {"role": "child", "sensitivities": [{"kind": "INTENSITY", "level": "LOW"}]}
+        ],
+        "must_do": ["TRON", "Space Mountain"],
+        "departure_time": "20:00",
+        "lunch_window": {"start": "12:30", "end": "13:30"},
+        "accessibility": [{"guest_ref": 2, "mobility_requirements": ["LIMITED_WALKING"]}]
+      },
+      "expected": {
+        "must_do:tron": "hard",
+        "must_do:space mountain": "hard",
+        "departure_time": "hard",
+        "lunch_window": "hard",
+        "accessibility:g2:LIMITED_WALKING": "hard",
+        "sensitivity:g3:INTENSITY": "soft",
+        "sensitivity:g4:INTENSITY": "soft"
+      },
+      "expect_missing": [],
+      "expect_pending": [
+        "must_do: TRON",
+        "must_do: Space Mountain",
+        "departure_time: 20:00",
+        "lunch_window: 12:30-13:30",
+        "accessibility:g2"
+      ]
+    },
+    {
+      "id": "casual_rest_breaks_vs_queue_preference",
+      "messages": [
+        "It's me and my mom. We hate long queues, but she tires quickly and has to sit down every half hour. We head out at 6 PM."
+      ],
+      "extraction": {
+        "party_size": 2,
+        "guests": [
+          {"role": "adult", "queue_tolerance": 0.2},
+          {"role": "adult", "queue_tolerance": 0.2}
+        ],
+        "departure_time": "18:00",
+        "accessibility": [{"guest_ref": 2, "rest_frequency_minutes": 30}]
+      },
+      "expected": {
+        "queue_tolerance:g1": "soft",
+        "queue_tolerance:g2": "soft",
+        "departure_time": "hard",
+        "accessibility:g2:REST_FREQUENCY": "hard"
+      },
+      "expect_missing": [],
+      "expect_pending": ["departure_time: 18:00", "accessibility:g2"]
+    },
+    {
+      "id": "heat_sensitivity_is_accessibility",
+      "messages": [
+        "Two adults and our daughter. She gets really sick in the heat, so indoor things first. We like dark rides. Leaving at 9 PM."
+      ],
+      "extraction": {
+        "party_size": 3,
+        "guests": [
+          {"role": "adult", "preferred_categories": ["DARK_RIDE"]},
+          {"role": "adult", "preferred_categories": ["DARK_RIDE"]},
+          {"role": "child", "preferred_categories": ["DARK_RIDE"]}
+        ],
+        "departure_time": "21:00",
+        "accessibility": [{"guest_ref": 3, "heat_sensitivity": true}]
+      },
+      "expected": {
+        "preferred:g1:DARK_RIDE": "soft",
+        "preferred:g2:DARK_RIDE": "soft",
+        "preferred:g3:DARK_RIDE": "soft",
+        "departure_time": "hard",
+        "accessibility:g3:HEAT_SENSITIVITY": "hard"
+      },
+      "expect_missing": [],
+      "expect_pending": ["departure_time: 21:00", "accessibility:g3"]
+    },
+    {
+      "id": "pure_preferences_no_accessibility",
+      "messages": [
+        "Two adults, relaxed pace please. We love anything haunted, and we would rather skip the water rides. We leave at 9 PM."
+      ],
+      "extraction": {
+        "party_size": 2,
+        "guests": [
+          {
+            "role": "adult",
+            "pace": "relaxed",
+            "avoided_categories": ["WATER"],
+            "thematic_affinity": [{"theme": "Haunted", "affinity": 0.9}]
+          },
+          {
+            "role": "adult",
+            "pace": "relaxed",
+            "avoided_categories": ["WATER"],
+            "thematic_affinity": [{"theme": "Haunted", "affinity": 0.9}]
+          }
+        ],
+        "departure_time": "21:00"
+      },
+      "expected": {
+        "pace:g1": "soft",
+        "pace:g2": "soft",
+        "avoided:g1:WATER": "soft",
+        "avoided:g2:WATER": "soft",
+        "affinity:g1:haunted": "soft",
+        "affinity:g2:haunted": "soft",
+        "departure_time": "hard"
+      },
+      "expect_missing": [],
+      "expect_pending": ["departure_time: 21:00"]
+    },
+    {
+      "id": "wheelchair_and_avoid",
+      "messages": [
+        "My husband and I are visiting. He uses a wheelchair. Please never send us to Splash Mountain. We have to be out by 5 PM."
+      ],
+      "extraction": {
+        "party_size": 2,
+        "guests": [{"role": "adult"}, {"role": "adult"}],
+        "avoid": ["Splash Mountain"],
+        "departure_time": "17:00",
+        "accessibility": [{"guest_ref": 2, "mobility_requirements": ["WHEELCHAIR"]}]
+      },
+      "expected": {
+        "avoid:splash mountain": "hard",
+        "departure_time": "hard",
+        "accessibility:g2:WHEELCHAIR": "hard"
+      },
+      "expect_missing": [],
+      "expect_pending": ["avoid: Splash Mountain", "departure_time: 17:00", "accessibility:g2"]
+    },
+    {
+      "id": "fear_of_heights_vs_motion_restriction",
+      "messages": [
+        "Two adults and a child. The child is scared of heights, but she can ride most things. My wife must avoid spinning rides, it makes her really ill. Leaving at 7 PM."
+      ],
+      "extraction": {
+        "party_size": 3,
+        "guests": [
+          {"role": "adult"},
+          {"role": "adult"},
+          {"role": "child", "sensitivities": [{"kind": "HEIGHTS", "level": "HIGH"}]}
+        ],
+        "departure_time": "19:00",
+        "accessibility": [
+          {"guest_ref": 2, "ride_restrictions": ["NOT_RECOMMENDED_MOTION_SENSITIVITY"]}
+        ]
+      },
+      "expected": {
+        "sensitivity:g3:HEIGHTS": "soft",
+        "departure_time": "hard",
+        "accessibility:g2:NOT_RECOMMENDED_MOTION_SENSITIVITY": "hard"
+      },
+      "expect_missing": [],
+      "expect_pending": ["departure_time: 19:00", "accessibility:g2"]
+    },
+    {
+      "id": "party_walking_budget",
+      "messages": [
+        "Three of us, all adults. Please keep the walking under three hours in total. Home by 8 PM."
+      ],
+      "extraction": {
+        "party_size": 3,
+        "guests": [{"role": "adult"}, {"role": "adult"}, {"role": "adult"}],
+        "departure_time": "20:00",
+        "party_walking_budget_minutes": 180
+      },
+      "expected": {
+        "departure_time": "hard",
+        "walking_budget": "hard"
+      },
+      "expect_missing": [],
+      "expect_pending": ["departure_time: 20:00", "walking_budget: 180"]
+    },
+    {
+      "id": "unknown_adult_or_child",
+      "messages": ["Me and my son want to ride Space Mountain, definitely. Leaving at 4 PM."],
+      "extraction": {
+        "party_size": 2,
+        "guests": [{"role": "adult"}, {}],
+        "must_do": ["Space Mountain"],
+        "departure_time": "16:00"
+      },
+      "expected": {
+        "must_do:space mountain": "hard",
+        "departure_time": "hard"
+      },
+      "expect_missing": ["guest_role:g2"],
+      "expect_pending": []
+    },
+    {
+      "id": "stated_child_height",
+      "messages": ["Me and my son, he is about 4 feet tall. He hates waiting in long queues. We leave at 6 PM."],
+      "extraction": {
+        "party_size": 2,
+        "guests": [{"role": "adult"}, {"role": "child", "height_cm": 122, "queue_tolerance": 0.1}],
+        "departure_time": "18:00"
+      },
+      "expected": {
+        "height:g2": "hard",
+        "queue_tolerance:g2": "soft",
+        "departure_time": "hard"
+      },
+      "expect_missing": [],
+      "expect_pending": ["departure_time: 18:00", "height:g2: 122"]
+    }
+  ]
+}
