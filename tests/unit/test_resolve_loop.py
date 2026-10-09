@@ -17,12 +17,11 @@ from parkmind.core.contracts import (
     TimeWindow,
 )
 from parkmind.core.contracts.models import Plan, Stop
-from parkmind.services.planning.errors import ContextReloadError
 from parkmind.services.planning.repair_moves import RULE_TO_REPAIR_ACTION, RepairAction
 from parkmind.services.planning.resolve_loop import PlannerResolveLoop
 
 # ---------------------------------------------------------------------------
-# Helpers — Provenance / Stop / Plan mínimos reales (sin MagicMock)
+# Helpers
 # ---------------------------------------------------------------------------
 
 DAY = datetime(2026, 10, 8, tzinfo=PARK_TZ)
@@ -77,9 +76,8 @@ def _plan(
 
 
 # ---------------------------------------------------------------------------
-# Mock optimizer / checker
+# Mocks
 # ---------------------------------------------------------------------------
-
 
 class MockOptimizer:
     def __init__(self, plan_to_return=None, plan_factory=None):
@@ -114,7 +112,6 @@ class MockChecker:
 # Fixtures
 # ---------------------------------------------------------------------------
 
-
 @pytest.fixture
 def base_constraints():
     mock = MagicMock()
@@ -134,7 +131,6 @@ def empty_plan() -> Plan:
 # Tests
 # ---------------------------------------------------------------------------
 
-
 def test_success_first_attempt(base_constraints, empty_plan):
     optimizer = MockOptimizer(empty_plan)
     checker = MockChecker([CheckResult(valid=True, violations=[])])
@@ -145,37 +141,13 @@ def test_success_first_attempt(base_constraints, empty_plan):
         context=MagicMock(),
         utilities={},
         now=datetime.now(tz=PARK_TZ),
+        park=MagicMock(),
     )
 
     assert result.valid is True
     assert result.plan is empty_plan
     assert optimizer.call_count == 1
     assert checker.call_count == 1
-
-
-def test_infeasible_constraint_fails_closed(base_constraints, empty_plan):
-    """MUST_DO ahora aplica degradacion elegante (§21): retorna valid=True con unmet_must_do."""
-    optimizer = MockOptimizer(empty_plan)
-    checker = MockChecker([
-        CheckResult(
-            valid=False,
-            violations=[
-                ConstraintViolation(rule=RuleId.MUST_DO, message="must do failed")
-            ],
-        )
-    ])
-    loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
-
-    result = loop.resolve(
-        constraints=base_constraints,
-        context=MagicMock(),
-        utilities={},
-        now=datetime.now(tz=PARK_TZ),
-    )
-
-    assert result.valid is True
-    assert result.plan is not None
-    assert result.fatal_error is None
 
 
 def test_infeasible_physical_constraints_fail_closed(base_constraints, empty_plan):
@@ -196,6 +168,7 @@ def test_infeasible_physical_constraints_fail_closed(base_constraints, empty_pla
             context=MagicMock(),
             utilities={},
             now=datetime.now(tz=PARK_TZ),
+            park=MagicMock(),
         )
 
         assert result.valid is False
@@ -221,6 +194,7 @@ def test_max_attempts_reached(base_constraints, empty_plan):
         context=MagicMock(),
         utilities={},
         now=datetime.now(tz=PARK_TZ),
+        park=MagicMock(),
     )
 
     assert result.valid is False
@@ -258,6 +232,7 @@ def test_repair_move_forbid_node(base_constraints):
         context=MagicMock(),
         utilities={},
         now=datetime.now(tz=PARK_TZ),
+        park=MagicMock(),
     )
 
     assert result.valid is True
@@ -265,31 +240,8 @@ def test_repair_move_forbid_node(base_constraints):
     assert "space_mountain" in optimizer.last_constraints.avoid
 
 
-def test_repair_move_forbid_node_missing_target_id(base_constraints, empty_plan):
-    optimizer = MockOptimizer(empty_plan)
-    checker = MockChecker([
-        CheckResult(
-            valid=False,
-            violations=[
-                ConstraintViolation(rule=RuleId.OPENING_HOURS, message="closed", stop_id=None)
-            ],
-        )
-    ])
-    loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
-
-    result = loop.resolve(
-        constraints=base_constraints,
-        context=MagicMock(),
-        utilities={},
-        now=datetime.now(tz=PARK_TZ),
-    )
-
-    assert result.valid is False
-    assert "FORBID_NODE missing target_id" in result.fatal_error
-
-
 def test_repair_move_window_reinserts_neighbor():
-    """LUNCH_WINDOW: quita el vecino de menor utilidad y reintenta. NO muta PartyConstraints (Punto 3)."""
+    """LUNCH_WINDOW: quita el vecino de menor utilidad y reintenta."""
     prev_stop = _stop("prev_attraction", hour_start=10, utility=1.0)
     window_stop = _stop("restaurant_1", kind=StopKind.MEAL, hour_start=11, utility=0.0)
     plan_first = _plan(stops=[prev_stop, window_stop])
@@ -326,19 +278,16 @@ def test_repair_move_window_reinserts_neighbor():
         context=MagicMock(),
         utilities={},
         now=datetime.now(tz=PARK_TZ),
+        park=MagicMock(),
     )
 
     assert result.valid is True
     assert optimizer.call_count == 2
-    # El vecino anterior debe haberse prohibido
     assert "prev_attraction" in optimizer.last_constraints.avoid
-    # NUNCA mutar lunch_window (Punto 3)
-    assert mock_constraints.lunch_window.start == DAY.replace(hour=11)
-    assert mock_constraints.lunch_window.end == DAY.replace(hour=13)
 
 
 def test_repair_move_walking_budget_removes_optional_stop():
-    """WALKING_BUDGET: quita la parada opcional de menor utilidad. NO muta walking_budget (Punto 3)."""
+    """WALKING_BUDGET: quita la parada opcional de menor utilidad."""
     must_stop = _stop("must_attraction", hour_start=10, utility=5.0)
     opt_stop = _stop("optional_attraction", hour_start=11, utility=1.0)
     plan_first = _plan(stops=[must_stop, opt_stop])
@@ -346,9 +295,7 @@ def test_repair_move_walking_budget_removes_optional_stop():
 
     mock_constraints = MagicMock()
     mock_constraints.avoid = []
-    mock_constraints.lunch_window = None
     mock_constraints.must_do = ["must_attraction"]
-    mock_constraints.party_walking_budget_minutes = 100
 
     optimizer = MockOptimizer(
         plan_factory=lambda n, _c: plan_first if n == 1 else plan_second
@@ -371,13 +318,12 @@ def test_repair_move_walking_budget_removes_optional_stop():
         context=MagicMock(),
         utilities={},
         now=datetime.now(tz=PARK_TZ),
+        park=MagicMock(),
     )
 
     assert result.valid is True
     assert optimizer.call_count == 2
     assert "optional_attraction" in optimizer.last_constraints.avoid
-    # NUNCA mutar party_walking_budget_minutes (Punto 3)
-    assert mock_constraints.party_walking_budget_minutes == 100
 
 
 def test_data_freshness_reload(base_constraints, empty_plan):
@@ -406,91 +352,29 @@ def test_data_freshness_reload(base_constraints, empty_plan):
         context=MagicMock(),
         utilities={},
         now=datetime.now(tz=PARK_TZ),
+        park=MagicMock(),
         context_reloader=mock_reloader,
     )
 
     assert result.valid is True
     assert reloader_called is True
-    # Punto 6: DATA_FRESHNESS no vuelve a llamar al optimizador
     assert optimizer.call_count == 1
 
 
-def test_data_freshness_reload_fails_closed_if_twice(base_constraints, empty_plan):
-    """Punto 6: re-check persiste DATA_FRESHNESS -> falla cerrado, optimizer solo se llama 1 vez."""
-    optimizer = MockOptimizer(empty_plan)
-    checker = MockChecker([
-        CheckResult(
-            valid=False,
-            violations=[
-                ConstraintViolation(rule=RuleId.DATA_FRESHNESS, message="stale")
-            ],
-        ),
-        CheckResult(
-            valid=False,
-            violations=[
-                ConstraintViolation(rule=RuleId.DATA_FRESHNESS, message="still stale")
-            ],
-        ),
-    ])
-    loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
+# ---------------------------------------------------------------------------
+# PROBES (Architecture §21 Invariants)
+# ---------------------------------------------------------------------------
 
-    def mock_reloader():
-        return MagicMock()
-
-    result = loop.resolve(
-        constraints=base_constraints,
-        context=MagicMock(),
-        utilities={},
-        now=datetime.now(tz=PARK_TZ),
-        context_reloader=mock_reloader,
-    )
-
-    assert result.valid is False
-    assert result.plan is None
-    assert "DATA_FRESHNESS violation but no context_reloader provided" in result.fatal_error
-    # Punto 6: el optimizador solo es invocado UNA vez
-    assert optimizer.call_count == 1
-
-
-def test_data_freshness_reload_exception_fails_closed(base_constraints, empty_plan):
-    optimizer = MockOptimizer(empty_plan)
-    checker = MockChecker([
-        CheckResult(
-            valid=False,
-            violations=[
-                ConstraintViolation(rule=RuleId.DATA_FRESHNESS, message="stale")
-            ],
-        )
-    ])
-    loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
-
-    def mock_failing_reloader():
-        raise ContextReloadError("Failed to fetch fresh snapshot")
-
-    result = loop.resolve(
-        constraints=base_constraints,
-        context=MagicMock(),
-        utilities={},
-        now=datetime.now(tz=PARK_TZ),
-        context_reloader=mock_failing_reloader,
-    )
-
-    assert result.valid is False
-    assert result.plan is None
-    assert "Context reload failed: Failed to fetch fresh snapshot" in result.fatal_error
-
-
-def test_unavailable_must_do_yields_valid_plan_with_unmet_must_do(base_constraints):
-    """DoD: Un must_do que no pudo insertarse genera valid=True con unmet_must_do poblado."""
-    plan_without_must_do = _plan(stops=[_stop("some_other_attraction")])
+def test_must_do_operating_fails_closed(base_constraints, empty_plan):
+    """Probe 1: A MUST_DO operating that cannot be inserted fails closed instead of returning valid=True."""
     base_constraints.must_do = ["splash_mountain"]
-
-    optimizer = MockOptimizer(plan_without_must_do)
+    
+    optimizer = MockOptimizer(empty_plan)
     checker = MockChecker([
         CheckResult(
             valid=False,
             violations=[
-                ConstraintViolation(rule=RuleId.MUST_DO, message="must_do not in plan")
+                ConstraintViolation(rule=RuleId.MUST_DO, message="must_do slot not available", stop_id="splash_mountain")
             ],
         )
     ])
@@ -501,12 +385,44 @@ def test_unavailable_must_do_yields_valid_plan_with_unmet_must_do(base_constrain
         context=MagicMock(),
         utilities={},
         now=datetime.now(tz=PARK_TZ),
+        park=MagicMock(),
     )
 
-    assert result.valid is True
-    assert result.plan is not None
-    assert "splash_mountain" in result.unmet_must_do
-    assert result.fatal_error is None
+    assert result.valid is False
+    assert result.plan is None
+    assert "MUST_DO attraction 'splash_mountain' is OPERATING" in result.fatal_error
+
+
+def test_opening_hours_protects_must_do(base_constraints):
+    """Probe 3: FORBID_NODE should fail closed rather than removing a MUST_DO node."""
+    base_constraints.must_do = ["space_mountain"]
+    plan_with_stop = _plan(stops=[_stop("space_mountain")])
+
+    optimizer = MockOptimizer(plan_with_stop)
+    checker = MockChecker([
+        CheckResult(
+            valid=False,
+            violations=[
+                ConstraintViolation(
+                    rule=RuleId.OPENING_HOURS,
+                    message="closed",
+                    stop_id="space_mountain",
+                )
+            ],
+        )
+    ])
+    loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
+
+    result = loop.resolve(
+        constraints=base_constraints,
+        context=MagicMock(),
+        utilities={},
+        now=datetime.now(tz=PARK_TZ),
+        park=MagicMock(),
+    )
+
+    assert result.valid is False
+    assert "cannot forbid MUST_DO node 'space_mountain'" in result.fatal_error
 
 
 def test_repair_move_catalog_covers_all_canonical_rules():

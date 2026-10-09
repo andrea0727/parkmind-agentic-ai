@@ -12,13 +12,13 @@ from parkmind.core.contracts.enums import RuleId
 
 
 class RepairAction(str, Enum):
-    """Action to take when a rule is violated."""
+    """Action to take when a rule is violated (Architecture §21)."""
 
     FAIL_CLOSED = "FAIL_CLOSED"
     RELOAD_CONTEXT = "RELOAD_CONTEXT"
     FORBID_NODE = "FORBID_NODE"
-    RELAX_LUNCH_WINDOW = "RELAX_LUNCH_WINDOW"
-    RELAX_WALKING_BUDGET = "RELAX_WALKING_BUDGET"
+    SHIFT_OR_FORBID_NEIGHBOR = "SHIFT_OR_FORBID_NEIGHBOR"
+    DROP_LOWEST_UTILITY_OPTIONAL = "DROP_LOWEST_UTILITY_OPTIONAL"
 
 
 class RepairMove(BaseModel):
@@ -30,21 +30,22 @@ class RepairMove(BaseModel):
 
 # Architecture §21 Mapping Table: exactly one deterministic move per canonical rule id
 RULE_TO_REPAIR_ACTION: dict[RuleId, RepairAction] = {
-    # Relaxes
-    RuleId.WALKING_BUDGET: RepairAction.RELAX_WALKING_BUDGET,
-    RuleId.LUNCH_WINDOW: RepairAction.RELAX_LUNCH_WINDOW,
     # Node removals / exclusions
     RuleId.OPENING_HOURS: RepairAction.FORBID_NODE,
-    RuleId.SHOW_ARRIVAL: RepairAction.FORBID_NODE,
-    # Context reload (handled once, then fails closed [C23])
+    RuleId.AVOID: RepairAction.FORBID_NODE,
+    # Fixed window neighbor exclusions / shifts
+    RuleId.SHOW_ARRIVAL: RepairAction.SHIFT_OR_FORBID_NEIGHBOR,
+    RuleId.LUNCH_WINDOW: RepairAction.SHIFT_OR_FORBID_NEIGHBOR,
+    RuleId.DEPARTURE: RepairAction.SHIFT_OR_FORBID_NEIGHBOR,
+    # Budget / capacity trimming (drop lowest utility optional)
+    RuleId.WALKING_BUDGET: RepairAction.DROP_LOWEST_UTILITY_OPTIONAL,
+    RuleId.ACCESSIBILITY: RepairAction.DROP_LOWEST_UTILITY_OPTIONAL,
+    # Context reload (handled once, then fails closed)
     RuleId.DATA_FRESHNESS: RepairAction.RELOAD_CONTEXT,
-    # Deterministic terminal / fail-closed rules (safety & physical feasibility)
+    # Deterministic terminal / fail-closed rules
     RuleId.HEIGHT: RepairAction.FAIL_CLOSED,
-    RuleId.ACCESSIBILITY: RepairAction.FAIL_CLOSED,
     RuleId.RIDE_RESTRICTION: RepairAction.FAIL_CLOSED,
     RuleId.MUST_DO: RepairAction.FAIL_CLOSED,
-    RuleId.AVOID: RepairAction.FAIL_CLOSED,
-    RuleId.DEPARTURE: RepairAction.FAIL_CLOSED,
 }
 
 

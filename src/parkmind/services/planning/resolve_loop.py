@@ -26,7 +26,9 @@ from parkmind.core.contracts import (
     StopKind,
 )
 from parkmind.services.planning.constraint_checker import ConstraintChecker
+from parkmind.services.planning.errors import ContextReloadError
 from parkmind.services.planning.optimizer import GreedyInsertionOptimizer
+from parkmind.services.planning.repair_moves import RepairAction, get_repair_move
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +68,8 @@ class PlannerResolveLoop:
         context: LiveContext,
         utilities: dict[str, float],
         now: datetime,
+        park: Park,
         accessibility_reqs: Sequence[AccessibilityRequirements] | None = None,
-        park: Park | None = None,
         catalog: Sequence[Attraction] | None = None,
         restaurant_node_ids: Sequence[str] | None = None,
         provenance: Provenance | None = None,
@@ -78,16 +80,16 @@ class PlannerResolveLoop:
         Run the repair loop up to max_attempts.
 
         If DATA_FRESHNESS fails, the context_reloader is invoked once.
-        Returns a PlannerResolveResult.
+        Returns a PlannerResolveResult. Absolute invariant: valid=True is ONLY
+        returned when ConstraintChecker produces a clean valid CheckResult.
         """
-        # [Punto 3] NUNCA mutar o relajar PartyConstraints
         current_constraints = deepcopy(constraints)
         current_context = context
 
         catalog_index = {a.node_id: a for a in catalog} if catalog else {}
 
         for attempt in range(self._max_attempts):
-            # 1. Generate plan
+            # 1. Generate candidate plan
             plan = self._optimizer.build_plan(
                 constraints=current_constraints,
                 context=current_context,
@@ -100,18 +102,18 @@ class PlannerResolveLoop:
                 group_objective=group_objective,
             )
 
-            # 2. Check plan
+            # 2. Check candidate plan
             check_result = self._checker.check(
                 plan=plan,
                 constraints=current_constraints,
                 accessibility=list(accessibility_reqs) if accessibility_reqs else [],
                 attractions=catalog_index,
-                park=park,  # type: ignore[arg-type]
+                park=park,
                 live_context=current_context,
                 now=now,
             )
 
-            # 3. If valid, return success
+            # 3. If clean check, return success
             if check_result.valid:
                 return PlannerResolveResult(
                     valid=True,
@@ -120,8 +122,7 @@ class PlannerResolveLoop:
                     fatal_error=None,
                 )
 
-            # [Punto 6] DATA_FRESHNESS:
-            # Recargar LiveContext una sola vez y hacer re-check. No duplicar llamadas al optimizador.
+            # DATA_FRESHNESS handling
             freshness_violation = next(
                 (v for v in check_result.violations if v.rule == RuleId.DATA_FRESHNESS),
                 None,
@@ -136,23 +137,23 @@ class PlannerResolveLoop:
                     )
                 try:
                     current_context = context_reloader()
-                except Exception as e:  # noqa: BLE001
+                except ContextReloadError as e:
                     return PlannerResolveResult(
                         valid=False,
                         plan=None,
                         unmet_must_do=[],
                         fatal_error=f"Context reload failed: {e}",
                     )
-                # Recargar una sola vez
+                # Consume reloader (single attempt)
                 context_reloader = None
 
-                # Re-check sin volver a llamar al optimizador
+                # Re-check without calling optimizer again
                 recheck_result = self._checker.check(
                     plan=plan,
                     constraints=current_constraints,
                     accessibility=list(accessibility_reqs) if accessibility_reqs else [],
                     attractions=catalog_index,
-                    park=park,  # type: ignore[arg-type]
+                    park=park,
                     live_context=current_context,
                     now=now,
                 )
@@ -171,41 +172,30 @@ class PlannerResolveLoop:
                         valid=False,
                         plan=None,
                         unmet_must_do=[],
-                        fatal_error="Stale data: DATA_FRESHNESS violation but no context_reloader provided.",
+                        fatal_error="Stale data: Live context remains stale after context reload.",
                     )
                 check_result = recheck_result
 
-            # 4. Map the first violation to a repair move
+            # 4. Map the first violation to a repair move (§21 SSOT)
             violation = check_result.violations[0]
+            repair_move = get_repair_move(violation.rule, violation.stop_id)
 
             logger.info(
-                f"Resolve loop attempt {attempt + 1}: violation {violation.rule.value}"
+                f"Resolve loop attempt {attempt + 1}: violation {violation.rule.value} -> action {repair_move.action.value}"
             )
 
-            # [Punto 4] MUST_DO:
-            # Si no se puede insertar o la atracción está DOWN todo el día,
-            # registrar el ID en unmet_must_do y retornar un plan válido (valid=True, unmet_must_do=[...]).
+            # Rule 4 / Must-Do Violation Handling
             if violation.rule == RuleId.MUST_DO:
-                missing_must_dos = [
-                    m
-                    for m in current_constraints.must_do
-                    if m not in {s.node_id for s in plan.stops}
-                ]
-                unmet_list = list(
-                    dict.fromkeys(list(plan.unmet_must_do) + missing_must_dos)
-                )
-                updated_plan = plan.model_copy(update={"unmet_must_do": unmet_list})
                 return PlannerResolveResult(
-                    valid=True,
-                    plan=updated_plan,
-                    unmet_must_do=unmet_list,
-                    fatal_error=None,
+                    valid=False,
+                    plan=None,
+                    unmet_must_do=[],
+                    fatal_error=f"Infeasible constraint set: MUST_DO attraction '{violation.stop_id or 'unknown'}' is OPERATING but could not be validly scheduled.",
                 )
 
-            # [Punto 4] OPENING_HOURS / AVOID:
-            # Aplicar FORBID_NODE (agregar el nodo/atracción a la lista de nodos prohibidos) y volver a intentar en el siguiente loop.
-            if violation.rule in (RuleId.OPENING_HOURS, RuleId.AVOID):
-                target_node = violation.stop_id
+            # FORBID_NODE (OPENING_HOURS, AVOID)
+            if repair_move.action == RepairAction.FORBID_NODE:
+                target_node = repair_move.target_id
                 if not target_node:
                     return PlannerResolveResult(
                         valid=False,
@@ -213,19 +203,21 @@ class PlannerResolveLoop:
                         unmet_must_do=[],
                         fatal_error=f"FORBID_NODE missing target_id for violation {violation.rule.value}.",
                     )
+                if target_node in current_constraints.must_do:
+                    return PlannerResolveResult(
+                        valid=False,
+                        plan=None,
+                        unmet_must_do=[],
+                        fatal_error=f"Infeasible constraint set: cannot forbid MUST_DO node '{target_node}'.",
+                    )
                 if target_node not in current_constraints.avoid:
                     current_constraints.avoid.append(target_node)
                 continue
 
-            # [Punto 4] SHOW_ARRIVAL, LUNCH_WINDOW, DEPARTURE:
-            # Fijar la parada de ventana y reinsertar las vecinas.
-            if violation.rule in (
-                RuleId.SHOW_ARRIVAL,
-                RuleId.LUNCH_WINDOW,
-                RuleId.DEPARTURE,
-            ):
+            # SHIFT_OR_FORBID_NEIGHBOR (SHOW_ARRIVAL, LUNCH_WINDOW, DEPARTURE)
+            if repair_move.action == RepairAction.SHIFT_OR_FORBID_NEIGHBOR:
                 neighbor_to_remove = None
-                window_node = violation.stop_id
+                window_node = repair_move.target_id
 
                 stop_idx = None
                 if window_node:
@@ -236,11 +228,17 @@ class PlannerResolveLoop:
 
                 if stop_idx is not None and stop_idx > 0:
                     prev_stop = plan.stops[stop_idx - 1]
-                    if prev_stop.kind == StopKind.ATTRACTION:
+                    if (
+                        prev_stop.kind == StopKind.ATTRACTION
+                        and prev_stop.node_id not in current_constraints.must_do
+                    ):
                         neighbor_to_remove = prev_stop.node_id
                 elif stop_idx is not None and stop_idx < len(plan.stops) - 1:
                     next_stop = plan.stops[stop_idx + 1]
-                    if next_stop.kind == StopKind.ATTRACTION:
+                    if (
+                        next_stop.kind == StopKind.ATTRACTION
+                        and next_stop.node_id not in current_constraints.must_do
+                    ):
                         neighbor_to_remove = next_stop.node_id
                 elif violation.rule == RuleId.DEPARTURE and plan.stops:
                     last_attr = next(
@@ -248,11 +246,12 @@ class PlannerResolveLoop:
                             s.node_id
                             for s in reversed(plan.stops)
                             if s.kind == StopKind.ATTRACTION
+                            and s.node_id not in current_constraints.must_do
                         ),
                         None,
                     )
                     neighbor_to_remove = last_attr
-                elif window_node:
+                elif window_node and window_node not in current_constraints.must_do:
                     neighbor_to_remove = window_node
 
                 if neighbor_to_remove:
@@ -267,9 +266,8 @@ class PlannerResolveLoop:
                     fatal_error=f"Infeasible constraint set: {violation.rule.value} - {violation.message}",
                 )
 
-            # [Punto 4] WALKING_BUDGET / ACCESSIBILITY:
-            # Quitar la parada opcional de menor utilidad o insertar un descanso (REST).
-            if violation.rule in (RuleId.WALKING_BUDGET, RuleId.ACCESSIBILITY):
+            # DROP_LOWEST_UTILITY_OPTIONAL (WALKING_BUDGET, ACCESSIBILITY)
+            if repair_move.action == RepairAction.DROP_LOWEST_UTILITY_OPTIONAL:
                 optional_stops = [
                     s
                     for s in plan.stops
@@ -282,7 +280,6 @@ class PlannerResolveLoop:
                         current_constraints.avoid.append(lowest_utility_stop.node_id)
                     continue
 
-                # No hay paradas opcionales para quitar; inviable determinísticamente
                 return PlannerResolveResult(
                     valid=False,
                     plan=None,
@@ -290,7 +287,7 @@ class PlannerResolveLoop:
                     fatal_error=f"Infeasible constraint set: {violation.rule.value} - {violation.message}",
                 )
 
-            # Restricciones físicas y de seguridad (HEIGHT, RIDE_RESTRICTION, etc.): fail closed
+            # Terminal fail-closed actions (HEIGHT, RIDE_RESTRICTION, etc.)
             return PlannerResolveResult(
                 valid=False,
                 plan=None,
@@ -298,7 +295,7 @@ class PlannerResolveLoop:
                 fatal_error=f"Infeasible constraint set: {violation.rule.value} - {violation.message}",
             )
 
-        # Si se superan los intentos máximos sin converger
+        # Max attempts reached without convergence
         return PlannerResolveResult(
             valid=False,
             plan=None,
