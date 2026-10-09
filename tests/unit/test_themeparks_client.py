@@ -70,7 +70,11 @@ class TestGetCatalog:
     def test_valid_catalog_filters_and_normalizes(self):
         """ATTRACTION/SHOW kept, RESTAURANT/PARK dropped, unknown metadata skipped."""
         client = _client(
-            {f"/entity/{PARK_ID}/children": _load_fixture("children_magic_kingdom.json")}
+            {
+                f"/entity/{PARK_ID}/children": _load_fixture(
+                    "children_magic_kingdom.json"
+                )
+            }
         )
         catalog = client.get_catalog()
 
@@ -90,10 +94,16 @@ class TestGetCatalog:
 
     def test_catalog_entry_fields_match_curated_metadata(self):
         client = _client(
-            {f"/entity/{PARK_ID}/children": _load_fixture("children_magic_kingdom.json")}
+            {
+                f"/entity/{PARK_ID}/children": _load_fixture(
+                    "children_magic_kingdom.json"
+                )
+            }
         )
         catalog = client.get_catalog()
-        space_mountain = next(a for a in catalog if a.node_id == "b2260923-9315-40fd-9c6b-44dd811dbe64")
+        space_mountain = next(
+            a for a in catalog if a.node_id == "b2260923-9315-40fd-9c6b-44dd811dbe64"
+        )
 
         assert space_mountain.name == "Space Mountain"
         assert space_mountain.height_restriction_cm == 112
@@ -102,7 +112,11 @@ class TestGetCatalog:
     def test_explicit_empty_metadata_table_is_not_replaced_by_default(self):
         """`{}` is falsy; it must not silently fall back to the Magic Kingdom table."""
         client = _client(
-            {f"/entity/{PARK_ID}/children": _load_fixture("children_magic_kingdom.json")},
+            {
+                f"/entity/{PARK_ID}/children": _load_fixture(
+                    "children_magic_kingdom.json"
+                )
+            },
             attraction_metadata={},
         )
         assert client.get_catalog() == []
@@ -119,7 +133,11 @@ class TestGetCatalog:
             }
         }
         client = _client(
-            {f"/entity/{PARK_ID}/children": _load_fixture("children_magic_kingdom.json")},
+            {
+                f"/entity/{PARK_ID}/children": _load_fixture(
+                    "children_magic_kingdom.json"
+                )
+            },
             attraction_metadata=custom,
         )
         catalog = client.get_catalog()
@@ -153,7 +171,9 @@ class TestGetCatalog:
 
 class TestGetLiveWaits:
     def test_standby_wait_normalized(self):
-        client = _client({f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom.json")})
+        client = _client(
+            {f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom.json")}
+        )
         waits = client.get_live_waits(["b2260923-9315-40fd-9c6b-44dd811dbe64"])
 
         estimate = waits["b2260923-9315-40fd-9c6b-44dd811dbe64"]
@@ -163,7 +183,9 @@ class TestGetLiveWaits:
 
     def test_non_standby_only_attraction_omitted(self):
         """Jungle Cruise has only a RETURN_TIME queue in the fixture — no STANDBY key at all."""
-        client = _client({f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom.json")})
+        client = _client(
+            {f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom.json")}
+        )
         waits = client.get_live_waits(["796b0a25-c51e-456e-9bb8-50a324e301b3"])
 
         assert "796b0a25-c51e-456e-9bb8-50a324e301b3" not in waits
@@ -171,13 +193,17 @@ class TestGetLiveWaits:
     def test_null_waittime_omitted(self):
         """The self-referencing PARK entity has queue.STANDBY.waitTime=null; also filtered
         out entirely before this point since it shares the park's own id."""
-        client = _client({f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom.json")})
+        client = _client(
+            {f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom.json")}
+        )
         waits = client.get_live_waits([PARK_ID])
 
         assert waits == {}
 
     def test_unrequested_id_silently_omitted(self):
-        client = _client({f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom.json")})
+        client = _client(
+            {f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom.json")}
+        )
         waits = client.get_live_waits(["does-not-exist"])
 
         assert waits == {}
@@ -185,7 +211,11 @@ class TestGetLiveWaits:
     def test_foreign_timezone_payload_raises_schema_error(self):
         """P0-10: a live payload in another timezone is contract drift."""
         client = _client(
-            {f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom_other_timezone.json")}
+            {
+                f"/entity/{PARK_ID}/live": _load_fixture(
+                    "live_magic_kingdom_other_timezone.json"
+                )
+            }
         )
         with pytest.raises(ThemeParksSchemaError):
             client.get_live_waits(["b2260923-9315-40fd-9c6b-44dd811dbe64"])
@@ -193,10 +223,17 @@ class TestGetLiveWaits:
     def test_duplicated_id_is_excluded_not_last_wins(self):
         """P0-10: two different readings for one id are both dropped, never picked."""
         client = _client(
-            {f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom_duplicate_id.json")}
+            {
+                f"/entity/{PARK_ID}/live": _load_fixture(
+                    "live_magic_kingdom_duplicate_id.json"
+                )
+            }
         )
         waits = client.get_live_waits(
-            ["b2260923-9315-40fd-9c6b-44dd811dbe64", "de3309ca-97d5-4211-bffe-739fed47e92f"]
+            [
+                "b2260923-9315-40fd-9c6b-44dd811dbe64",
+                "de3309ca-97d5-4211-bffe-739fed47e92f",
+            ]
         )
         assert "b2260923-9315-40fd-9c6b-44dd811dbe64" not in waits
 
@@ -228,7 +265,9 @@ class TestGetAttractionStatus:
         ],
     )
     def test_all_canonical_statuses(self, node_id, expected):
-        client = _client({f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom.json")})
+        client = _client(
+            {f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom.json")}
+        )
         statuses = client.get_attraction_status([node_id])
         assert statuses[node_id] == expected
 
@@ -240,7 +279,9 @@ class TestGetAttractionStatus:
 
 class TestGetShowtimes:
     def test_showtimes_are_timezone_aware(self):
-        client = _client({f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom.json")})
+        client = _client(
+            {f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom.json")}
+        )
         showtimes = client.get_showtimes(["4c31b3ad-5dc9-437f-ac1a-0fdff36a2818"])
 
         times = showtimes["4c31b3ad-5dc9-437f-ac1a-0fdff36a2818"]
@@ -248,7 +289,9 @@ class TestGetShowtimes:
         assert all(t.tzinfo is not None for t in times)
 
     def test_entity_without_showtimes_omitted(self):
-        client = _client({f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom.json")})
+        client = _client(
+            {f"/entity/{PARK_ID}/live": _load_fixture("live_magic_kingdom.json")}
+        )
         showtimes = client.get_showtimes(["b2260923-9315-40fd-9c6b-44dd811dbe64"])
         assert showtimes == {}
 
@@ -278,7 +321,11 @@ class TestGetSchedule:
 
     def test_no_match_raises_not_found(self):
         client = _client(
-            {f"/entity/{PARK_ID}/schedule": _load_fixture("schedule_magic_kingdom_no_match.json")}
+            {
+                f"/entity/{PARK_ID}/schedule": _load_fixture(
+                    "schedule_magic_kingdom_no_match.json"
+                )
+            }
         )
         with pytest.raises(ThemeParksNotFoundError):
             client.get_schedule(date(2026, 9, 16))
@@ -297,7 +344,9 @@ class TestRetriesAndErrors:
             calls["count"] += 1
             if calls["count"] < 2:
                 return httpx.Response(503)
-            return httpx.Response(200, json=_load_fixture("schedule_magic_kingdom_2026-09-16.json"))
+            return httpx.Response(
+                200, json=_load_fixture("schedule_magic_kingdom_2026-09-16.json")
+            )
 
         client = ThemeParksClient(
             park_id=PARK_ID, transport=httpx.MockTransport(handler), backoff_seconds=0
@@ -392,7 +441,9 @@ class TestRetriesAndErrors:
 
     def test_context_manager_closes_underlying_client(self):
         def handler(request: httpx.Request) -> httpx.Response:
-            return httpx.Response(200, json=_load_fixture("schedule_magic_kingdom_2026-09-16.json"))
+            return httpx.Response(
+                200, json=_load_fixture("schedule_magic_kingdom_2026-09-16.json")
+            )
 
         with ThemeParksClient(
             park_id=PARK_ID, transport=httpx.MockTransport(handler), backoff_seconds=0

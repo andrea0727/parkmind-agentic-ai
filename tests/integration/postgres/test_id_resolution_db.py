@@ -63,15 +63,21 @@ def test_internal_ids_are_stable_across_snapshots_in_postgres(
     assert (rows["first"], rows["last"]) == (NOW, NOW + timedelta(hours=4))
 
 
-def test_catalog_and_live_resolve_to_the_same_internal_ids(conn: psycopg.Connection) -> None:
+def test_catalog_and_live_resolve_to_the_same_internal_ids(
+    conn: psycopg.Connection,
+) -> None:
     resolver = IdResolver(PostgresIdMappingRepository(conn))
 
     catalog = resolver.resolve_catalog(
         THEMEPARKS,
-        parse_catalog(_fixture("children_magic_kingdom.json"), MAGIC_KINGDOM_ATTRACTION_METADATA),
+        parse_catalog(
+            _fixture("children_magic_kingdom.json"), MAGIC_KINGDOM_ATTRACTION_METADATA
+        ),
         seen_at=NOW,
     )
-    live = resolver.resolve_live(THEMEPARKS, parse_live(_fixture("live_magic_kingdom.json")), seen_at=NOW)
+    live = resolver.resolve_live(
+        THEMEPARKS, parse_live(_fixture("live_magic_kingdom.json")), seen_at=NOW
+    )
 
     assert {a.node_id for a in catalog.attractions} <= set(live.entities)
 
@@ -82,7 +88,10 @@ def test_plan_stop_traces_back_to_provider_id(conn: psycopg.Connection) -> None:
     resolver = IdResolver(PostgresIdMappingRepository(conn))
     live = resolver.resolve_live(THEMEPARKS, parse_live(raw), seen_at=NOW)
     PostgresSnapshotRepository(conn).save(
-        factories.live_context(snapshot_id="snap_trace"), raw, [THEMEPARKS], normalizer_version=1
+        factories.live_context(snapshot_id="snap_trace"),
+        raw,
+        [THEMEPARKS],
+        normalizer_version=1,
     )
     plan = factories.plan(
         plan_id="plan_trace",
@@ -97,8 +106,12 @@ def test_plan_stop_traces_back_to_provider_id(conn: psycopg.Connection) -> None:
     assert node_id in live.entities
 
     # internal id -> every provider id recorded for it
-    assert resolver.trace(node_id) == [("themeparks_wiki", SPACE_MOUNTAIN, "attraction")]
+    assert resolver.trace(node_id) == [
+        ("themeparks_wiki", SPACE_MOUNTAIN, "attraction")
+    ]
     # provenance -> the exact provider payload the plan was built from
-    payload = PostgresSnapshotRepository(conn).get_raw_payload(stored.provenance.snapshot_id)
+    payload = PostgresSnapshotRepository(conn).get_raw_payload(
+        stored.provenance.snapshot_id
+    )
     assert payload is not None
     assert SPACE_MOUNTAIN in {entity["id"] for entity in payload["liveData"]}

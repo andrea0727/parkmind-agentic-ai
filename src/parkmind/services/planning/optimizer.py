@@ -80,6 +80,7 @@ def _revalidated(model: _ModelT, **changes: object) -> _ModelT:
     """
     return type(model).model_validate({**model.model_dump(), **changes})
 
+
 # ---------------------------------------------------------------------------
 # Defaults — tunable but intentionally not persisted preferences
 # ---------------------------------------------------------------------------
@@ -268,13 +269,16 @@ class GreedyInsertionOptimizer:
         # differently on a second call, and a failing source is asked (and logged) once.
         wait_readings: dict[tuple[str, datetime], tuple[float, _WaitSource] | None] = {}
 
-        def read_wait(node_id: str, arrival: datetime) -> tuple[float, _WaitSource] | None:
+        def read_wait(
+            node_id: str, arrival: datetime
+        ) -> tuple[float, _WaitSource] | None:
             key = (node_id, arrival)
             if key not in wait_readings:
                 wait_readings[key] = self._wait_at(
                     node_id, arrival, context, catalog_index, forecast_service, now
                 )
             return wait_readings[key]
+
         cursor_time = start_time
         cursor_node = _PARK_ENTRANCE_NODE
         active_minutes_since_rest = 0.0
@@ -463,7 +467,9 @@ class GreedyInsertionOptimizer:
             # 4. If a candidate was chosen, insert it
             if chosen_id is not None:
                 walk_min = self._walk_time(cursor_node, chosen_id)
-                reading = read_wait(chosen_id, cursor_time + timedelta(minutes=walk_min))
+                reading = read_wait(
+                    chosen_id, cursor_time + timedelta(minutes=walk_min)
+                )
                 if reading is None:  # unreachable: the candidate read this same key
                     visited.add(chosen_id)
                     continue
@@ -650,7 +656,9 @@ class GreedyInsertionOptimizer:
         )
         if scores is not None:
             # Needs the assembled plan (which stops serve whom), so it comes last.
-            plan = _revalidated(plan, per_guest_satisfaction=scorer_satisfaction(plan, scores))
+            plan = _revalidated(
+                plan, per_guest_satisfaction=scorer_satisfaction(plan, scores)
+            )
         return plan
 
     # ------------------------------------------------------------------
@@ -884,7 +892,10 @@ class GreedyInsertionOptimizer:
 
     @staticmethod
     def _with_wait_sources(
-        provenance: Provenance, forecasts: list[WaitForecast], *, typical_wait_used: bool
+        provenance: Provenance,
+        forecasts: list[WaitForecast],
+        *,
+        typical_wait_used: bool,
     ) -> Provenance:
         """Record where the charged waits came from (section 40).
 
@@ -896,7 +907,9 @@ class GreedyInsertionOptimizer:
         curated reference data, not a provider, so it adds none.
         """
         also = [TYPICAL_WAIT] if typical_wait_used else []
-        data_sources = set(provenance.data_sources) | set(forecast_data_sources(forecasts))
+        data_sources = set(provenance.data_sources) | set(
+            forecast_data_sources(forecasts)
+        )
         return _revalidated(
             provenance,
             forecast_strategy=forecast_strategy_label(forecasts, also=also),

@@ -54,7 +54,9 @@ def test_fetch_hourly_payload_returns_the_provider_json_verbatim() -> None:
     raw = client.fetch_hourly_payload(start_date="2026-09-27", end_date="2026-09-27")
 
     assert raw == payload
-    assert client.get_hourly_forecast(start_date="2026-09-27") == parse_hourly_forecast(payload)
+    assert client.get_hourly_forecast(start_date="2026-09-27") == parse_hourly_forecast(
+        payload
+    )
 
 
 def test_stored_payload_in_another_timezone_is_rejected() -> None:
@@ -79,14 +81,18 @@ def test_stored_payload_in_celsius_is_rejected() -> None:
 
 def test_fetch_live_payload_returns_the_provider_json_verbatim() -> None:
     payload = _capture("themeparks_live.json")
-    client = ThemeParksClient(PARK_ID, base_url="https://testserver", transport=_serving(payload))
+    client = ThemeParksClient(
+        PARK_ID, base_url="https://testserver", transport=_serving(payload)
+    )
 
     assert client.fetch_live_payload() == payload
 
 
 def test_fetch_schedule_payload_returns_the_provider_json_verbatim() -> None:
     payload = _capture("themeparks_schedule.json")
-    client = ThemeParksClient(PARK_ID, base_url="https://testserver", transport=_serving(payload))
+    client = ThemeParksClient(
+        PARK_ID, base_url="https://testserver", transport=_serving(payload)
+    )
 
     assert client.fetch_schedule_payload() == payload
 
@@ -94,7 +100,9 @@ def test_fetch_schedule_payload_returns_the_provider_json_verbatim() -> None:
 def test_raw_fetch_still_rejects_a_foreign_timezone() -> None:
     payload = copy.deepcopy(_capture("themeparks_live.json"))
     payload["timezone"] = "Europe/Paris"
-    client = ThemeParksClient(PARK_ID, base_url="https://testserver", transport=_serving(payload))
+    client = ThemeParksClient(
+        PARK_ID, base_url="https://testserver", transport=_serving(payload)
+    )
 
     with pytest.raises(ThemeParksSchemaError):
         client.fetch_live_payload()

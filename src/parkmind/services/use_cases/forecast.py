@@ -127,7 +127,9 @@ def build_forecast_service(
             strategies.append(api)
     strategies.append(
         HistoricalProfileStrategy(
-            build_wait_profile(snapshots, now=now, lookback=lookback, min_samples=min_samples)
+            build_wait_profile(
+                snapshots, now=now, lookback=lookback, min_samples=min_samples
+            )
         )
     )
     if fresh is not None:
@@ -148,7 +150,9 @@ def _api_strategy(
         points = _forecast_points(raw, id_mappings)
     except (ThemeParksSchemaError, KeyError, TypeError, AttributeError) as exc:
         logger.warning(
-            "API forecast unavailable for snapshot %s; falling back: %s", context.snapshot_id, exc
+            "API forecast unavailable for snapshot %s; falling back: %s",
+            context.snapshot_id,
+            exc,
         )
         return None
     return ApiForecastStrategy(
@@ -182,7 +186,9 @@ def _forecast_points(
         kind = entity_kind(entity)
         if not series or kind is None:
             continue
-        internal_id = id_mappings.resolve(DataSource.THEMEPARKS_WIKI.value, provider_id, kind)
+        internal_id = id_mappings.resolve(
+            DataSource.THEMEPARKS_WIKI.value, provider_id, kind
+        )
         if internal_id is not None:
             by_internal[internal_id].append((provider_id, series))
     points: dict[str, ForecastPoints] = {}

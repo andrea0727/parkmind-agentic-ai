@@ -75,7 +75,6 @@ __all__ = [
     "ApprovalStatus",
     "Attraction",
     "AttractionCategory",
-    # Enums
     "AttractionStatus",
     "BehaviorEntry",
     "BehaviorEventType",
@@ -91,7 +90,6 @@ __all__ = [
     "EventType",
     "FairnessConfig",
     "GroupObjective",
-    # Models
     "Guest",
     "GuestProfile",
     "GuestRole",
@@ -99,7 +97,6 @@ __all__ = [
     "LiveContext",
     "MobilityRequirement",
     "Park",
-    # Base
     "ParkMindBaseModel",
     "PartyConstraints",
     "Plan",

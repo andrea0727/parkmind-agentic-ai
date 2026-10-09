@@ -55,7 +55,9 @@ class PostgresProposalRepository(PostgresRepositoryBase):
                         proposal.candidate_plan_id,
                         proposal.triggering_event_id,
                         proposal.approval_status.value,
-                        proposal.rejection_reason.value if proposal.rejection_reason else None,
+                        proposal.rejection_reason.value
+                        if proposal.rejection_reason
+                        else None,
                         to_jsonb(proposal),
                     ),
                 )
@@ -98,7 +100,10 @@ class PostgresProposalRepository(PostgresRepositoryBase):
                 (thread_id,),
             )
             rows = cur.fetchall()
-        return [_overlay(r["payload"], r["approval_status"], r["rejection_reason"]) for r in rows]
+        return [
+            _overlay(r["payload"], r["approval_status"], r["rejection_reason"])
+            for r in rows
+        ]
 
     def resolve(
         self,
@@ -109,7 +114,9 @@ class PostgresProposalRepository(PostgresRepositoryBase):
         rejection_reason: RejectionReason | None = None,
     ) -> Proposal:
         if status is ApprovalStatus.PENDING:
-            raise InvalidStateTransitionError("a proposal cannot be resolved back to PENDING")
+            raise InvalidStateTransitionError(
+                "a proposal cannot be resolved back to PENDING"
+            )
 
         with self._tx() as cur:
             cur.execute(
@@ -128,10 +135,14 @@ class PostgresProposalRepository(PostgresRepositoryBase):
             )
             row = cur.fetchone()
             if row is None:
-                cur.execute("SELECT 1 FROM proposals WHERE proposal_id = %s", (proposal_id,))
+                cur.execute(
+                    "SELECT 1 FROM proposals WHERE proposal_id = %s", (proposal_id,)
+                )
                 if cur.fetchone() is None:
                     raise NotFoundError("proposal does not exist")
-                raise InvalidStateTransitionError("only a PENDING proposal can be resolved")
+                raise InvalidStateTransitionError(
+                    "only a PENDING proposal can be resolved"
+                )
         return _overlay(row["payload"], row["approval_status"], row["rejection_reason"])
 
     def supersede_pending(self, thread_id: str, *, at: datetime) -> list[str]:
@@ -148,7 +159,9 @@ class PostgresProposalRepository(PostgresRepositoryBase):
             return sorted(row["proposal_id"] for row in cur.fetchall())
 
     @staticmethod
-    def _require_same_body(cur: psycopg.Cursor[dict[str, Any]], thread_id: str, proposal: Proposal) -> None:
+    def _require_same_body(
+        cur: psycopg.Cursor[dict[str, Any]], thread_id: str, proposal: Proposal
+    ) -> None:
         """An existing proposal_id may only be re-saved with the same body.
 
         The incoming resolution is overlaid on the stored body first, so a stale
@@ -167,4 +180,6 @@ class PostgresProposalRepository(PostgresRepositoryBase):
             proposal.rejection_reason.value if proposal.rejection_reason else None,
         )
         if stored["thread_id"] != thread_id or rebuilt != proposal:
-            raise ProposalImmutableError("a different proposal is already stored under this id")
+            raise ProposalImmutableError(
+                "a different proposal is already stored under this id"
+            )

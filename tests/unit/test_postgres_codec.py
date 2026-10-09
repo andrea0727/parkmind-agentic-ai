@@ -38,7 +38,9 @@ def _through_json(model: BaseModel) -> Any:
 
 
 @pytest.mark.parametrize("build", BUILDERS, ids=lambda build: build.__name__)
-def test_every_contract_round_trips_through_jsonb(build: Callable[[], BaseModel]) -> None:
+def test_every_contract_round_trips_through_jsonb(
+    build: Callable[[], BaseModel],
+) -> None:
     original = build()
 
     restored = from_payload(type(original), _through_json(original), what="test row")
@@ -81,6 +83,9 @@ def test_stored_data_error_never_leaks_accessibility_values() -> None:
 
 
 def test_raw_provider_payload_is_stored_verbatim() -> None:
-    raw = {"liveData": [{"id": "x", "queue": {"STANDBY": {"waitTime": None}}}], "n": 1.5}
+    raw = {
+        "liveData": [{"id": "x", "queue": {"STANDBY": {"waitTime": None}}}],
+        "n": 1.5,
+    }
 
     assert json.loads(json.dumps(raw_to_jsonb(raw).obj)) == raw

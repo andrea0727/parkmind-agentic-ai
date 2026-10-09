@@ -82,7 +82,9 @@ class PreferenceValue(ParkMindBaseModel):
     source: PreferenceSource
     confidence: float = Field(ge=0, le=1)
     updated_at: datetime
-    stated_value: float | None = None  # Verbatim from guest; never overwritten by learning
+    stated_value: float | None = (
+        None  # Verbatim from guest; never overwritten by learning
+    )
 
     @model_validator(mode="after")
     def check_stated_value_retention(self) -> "PreferenceValue":
@@ -110,10 +112,10 @@ class GuestProfile(ParkMindBaseModel):
     guest_id: str
     pace: PlanningPace
     queue_tolerance: PreferenceValue
-    walking_tolerance: PreferenceValue  # Comfort, not a limit. Limit is in AccessibilityRequirements.
-    sensitivities: dict[SensitivityKind, SensitivityLevel] = Field(
-        default_factory=dict
+    walking_tolerance: (
+        PreferenceValue  # Comfort, not a limit. Limit is in AccessibilityRequirements.
     )
+    sensitivities: dict[SensitivityKind, SensitivityLevel] = Field(default_factory=dict)
     thematic_affinity: dict[str, PreferenceValue] = Field(
         default_factory=dict
     )  # theme/land -> PreferenceValue
@@ -351,13 +353,17 @@ class GroupObjective(ParkMindBaseModel):
     """
 
     objective_version: str
-    weights: dict[str, float]  # Scorer coefficients (λq, λw, λr, λc, λf, affinity weights)
+    weights: dict[
+        str, float
+    ]  # Scorer coefficients (λq, λw, λr, λc, λf, affinity weights)
     per_guest_eligible: dict[str, list[str]] = Field(
         default_factory=dict
     )  # guest_id -> attraction ids allowed by rules 2, 9, 10
     hard_constraints: HardConstraintSet
     fairness: FairnessConfig
-    event_thresholds: EventThresholds  # Queue spike / walking overrun; most-sensitive guest
+    event_thresholds: (
+        EventThresholds  # Queue spike / walking overrun; most-sensitive guest
+    )
     weight_provenance: dict[str, PreferenceSource] = Field(
         default_factory=dict
     )  # Per weight: stated, learned, or default
@@ -414,7 +420,10 @@ class Event(ParkMindBaseModel):
     @model_validator(mode="after")
     def validate_event_fields(self) -> "Event":
         """Validate event-type-specific fields."""
-        if self.type in (EventType.ATTRACTION_DOWN, EventType.WAIT_SPIKE) and not self.attraction_id:
+        if (
+            self.type in (EventType.ATTRACTION_DOWN, EventType.WAIT_SPIKE)
+            and not self.attraction_id
+        ):
             raise ValueError(f"{self.type} requires attraction_id")
         if self.type == EventType.GUEST_FATIGUE and not self.guest_id:
             raise ValueError(f"{self.type} requires guest_id")

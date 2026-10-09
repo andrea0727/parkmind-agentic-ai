@@ -88,14 +88,18 @@ class ForecastService:
             try:
                 forecast = strategy.forecast(attraction_id, at, now=now)
             except ForecastSourceError as exc:
-                logger.warning("forecast strategy %s failed; falling back: %s", strategy.name, exc)
+                logger.warning(
+                    "forecast strategy %s failed; falling back: %s", strategy.name, exc
+                )
                 continue
             if forecast is not None:
                 return forecast
         return None
 
 
-def forecast_strategy_label(forecasts: Iterable[WaitForecast], *, also: Iterable[str] = ()) -> str:
+def forecast_strategy_label(
+    forecasts: Iterable[WaitForecast], *, also: Iterable[str] = ()
+) -> str:
     """``Provenance.forecast_strategy`` for a set of forecasts.
 
     The distinct strategy names, sorted and joined with ``+`` (e.g.
@@ -134,7 +138,9 @@ class ApiForecastStrategy:
         self._retrieved_at = retrieved_at
         self._max_age = max_age
 
-    def forecast(self, attraction_id: str, at: datetime, *, now: datetime) -> WaitForecast | None:
+    def forecast(
+        self, attraction_id: str, at: datetime, *, now: datetime
+    ) -> WaitForecast | None:
         """The point whose hour contains ``at``; ``None`` outside the forecast's hours,
         for an hour without a reading, or once the snapshot is stale at ``now``."""
         if not is_fresh(self._retrieved_at, now=now, max_age=self._max_age):
@@ -182,7 +188,9 @@ class HistoricalProfileStrategy:
         _require_aware(profile.built_at, "profile.built_at")
         self._profile = profile
 
-    def forecast(self, attraction_id: str, at: datetime, *, now: datetime) -> WaitForecast | None:
+    def forecast(
+        self, attraction_id: str, at: datetime, *, now: datetime
+    ) -> WaitForecast | None:
         median = self._profile.medians.get((attraction_id, at.astimezone(PARK_TZ).hour))
         if median is None:
             return None
@@ -211,7 +219,9 @@ class CachedSnapshotStrategy:
         self._live_context = live_context
         self._max_age = max_age
 
-    def forecast(self, attraction_id: str, at: datetime, *, now: datetime) -> WaitForecast | None:
+    def forecast(
+        self, attraction_id: str, at: datetime, *, now: datetime
+    ) -> WaitForecast | None:
         context = self._live_context
         if not is_fresh(context.retrieved_at, now=now, max_age=self._max_age):
             return None

@@ -63,10 +63,6 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 
-
-
-
-
 class OpenMeteoClient:
     """
     HTTP Client adapter for Open-Meteo Weather API.
@@ -94,7 +90,9 @@ class OpenMeteoClient:
         self.base_url = base_url.rstrip("/")
         self.default_latitude = default_latitude
         self.default_longitude = default_longitude
-        self._retry_policy = RetryPolicy(max_attempts=max_retries, backoff_seconds=backoff_seconds)
+        self._retry_policy = RetryPolicy(
+            max_attempts=max_retries, backoff_seconds=backoff_seconds
+        )
         self._client = httpx.Client(
             base_url=self.base_url,
             transport=transport,

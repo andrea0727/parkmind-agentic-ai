@@ -80,7 +80,9 @@ class AttractionNameResolver:
             return NameResolution()
         catalog = self._repository.list_attractions(self._park_id)
         if not catalog:
-            raise CatalogUnavailableError(f"no attraction catalog for park {self._park_id!r}")
+            raise CatalogUnavailableError(
+                f"no attraction catalog for park {self._park_id!r}"
+            )
 
         resolved: dict[str, ResolvedAttraction] = {}
         unknown: list[str] = []

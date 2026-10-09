@@ -43,9 +43,13 @@ class PostgresPlanRepository(PostgresRepositoryBase):
                 assert stored is not None  # the conflict proves the row exists
                 same_body = from_payload(Plan, stored["payload"], what="plan") == plan
                 if stored["thread_id"] != thread_id or not same_body:
-                    raise PlanImmutableError("a different plan is already stored under this id")
+                    raise PlanImmutableError(
+                        "a different plan is already stored under this id"
+                    )
 
-            PostgresProvenanceRepository(self._conn).record("PLAN", plan.plan_id, plan.provenance)
+            PostgresProvenanceRepository(self._conn).record(
+                "PLAN", plan.plan_id, plan.provenance
+            )
 
     def get(self, plan_id: str) -> Plan | None:
         with self._tx() as cur:

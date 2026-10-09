@@ -413,7 +413,10 @@ def test_missing_forecast_is_empty_and_null_wait_is_no_reading() -> None:
     assert parse_forecast({"id": SPACE_MOUNTAIN}) == []
     assert parse_forecast({"id": SPACE_MOUNTAIN, "forecast": None}) == []
     assert parse_forecast(
-        {"id": SPACE_MOUNTAIN, "forecast": [{"time": "2026-09-27T09:00:00-04:00", "waitTime": None}]}
+        {
+            "id": SPACE_MOUNTAIN,
+            "forecast": [{"time": "2026-09-27T09:00:00-04:00", "waitTime": None}],
+        }
     ) == [(datetime(2026, 9, 27, 9, 0, tzinfo=PARK_TZ), None)]
 
 
@@ -439,7 +442,9 @@ def test_captured_snapshot_forecasts_parse() -> None:
             encoding="utf-8"
         )
     )
-    forecasts = {e["id"]: parse_forecast(e) for e in capture["liveData"] if e.get("forecast")}
+    forecasts = {
+        e["id"]: parse_forecast(e) for e in capture["liveData"] if e.get("forecast")
+    }
 
     assert len(forecasts) == 26
     assert all(

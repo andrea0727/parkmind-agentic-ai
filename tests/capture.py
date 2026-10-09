@@ -17,7 +17,9 @@ from parkmind.services.clients.themeparks_client import ThemeParksClient
 
 CAPTURE = Path(__file__).resolve().parent / "fixtures" / "snapshot_2026-09-27"
 PARK_ID = "75ea578a-adc8-4116-a54d-dccb60765ef9"
-NOW = datetime(2026, 9, 27, 11, 2, 30, tzinfo=PARK_TZ)  # inside the capture day, park open
+NOW = datetime(
+    2026, 9, 27, 11, 2, 30, tzinfo=PARK_TZ
+)  # inside the capture day, park open
 
 
 def capture(name: str) -> dict:
@@ -37,23 +39,40 @@ class Provider:
     ):
         self.calls: list[str] = []
         self.live = live  # a modified /live payload; the capture when None
-        self.parks_status, self.schedule_status, self.weather_status = parks_status, schedule_status, weather_status
+        self.parks_status, self.schedule_status, self.weather_status = (
+            parks_status,
+            schedule_status,
+            weather_status,
+        )
 
     def parks(self) -> ThemeParksClient:
         def handler(request: httpx.Request) -> httpx.Response:
             self.calls.append(request.url.path)
             if request.url.path.endswith("/live"):
-                live = self.live if self.live is not None else capture("themeparks_live.json")
+                live = (
+                    self.live
+                    if self.live is not None
+                    else capture("themeparks_live.json")
+                )
                 return httpx.Response(self.parks_status, json=live)
-            return httpx.Response(self.schedule_status, json=capture("themeparks_schedule.json"))
+            return httpx.Response(
+                self.schedule_status, json=capture("themeparks_schedule.json")
+            )
 
         return ThemeParksClient(
-            PARK_ID, base_url="https://testserver", transport=httpx.MockTransport(handler), backoff_seconds=0
+            PARK_ID,
+            base_url="https://testserver",
+            transport=httpx.MockTransport(handler),
+            backoff_seconds=0,
         )
 
     def weather(self) -> OpenMeteoClient:
         def handler(request: httpx.Request) -> httpx.Response:
             self.calls.append(request.url.path)
-            return httpx.Response(self.weather_status, json=capture("open_meteo_hourly.json"))
+            return httpx.Response(
+                self.weather_status, json=capture("open_meteo_hourly.json")
+            )
 
-        return OpenMeteoClient(transport=httpx.MockTransport(handler), backoff_seconds=0)
+        return OpenMeteoClient(
+            transport=httpx.MockTransport(handler), backoff_seconds=0
+        )

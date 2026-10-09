@@ -29,7 +29,12 @@ class PostgresProvenanceRepository(PostgresRepositoryBase):
                 ON CONFLICT (subject_kind, subject_id) DO NOTHING
                 RETURNING subject_id
                 """,
-                (subject_kind, subject_id, provenance.snapshot_id, to_jsonb(provenance)),
+                (
+                    subject_kind,
+                    subject_id,
+                    provenance.snapshot_id,
+                    to_jsonb(provenance),
+                ),
             )
             if cur.fetchone() is not None:
                 return
@@ -39,14 +44,20 @@ class PostgresProvenanceRepository(PostgresRepositoryBase):
         if self.get(subject_kind, subject_id) != provenance:
             raise ProvenanceConflictError("different provenance is already recorded")
 
-    def get(self, subject_kind: ProvenanceSubjectKind, subject_id: str) -> Provenance | None:
+    def get(
+        self, subject_kind: ProvenanceSubjectKind, subject_id: str
+    ) -> Provenance | None:
         with self._tx() as cur:
             cur.execute(
                 "SELECT payload FROM provenance WHERE subject_kind = %s AND subject_id = %s",
                 (subject_kind, subject_id),
             )
             row = cur.fetchone()
-        return None if row is None else from_payload(Provenance, row["payload"], what="provenance")
+        return (
+            None
+            if row is None
+            else from_payload(Provenance, row["payload"], what="provenance")
+        )
 
     def subjects_for_snapshot(
         self, snapshot_id: str
@@ -66,5 +77,7 @@ class PostgresProvenanceRepository(PostgresRepositoryBase):
         for row in rows:
             if row["subject_kind"] not in allowed:
                 raise StoredDataError("stored provenance has an unknown subject kind")
-            subjects.append((cast(ProvenanceSubjectKind, row["subject_kind"]), row["subject_id"]))
+            subjects.append(
+                (cast(ProvenanceSubjectKind, row["subject_kind"]), row["subject_id"])
+            )
         return subjects
