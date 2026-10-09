@@ -195,11 +195,7 @@ class EventThresholds(ParkMindBaseModel):
     queue_spike_minutes: float = Field(
         ge=0, default=20
     )  # wait increase to trigger MEDIUM severity
-    walking_overrun_minutes: float = Field(
-        ge=0, default=10
-    )  # minutes over daily limit
+    walking_overrun_minutes: float = Field(ge=0, default=10)  # minutes over daily limit
     fatigue_threshold: float = Field(
         ge=0, le=1, default=0.7
     )  # confidence level for GUEST_FATIGUE to require replan
-
-

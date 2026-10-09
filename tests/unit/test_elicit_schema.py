@@ -16,7 +16,9 @@ SCENARIOS = load_scenarios()
 
 
 @pytest.mark.parametrize("scenario", SCENARIOS, ids=[s["id"] for s in SCENARIOS])
-def test_recorded_output_is_valid_and_classified_as_labeled(scenario: dict[str, Any]) -> None:
+def test_recorded_output_is_valid_and_classified_as_labeled(
+    scenario: dict[str, Any],
+) -> None:
     extraction = ElicitationExtraction.model_validate(scenario["extraction"])
 
     report = classification_report(extraction.classified_items(), scenario["expected"])
@@ -31,7 +33,9 @@ def test_fixture_set_covers_accessibility_and_preferences() -> None:
     for s in SCENARIOS:
         labels.update(s["expected"].values())
         extraction = ElicitationExtraction.model_validate(s["extraction"])
-        reports.append(classification_report(extraction.classified_items(), s["expected"]))
+        reports.append(
+            classification_report(extraction.classified_items(), s["expected"])
+        )
 
     total = combine_reports(reports)
     assert labels == {"hard", "soft"}
@@ -44,7 +48,9 @@ def test_accessibility_is_never_classified_soft() -> None:
     extraction = ElicitationExtraction.model_validate(
         {
             "guests": [{"role": "adult"}],
-            "accessibility": [{"guest_ref": 1, "mobility_requirements": ["WHEELCHAIR"]}],
+            "accessibility": [
+                {"guest_ref": 1, "mobility_requirements": ["WHEELCHAIR"]}
+            ],
         }
     )
 
@@ -57,7 +63,10 @@ def test_accessibility_is_never_classified_soft() -> None:
     "payload",
     [
         {"party_size": 3, "guests": [{"role": "adult"}]},  # size/guests mismatch
-        {"guests": [{"role": "adult"}], "accessibility": [{"guest_ref": 2, "heat_sensitivity": True}]},
+        {
+            "guests": [{"role": "adult"}],
+            "accessibility": [{"guest_ref": 2, "heat_sensitivity": True}],
+        },
         {"departure_time": "8 PM"},
         {"departure_time": "25:00"},
         {"lunch_window": {"start": "13:30", "end": "12:30"}},
@@ -80,7 +89,11 @@ def test_schema_has_no_consent_or_free_text_health_field(field: str) -> None:
             {
                 "guests": [{"role": "adult"}],
                 "accessibility": [
-                    {"guest_ref": 1, "mobility_requirements": ["WHEELCHAIR"], field: "x"}
+                    {
+                        "guest_ref": 1,
+                        "mobility_requirements": ["WHEELCHAIR"],
+                        field: "x",
+                    }
                 ],
             }
         )

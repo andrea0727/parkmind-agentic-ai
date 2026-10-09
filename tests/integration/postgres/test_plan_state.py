@@ -29,7 +29,9 @@ from parkmind.services.ports import (
 NOW = factories.NOW
 
 
-def _repos(conn: psycopg.Connection) -> tuple[PostgresPlanRepository, PostgresProposalRepository]:
+def _repos(
+    conn: psycopg.Connection,
+) -> tuple[PostgresPlanRepository, PostgresProposalRepository]:
     return PostgresPlanRepository(conn), PostgresProposalRepository(conn)
 
 
@@ -51,7 +53,9 @@ def _candidate(
 # --------------------------------------------------------------------------- plans
 
 
-def test_plan_round_trips_and_its_provenance_is_indexed(conn: psycopg.Connection) -> None:
+def test_plan_round_trips_and_its_provenance_is_indexed(
+    conn: psycopg.Connection,
+) -> None:
     plans, _ = _repos(conn)
     plan = factories.plan(provenance=factories.provenance(snapshot_id="snap_7"))
 
@@ -220,7 +224,9 @@ def test_a_proposal_cannot_be_created_already_decided(
         plans.activate("t1", "plan_1", at=NOW)
 
 
-def test_proposal_requires_its_candidate_plan_to_exist(conn: psycopg.Connection) -> None:
+def test_proposal_requires_its_candidate_plan_to_exist(
+    conn: psycopg.Connection,
+) -> None:
     _, proposals = _repos(conn)
 
     with pytest.raises(NotFoundError):
@@ -245,16 +251,23 @@ def test_proposal_round_trips_with_its_provenance(conn: psycopg.Connection) -> N
 
     assert proposals.get("prop_1") == proposal
     assert proposals.get("nope") is None
-    assert PostgresProvenanceRepository(conn).get("PROPOSAL", "prop_1") == proposal.provenance
+    assert (
+        PostgresProvenanceRepository(conn).get("PROPOSAL", "prop_1")
+        == proposal.provenance
+    )
 
 
-def test_a_second_pending_proposal_in_a_thread_is_refused(conn: psycopg.Connection) -> None:
+def test_a_second_pending_proposal_in_a_thread_is_refused(
+    conn: psycopg.Connection,
+) -> None:
     _, proposals = _repos(conn)
     _candidate(conn, plan_id="plan_1", proposal_id="prop_1")
     PostgresPlanRepository(conn).save("t1", factories.plan(plan_id="plan_2"))
 
     with pytest.raises(PendingProposalExistsError):
-        proposals.save("t1", factories.proposal(proposal_id="prop_2", candidate_plan_id="plan_2"))
+        proposals.save(
+            "t1", factories.proposal(proposal_id="prop_2", candidate_plan_id="plan_2")
+        )
 
     # Another thread is unaffected.
     _candidate(conn, thread="t2", plan_id="plan_3", proposal_id="prop_3")
@@ -275,7 +288,9 @@ def test_supersede_pending_proposal(conn: psycopg.Connection) -> None:
     assert other is not None and other.approval_status is ApprovalStatus.PENDING
     # The slot is free again: replanning may now propose a new candidate.
     plans.save("t1", factories.plan(plan_id="plan_3"))
-    proposals.save("t1", factories.proposal(proposal_id="prop_3", candidate_plan_id="plan_3"))
+    proposals.save(
+        "t1", factories.proposal(proposal_id="prop_3", candidate_plan_id="plan_3")
+    )
     assert [p.proposal_id for p in proposals.list_pending("t1")] == ["prop_3"]
 
 
@@ -301,7 +316,9 @@ def test_proposal_resolution_is_final(conn: psycopg.Connection) -> None:
     assert stored is not None and stored.approval_status is ApprovalStatus.APPROVED
 
 
-def test_rejection_reason_is_stored_with_the_resolution(conn: psycopg.Connection) -> None:
+def test_rejection_reason_is_stored_with_the_resolution(
+    conn: psycopg.Connection,
+) -> None:
     _, proposals = _repos(conn)
     _candidate(conn)
 
@@ -317,12 +334,16 @@ def test_rejection_reason_is_stored_with_the_resolution(conn: psycopg.Connection
     assert proposals.get("prop_1") == resolved
 
 
-def test_resaving_a_proposal_never_resets_its_resolution(conn: psycopg.Connection) -> None:
+def test_resaving_a_proposal_never_resets_its_resolution(
+    conn: psycopg.Connection,
+) -> None:
     _, proposals = _repos(conn)
     _candidate(conn)
     proposals.resolve("prop_1", ApprovalStatus.APPROVED, at=NOW)
 
-    proposals.save("t1", factories.proposal())  # a stale retry of the original PENDING save
+    proposals.save(
+        "t1", factories.proposal()
+    )  # a stale retry of the original PENDING save
 
     stored = proposals.get("prop_1")
     assert stored is not None and stored.approval_status is ApprovalStatus.APPROVED

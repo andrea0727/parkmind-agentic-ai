@@ -58,7 +58,9 @@ def test_next_window_is_a_new_snapshot(conn: psycopg.Connection) -> None:
     assert latest is not None and latest.snapshot_id == later.snapshot_id
 
 
-def test_snapshot_stores_raw_payload_sources_and_retrieved_at(conn: psycopg.Connection) -> None:
+def test_snapshot_stores_raw_payload_sources_and_retrieved_at(
+    conn: psycopg.Connection,
+) -> None:
     result = _collector(conn, Provider()).collect(now=NOW)
     repo = PostgresSnapshotRepository(conn)
 
@@ -84,7 +86,9 @@ def test_every_seen_entity_is_recorded_in_id_mapping(conn: psycopg.Connection) -
     assert row is not None and row["n"] == len(result.live_context.statuses)
 
 
-def test_weather_outage_still_writes_snapshot_without_open_meteo(conn: psycopg.Connection) -> None:
+def test_weather_outage_still_writes_snapshot_without_open_meteo(
+    conn: psycopg.Connection,
+) -> None:
     result = _collector(conn, Provider(weather_status=503)).collect(now=NOW)
 
     meta = PostgresSnapshotRepository(conn).get_meta(result.snapshot_id)

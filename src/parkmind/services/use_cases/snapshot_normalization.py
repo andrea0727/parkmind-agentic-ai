@@ -91,7 +91,9 @@ def normalize_raw_snapshot(
     entities = live.entities
     waits = {
         entity_id: WaitEstimate(
-            attraction_id=entity_id, wait_minutes=entity.standby_wait_minutes, status=entity.status
+            attraction_id=entity_id,
+            wait_minutes=entity.standby_wait_minutes,
+            status=entity.status,
         )
         for entity_id, entity in entities.items()
         if entity.standby_wait_minutes is not None
@@ -142,7 +144,10 @@ def normalize_raw_snapshot(
 
 
 def _park_window(
-    schedule: Mapping[str, Any] | None, service_date: date, park_id: str, gaps: list[str]
+    schedule: Mapping[str, Any] | None,
+    service_date: date,
+    park_id: str,
+    gaps: list[str],
 ) -> Park | None:
     if schedule is None:
         gaps.append("no park schedule collected: weather coverage can't be checked")
@@ -152,10 +157,16 @@ def _park_window(
         # never stored or returned, so park_name=park_id is a placeholder, not the
         # park's real name -- don't reuse it where the name matters.
         return parse_schedule(
-            schedule, service_date, park_id=park_id, park_name=park_id, park_outdoor=True
+            schedule,
+            service_date,
+            park_id=park_id,
+            park_name=park_id,
+            park_outdoor=True,
         )
     except ThemeParksClientError as exc:
-        gaps.append(f"no usable OPERATING schedule for {service_date.isoformat()}: {exc}")
+        gaps.append(
+            f"no usable OPERATING schedule for {service_date.isoformat()}: {exc}"
+        )
         return None
 
 
@@ -177,7 +188,9 @@ def _coverage(
     # can't be planned today -- rule 1 already forbids it -- so on a party night,
     # when the regular fireworks don't run, its missing showtimes are no gap.
     relevant_shows = [
-        i for i in scheduled_shows if statuses.get(i) in (None, AttractionStatus.OPERATING)
+        i
+        for i in scheduled_shows
+        if statuses.get(i) in (None, AttractionStatus.OPERATING)
     ]
 
     missing_status = sorted(i for i in curated if i not in statuses)
@@ -208,8 +221,13 @@ def _coverage(
     )
 
 
-def _weather_spans(weather: list[WeatherHour], opening: datetime, closing: datetime) -> bool:
-    hours = {h.timestamp.astimezone(PARK_TZ).replace(minute=0, second=0, microsecond=0) for h in weather}
+def _weather_spans(
+    weather: list[WeatherHour], opening: datetime, closing: datetime
+) -> bool:
+    hours = {
+        h.timestamp.astimezone(PARK_TZ).replace(minute=0, second=0, microsecond=0)
+        for h in weather
+    }
     hour = opening.astimezone(PARK_TZ).replace(minute=0, second=0, microsecond=0)
     while hour < closing:
         if hour not in hours:

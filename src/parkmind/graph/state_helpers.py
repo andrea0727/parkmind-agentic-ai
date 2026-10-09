@@ -17,13 +17,17 @@ from parkmind.core.contracts import (
 from parkmind.graph.state import ParkMindState
 
 
-def set_constraints(state: ParkMindState, constraints: PartyConstraints) -> ParkMindState:
+def set_constraints(
+    state: ParkMindState, constraints: PartyConstraints
+) -> ParkMindState:
     """Set party constraints for this session (may be replaced on ELICIT re-loop)."""
     state["constraints"] = constraints
     return state
 
 
-def set_guest_profiles(state: ParkMindState, profiles: list[GuestProfile]) -> ParkMindState:
+def set_guest_profiles(
+    state: ParkMindState, profiles: list[GuestProfile]
+) -> ParkMindState:
     """Set guest profiles (preferences). Overrides previous."""
     state["guest_profiles"] = profiles
     return state

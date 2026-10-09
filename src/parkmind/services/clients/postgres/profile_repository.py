@@ -28,7 +28,9 @@ class PostgresProfileRepository(PostgresRepositoryBase):
             latest = cur.fetchone()
             if latest is not None:
                 if latest["profile_version"] == profile.profile_version:
-                    stored = from_payload(GuestProfile, latest["payload"], what="profile")
+                    stored = from_payload(
+                        GuestProfile, latest["payload"], what="profile"
+                    )
                     if stored == profile:
                         return  # identical retry: idempotent
                 if profile.profile_version <= latest["profile_version"]:
@@ -54,7 +56,11 @@ class PostgresProfileRepository(PostgresRepositoryBase):
                 (guest_id,),
             )
             row = cur.fetchone()
-        return None if row is None else from_payload(GuestProfile, row["payload"], what="profile")
+        return (
+            None
+            if row is None
+            else from_payload(GuestProfile, row["payload"], what="profile")
+        )
 
     def get_version(self, guest_id: str, profile_version: int) -> GuestProfile | None:
         with self._tx() as cur:
@@ -66,4 +72,8 @@ class PostgresProfileRepository(PostgresRepositoryBase):
                 (guest_id, profile_version),
             )
             row = cur.fetchone()
-        return None if row is None else from_payload(GuestProfile, row["payload"], what="profile")
+        return (
+            None
+            if row is None
+            else from_payload(GuestProfile, row["payload"], what="profile")
+        )

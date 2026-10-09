@@ -40,7 +40,9 @@ async def synthesize_plan(state: ParkMindState) -> ParkMindState:
 
     guest_ids = [guest.guest_id for guest in constraints.guests]
     group_objective = state.get("group_objective")
-    objective_version = group_objective.objective_version if group_objective else "0-placeholder"
+    objective_version = (
+        group_objective.objective_version if group_objective else "0-placeholder"
+    )
 
     # Create minimal valid Plan
     plan = Plan(
@@ -59,7 +61,8 @@ async def synthesize_plan(state: ParkMindState) -> ParkMindState:
             optimizer_strategy="greedy_affinity_then_wait",
             constraints_version=constraints.constraints_version,
             objective_version=objective_version,
-            preference_model_version=state.get("preference_model_version") or "0-placeholder",
+            preference_model_version=state.get("preference_model_version")
+            or "0-placeholder",
             prompt_versions={"elicit": ELICIT_PROMPT_VERSION},
         ),
     )

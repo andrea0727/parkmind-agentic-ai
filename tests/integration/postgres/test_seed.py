@@ -78,7 +78,9 @@ SEEDED_TABLES = {
 
 def _dump(url: str) -> dict[str, list[str]]:
     """Every row of every table as JSON text, minus database-written bookkeeping."""
-    strip = sql.SQL("").join(sql.SQL(" - {}").format(sql.Literal(c)) for c in _BOOKKEEPING)
+    strip = sql.SQL("").join(
+        sql.SQL(" - {}").format(sql.Literal(c)) for c in _BOOKKEEPING
+    )
     dump: dict[str, list[str]] = {}
     with psycopg.connect(url, row_factory=dict_row) as reader:
         tables = reader.execute(
@@ -86,10 +88,12 @@ def _dump(url: str) -> dict[str, list[str]]:
             "WHERE schemaname = 'public' AND tablename <> 'alembic_version'"
         ).fetchall()
         for table in tables:
-            query = sql.SQL("SELECT (to_jsonb(t){} )::text AS doc FROM {} AS t ORDER BY 1").format(
-                strip, sql.Identifier(table["tablename"])
-            )
-            dump[table["tablename"]] = [row["doc"] for row in reader.execute(query).fetchall()]
+            query = sql.SQL(
+                "SELECT (to_jsonb(t){} )::text AS doc FROM {} AS t ORDER BY 1"
+            ).format(strip, sql.Identifier(table["tablename"]))
+            dump[table["tablename"]] = [
+                row["doc"] for row in reader.execute(query).fetchall()
+            ]
     return dump
 
 
@@ -128,9 +132,15 @@ def test_seeded_rows_validate_as_contracts(conn: psycopg.Connection) -> None:
 
     # Opposing profiles (section 38), with stated values preserved.
     profiles = PostgresProfileRepository(conn)
-    relaxed, maximizer = profiles.get_latest(RELAXED_ADULT), profiles.get_latest(MAXIMIZER)
+    relaxed, maximizer = (
+        profiles.get_latest(RELAXED_ADULT),
+        profiles.get_latest(MAXIMIZER),
+    )
     assert relaxed is not None and maximizer is not None
-    assert (relaxed.pace, maximizer.pace) == (PlanningPace.RELAXED, PlanningPace.MAXIMIZER)
+    assert (relaxed.pace, maximizer.pace) == (
+        PlanningPace.RELAXED,
+        PlanningPace.MAXIMIZER,
+    )
     assert relaxed.queue_tolerance.stated_value == 0.3
 
     # Active vs candidate are distinct, and the two plans share no stop (Lift 1.00).
@@ -139,14 +149,19 @@ def test_seeded_rows_validate_as_contracts(conn: psycopg.Connection) -> None:
     candidate = plans.get(CANDIDATE_PLAN_ID)
     assert active is not None and active.plan_id == ACTIVE_PLAN_ID
     assert candidate is not None and candidate.plan_id != active.plan_id
-    assert {s.node_id for s in active.stops}.isdisjoint({s.node_id for s in candidate.stops})
+    assert {s.node_id for s in active.stops}.isdisjoint(
+        {s.node_id for s in candidate.stops}
+    )
     pending = proposals.list_pending(THREAD_ID)
     assert [p.proposal_id for p in pending] == [CANDIDATE_PROPOSAL_ID]
     approved = proposals.get(ACTIVE_PROPOSAL_ID)
     assert approved is not None and approved.approval_status is ApprovalStatus.APPROVED
 
     # Persisted accessibility only, retrievable in any later session.
-    assert PostgresSessionStore(conn, SessionMemory()).get("later_session", RELAXED_ADULT) is not None
+    assert (
+        PostgresSessionStore(conn, SessionMemory()).get("later_session", RELAXED_ADULT)
+        is not None
+    )
 
     # Park data and the snapshot with its raw payload.
     attractions = PostgresAttractionRepository(conn)

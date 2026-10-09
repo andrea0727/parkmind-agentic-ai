@@ -7,8 +7,15 @@ services.planning/personalization directly.
 
 
 class BuildPlanUseCase:
-    def __init__(self, park_graph, preference_scorer, optimizer, constraint_checker,
-                 group_preference_resolver, forecast_service):
+    def __init__(
+        self,
+        park_graph,
+        preference_scorer,
+        optimizer,
+        constraint_checker,
+        group_preference_resolver,
+        forecast_service,
+    ):
         self.park_graph = park_graph
         self.preference_scorer = preference_scorer
         self.optimizer = optimizer

@@ -72,7 +72,10 @@ PARK_ID = "mk"
 
 
 def make_attraction(
-    node_id: str, name: str, category: AttractionCategory = AttractionCategory.THRILL, wait: int = 20
+    node_id: str,
+    name: str,
+    category: AttractionCategory = AttractionCategory.THRILL,
+    wait: int = 20,
 ) -> Attraction:
     return Attraction(
         node_id=node_id,
@@ -103,8 +106,14 @@ class FakeAttractionRepository:
         self._attractions = list(catalog() if attractions is None else attractions)
 
     def list_attractions(self, park_id: str) -> list[Attraction]:
-        return sorted(self._attractions, key=lambda a: a.node_id) if park_id == PARK_ID else []
+        return (
+            sorted(self._attractions, key=lambda a: a.node_id)
+            if park_id == PARK_ID
+            else []
+        )
 
 
-def make_names(attractions: Sequence[Attraction] | None = None) -> AttractionNameResolver:
+def make_names(
+    attractions: Sequence[Attraction] | None = None,
+) -> AttractionNameResolver:
     return AttractionNameResolver(FakeAttractionRepository(attractions), PARK_ID)  # type: ignore[arg-type]

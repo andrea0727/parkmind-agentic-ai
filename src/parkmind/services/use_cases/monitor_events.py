@@ -10,7 +10,13 @@ message queue needed.
 
 
 class MonitorEventsUseCase:
-    def __init__(self, themeparks_client, open_meteo_client, postgres_repository, event_detector_fn):
+    def __init__(
+        self,
+        themeparks_client,
+        open_meteo_client,
+        postgres_repository,
+        event_detector_fn,
+    ):
         self.themeparks_client = themeparks_client
         self.open_meteo_client = open_meteo_client
         self.postgres_repository = postgres_repository

@@ -20,5 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 # replanning_graph = build_replanning_graph()
 
 if __name__ == "__main__":
-    print("TODO: build_initial_planning_graph() and build_replanning_graph() "
-          "are still stubs — see src/parkmind/graph/")
+    print(
+        "TODO: build_initial_planning_graph() and build_replanning_graph() "
+        "are still stubs — see src/parkmind/graph/"
+    )

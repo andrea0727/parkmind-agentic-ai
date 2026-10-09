@@ -80,6 +80,7 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
+
 class ThemeParksClient:
     def __init__(
         self,
@@ -95,7 +96,9 @@ class ThemeParksClient:
         park_outdoor: bool = True,
     ) -> None:
         self._park_id = park_id
-        self._retry_policy = RetryPolicy(max_attempts=max_retries, backoff_seconds=backoff_seconds)
+        self._retry_policy = RetryPolicy(
+            max_attempts=max_retries, backoff_seconds=backoff_seconds
+        )
         # `is None`, not `or`: an intentionally empty table must stay empty.
         self._attraction_metadata: Mapping[str, AttractionMetadata] = (
             MAGIC_KINGDOM_ATTRACTION_METADATA
@@ -104,7 +107,9 @@ class ThemeParksClient:
         )
         self._park_name = park_name
         self._park_outdoor = park_outdoor
-        self._client = httpx.Client(base_url=base_url, transport=transport, timeout=timeout)
+        self._client = httpx.Client(
+            base_url=base_url, transport=transport, timeout=timeout
+        )
 
     def close(self) -> None:
         self._client.close()
@@ -184,7 +189,9 @@ class ThemeParksClient:
             )
         return results
 
-    def get_attraction_status(self, attraction_ids: list[str]) -> dict[str, AttractionStatus]:
+    def get_attraction_status(
+        self, attraction_ids: list[str]
+    ) -> dict[str, AttractionStatus]:
         live_entities = self._fetch_live_entities()
 
         results: dict[str, AttractionStatus] = {}
@@ -213,12 +220,17 @@ class ThemeParksClient:
         entities, issues = index_entities(payload.get("liveData", []))
         for issue in issues:
             logger.warning(
-                "ThemeParksClient: %s %s (%s); excluded", issue.kind, issue.provider_id, issue.detail
+                "ThemeParksClient: %s %s (%s); excluded",
+                issue.kind,
+                issue.provider_id,
+                issue.detail,
             )
         entities.pop(self._park_id, None)  # the park itself appears in liveData too
         return entities
 
-    def _request(self, path: str, *, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _request(
+        self, path: str, *, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         try:
             response = send_with_retry(
                 lambda: self._client.get(path, params=params),
@@ -252,4 +264,6 @@ class ThemeParksClient:
         try:
             return response.json()
         except ValueError as exc:
-            raise ThemeParksSchemaError(f"{path} returned non-JSON body: {exc}") from exc
+            raise ThemeParksSchemaError(
+                f"{path} returned non-JSON body: {exc}"
+            ) from exc

@@ -33,7 +33,10 @@ def _store(
     context = live_context(
         snapshot_id=f"snap-{at.isoformat()}",
         retrieved_at=at,
-        waits={a: WaitEstimate(attraction_id=a, wait_minutes=w, status=status) for a, w in waits.items()},
+        waits={
+            a: WaitEstimate(attraction_id=a, wait_minutes=w, status=status)
+            for a, w in waits.items()
+        },
     )
     snapshots.save(context, {}, [DataSource.THEMEPARKS_WIKI], normalizer_version=2)
 
@@ -65,9 +68,9 @@ def test_a_cell_with_too_few_samples_has_no_profile() -> None:
         _store(snapshots, at, {"a1": 20.0})
 
     assert build_wait_profile(snapshots, now=DAY + timedelta(days=5)).medians == {}
-    assert build_wait_profile(snapshots, now=DAY + timedelta(days=5), min_samples=2).medians == {
-        ("a1", 10): 20.0
-    }
+    assert build_wait_profile(
+        snapshots, now=DAY + timedelta(days=5), min_samples=2
+    ).medians == {("a1", 10): 20.0}
 
 
 def test_snapshots_after_now_are_not_in_the_profile() -> None:
@@ -96,10 +99,14 @@ def test_profile_is_deterministic() -> None:
         _store(snapshots, at, {"a1": 10.0 + i, "a2": 30.0 - i})
     now = DAY + timedelta(days=6)
 
-    assert build_wait_profile(snapshots, now=now) == build_wait_profile(snapshots, now=now)
+    assert build_wait_profile(snapshots, now=now) == build_wait_profile(
+        snapshots, now=now
+    )
 
 
-@pytest.mark.parametrize("kwargs", [{"now": DAY.replace(tzinfo=None)}, {"now": DAY, "min_samples": 0}])
+@pytest.mark.parametrize(
+    "kwargs", [{"now": DAY.replace(tzinfo=None)}, {"now": DAY, "min_samples": 0}]
+)
 def test_profile_rejects_naive_now_and_empty_threshold(kwargs: dict) -> None:
     with pytest.raises(ValueError):
         build_wait_profile(InMemorySnapshotRepository(), **kwargs)
@@ -117,19 +124,27 @@ WAIT_ONLY_ID = next(  # an operating ride with a posted wait but no provider for
     and e.get("status") == "OPERATING"
     and ((e.get("queue") or {}).get("STANDBY") or {}).get("waitTime") is not None
 )
-SWISS_FAMILY = "30fe3c64-af71-4c66-a54b-aa61fd7af177"  # forecast 09:00 -> 10 min in the capture
+SWISS_FAMILY = (
+    "30fe3c64-af71-4c66-a54b-aa61fd7af177"  # forecast 09:00 -> 10 min in the capture
+)
 PLAN_NOW = NOW + timedelta(minutes=5)
 AT_14 = NOW.replace(hour=14, minute=15, second=0)
 
 
-def _collected(live: dict | None = None) -> tuple[InMemorySnapshotRepository, InMemoryIdMappingRepository, str]:
+def _collected(
+    live: dict | None = None,
+) -> tuple[InMemorySnapshotRepository, InMemoryIdMappingRepository, str]:
     provider = Provider(live=live)
     snapshots, ids = InMemorySnapshotRepository(), InMemoryIdMappingRepository()
-    result = SnapshotCollector(provider.parks(), provider.weather(), snapshots, ids).collect(now=NOW)
+    result = SnapshotCollector(
+        provider.parks(), provider.weather(), snapshots, ids
+    ).collect(now=NOW)
     return snapshots, ids, result.snapshot_id
 
 
-def _history(snapshots: InMemorySnapshotRepository, attraction_id: str, wait: float) -> None:
+def _history(
+    snapshots: InMemorySnapshotRepository, attraction_id: str, wait: float
+) -> None:
     """Three earlier days with a reading at 14:xx, so the profile has the cell."""
     for days in (3, 4, 5):
         _store(snapshots, AT_14 - timedelta(days=days), {attraction_id: wait})
@@ -152,7 +167,9 @@ def test_api_forecast_comes_from_the_snapshot_raw_payload() -> None:
     snapshots, ids, sid = _collected()
     service = build_forecast_service(snapshots, ids, now=PLAN_NOW)
 
-    forecast = service.forecast_wait(SWISS_FAMILY, NOW.replace(hour=9, minute=30), now=PLAN_NOW)
+    forecast = service.forecast_wait(
+        SWISS_FAMILY, NOW.replace(hour=9, minute=30), now=PLAN_NOW
+    )
 
     assert forecast is not None
     assert (forecast.wait_minutes, forecast.strategy, forecast.data_source) == (
@@ -160,7 +177,10 @@ def test_api_forecast_comes_from_the_snapshot_raw_payload() -> None:
         API_FORECAST,
         DataSource.THEMEPARKS_WIKI,
     )
-    assert (forecast.snapshot_id, forecast.as_of) == (sid, snapshots.get(sid).retrieved_at)  # type: ignore[union-attr]
+    assert (forecast.snapshot_id, forecast.as_of) == (
+        sid,
+        snapshots.get(sid).retrieved_at,
+    )  # type: ignore[union-attr]
 
 
 def test_api_source_error_falls_back_to_historical_profile() -> None:
@@ -194,11 +214,15 @@ def test_malformed_raw_forecast_degrades_to_historical() -> None:
     assert forecast is not None and forecast.strategy == HISTORICAL_PROFILE
 
 
-def test_two_provider_ids_on_one_internal_id_get_no_api_forecast(caplog: pytest.LogCaptureFixture) -> None:
+def test_two_provider_ids_on_one_internal_id_get_no_api_forecast(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     snapshots, ids, _ = _collected()
     kept, first, second = FORECAST_IDS[0], FORECAST_IDS[1], FORECAST_IDS[2]
     key = next(k for k in ids.rows if k[1] == second)
-    ids.rows[key] = first  # a curated re-map gone wrong: two provider ids, one internal id
+    ids.rows[key] = (
+        first  # a curated re-map gone wrong: two provider ids, one internal id
+    )
 
     with caplog.at_level("WARNING", logger="parkmind.services.use_cases.forecast"):
         service = build_forecast_service(snapshots, ids, now=PLAN_NOW)
@@ -206,7 +230,9 @@ def test_two_provider_ids_on_one_internal_id_get_no_api_forecast(caplog: pytest.
     collided = service.forecast_wait(first, AT_14, now=PLAN_NOW)
     assert collided is None or collided.strategy != API_FORECAST
     assert service.forecast_wait(kept, AT_14, now=PLAN_NOW).strategy == API_FORECAST  # type: ignore[union-attr]
-    assert any(first in r.getMessage() and second in r.getMessage() for r in caplog.records)
+    assert any(
+        first in r.getMessage() and second in r.getMessage() for r in caplog.records
+    )
 
 
 def test_no_profile_falls_back_to_latest_valid_snapshot_with_cache_provenance() -> None:
@@ -218,7 +244,12 @@ def test_no_profile_falls_back_to_latest_valid_snapshot_with_cache_provenance() 
     )
 
     assert forecast is not None
-    assert (forecast.strategy, forecast.data_source, forecast.snapshot_id, forecast.wait_minutes) == (
+    assert (
+        forecast.strategy,
+        forecast.data_source,
+        forecast.snapshot_id,
+        forecast.wait_minutes,
+    ) == (
         CACHED_SNAPSHOT,
         DataSource.CACHE,
         sid,
@@ -238,10 +269,14 @@ class _RawReadCounter(InMemorySnapshotRepository):
         return super().get_raw_payload(snapshot_id)
 
 
-def test_a_stale_snapshot_builds_no_snapshot_strategy_and_reads_no_raw_payload() -> None:
+def test_a_stale_snapshot_builds_no_snapshot_strategy_and_reads_no_raw_payload() -> (
+    None
+):
     snapshots, ids = _RawReadCounter(), InMemoryIdMappingRepository()
     provider = Provider()
-    SnapshotCollector(provider.parks(), provider.weather(), snapshots, ids).collect(now=NOW)
+    SnapshotCollector(provider.parks(), provider.weather(), snapshots, ids).collect(
+        now=NOW
+    )
 
     fresh = build_forecast_service(snapshots, ids, now=PLAN_NOW)
     assert (fresh.strategy_names, snapshots.raw_reads) == (
@@ -255,14 +290,18 @@ def test_a_stale_snapshot_builds_no_snapshot_strategy_and_reads_no_raw_payload()
 
 def test_a_stale_snapshot_is_never_read_as_a_current_forecast() -> None:
     snapshots, ids, _ = _collected()
-    late = NOW + timedelta(hours=2)  # the only snapshot is 2 h old: past rule 11's window
+    late = NOW + timedelta(
+        hours=2
+    )  # the only snapshot is 2 h old: past rule 11's window
     service = build_forecast_service(snapshots, ids, now=late)
 
     assert service.strategy_names == (HISTORICAL_PROFILE,)
     assert service.forecast_wait(WAIT_ONLY_ID, AT_14, now=late) is None
     assert service.forecast_wait(FORECAST_IDS[0], AT_14, now=late) is None
     _history(snapshots, WAIT_ONLY_ID, 33.0)
-    rebuilt = build_forecast_service(snapshots, ids, now=late).forecast_wait(WAIT_ONLY_ID, AT_14, now=late)
+    rebuilt = build_forecast_service(snapshots, ids, now=late).forecast_wait(
+        WAIT_ONLY_ID, AT_14, now=late
+    )
     assert rebuilt is not None and rebuilt.strategy == HISTORICAL_PROFILE
 
 

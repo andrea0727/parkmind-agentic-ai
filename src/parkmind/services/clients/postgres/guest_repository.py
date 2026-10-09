@@ -31,6 +31,8 @@ class PostgresGuestRepository(PostgresRepositoryBase):
 
     def list_all(self) -> list[Guest]:
         with self._tx() as cur:
-            cur.execute("SELECT guest_id, role, height_cm FROM guests ORDER BY guest_id")
+            cur.execute(
+                "SELECT guest_id, role, height_cm FROM guests ORDER BY guest_id"
+            )
             rows = cur.fetchall()
         return [from_payload(Guest, row, what="guest") for row in rows]

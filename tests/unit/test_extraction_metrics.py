@@ -12,11 +12,21 @@ def test_perfect_classification() -> None:
     report = classification_report(labels, labels)
 
     assert (report.total, report.correct, report.accuracy) == (2, 2, 1.0)
-    assert report.hard_as_soft == report.soft_as_hard == report.missing == report.spurious == 0
+    assert (
+        report.hard_as_soft
+        == report.soft_as_hard
+        == report.missing
+        == report.spurious
+        == 0
+    )
 
 
 def test_hard_as_soft_is_reported_separately_from_soft_as_hard() -> None:
-    expected = {"accessibility:g2:WHEELCHAIR": "hard", "pace:g1": "soft", "must_do:x": "hard"}
+    expected = {
+        "accessibility:g2:WHEELCHAIR": "hard",
+        "pace:g1": "soft",
+        "must_do:x": "hard",
+    }
     predicted = {
         "accessibility:g2:WHEELCHAIR": "soft",  # the dangerous mistake
         "pace:g1": "hard",
@@ -32,9 +42,16 @@ def test_hard_as_soft_is_reported_separately_from_soft_as_hard() -> None:
 
 
 def test_missing_and_spurious_items() -> None:
-    report = classification_report({"a": "hard", "extra": "soft"}, {"a": "hard", "b": "soft"})
+    report = classification_report(
+        {"a": "hard", "extra": "soft"}, {"a": "hard", "b": "soft"}
+    )
 
-    assert (report.total, report.correct, report.missing, report.spurious) == (2, 1, 1, 1)
+    assert (report.total, report.correct, report.missing, report.spurious) == (
+        2,
+        1,
+        1,
+        1,
+    )
     assert report.accuracy == 0.5
 
 

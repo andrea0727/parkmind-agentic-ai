@@ -49,7 +49,9 @@ def _state(*texts: str) -> dict:
 
 def _node(extractor: FakeExtractor):
     intake, store = make_intake()
-    node = make_elicit_node(extractor, intake, make_names(), today=lambda: TODAY, now=lambda: NOW)
+    node = make_elicit_node(
+        extractor, intake, make_names(), today=lambda: TODAY, now=lambda: NOW
+    )
     return node, intake, store
 
 
@@ -68,7 +70,10 @@ def test_invalid_output_is_retried_with_a_repair_hint_and_then_accepted() -> Non
 
 
 def test_repair_hint_never_contains_the_guests_words() -> None:
-    bad = {"guests": [{"role": "adult"}], "accessibility": [{"guest_ref": 1, "label": "my secret"}]}
+    bad = {
+        "guests": [{"role": "adult"}],
+        "accessibility": [{"guest_ref": 1, "label": "my secret"}],
+    }
     extractor = FakeExtractor(bad, COMPLETE["extraction"])
 
     extract_with_recovery(extractor, ["hi"])
@@ -132,14 +137,22 @@ def test_no_guests_is_reported() -> None:
 def test_wiki_example_builds_party_constraints() -> None:
     extraction = _extraction(COMPLETE)
     resolution = make_names().resolve(extraction.must_do)
-    constraints = build_party_constraints(extraction, today=TODAY, resolution=resolution)
+    constraints = build_party_constraints(
+        extraction, today=TODAY, resolution=resolution
+    )
 
     assert constraints.party_size == 4
     assert [g.guest_id for g in constraints.guests] == ["g1", "g2", "g3", "g4"]
     assert constraints.must_do == ["id-tron", "id-space"]
     assert constraints.lunch_window is not None
-    assert (constraints.lunch_window.start.hour, constraints.lunch_window.start.minute) == (12, 30)
-    assert (constraints.lunch_window.end.hour, constraints.lunch_window.end.minute) == (13, 30)
+    assert (
+        constraints.lunch_window.start.hour,
+        constraints.lunch_window.start.minute,
+    ) == (12, 30)
+    assert (constraints.lunch_window.end.hour, constraints.lunch_window.end.minute) == (
+        13,
+        30,
+    )
     assert constraints.departure_time == datetime(2026, 10, 6, 20, 0, tzinfo=PARK_TZ)
 
 
@@ -156,7 +169,9 @@ def test_soft_preferences_become_stated_guest_profile_values() -> None:
 
 
 def test_stated_tolerance_is_marked_stated() -> None:
-    profiles = build_guest_profiles(_extraction(scenario("casual_rest_breaks_vs_queue_preference")), now=NOW)
+    profiles = build_guest_profiles(
+        _extraction(scenario("casual_rest_breaks_vs_queue_preference")), now=NOW
+    )
 
     assert profiles[0].queue_tolerance.source == PreferenceSource.STATED
     assert profiles[0].queue_tolerance.stated_value == 0.2
@@ -200,9 +215,13 @@ def test_every_hard_item_is_pending(case: dict) -> None:
 
 
 @pytest.mark.parametrize("case", load_scenarios(), ids=lambda s: s["id"])
-def test_every_hard_labeled_item_in_the_fixtures_is_a_hard_classification(case: dict) -> None:
+def test_every_hard_labeled_item_in_the_fixtures_is_a_hard_classification(
+    case: dict,
+) -> None:
     classified = _extraction(case).classified_items()
-    assert {k: v for k, v in case["expected"].items() if v == "hard"}.items() <= classified.items()
+    assert {
+        k: v for k, v in case["expected"].items() if v == "hard"
+    }.items() <= classified.items()
 
 
 def test_a_stated_height_is_pending_and_never_reaches_the_checker_unconfirmed() -> None:
@@ -226,11 +245,18 @@ def test_no_stated_height_means_no_height_confirmation() -> None:
     extraction = _extraction(COMPLETE)
     resolution = make_names().resolve([*extraction.must_do, *extraction.avoid])
 
-    assert not any(e.startswith("height:") for e in pending_confirmations(extraction, resolution))
+    assert not any(
+        e.startswith("height:") for e in pending_confirmations(extraction, resolution)
+    )
 
 
 def test_a_new_extraction_replaces_stale_staging() -> None:
-    node, intake, _ = _node(FakeExtractor(COMPLETE["extraction"], scenario("pure_preferences_no_accessibility")["extraction"]))
+    node, intake, _ = _node(
+        FakeExtractor(
+            COMPLETE["extraction"],
+            scenario("pure_preferences_no_accessibility")["extraction"],
+        )
+    )
 
     node(_state(*COMPLETE["messages"]))
     node(_state("we changed our minds"))
@@ -266,9 +292,9 @@ def _with(extraction: dict, **changes) -> dict:
 
 
 def test_confirmed_names_become_node_ids_and_the_echo_shows_the_official_name() -> None:
-    node, _, _ = _node(FakeExtractor(_with(
-        COMPLETE["extraction"], must_do=["tron"], avoid=["Splash"]
-    )))
+    node, _, _ = _node(
+        FakeExtractor(_with(COMPLETE["extraction"], must_do=["tron"], avoid=["Splash"]))
+    )
 
     update = node(_state(*COMPLETE["messages"]))
 
@@ -279,9 +305,9 @@ def test_confirmed_names_become_node_ids_and_the_echo_shows_the_official_name() 
 
 
 def test_two_spoken_names_for_one_attraction_become_one_id() -> None:
-    node, _, _ = _node(FakeExtractor(_with(
-        COMPLETE["extraction"], must_do=["TRON", "tron"]
-    )))
+    node, _, _ = _node(
+        FakeExtractor(_with(COMPLETE["extraction"], must_do=["TRON", "tron"]))
+    )
 
     update = node(_state(*COMPLETE["messages"]))
 
@@ -289,38 +315,42 @@ def test_two_spoken_names_for_one_attraction_become_one_id() -> None:
 
 
 def test_unknown_attraction_is_asked_not_stored() -> None:
-    node, intake, _ = _node(FakeExtractor(_with(
-        COMPLETE["extraction"], avoid=["Death Star"]
-    )))
+    node, intake, _ = _node(
+        FakeExtractor(_with(COMPLETE["extraction"], avoid=["Death Star"]))
+    )
 
     update = node(_state(*COMPLETE["messages"]))
 
     assert update["constraints"] is None
     assert update["pending_hard_constraint_confirmation"] is None
     message = update["messages"][0]
-    assert message.additional_kwargs["missing_information"] == ["unknown_attraction:Death Star"]
+    assert message.additional_kwargs["missing_information"] == [
+        "unknown_attraction:Death Star"
+    ]
     assert "Death Star" in message.content
     assert intake.pending_guest_ids("t1") == []
 
 
 def test_ambiguous_attraction_lists_the_options() -> None:
-    node, _, _ = _node(FakeExtractor(_with(
-        COMPLETE["extraction"], must_do=["Mountain"]
-    )))
+    node, _, _ = _node(
+        FakeExtractor(_with(COMPLETE["extraction"], must_do=["Mountain"]))
+    )
 
     update = node(_state(*COMPLETE["messages"]))
 
     assert update["constraints"] is None
     message = update["messages"][0]
-    assert message.additional_kwargs["missing_information"] == ["ambiguous_attraction:Mountain"]
+    assert message.additional_kwargs["missing_information"] == [
+        "ambiguous_attraction:Mountain"
+    ]
     for official in ("Space Mountain", "Splash Mountain", "Big Thunder Mountain"):
         assert official in message.content
 
 
 def test_unresolved_names_are_asked_together_with_other_missing_information() -> None:
-    node, _, _ = _node(FakeExtractor(_with(
-        MISSING_DEPARTURE["extraction"], avoid=["Death Star"]
-    )))
+    node, _, _ = _node(
+        FakeExtractor(_with(MISSING_DEPARTURE["extraction"], avoid=["Death Star"]))
+    )
 
     update = node(_state(*MISSING_DEPARTURE["messages"]))
 
@@ -331,19 +361,29 @@ def test_unresolved_names_are_asked_together_with_other_missing_information() ->
 
 
 def test_the_same_attraction_as_must_do_and_avoid_is_asked_not_planned() -> None:
-    node, intake, _ = _node(FakeExtractor(_with(COMPLETE["extraction"], avoid=["TRON"])))
+    node, intake, _ = _node(
+        FakeExtractor(_with(COMPLETE["extraction"], avoid=["TRON"]))
+    )
 
     update = node(_state(*COMPLETE["messages"]))
 
     assert update["constraints"] is None
     assert update["pending_hard_constraint_confirmation"] is None
     message = update["messages"][0]
-    assert message.additional_kwargs["missing_information"] == ["conflicting_attraction:TRON"]
-    assert "TRON" in message.content and "must-do" in message.content and "avoid" in message.content
+    assert message.additional_kwargs["missing_information"] == [
+        "conflicting_attraction:TRON"
+    ]
+    assert (
+        "TRON" in message.content
+        and "must-do" in message.content
+        and "avoid" in message.content
+    )
     assert intake.pending_guest_ids("t1") == []
 
 
-def test_a_conflict_is_found_even_when_the_two_lists_use_different_spoken_names() -> None:
+def test_a_conflict_is_found_even_when_the_two_lists_use_different_spoken_names() -> (
+    None
+):
     node, _, _ = _node(
         FakeExtractor(_with(COMPLETE["extraction"], must_do=["tron"], avoid=["TRON"]))
     )
@@ -378,7 +418,11 @@ def test_a_bad_time_is_repaired_without_echoing_what_the_guests_said() -> None:
 def test_an_empty_catalog_is_an_error_not_a_question_to_the_guests() -> None:
     intake, _ = make_intake()
     node = make_elicit_node(
-        FakeExtractor(COMPLETE["extraction"]), intake, make_names([]), today=lambda: TODAY, now=lambda: NOW
+        FakeExtractor(COMPLETE["extraction"]),
+        intake,
+        make_names([]),
+        today=lambda: TODAY,
+        now=lambda: NOW,
     )
 
     with pytest.raises(CatalogUnavailableError):

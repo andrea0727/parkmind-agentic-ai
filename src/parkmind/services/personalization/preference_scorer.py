@@ -119,10 +119,14 @@ class ScoringConfig:
 
     def __post_init__(self) -> None:
         invalid = sorted(
-            name for name, value in vars(self).items() if not math.isfinite(value) or value < 0
+            name
+            for name, value in vars(self).items()
+            if not math.isfinite(value) or value < 0
         )
         if invalid:
-            raise ValueError(f"scoring coefficients must be finite and >= 0: {', '.join(invalid)}")
+            raise ValueError(
+                f"scoring coefficients must be finite and >= 0: {', '.join(invalid)}"
+            )
 
 
 @dataclass(frozen=True)
@@ -183,11 +187,15 @@ class PreferenceScorer:
             raise ValueError(f"attractions repeat node ids: {', '.join(repeated)}")
         catalog = {a.node_id: a for a in sorted(attractions, key=lambda a: a.node_id)}
         walks, unrouted = self._walks(catalog, park_graph, origin_node_id)
-        in_base = {s.node_id for s in base_plan.stops} if base_plan is not None else None
+        in_base = (
+            {s.node_id for s in base_plan.stops} if base_plan is not None else None
+        )
         lands = _land_lookup(catalog.values(), park_graph)
         present = _catalog_targets(catalog.values())
         # One notice read per attraction (the port may be the pgvector adapter).
-        intensity = {node_id: _intensity(a, knowledge) for node_id, a in catalog.items()}
+        intensity = {
+            node_id: _intensity(a, knowledge) for node_id, a in catalog.items()
+        }
 
         per_guest: dict[str, dict[str, float]] = {}
         unmatched: list[str] = []
@@ -198,7 +206,13 @@ class PreferenceScorer:
             eligible = set(objective.per_guest_eligible[guest_id])
             per_guest[guest_id] = {
                 node_id: self._guest_utility(
-                    attraction, profile, affinity, live_context, intensity[node_id], walks, in_base
+                    attraction,
+                    profile,
+                    affinity,
+                    live_context,
+                    intensity[node_id],
+                    walks,
+                    in_base,
                 )
                 for node_id, attraction in catalog.items()
                 if node_id in eligible
@@ -245,12 +259,19 @@ class PreferenceScorer:
             if attraction.category in profile.avoided_categories:
                 utility -= c.category_weight
             utility += c.affinity_weight * _affinity_for(attraction, affinity)
-            utility -= c.sensitivity_weight * _sensitivity_load(attraction, profile, intensity)
+            utility -= c.sensitivity_weight * _sensitivity_load(
+                attraction, profile, intensity
+            )
 
         wait, live_reading = _wait_minutes(attraction, live_context)
         utility -= c.queue_weight * (1.0 - queue_tolerance) * wait / 60.0
         if attraction.node_id in walks:
-            utility -= c.walking_weight * (1.0 - walking_tolerance) * walks[attraction.node_id] / 30.0
+            utility -= (
+                c.walking_weight
+                * (1.0 - walking_tolerance)
+                * walks[attraction.node_id]
+                / 30.0
+            )
         if not live_reading and attraction.category != AttractionCategory.SHOW:
             utility -= c.risk_penalty
         if in_base is not None and attraction.node_id not in in_base:
@@ -278,7 +299,9 @@ class PreferenceScorer:
         # An unrouted ride is charged the longest walk to another routed ride. If the origin is
         # the only routed node, there is no such walk: every other ride is then equally
         # unrouted and unpenalized, so none looks closer than another; they stay reported.
-        routed = [minutes for node_id, minutes in walks.items() if node_id != origin_node_id]
+        routed = [
+            minutes for node_id, minutes in walks.items() if node_id != origin_node_id
+        ]
         if routed and unrouted:
             longest = max(routed)
             walks.update({node_id: longest for node_id in unrouted})
@@ -315,14 +338,18 @@ def per_guest_satisfaction(plan: Plan, scores: PreferenceScores) -> dict[str, fl
 
 def fairness_gap(satisfaction: Mapping[str, float]) -> float:
     """Spread between the best- and worst-served guest (section 45)."""
-    return max(satisfaction.values()) - min(satisfaction.values()) if satisfaction else 0.0
+    return (
+        max(satisfaction.values()) - min(satisfaction.values()) if satisfaction else 0.0
+    )
 
 
 def _normalize(text: str) -> str:
     return " ".join(text.lower().split())
 
 
-def _land_lookup(attractions: Iterable[Attraction], park_graph: ParkGraph | None) -> dict[str, str]:
+def _land_lookup(
+    attractions: Iterable[Attraction], park_graph: ParkGraph | None
+) -> dict[str, str]:
     """Normalized land name, land alias or category -> the key affinities are matched on."""
     lookup: dict[str, str] = {}
     for attraction in attractions:
@@ -333,7 +360,9 @@ def _land_lookup(attractions: Iterable[Attraction], park_graph: ParkGraph | None
             lookup.setdefault(_normalize(alias), _land_key(land))
     for category in AttractionCategory:
         lookup.setdefault(_normalize(category.value), f"category:{category.value}")
-        lookup.setdefault(_normalize(category.value.replace("_", " ")), f"category:{category.value}")
+        lookup.setdefault(
+            _normalize(category.value.replace("_", " ")), f"category:{category.value}"
+        )
     return lookup
 
 
@@ -365,7 +394,9 @@ def _affinities(
         if target is None or target not in present:
             missing.append(key)
         else:
-            totals[target] = totals.get(target, 0.0) + profile.thematic_affinity[key].value
+            totals[target] = (
+                totals.get(target, 0.0) + profile.thematic_affinity[key].value
+            )
     # Sum every key that reaches a target, then clamp once: the order of the keys never matters.
     return {target: _clamp(total) for target, total in totals.items()}, missing
 
@@ -384,11 +415,15 @@ def _intensity(attraction: Attraction, knowledge: KnowledgeStore) -> float:
     return 0.5 if attraction.category == AttractionCategory.THRILL else 0.0
 
 
-def _sensitivity_load(attraction: Attraction, profile: GuestProfile, intensity: float) -> float:
+def _sensitivity_load(
+    attraction: Attraction, profile: GuestProfile, intensity: float
+) -> float:
     """Sum over the guest's sensitivities of (guest level x attraction level)."""
     levels = {
         SensitivityKind.INTENSITY: intensity,
-        SensitivityKind.DARKNESS: float(attraction.category == AttractionCategory.DARK_RIDE),
+        SensitivityKind.DARKNESS: float(
+            attraction.category == AttractionCategory.DARK_RIDE
+        ),
         SensitivityKind.WATER: float(attraction.category == AttractionCategory.WATER),
     }
     return sum(
@@ -398,7 +433,9 @@ def _sensitivity_load(attraction: Attraction, profile: GuestProfile, intensity: 
     )
 
 
-def _wait_minutes(attraction: Attraction, live_context: LiveContext) -> tuple[float, bool]:
+def _wait_minutes(
+    attraction: Attraction, live_context: LiveContext
+) -> tuple[float, bool]:
     """The posted OPERATING wait, else the curated typical wait; and whether it was live."""
     estimate = live_context.waits.get(attraction.node_id)
     if estimate is not None and estimate.status == AttractionStatus.OPERATING:

@@ -43,7 +43,9 @@ class RecordingConnection:
 
 
 def _session_only(guest_id: str = "g1", **overrides: Any) -> Any:
-    return factories.accessibility(guest_id=guest_id, retention_policy="session_only", **overrides)
+    return factories.accessibility(
+        guest_id=guest_id, retention_policy="session_only", **overrides
+    )
 
 
 def test_session_only_never_touches_the_database() -> None:
@@ -105,7 +107,9 @@ def test_a_session_record_survives_across_requests_sharing_the_process_memory() 
 
 
 def test_ending_an_unknown_session_is_harmless() -> None:
-    PostgresSessionStore(RecordingConnection(), SessionMemory()).end_session("never-started")  # type: ignore[arg-type]
+    PostgresSessionStore(RecordingConnection(), SessionMemory()).end_session(
+        "never-started"
+    )  # type: ignore[arg-type]
 
 
 def test_persisting_without_consent_is_refused_before_any_write() -> None:

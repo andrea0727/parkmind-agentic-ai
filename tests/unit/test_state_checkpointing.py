@@ -230,11 +230,11 @@ def _find_approval_violations(scope: ast.AST | list[ast.stmt]) -> list[str]:
             elif isinstance(called, ast.Attribute) and called.attr == "update":
                 for kw in node.keywords:
                     if kw.arg in _FORBIDDEN_STATE_KEYS:
-                        findings.append(
-                            f".update({kw.arg}=...) at line {node.lineno}"
-                        )
+                        findings.append(f".update({kw.arg}=...) at line {node.lineno}")
         if isinstance(node, ast.Name) and node.id == "ResolveProposalUseCase":
-            findings.append(f"reference to ResolveProposalUseCase at line {node.lineno}")
+            findings.append(
+                f"reference to ResolveProposalUseCase at line {node.lineno}"
+            )
         if (
             isinstance(node, ast.Attribute)
             and node.attr == "APPROVED"
@@ -252,17 +252,14 @@ def _find_approval_violations(scope: ast.AST | list[ast.stmt]) -> list[str]:
                     and target.slice.value in _FORBIDDEN_STATE_KEYS
                 ):
                     findings.append(
-                        f'subscript assign to [{target.slice.value!r}] '
-                        f'at line {node.lineno}'
+                        f"subscript assign to [{target.slice.value!r}] "
+                        f"at line {node.lineno}"
                     )
         if isinstance(node, ast.Dict):
             for key in node.keys:
-                if (
-                    isinstance(key, ast.Constant)
-                    and key.value in _FORBIDDEN_STATE_KEYS
-                ):
+                if isinstance(key, ast.Constant) and key.value in _FORBIDDEN_STATE_KEYS:
                     findings.append(
-                        f'dict literal with key {key.value!r} at line {key.lineno}'
+                        f"dict literal with key {key.value!r} at line {key.lineno}"
                     )
     return findings
 

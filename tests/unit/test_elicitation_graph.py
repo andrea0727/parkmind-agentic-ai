@@ -45,13 +45,16 @@ def _graph(extractor: FakeExtractor, saver: MemorySaver | None = None):
     intake, store = make_intake()
     downstream = Downstream()
     saver = saver or default_checkpointer()
-    graph = build_elicitation_graph(extractor, intake, saver, downstream, names=make_names())
+    graph = build_elicitation_graph(
+        extractor, intake, saver, downstream, names=make_names()
+    )
     return graph, intake, store, downstream, saver
 
 
 def _start(graph: Any, *texts: str) -> dict[str, Any]:
     return graph.invoke(
-        {"thread_id": "t1", "messages": [HumanMessage(content=t) for t in texts]}, config=CONFIG
+        {"thread_id": "t1", "messages": [HumanMessage(content=t) for t in texts]},
+        config=CONFIG,
     )
 
 
@@ -108,26 +111,39 @@ def test_ensure_confirmed_rejects_every_unconfirmed_shape() -> None:
     with pytest.raises(UnconfirmedHardConstraintsError):
         ensure_confirmed({})
     with pytest.raises(UnconfirmedHardConstraintsError):
-        ensure_confirmed({**proposed, "pending_hard_constraint_confirmation": []})  # not validated
+        ensure_confirmed(
+            {**proposed, "pending_hard_constraint_confirmation": []}
+        )  # not validated
     with pytest.raises(UnconfirmedHardConstraintsError):
         ensure_confirmed({**proposed, "constraints_valid": True})  # still pending
-    ensure_confirmed({**proposed, "constraints_valid": True, "pending_hard_constraint_confirmation": []})
+    ensure_confirmed(
+        {
+            **proposed,
+            "constraints_valid": True,
+            "pending_hard_constraint_confirmation": [],
+        }
+    )
 
 
-def test_rejecting_the_echo_drops_the_proposal_and_reextracts_with_the_correction() -> None:
+def test_rejecting_the_echo_drops_the_proposal_and_reextracts_with_the_correction() -> (
+    None
+):
     corrected = scenario("wheelchair_and_avoid")
     extractor = FakeExtractor(COMPLETE["extraction"], corrected["extraction"])
     graph, intake, store, downstream, _ = _graph(extractor)
     _start(graph, *COMPLETE["messages"])
 
     result = _resume(
-        graph, {"confirmed": False, "correction": "No wait, my husband uses a wheelchair."}
+        graph,
+        {"confirmed": False, "correction": "No wait, my husband uses a wheelchair."},
     )
 
     assert _interrupt_value(result)["kind"] == "hard_constraint_confirmation"
     assert extractor.calls[1][0][-1] == "No wait, my husband uses a wheelchair."
     assert downstream.seen == [] and store.puts == 0
-    assert intake.pending_guest_ids("t1") == ["g2"]  # the corrected statement, re-staged
+    assert intake.pending_guest_ids("t1") == [
+        "g2"
+    ]  # the corrected statement, re-staged
 
 
 def test_rejecting_without_a_correction_asks_what_to_change() -> None:
@@ -270,7 +286,9 @@ def test_retention_policy_is_taken_from_the_human_decision() -> None:
     graph, _, store, _, _ = _graph(FakeExtractor(COMPLETE["extraction"]))
     _start(graph, *COMPLETE["messages"])
 
-    _resume(graph, {"confirmed": True, "consent": True, "retention_policy": "persisted"})
+    _resume(
+        graph, {"confirmed": True, "consent": True, "retention_policy": "persisted"}
+    )
 
     record = store.get("t1", "g2")
     assert record is not None and record.retention_policy == "persisted"
@@ -281,7 +299,9 @@ def test_unknown_retention_policy_is_rejected() -> None:
     _start(graph, *COMPLETE["messages"])
 
     with pytest.raises(ValueError, match="retention_policy"):
-        _resume(graph, {"confirmed": True, "consent": True, "retention_policy": "forever"})
+        _resume(
+            graph, {"confirmed": True, "consent": True, "retention_policy": "forever"}
+        )
 
     assert store.puts == 0 and downstream.seen == []
 
@@ -334,4 +354,3 @@ def _all_serialized_bytes(saver: MemorySaver) -> bytes:
         for _task_id, _channel, payload, _task_path in writes.values():
             chunks.append(payload[1])
     return b"".join(chunks)
-

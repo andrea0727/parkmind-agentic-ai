@@ -45,21 +45,29 @@ class FakeThemeParksClient:
         return Park(
             park_id=MAGIC_KINGDOM_ID,
             name="Magic Kingdom Park",
-            opening_time=datetime(on_date.year, on_date.month, on_date.day, 9, 0, tzinfo=PARK_TZ),
-            closing_time=datetime(on_date.year, on_date.month, on_date.day, 22, 0, tzinfo=PARK_TZ),
+            opening_time=datetime(
+                on_date.year, on_date.month, on_date.day, 9, 0, tzinfo=PARK_TZ
+            ),
+            closing_time=datetime(
+                on_date.year, on_date.month, on_date.day, 22, 0, tzinfo=PARK_TZ
+            ),
             outdoor=True,
         )
 
     def get_live_waits(self, attraction_ids: list[str]) -> dict[str, WaitEstimate]:
         return {
             attraction_id: WaitEstimate(
-                attraction_id=attraction_id, wait_minutes=30, status=AttractionStatus.OPERATING
+                attraction_id=attraction_id,
+                wait_minutes=30,
+                status=AttractionStatus.OPERATING,
             )
             for attraction_id in attraction_ids
             if attraction_id == SPACE_MOUNTAIN_ID
         }
 
-    def get_attraction_status(self, attraction_ids: list[str]) -> dict[str, AttractionStatus]:
+    def get_attraction_status(
+        self, attraction_ids: list[str]
+    ) -> dict[str, AttractionStatus]:
         return {
             attraction_id: AttractionStatus.OPERATING
             for attraction_id in attraction_ids

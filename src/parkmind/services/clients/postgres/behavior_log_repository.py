@@ -38,5 +38,8 @@ class PostgresBehaviorLogRepository(PostgresRepositoryBase):
             rows = cur.fetchall()
         return BehaviorLog(
             guest_id=guest_id,
-            entries=[from_payload(BehaviorEntry, r["payload"], what="behavior entry") for r in rows],
+            entries=[
+                from_payload(BehaviorEntry, r["payload"], what="behavior entry")
+                for r in rows
+            ],
         )

@@ -165,10 +165,13 @@ from parkmind.services.clients.postgres.session_store import (
 
 SESSION_MEMORY = SessionMemory()  # once, at process startup
 
+
 def handle_request(thread_id: str, guest_id: str) -> None:
     with connect() as conn:  # per request
         store = PostgresSessionStore(conn, SESSION_MEMORY)
-        requirements = store.get(thread_id, guest_id)  # session_id == LangGraph thread_id
+        requirements = store.get(
+            thread_id, guest_id
+        )  # session_id == LangGraph thread_id
         ...
 ```
 

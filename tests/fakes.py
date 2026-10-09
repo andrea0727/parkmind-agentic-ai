@@ -60,7 +60,9 @@ class InMemorySnapshotRepository:
         }
         return True
 
-    def replace_normalized(self, snapshot: LiveContext, *, normalizer_version: int) -> bool:
+    def replace_normalized(
+        self, snapshot: LiveContext, *, normalizer_version: int
+    ) -> bool:
         row = self.rows.get(snapshot.snapshot_id)
         if row is None:
             return False
@@ -106,6 +108,10 @@ class InMemorySnapshotRepository:
 
     def ids_below_version(self, normalizer_version: int) -> list[str]:
         return sorted(
-            (sid for sid, row in self.rows.items() if row["version"] < normalizer_version),
+            (
+                sid
+                for sid, row in self.rows.items()
+                if row["version"] < normalizer_version
+            ),
             key=lambda sid: (self.rows[sid]["live_context"].retrieved_at, sid),
         )
