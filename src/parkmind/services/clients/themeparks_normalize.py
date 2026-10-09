@@ -169,7 +169,9 @@ def parse_forecast(entity: Mapping[str, Any]) -> list[tuple[datetime, float | No
     points: list[tuple[datetime, float | None]] = []
     try:
         for point in entity.get("forecast") or []:
-            start = parse_time(point["time"], what=f"forecast time of {entity.get('id')}")
+            start = parse_time(
+                point["time"], what=f"forecast time of {entity.get('id')}"
+            )
             wait = point.get("waitTime")
             if wait is not None and (
                 isinstance(wait, bool) or not isinstance(wait, int | float) or wait < 0

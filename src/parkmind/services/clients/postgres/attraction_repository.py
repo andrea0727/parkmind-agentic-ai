@@ -34,9 +34,15 @@ class PostgresAttractionRepository(PostgresRepositoryBase):
 
     def get_attraction(self, node_id: str) -> Attraction | None:
         with self._tx() as cur:
-            cur.execute("SELECT payload FROM attractions WHERE node_id = %s", (node_id,))
+            cur.execute(
+                "SELECT payload FROM attractions WHERE node_id = %s", (node_id,)
+            )
             row = cur.fetchone()
-        return None if row is None else from_payload(Attraction, row["payload"], what="attraction")
+        return (
+            None
+            if row is None
+            else from_payload(Attraction, row["payload"], what="attraction")
+        )
 
     def save_schedule(self, park: Park) -> None:
         service_date = park.opening_time.astimezone(PARK_TZ).date()
@@ -58,4 +64,8 @@ class PostgresAttractionRepository(PostgresRepositoryBase):
                 (park_id, on_date),
             )
             row = cur.fetchone()
-        return None if row is None else from_payload(Park, row["payload"], what="park schedule")
+        return (
+            None
+            if row is None
+            else from_payload(Park, row["payload"], what="park schedule")
+        )

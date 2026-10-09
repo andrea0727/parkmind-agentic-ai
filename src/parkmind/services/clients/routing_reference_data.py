@@ -125,21 +125,57 @@ MAGIC_KINGDOM_NODE_COORDINATES: dict[str, tuple[float, float]] = {
     # Shows and meet-and-greets (issue #69): the provider's own /children `location`,
     # captured 2026-10-01 (tests/fixtures/themeparks/children_magic_kingdom_2026-10-01.json).
     # A parade gets one point (where the provider pins it), not its route.
-    "a0613b70-293f-4a5b-8169-357be1777c62": (28.4181, -81.5814),  # Casey's Corner Pianist
-    "f819079e-644e-4fce-bda3-26b899ac7027": (28.4169, -81.5812),  # Disney Adventure Friends Cavalcade
-    "ee56b2f3-fd49-4a29-ae1a-2d321549a633": (28.4190, -81.5838),  # Disney Festival of Fantasy Parade
-    "d69261dc-62b8-434c-83bd-93649b43c408": (28.4169, -81.5812),  # Disney Starlight: Dream the Night Away
+    "a0613b70-293f-4a5b-8169-357be1777c62": (
+        28.4181,
+        -81.5814,
+    ),  # Casey's Corner Pianist
+    "f819079e-644e-4fce-bda3-26b899ac7027": (
+        28.4169,
+        -81.5812,
+    ),  # Disney Adventure Friends Cavalcade
+    "ee56b2f3-fd49-4a29-ae1a-2d321549a633": (
+        28.4190,
+        -81.5838,
+    ),  # Disney Festival of Fantasy Parade
+    "d69261dc-62b8-434c-83bd-93649b43c408": (
+        28.4169,
+        -81.5812,
+    ),  # Disney Starlight: Dream the Night Away
     "1c708beb-41e1-43ae-8dd8-1e85075aeb38": (28.4169, -81.5812),  # Flag Retreat
     "22b78ed9-a692-47cb-b6a4-6d1224ff67e3": (28.4192, -81.5812),  # Happily Ever After
-    "51392ca4-f824-42d8-8808-8110ec8e0e22": (28.4185, -81.5813),  # Main Street Philharmonic
-    "4c31b3ad-5dc9-437f-ac1a-0fdff36a2818": (28.4192, -81.5812),  # Mickey's Magical Friendship Faire
+    "51392ca4-f824-42d8-8808-8110ec8e0e22": (
+        28.4185,
+        -81.5813,
+    ),  # Main Street Philharmonic
+    "4c31b3ad-5dc9-437f-ac1a-0fdff36a2818": (
+        28.4192,
+        -81.5812,
+    ),  # Mickey's Magical Friendship Faire
     "1eee22e8-1d0a-4809-a42b-df3ae55c69d5": (28.4174, -81.5812),  # The Dapper Dans
-    "012a211b-4c91-451c-8a0e-5e3ab398eda8": (28.4209, -81.5796),  # Meet Ariel at Her Grotto
-    "40737d3d-0ff6-4a9e-a050-beb87bf90120": (28.4201, -81.5809),  # Meet Cinderella (Princess Fairytale Hall)
-    "cf4b2ba4-3626-4de7-9d07-abe8a65b1665": (28.4200, -81.5809),  # Meet Tiana (Princess Fairytale Hall)
-    "166f2985-7b27-4eff-a8b3-29c3448ba198": (28.4213, -81.5789),  # Meet Daring Disney Pals (Pete's Silly Sideshow)
-    "b5d6d1d1-e960-4c8f-a8a4-b9748b386b64": (28.4213, -81.5789),  # Meet Dashing Disney Pals (Pete's Silly Sideshow)
-    "a2d92647-634d-4eb4-886b-9da858e871f1": (28.4167, -81.5807),  # Meet Mickey at Town Square Theater
+    "012a211b-4c91-451c-8a0e-5e3ab398eda8": (
+        28.4209,
+        -81.5796,
+    ),  # Meet Ariel at Her Grotto
+    "40737d3d-0ff6-4a9e-a050-beb87bf90120": (
+        28.4201,
+        -81.5809,
+    ),  # Meet Cinderella (Princess Fairytale Hall)
+    "cf4b2ba4-3626-4de7-9d07-abe8a65b1665": (
+        28.4200,
+        -81.5809,
+    ),  # Meet Tiana (Princess Fairytale Hall)
+    "166f2985-7b27-4eff-a8b3-29c3448ba198": (
+        28.4213,
+        -81.5789,
+    ),  # Meet Daring Disney Pals (Pete's Silly Sideshow)
+    "b5d6d1d1-e960-4c8f-a8a4-b9748b386b64": (
+        28.4213,
+        -81.5789,
+    ),  # Meet Dashing Disney Pals (Pete's Silly Sideshow)
+    "a2d92647-634d-4eb4-886b-9da858e871f1": (
+        28.4167,
+        -81.5807,
+    ),  # Meet Mickey at Town Square Theater
 }
 
 # Direct walking times overrides (empty by default to preserve metric space properties

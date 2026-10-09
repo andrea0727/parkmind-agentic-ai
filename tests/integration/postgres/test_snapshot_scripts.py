@@ -16,7 +16,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _script(name: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(name, REPO_ROOT / "scripts" / f"{name}.py")
+    spec = importlib.util.spec_from_file_location(
+        name, REPO_ROOT / "scripts" / f"{name}.py"
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -34,7 +36,10 @@ def test_one_shot_collect_exits_zero_and_reports(
 ) -> None:
     assert _collect(migrated_database_url, Provider()) == 0
     first = capsys.readouterr().out
-    assert first.startswith("collected snap_") and "sources=themeparks_wiki,open_meteo" in first
+    assert (
+        first.startswith("collected snap_")
+        and "sources=themeparks_wiki,open_meteo" in first
+    )
 
     assert _collect(migrated_database_url, Provider()) == 0  # same window
     assert capsys.readouterr().out.startswith("already collected snap_")
@@ -49,7 +54,9 @@ def test_park_outage_exits_two_and_stores_nothing(
     assert row is not None and row["n"] == 0
 
 
-def test_missing_schema_is_explained(empty_database_url: str, capsys: pytest.CaptureFixture[str]) -> None:
+def test_missing_schema_is_explained(
+    empty_database_url: str, capsys: pytest.CaptureFixture[str]
+) -> None:
     assert _collect(empty_database_url, Provider()) == 1
     assert "alembic" in capsys.readouterr().err
 
@@ -59,11 +66,16 @@ def test_renormalize_command_rebuilds_and_reports(
 ) -> None:
     assert _collect(migrated_database_url, Provider()) == 0
     capsys.readouterr()
-    conn.execute("UPDATE snapshots SET live_context = %s::jsonb", (json.dumps({"broken": True}),))
+    conn.execute(
+        "UPDATE snapshots SET live_context = %s::jsonb", (json.dumps({"broken": True}),)
+    )
     conn.commit()  # the script runs on its own connection
 
     renormalize = _script("renormalize_snapshots").main
-    assert renormalize(["--database-url", migrated_database_url, "--all", "--dry-run"]) == 0
+    assert (
+        renormalize(["--database-url", migrated_database_url, "--all", "--dry-run"])
+        == 0
+    )
     assert "1 snapshot(s) selected" in capsys.readouterr().out
 
     assert renormalize(["--database-url", migrated_database_url, "--all"]) == 0
@@ -77,7 +89,10 @@ def test_renormalize_command_exits_one_when_a_snapshot_fails(
 ) -> None:
     renormalize = _script("renormalize_snapshots").main
 
-    assert renormalize(["--database-url", migrated_database_url, "--snapshot-id", "ghost"]) == 1
+    assert (
+        renormalize(["--database-url", migrated_database_url, "--snapshot-id", "ghost"])
+        == 1
+    )
     assert "failed ghost: no such snapshot" in capsys.readouterr().out
 
 
@@ -100,9 +115,16 @@ def test_latest_points_to_renormalize_when_stored_rows_are_invalid(
     migrated_database_url: str, conn, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert _collect(migrated_database_url, Provider()) == 0
-    conn.execute("UPDATE snapshots SET live_context = %s::jsonb", (json.dumps({"broken": True}),))
+    conn.execute(
+        "UPDATE snapshots SET live_context = %s::jsonb", (json.dumps({"broken": True}),)
+    )
     conn.commit()
     capsys.readouterr()
 
-    assert _script("collect_snapshot").main(["--database-url", migrated_database_url, "--latest"]) == 0
+    assert (
+        _script("collect_snapshot").main(
+            ["--database-url", migrated_database_url, "--latest"]
+        )
+        == 0
+    )
     assert "renormalize_snapshots.py --all" in capsys.readouterr().out

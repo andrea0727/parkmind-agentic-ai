@@ -7,5 +7,7 @@ from parkmind.core.contracts import Event, Plan
 
 
 class Replanner:
-    def replan(self, current_plan: Plan, event: Event, remaining_constraints, context) -> Plan:
+    def replan(
+        self, current_plan: Plan, event: Event, remaining_constraints, context
+    ) -> Plan:
         raise NotImplementedError

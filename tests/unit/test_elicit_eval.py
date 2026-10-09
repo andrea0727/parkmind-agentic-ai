@@ -18,7 +18,9 @@ from parkmind.services.evaluation.metrics.extraction import (
 MIN_ACCURACY = 0.85
 
 
-@pytest.mark.skipif(not os.getenv("ANTHROPIC_API_KEY"), reason="needs ANTHROPIC_API_KEY")
+@pytest.mark.skipif(
+    not os.getenv("ANTHROPIC_API_KEY"), reason="needs ANTHROPIC_API_KEY"
+)
 def test_live_classification_accuracy_over_the_labeled_set() -> None:
     extractor = AnthropicExtractor()
     reports = []
@@ -26,11 +28,15 @@ def test_live_classification_accuracy_over_the_labeled_set() -> None:
         outcome = extract_with_recovery(extractor, scenario["messages"])
         assert outcome.extraction is not None, scenario["id"]
         reports.append(
-            classification_report(outcome.extraction.classified_items(), scenario["expected"])
+            classification_report(
+                outcome.extraction.classified_items(), scenario["expected"]
+            )
         )
 
     total = combine_reports(reports)
     print(f"elicit classification: {total}")
 
-    assert total.hard_as_soft == 0, total  # a constraint treated as tradeable is never acceptable
+    assert total.hard_as_soft == 0, (
+        total
+    )  # a constraint treated as tradeable is never acceptable
     assert total.accuracy >= MIN_ACCURACY, total

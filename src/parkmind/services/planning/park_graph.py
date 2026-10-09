@@ -47,7 +47,7 @@ def _normalize_query(query: str) -> str:
     cleaned = " ".join(query.lower().split())
     for prefix in _LOCATIVE_PREFIXES:
         if cleaned.startswith(prefix):
-            cleaned = cleaned[len(prefix):].strip()
+            cleaned = cleaned[len(prefix) :].strip()
             break
     return cleaned
 
@@ -222,7 +222,8 @@ class ParkGraph:
             statuses = {}
         else:
             showtimes_by_node = {
-                node_id: tuple(times) for node_id, times in live_context.showtimes.items()
+                node_id: tuple(times)
+                for node_id, times in live_context.showtimes.items()
             }
             statuses = dict(live_context.statuses)
 

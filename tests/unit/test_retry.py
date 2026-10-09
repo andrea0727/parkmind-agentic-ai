@@ -125,7 +125,9 @@ def test_recovers_after_transient_failures_within_the_attempt_budget():
             raise outcome
         return outcome
 
-    response = send_with_retry(send, policy=RetryPolicy(max_attempts=3), sleep=sleeps.append)
+    response = send_with_retry(
+        send, policy=RetryPolicy(max_attempts=3), sleep=sleeps.append
+    )
 
     assert response.status_code == 200
     assert sleeps == [0.5, 1.0]

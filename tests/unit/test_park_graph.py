@@ -447,7 +447,9 @@ def test_from_sources_buckets_attractions_without_land_as_unknown() -> None:
     assert graph.nodes_by_land["Unknown"] == ("orphan",)
 
 
-def test_from_sources_without_live_context_leaves_showtimes_and_statuses_empty() -> None:
+def test_from_sources_without_live_context_leaves_showtimes_and_statuses_empty() -> (
+    None
+):
     """When no LiveContext is passed, showtimes and statuses default to empty."""
     graph = ParkGraph.from_sources(
         routing=FakeRouting(), park=_park(), attractions=[_attraction("a")]

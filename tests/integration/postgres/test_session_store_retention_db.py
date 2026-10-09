@@ -111,7 +111,10 @@ def _populate_realistic_data(conn: psycopg.Connection) -> None:
     PostgresProfileRepository(conn).save(factories.guest_profile(guest_id="g1"))
     PostgresBehaviorLogRepository(conn).append("g1", factories.behavior_entry())
     PostgresSnapshotRepository(conn).save(
-        factories.live_context(), {"liveData": []}, [DataSource.THEMEPARKS_WIKI], normalizer_version=1
+        factories.live_context(),
+        {"liveData": []},
+        [DataSource.THEMEPARKS_WIKI],
+        normalizer_version=1,
     )
     plans = PostgresPlanRepository(conn)
     plans.save("t1", factories.plan())
@@ -119,7 +122,11 @@ def _populate_realistic_data(conn: psycopg.Connection) -> None:
     PostgresEventRepository(conn).record("t1", factories.event())
     PostgresAttractionRepository(conn).save_catalog("mk", [factories.attraction()])
     PostgresIdMappingRepository(conn).record(
-        "themeparks_wiki", "tp-1", "attraction", "a1", seen_at=now + timedelta(minutes=1)
+        "themeparks_wiki",
+        "tp-1",
+        "attraction",
+        "a1",
+        seen_at=now + timedelta(minutes=1),
     )
 
 
@@ -153,7 +160,9 @@ def test_session_only_record_absent_from_every_table_after_session_end(
 
         # -- neither the shared memory nor a fresh one can recover it ----------
         assert PostgresSessionStore(conn, memory).get("sess_1", guest_id) is None
-        assert PostgresSessionStore(conn, SessionMemory()).get("sess_1", guest_id) is None
+        assert (
+            PostgresSessionStore(conn, SessionMemory()).get("sess_1", guest_id) is None
+        )
 
         # -- the scan is not blind: it covers checkpoint tables and real rows,
         #    and does see a persisted record where it belongs -------------------
@@ -171,7 +180,9 @@ def test_session_only_record_absent_from_every_table_after_session_end(
         assert _leaks(control, SESSION_ONLY_TOKENS) == {}
 
 
-def test_persisted_record_survives_the_end_of_a_session(conn: psycopg.Connection) -> None:
+def test_persisted_record_survives_the_end_of_a_session(
+    conn: psycopg.Connection,
+) -> None:
     PostgresGuestRepository(conn).save(factories.guest(guest_id="g1"))
     record = factories.accessibility(guest_id="g1", retention_policy="persisted")
     store = PostgresSessionStore(conn, SessionMemory())
@@ -179,19 +190,30 @@ def test_persisted_record_survives_the_end_of_a_session(conn: psycopg.Connection
     store.put("sess_1", record)
     store.end_session("sess_1")
 
-    assert PostgresSessionStore(conn, SessionMemory()).get("another_session", "g1") == record
+    assert (
+        PostgresSessionStore(conn, SessionMemory()).get("another_session", "g1")
+        == record
+    )
 
 
-def test_persisting_updates_replace_the_previous_flags(conn: psycopg.Connection) -> None:
+def test_persisting_updates_replace_the_previous_flags(
+    conn: psycopg.Connection,
+) -> None:
     PostgresGuestRepository(conn).save(factories.guest(guest_id="g1"))
     store = PostgresSessionStore(conn, SessionMemory())
-    store.put("s", factories.accessibility(guest_id="g1", daily_walking_limit_minutes=60))
+    store.put(
+        "s", factories.accessibility(guest_id="g1", daily_walking_limit_minutes=60)
+    )
 
-    store.put("s", factories.accessibility(guest_id="g1", daily_walking_limit_minutes=45))
+    store.put(
+        "s", factories.accessibility(guest_id="g1", daily_walking_limit_minutes=45)
+    )
 
     stored = store.get("s", "g1")
     assert stored is not None and stored.daily_walking_limit_minutes == 45
-    count = conn.execute("SELECT count(*) AS n FROM accessibility_requirements").fetchone()
+    count = conn.execute(
+        "SELECT count(*) AS n FROM accessibility_requirements"
+    ).fetchone()
     assert count is not None and count["n"] == 1
 
 
@@ -216,7 +238,9 @@ def test_persisting_for_an_unknown_guest_is_refused(conn: psycopg.Connection) ->
     store = PostgresSessionStore(conn, SessionMemory())
 
     with pytest.raises(NotFoundError):
-        store.put("s", factories.accessibility(guest_id="ghost", retention_policy="persisted"))
+        store.put(
+            "s", factories.accessibility(guest_id="ghost", retention_policy="persisted")
+        )
 
 
 def test_persisting_without_consent_writes_nothing(conn: psycopg.Connection) -> None:
@@ -233,5 +257,7 @@ def test_persisting_without_consent_writes_nothing(conn: psycopg.Connection) -> 
     with pytest.raises(ConsentRequiredError):
         PostgresSessionStore(conn, SessionMemory()).put("s", no_consent)
 
-    count = conn.execute("SELECT count(*) AS n FROM accessibility_requirements").fetchone()
+    count = conn.execute(
+        "SELECT count(*) AS n FROM accessibility_requirements"
+    ).fetchone()
     assert count is not None and count["n"] == 0

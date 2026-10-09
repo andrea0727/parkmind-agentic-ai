@@ -39,7 +39,9 @@ class SessionMemory:
 
     def put(self, session_id: str, requirements: AccessibilityRequirements) -> None:
         with self._lock:
-            self._records.setdefault(session_id, {})[requirements.guest_id] = requirements
+            self._records.setdefault(session_id, {})[requirements.guest_id] = (
+                requirements
+            )
 
     def get(self, session_id: str, guest_id: str) -> AccessibilityRequirements | None:
         with self._lock:
@@ -61,7 +63,9 @@ class PostgresSessionStore(PostgresRepositoryBase):
             return
 
         if not requirements.consent:
-            raise ConsentRequiredError("persisting accessibility data requires explicit consent")
+            raise ConsentRequiredError(
+                "persisting accessibility data requires explicit consent"
+            )
         with self._tx() as cur:
             cur.execute(
                 """
@@ -87,7 +91,9 @@ class PostgresSessionStore(PostgresRepositoryBase):
             row = cur.fetchone()
         if row is None:
             return None
-        return from_payload(AccessibilityRequirements, row["payload"], what="accessibility record")
+        return from_payload(
+            AccessibilityRequirements, row["payload"], what="accessibility record"
+        )
 
     def end_session(self, session_id: str) -> None:
         self._memory.drop(session_id)

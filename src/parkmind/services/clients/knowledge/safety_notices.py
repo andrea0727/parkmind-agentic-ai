@@ -64,7 +64,9 @@ from .in_memory import InMemoryKnowledgeStore
 
 NOTICE_CORPUS_VERSION = "2026-10-01"
 ATTRACTION_PAGE = "https://disneyworld.disney.go.com/attractions/magic-kingdom/{slug}/"
-ENTERTAINMENT_PAGE = "https://disneyworld.disney.go.com/entertainment/magic-kingdom/{slug}/"
+ENTERTAINMENT_PAGE = (
+    "https://disneyworld.disney.go.com/entertainment/magic-kingdom/{slug}/"
+)
 REVIEWED_ON = date(2026, 9, 28)
 
 HIGH_G = RideRestriction.NOT_RECOMMENDED_HIGH_G_FORCE

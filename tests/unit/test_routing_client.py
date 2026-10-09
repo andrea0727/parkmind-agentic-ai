@@ -150,7 +150,9 @@ def test_custom_matrix_bidirectional_lookup():
 def test_triangular_inequality_holds_for_all_reference_nodes():
     """Verify that the continuous coordinate model satisfies triangular inequality across all reference nodes."""
     client = RoutingClient()
-    node_ids = list(MAGIC_KINGDOM_NODE_COORDINATES.keys())[:10]  # Sample first 10 for speed
+    node_ids = list(MAGIC_KINGDOM_NODE_COORDINATES.keys())[
+        :10
+    ]  # Sample first 10 for speed
     violations = 0
 
     for a in node_ids:

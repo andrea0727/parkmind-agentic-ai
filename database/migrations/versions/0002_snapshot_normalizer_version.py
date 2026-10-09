@@ -25,7 +25,9 @@ def upgrade() -> None:
                 CHECK (normalizer_version >= 1)
         """
     )
-    op.execute("CREATE INDEX snapshots_normalizer_version_idx ON snapshots (normalizer_version)")
+    op.execute(
+        "CREATE INDEX snapshots_normalizer_version_idx ON snapshots (normalizer_version)"
+    )
 
 
 def downgrade() -> None:

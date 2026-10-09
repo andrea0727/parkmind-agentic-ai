@@ -45,7 +45,9 @@ class SnapshotRepository(Protocol):
         """
         ...
 
-    def replace_normalized(self, snapshot: LiveContext, *, normalizer_version: int) -> bool:
+    def replace_normalized(
+        self, snapshot: LiveContext, *, normalizer_version: int
+    ) -> bool:
         """Rewrite one snapshot's ``live_context`` and ``normalizer_version`` only.
 
         ``raw_payload``, ``data_sources`` and ``retrieved_at`` are never touched.

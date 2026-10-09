@@ -40,7 +40,9 @@ class IdMappingRepository(Protocol):
         """
         ...
 
-    def resolve(self, provider: str, provider_id: str, entity_kind: str) -> str | None: ...
+    def resolve(
+        self, provider: str, provider_id: str, entity_kind: str
+    ) -> str | None: ...
 
     def provider_ids_for(self, internal_id: str) -> list[tuple[str, str, str]]:
         """``(provider, provider_id, entity_kind)`` triples for an internal id."""

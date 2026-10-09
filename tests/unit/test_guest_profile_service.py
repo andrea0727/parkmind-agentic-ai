@@ -60,7 +60,9 @@ class FakeProfileRepository:
         return self._history.get(guest_id, {}).get(profile_version)
 
 
-def _service_with_guests(*guest_ids: str) -> tuple[GuestProfileService, FakeProfileRepository]:
+def _service_with_guests(
+    *guest_ids: str,
+) -> tuple[GuestProfileService, FakeProfileRepository]:
     repo = FakeProfileRepository(set(guest_ids))
     return GuestProfileService(repo), repo
 
@@ -74,7 +76,10 @@ def test_multiple_guests_are_stored_independently() -> None:
         "g1",
         ProfileUpdate(
             queue_tolerance=PreferenceUpdate(
-                value=0.9, source=PreferenceSource.LEARNED, confidence=0.7, updated_at=NOW
+                value=0.9,
+                source=PreferenceSource.LEARNED,
+                confidence=0.7,
+                updated_at=NOW,
             )
         ),
     )
@@ -99,7 +104,10 @@ def test_update_leaves_unrelated_dimensions_untouched() -> None:
         "g1",
         ProfileUpdate(
             queue_tolerance=PreferenceUpdate(
-                value=0.9, source=PreferenceSource.LEARNED, confidence=0.7, updated_at=NOW
+                value=0.9,
+                source=PreferenceSource.LEARNED,
+                confidence=0.7,
+                updated_at=NOW,
             )
         ),
     )
@@ -153,7 +161,10 @@ def test_sensitivities_and_thematic_affinity_merge_key_wise() -> None:
             sensitivities={SensitivityKind.HEIGHTS: SensitivityLevel.MEDIUM},
             thematic_affinity={
                 "pirates": PreferenceUpdate(
-                    value=0.3, source=PreferenceSource.STATED, confidence=0.9, updated_at=NOW
+                    value=0.3,
+                    source=PreferenceSource.STATED,
+                    confidence=0.9,
+                    updated_at=NOW,
                 )
             },
         ),
@@ -177,7 +188,10 @@ def test_confidence_values_are_validated() -> None:
             "g1",
             ProfileUpdate(
                 queue_tolerance=PreferenceUpdate(
-                    value=0.5, source=PreferenceSource.LEARNED, confidence=1.5, updated_at=NOW
+                    value=0.5,
+                    source=PreferenceSource.LEARNED,
+                    confidence=1.5,
+                    updated_at=NOW,
                 )
             ),
         )
@@ -195,7 +209,10 @@ def test_stated_value_survives_a_learned_update() -> None:
         "g1",
         ProfileUpdate(
             queue_tolerance=PreferenceUpdate(
-                value=0.9, source=PreferenceSource.LEARNED, confidence=0.6, updated_at=NOW
+                value=0.9,
+                source=PreferenceSource.LEARNED,
+                confidence=0.6,
+                updated_at=NOW,
             )
         ),
     )
@@ -217,7 +234,10 @@ def test_a_stated_update_can_set_a_new_stated_value() -> None:
         "g1",
         ProfileUpdate(
             queue_tolerance=PreferenceUpdate(
-                value=0.6, source=PreferenceSource.STATED, confidence=1.0, updated_at=NOW
+                value=0.6,
+                source=PreferenceSource.STATED,
+                confidence=1.0,
+                updated_at=NOW,
             )
         ),
     )
@@ -277,7 +297,10 @@ def test_a_default_update_cannot_overwrite_a_stated_value() -> None:
             "g1",
             ProfileUpdate(
                 queue_tolerance=PreferenceUpdate(
-                    value=0.5, source=PreferenceSource.DEFAULT, confidence=0.1, updated_at=NOW
+                    value=0.5,
+                    source=PreferenceSource.DEFAULT,
+                    confidence=0.1,
+                    updated_at=NOW,
                 )
             ),
         )
@@ -292,7 +315,10 @@ def test_a_default_update_is_accepted_for_a_dimension_with_no_prior_value() -> N
         ProfileUpdate(
             thematic_affinity={
                 "pirates": PreferenceUpdate(
-                    value=0.0, source=PreferenceSource.DEFAULT, confidence=0.1, updated_at=NOW
+                    value=0.0,
+                    source=PreferenceSource.DEFAULT,
+                    confidence=0.1,
+                    updated_at=NOW,
                 )
             }
         ),
@@ -317,7 +343,10 @@ def test_update_propagates_a_concurrent_version_conflict() -> None:
             "g1",
             ProfileUpdate(
                 queue_tolerance=PreferenceUpdate(
-                    value=0.9, source=PreferenceSource.LEARNED, confidence=0.6, updated_at=NOW
+                    value=0.9,
+                    source=PreferenceSource.LEARNED,
+                    confidence=0.6,
+                    updated_at=NOW,
                 )
             ),
         )
@@ -331,7 +360,10 @@ def test_update_bumps_the_profile_version_and_preserves_history() -> None:
         "g1",
         ProfileUpdate(
             queue_tolerance=PreferenceUpdate(
-                value=0.9, source=PreferenceSource.LEARNED, confidence=0.6, updated_at=NOW
+                value=0.9,
+                source=PreferenceSource.LEARNED,
+                confidence=0.6,
+                updated_at=NOW,
             )
         ),
     )
@@ -349,7 +381,10 @@ def test_updating_a_guest_with_no_stored_profile_is_refused() -> None:
             "g1",
             ProfileUpdate(
                 queue_tolerance=PreferenceUpdate(
-                    value=0.9, source=PreferenceSource.LEARNED, confidence=0.6, updated_at=NOW
+                    value=0.9,
+                    source=PreferenceSource.LEARNED,
+                    confidence=0.6,
+                    updated_at=NOW,
                 )
             ),
         )

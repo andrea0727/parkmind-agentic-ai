@@ -133,13 +133,19 @@ class ElicitationExtraction(_Strict):
     @model_validator(mode="after")
     def _consistent(self) -> "ElicitationExtraction":
         _check_hhmm(self.departure_time, "departure_time")
-        if self.guests and self.party_size is not None and self.party_size != len(self.guests):
+        if (
+            self.guests
+            and self.party_size is not None
+            and self.party_size != len(self.guests)
+        ):
             raise ValueError(
                 f"party_size={self.party_size} but {len(self.guests)} guests were listed"
             )
         for entry in self.accessibility:
             if entry.guest_ref > len(self.guests):
-                raise ValueError(f"accessibility guest_ref {entry.guest_ref} has no matching guest")
+                raise ValueError(
+                    f"accessibility guest_ref {entry.guest_ref} has no matching guest"
+                )
         return self
 
     def classified_items(self) -> dict[str, Classification]:
