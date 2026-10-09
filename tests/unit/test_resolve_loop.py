@@ -17,6 +17,7 @@ from parkmind.core.contracts import (
     TimeWindow,
 )
 from parkmind.core.contracts.models import Plan, Stop
+from parkmind.services.planning.errors import ContextReloadError
 from parkmind.services.planning.repair_moves import RULE_TO_REPAIR_ACTION, RepairAction
 from parkmind.services.planning.resolve_loop import PlannerResolveLoop
 
@@ -79,6 +80,7 @@ def _plan(
 # Mocks
 # ---------------------------------------------------------------------------
 
+
 class MockOptimizer:
     def __init__(self, plan_to_return=None, plan_factory=None):
         self.plan_to_return = plan_to_return
@@ -112,6 +114,7 @@ class MockChecker:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def base_constraints():
     mock = MagicMock()
@@ -130,6 +133,7 @@ def empty_plan() -> Plan:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 def test_success_first_attempt(base_constraints, empty_plan):
     optimizer = MockOptimizer(empty_plan)
@@ -153,14 +157,16 @@ def test_success_first_attempt(base_constraints, empty_plan):
 def test_infeasible_physical_constraints_fail_closed(base_constraints, empty_plan):
     for rule in [RuleId.HEIGHT, RuleId.RIDE_RESTRICTION]:
         optimizer = MockOptimizer(empty_plan)
-        checker = MockChecker([
-            CheckResult(
-                valid=False,
-                violations=[
-                    ConstraintViolation(rule=rule, message="safety rule violation")
-                ],
-            )
-        ])
+        checker = MockChecker(
+            [
+                CheckResult(
+                    valid=False,
+                    violations=[
+                        ConstraintViolation(rule=rule, message="safety rule violation")
+                    ],
+                )
+            ]
+        )
         loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
 
         result = loop.resolve(
@@ -179,14 +185,18 @@ def test_infeasible_physical_constraints_fail_closed(base_constraints, empty_pla
 
 def test_max_attempts_reached(base_constraints, empty_plan):
     optimizer = MockOptimizer(empty_plan)
-    checker = MockChecker([
-        CheckResult(
-            valid=False,
-            violations=[
-                ConstraintViolation(rule=RuleId.OPENING_HOURS, message="closed", stop_id="a1")
-            ],
-        )
-    ])
+    checker = MockChecker(
+        [
+            CheckResult(
+                valid=False,
+                violations=[
+                    ConstraintViolation(
+                        rule=RuleId.OPENING_HOURS, message="closed", stop_id="a1"
+                    )
+                ],
+            )
+        ]
+    )
     loop = PlannerResolveLoop(optimizer, checker, max_attempts=2)
 
     result = loop.resolve(
@@ -212,19 +222,21 @@ def test_repair_move_forbid_node(base_constraints):
     optimizer = MockOptimizer(
         plan_factory=lambda n, _c: plan_with_stop if n == 1 else plan_clean
     )
-    checker = MockChecker([
-        CheckResult(
-            valid=False,
-            violations=[
-                ConstraintViolation(
-                    rule=RuleId.OPENING_HOURS,
-                    message="closed",
-                    stop_id="space_mountain",
-                )
-            ],
-        ),
-        CheckResult(valid=True, violations=[]),
-    ])
+    checker = MockChecker(
+        [
+            CheckResult(
+                valid=False,
+                violations=[
+                    ConstraintViolation(
+                        rule=RuleId.OPENING_HOURS,
+                        message="closed",
+                        stop_id="space_mountain",
+                    )
+                ],
+            ),
+            CheckResult(valid=True, violations=[]),
+        ]
+    )
     loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
 
     result = loop.resolve(
@@ -258,19 +270,21 @@ def test_repair_move_window_reinserts_neighbor():
     optimizer = MockOptimizer(
         plan_factory=lambda n, _c: plan_first if n == 1 else plan_second
     )
-    checker = MockChecker([
-        CheckResult(
-            valid=False,
-            violations=[
-                ConstraintViolation(
-                    rule=RuleId.LUNCH_WINDOW,
-                    message="missed lunch",
-                    stop_id="restaurant_1",
-                )
-            ],
-        ),
-        CheckResult(valid=True, violations=[]),
-    ])
+    checker = MockChecker(
+        [
+            CheckResult(
+                valid=False,
+                violations=[
+                    ConstraintViolation(
+                        rule=RuleId.LUNCH_WINDOW,
+                        message="missed lunch",
+                        stop_id="restaurant_1",
+                    )
+                ],
+            ),
+            CheckResult(valid=True, violations=[]),
+        ]
+    )
     loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
 
     result = loop.resolve(
@@ -300,17 +314,19 @@ def test_repair_move_walking_budget_removes_optional_stop():
     optimizer = MockOptimizer(
         plan_factory=lambda n, _c: plan_first if n == 1 else plan_second
     )
-    checker = MockChecker([
-        CheckResult(
-            valid=False,
-            violations=[
-                ConstraintViolation(
-                    rule=RuleId.WALKING_BUDGET, message="walking budget exceeded"
-                )
-            ],
-        ),
-        CheckResult(valid=True, violations=[]),
-    ])
+    checker = MockChecker(
+        [
+            CheckResult(
+                valid=False,
+                violations=[
+                    ConstraintViolation(
+                        rule=RuleId.WALKING_BUDGET, message="walking budget exceeded"
+                    )
+                ],
+            ),
+            CheckResult(valid=True, violations=[]),
+        ]
+    )
     loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
 
     result = loop.resolve(
@@ -328,15 +344,17 @@ def test_repair_move_walking_budget_removes_optional_stop():
 
 def test_data_freshness_reload(base_constraints, empty_plan):
     optimizer = MockOptimizer(empty_plan)
-    checker = MockChecker([
-        CheckResult(
-            valid=False,
-            violations=[
-                ConstraintViolation(rule=RuleId.DATA_FRESHNESS, message="stale")
-            ],
-        ),
-        CheckResult(valid=True, violations=[]),
-    ])
+    checker = MockChecker(
+        [
+            CheckResult(
+                valid=False,
+                violations=[
+                    ConstraintViolation(rule=RuleId.DATA_FRESHNESS, message="stale")
+                ],
+            ),
+            CheckResult(valid=True, violations=[]),
+        ]
+    )
     loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
 
     reloader_called = False
@@ -365,19 +383,26 @@ def test_data_freshness_reload(base_constraints, empty_plan):
 # PROBES (Architecture §21 Invariants)
 # ---------------------------------------------------------------------------
 
+
 def test_must_do_operating_fails_closed(base_constraints, empty_plan):
     """Probe 1: A MUST_DO operating that cannot be inserted fails closed instead of returning valid=True."""
     base_constraints.must_do = ["splash_mountain"]
-    
+
     optimizer = MockOptimizer(empty_plan)
-    checker = MockChecker([
-        CheckResult(
-            valid=False,
-            violations=[
-                ConstraintViolation(rule=RuleId.MUST_DO, message="must_do slot not available", stop_id="splash_mountain")
-            ],
-        )
-    ])
+    checker = MockChecker(
+        [
+            CheckResult(
+                valid=False,
+                violations=[
+                    ConstraintViolation(
+                        rule=RuleId.MUST_DO,
+                        message="must_do slot not available",
+                        stop_id="splash_mountain",
+                    )
+                ],
+            )
+        ]
+    )
     loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
 
     result = loop.resolve(
@@ -399,18 +424,20 @@ def test_opening_hours_protects_must_do(base_constraints):
     plan_with_stop = _plan(stops=[_stop("space_mountain")])
 
     optimizer = MockOptimizer(plan_with_stop)
-    checker = MockChecker([
-        CheckResult(
-            valid=False,
-            violations=[
-                ConstraintViolation(
-                    rule=RuleId.OPENING_HOURS,
-                    message="closed",
-                    stop_id="space_mountain",
-                )
-            ],
-        )
-    ])
+    checker = MockChecker(
+        [
+            CheckResult(
+                valid=False,
+                violations=[
+                    ConstraintViolation(
+                        rule=RuleId.OPENING_HOURS,
+                        message="closed",
+                        stop_id="space_mountain",
+                    )
+                ],
+            )
+        ]
+    )
     loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
 
     result = loop.resolve(
@@ -428,5 +455,154 @@ def test_opening_hours_protects_must_do(base_constraints):
 def test_repair_move_catalog_covers_all_canonical_rules():
     """Architecture §21: Exactly one deterministic repair move per canonical RuleId."""
     for rule in RuleId:
-        assert rule in RULE_TO_REPAIR_ACTION, f"Rule {rule} missing from RULE_TO_REPAIR_ACTION"
+        assert rule in RULE_TO_REPAIR_ACTION, (
+            f"Rule {rule} missing from RULE_TO_REPAIR_ACTION"
+        )
         assert isinstance(RULE_TO_REPAIR_ACTION[rule], RepairAction)
+
+
+def test_data_freshness_reload_fails_closed_if_twice(base_constraints, empty_plan):
+    optimizer = MockOptimizer(empty_plan)
+    checker = MockChecker(
+        [
+            CheckResult(
+                valid=False,
+                violations=[
+                    ConstraintViolation(rule=RuleId.DATA_FRESHNESS, message="stale")
+                ],
+            ),
+            CheckResult(
+                valid=False,
+                violations=[
+                    ConstraintViolation(
+                        rule=RuleId.DATA_FRESHNESS, message="still stale"
+                    )
+                ],
+            ),
+        ]
+    )
+    loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
+    result = loop.resolve(
+        constraints=base_constraints,
+        context=MagicMock(),
+        utilities={},
+        now=datetime.now(tz=PARK_TZ),
+        park=MagicMock(),
+        context_reloader=lambda: MagicMock(),
+    )
+    assert result.valid is False
+    assert result.plan is None
+    assert optimizer.call_count == 1  # Invariante §21: Optimizador se llama 1 sola vez
+
+
+def test_data_freshness_reload_exception_fails_closed(base_constraints, empty_plan):
+    optimizer = MockOptimizer(empty_plan)
+    checker = MockChecker(
+        [
+            CheckResult(
+                valid=False,
+                violations=[
+                    ConstraintViolation(rule=RuleId.DATA_FRESHNESS, message="stale")
+                ],
+            )
+        ]
+    )
+    loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
+
+    def mock_failing_reloader():
+        raise ContextReloadError("Failed to fetch fresh snapshot")
+
+    result = loop.resolve(
+        constraints=base_constraints,
+        context=MagicMock(),
+        utilities={},
+        now=datetime.now(tz=PARK_TZ),
+        park=MagicMock(),
+        context_reloader=mock_failing_reloader,
+    )
+    assert result.valid is False
+    assert result.plan is None
+
+
+def test_repair_move_forbid_node_missing_target_id(base_constraints, empty_plan):
+    optimizer = MockOptimizer(empty_plan)
+    checker = MockChecker(
+        [
+            CheckResult(
+                valid=False,
+                violations=[
+                    ConstraintViolation(
+                        rule=RuleId.OPENING_HOURS, message="closed", stop_id=None
+                    )
+                ],
+            )
+        ]
+    )
+    loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
+    result = loop.resolve(
+        constraints=base_constraints,
+        context=MagicMock(),
+        utilities={},
+        now=datetime.now(tz=PARK_TZ),
+        park=MagicMock(),
+    )
+    assert result.valid is False
+    assert result.plan is None
+
+
+def test_infeasible_constraint_fails_closed(base_constraints, empty_plan):
+    optimizer = MockOptimizer(empty_plan)
+    checker = MockChecker(
+        [
+            CheckResult(
+                valid=False,
+                violations=[
+                    ConstraintViolation(rule=RuleId.AVOID, message="avoid violated")
+                ],
+            )
+        ]
+    )
+    loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
+    result = loop.resolve(
+        constraints=base_constraints,
+        context=MagicMock(),
+        utilities={},
+        now=datetime.now(tz=PARK_TZ),
+        park=MagicMock(),
+    )
+    assert result.valid is False
+    assert result.plan is None
+
+
+def test_show_arrival_protects_must_do_neighbor(base_constraints):
+    must_stop = _stop("must_do_neighbor", hour_start=10, utility=5.0)
+    window_stop = _stop("show_1", hour_start=11, utility=0.0)
+    plan_first = _plan(stops=[must_stop, window_stop])
+
+    base_constraints.must_do = ["must_do_neighbor"]
+    optimizer = MockOptimizer(plan_first)
+    checker = MockChecker(
+        [
+            CheckResult(
+                valid=False,
+                violations=[
+                    ConstraintViolation(
+                        rule=RuleId.SHOW_ARRIVAL,
+                        message="missed show",
+                        stop_id="show_1",
+                    )
+                ],
+            )
+        ]
+    )
+    loop = PlannerResolveLoop(optimizer, checker, max_attempts=3)
+    result = loop.resolve(
+        constraints=base_constraints,
+        context=MagicMock(),
+        utilities={},
+        now=datetime.now(tz=PARK_TZ),
+        park=MagicMock(),
+    )
+    # Protege el must_do y falla cerrado
+    assert result.valid is False
+    assert result.plan is None

@@ -3,6 +3,10 @@ Planner Re-solve Loop orchestrator.
 
 Handles the iterative repair of plans that fail the ConstraintChecker.
 §21 [C23]
+
+Architectural Deviations / Approximations:
+- SHIFT_OR_FORBID_NEIGHBOR: Approximated by forbidding the neighbor rather than shifting the window.
+- HEIGHT / RIDE_RESTRICTION / MUST_DO: Implemented as fail-closed for safety and deterministic constraint guarantees.
 """
 
 import logging
@@ -151,7 +155,9 @@ class PlannerResolveLoop:
                 recheck_result = self._checker.check(
                     plan=plan,
                     constraints=current_constraints,
-                    accessibility=list(accessibility_reqs) if accessibility_reqs else [],
+                    accessibility=list(accessibility_reqs)
+                    if accessibility_reqs
+                    else [],
                     attractions=catalog_index,
                     park=park,
                     live_context=current_context,
@@ -186,11 +192,12 @@ class PlannerResolveLoop:
 
             # Rule 4 / Must-Do Violation Handling
             if violation.rule == RuleId.MUST_DO:
+                target_detail = violation.stop_id or violation.message or "unknown"
                 return PlannerResolveResult(
                     valid=False,
                     plan=None,
                     unmet_must_do=[],
-                    fatal_error=f"Infeasible constraint set: MUST_DO attraction '{violation.stop_id or 'unknown'}' is OPERATING but could not be validly scheduled.",
+                    fatal_error=f"Infeasible constraint set: MUST_DO attraction '{target_detail}' is OPERATING but could not be validly scheduled.",
                 )
 
             # FORBID_NODE (OPENING_HOURS, AVOID)
