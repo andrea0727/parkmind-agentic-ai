@@ -9,10 +9,12 @@ this use case); it reads the plan and never feeds anything back into it.
 from collections.abc import Mapping
 
 from parkmind.core.contracts import PARK_TZ, CheckResult, Plan
+from parkmind.services.planning.optimizer import MEAL_VENUE_TBD
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
     default_planning_deps,
     load_catalog,
+    open_deps,
 )
 
 
@@ -23,6 +25,7 @@ class ExplainBeforeValidationError(RuntimeError):
 def explain_plan(plan: Plan, check_result: CheckResult, names: Mapping[str, str]) -> str:
     if not check_result.valid:
         raise ExplainBeforeValidationError("a plan is explained only after it passed the checker")
+    names = {**names, MEAL_VENUE_TBD: "Lunch (restaurant to be chosen, near your previous stop)"}
     lines = [
         f"{stop.arrival_time.astimezone(PARK_TZ):%H:%M} "
         f"{names.get(stop.node_id, stop.node_id)} "
@@ -49,6 +52,6 @@ class ExplainPlanUseCase:
             raise ExplainBeforeValidationError(
                 "a plan is explained only after it passed the checker"
             )
-        with self._deps_factory() as deps:
+        with open_deps(self._deps_factory) as deps:
             names = {a.node_id: a.name for a in load_catalog(deps)}
         return explain_plan(plan, check_result, names)

@@ -6,7 +6,12 @@ from datetime import date, datetime
 from typing import Any
 
 from elicit_support import PARK_ID, FakeSessionStore, catalog
-from fakes import InMemoryIdMappingRepository, InMemorySnapshotRepository
+from fakes import (
+    InMemoryIdMappingRepository,
+    InMemoryPlanRepository,
+    InMemoryProposalRepository,
+    InMemorySnapshotRepository,
+)
 
 from parkmind.core.contracts import (
     PARK_TZ,
@@ -108,7 +113,9 @@ def make_deps(
     collector: Any = None,
     attractions: PlanningAttractionRepository | None = None,
     knowledge: InMemoryKnowledgeStore | None = None,
+    proposals: InMemoryProposalRepository | None = None,
 ) -> PlanningDeps:
+    proposals = proposals if proposals is not None else InMemoryProposalRepository()
     return PlanningDeps(
         park_id=PARK_ID,
         attractions=attractions or PlanningAttractionRepository(),  # type: ignore[arg-type]
@@ -117,6 +124,8 @@ def make_deps(
         knowledge=knowledge or InMemoryKnowledgeStore({}, corpus_version="t"),
         routing=FlatRouting(),
         sessions=sessions if sessions is not None else FakeSessionStore(),  # type: ignore[arg-type]
+        plans=InMemoryPlanRepository(proposals),
+        proposals=proposals,
         collector=collector,
     )
 

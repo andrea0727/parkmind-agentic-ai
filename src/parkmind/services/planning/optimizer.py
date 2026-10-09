@@ -90,6 +90,8 @@ _DEFAULT_REST_DURATION_MIN = 20.0
 _DEFAULT_SHOW_DURATION_MIN = 25.0
 _LUNCH_WINDOW_EARLY_BUFFER_MIN = 15.0
 _PARK_ENTRANCE_NODE = "__park_entrance__"
+MEAL_VENUE_TBD = "__restaurant__"
+"""MEAL stop with no restaurant chosen: eaten where the party is, so no walk and no move."""
 
 
 class GreedyInsertionOptimizer:
@@ -335,7 +337,7 @@ class GreedyInsertionOptimizer:
             if meal_anchor is not None and not meal_inserted:
                 lunch_win = constraints.lunch_window
                 assert lunch_win is not None
-                walk_to_meal = self._walk_time(cursor_node, meal_anchor.node_id)
+                walk_to_meal = self._walk_to_meal(cursor_node, meal_anchor)
                 earliest_meal_arrival = cursor_time + timedelta(minutes=walk_to_meal)
                 if earliest_meal_arrival >= lunch_win.start - timedelta(
                     minutes=_LUNCH_WINDOW_EARLY_BUFFER_MIN
@@ -359,7 +361,7 @@ class GreedyInsertionOptimizer:
                             )
                             stops.append(meal_stop)
                             cursor_time = meal_departure
-                            cursor_node = meal_anchor.node_id
+                            cursor_node = self._after_meal(cursor_node, meal_anchor)
                             active_minutes_since_rest = 0.0
                     meal_inserted = True
                     continue
@@ -443,7 +445,7 @@ class GreedyInsertionOptimizer:
                         and meal_anchor is not None
                         and cursor_time < lunch_win.start
                     ):
-                        walk_to_meal = self._walk_time(cid, meal_anchor.node_id)
+                        walk_to_meal = self._walk_to_meal(cid, meal_anchor)
                         if (
                             cand_departure + timedelta(minutes=walk_to_meal)
                             > lunch_win.end
@@ -567,7 +569,7 @@ class GreedyInsertionOptimizer:
             if meal_anchor is not None and not meal_inserted:
                 lunch_win = constraints.lunch_window
                 assert lunch_win is not None
-                walk_to_meal = self._walk_time(cursor_node, meal_anchor.node_id)
+                walk_to_meal = self._walk_to_meal(cursor_node, meal_anchor)
                 actual_arrival = max(
                     cursor_time + timedelta(minutes=walk_to_meal),
                     lunch_win.start,
@@ -587,7 +589,7 @@ class GreedyInsertionOptimizer:
                         )
                         stops.append(meal_stop)
                         cursor_time = meal_departure
-                        cursor_node = meal_anchor.node_id
+                        cursor_node = self._after_meal(cursor_node, meal_anchor)
                         active_minutes_since_rest = 0.0
                 meal_inserted = True
                 continue
@@ -758,6 +760,15 @@ class GreedyInsertionOptimizer:
         valid = [t for t in sorted(times) if start <= t < end]
         return valid[0] if valid else None
 
+    def _walk_to_meal(self, origin: str, meal_anchor: Stop) -> float:
+        if meal_anchor.node_id == MEAL_VENUE_TBD:
+            return 0.0
+        return self._walk_time(origin, meal_anchor.node_id)
+
+    @staticmethod
+    def _after_meal(cursor_node: str, meal_anchor: Stop) -> str:
+        return cursor_node if meal_anchor.node_id == MEAL_VENUE_TBD else meal_anchor.node_id
+
     def _create_meal_anchor(
         self,
         window: TimeWindow,
@@ -765,7 +776,7 @@ class GreedyInsertionOptimizer:
         guest_ids: list[str],
     ) -> Stop:
         """Build a MEAL stop placeholder inside the lunch window."""
-        node = restaurant_node_ids[0] if restaurant_node_ids else "__restaurant__"
+        node = restaurant_node_ids[0] if restaurant_node_ids else MEAL_VENUE_TBD
         arrival = window.start
         departure = arrival + timedelta(minutes=self._meal_dur)
         departure = min(departure, window.end)

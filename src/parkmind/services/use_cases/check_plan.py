@@ -10,12 +10,14 @@ from datetime import datetime
 
 from parkmind.core.contracts import CheckResult, LiveContext, PartyConstraints, Plan
 from parkmind.services.planning.constraint_checker import ConstraintChecker
+from parkmind.services.use_cases.party_accessibility import party_checks, with_checks
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
     default_planning_deps,
     load_catalog,
     load_park,
     load_requirements,
+    open_deps,
 )
 
 
@@ -33,10 +35,13 @@ class CheckPlanUseCase:
         live_context: LiveContext,
         now: datetime,
     ) -> CheckResult:
-        with self._deps_factory() as deps:
+        with open_deps(self._deps_factory) as deps:
             catalog = load_catalog(deps)
             park = load_park(deps, now)
             requirements, _ = load_requirements(deps, thread_id, accessibility_ref)
+            live_context = with_checks(
+                live_context, party_checks(requirements, catalog, deps.knowledge)
+            )
             return ConstraintChecker().check(
                 plan,
                 constraints,

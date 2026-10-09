@@ -10,8 +10,23 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from parkmind.core.contracts import DataSource, LiveContext
-from parkmind.services.ports import IdMappingConflictError, SnapshotMeta
+from parkmind.core.contracts import (
+    ApprovalStatus,
+    DataSource,
+    LiveContext,
+    Plan,
+    Proposal,
+    RejectionReason,
+)
+from parkmind.services.ports import (
+    IdMappingConflictError,
+    InvalidStateTransitionError,
+    NotApprovedError,
+    NotFoundError,
+    PendingProposalExistsError,
+    PlanImmutableError,
+    SnapshotMeta,
+)
 
 
 class InMemoryIdMappingRepository:
@@ -115,3 +130,86 @@ class InMemorySnapshotRepository:
             ),
             key=lambda sid: (self.rows[sid]["live_context"].retrieved_at, sid),
         )
+
+
+class InMemoryPlanRepository:
+    """PlanRepository over a proposal repository, with ``activate`` gated on an APPROVED proposal."""
+
+    def __init__(self, proposals: "InMemoryProposalRepository") -> None:
+        self._proposals = proposals
+        self.plans: dict[str, Plan] = {}
+        self.active: dict[str, str] = {}
+
+    def save(self, thread_id: str, plan: Plan) -> None:
+        if self.plans.setdefault(plan.plan_id, plan) != plan:
+            raise PlanImmutableError("plan bodies are immutable")
+
+    def get(self, plan_id: str) -> Plan | None:
+        return self.plans.get(plan_id)
+
+    def activate(self, thread_id: str, plan_id: str, *, at: datetime) -> None:
+        if plan_id not in self.plans:
+            raise NotFoundError("plan does not exist")
+        approved = any(
+            p.candidate_plan_id == plan_id and p.approval_status is ApprovalStatus.APPROVED
+            for t, p in self._proposals.rows.values()
+            if t == thread_id
+        )
+        if not approved:
+            raise NotApprovedError("no APPROVED proposal for this plan in this thread")
+        self.active[thread_id] = plan_id
+
+    def get_active(self, thread_id: str) -> Plan | None:
+        plan_id = self.active.get(thread_id)
+        return self.plans[plan_id] if plan_id else None
+
+
+class InMemoryProposalRepository:
+    def __init__(self) -> None:
+        self.rows: dict[str, tuple[str, Proposal]] = {}
+
+    def save(self, thread_id: str, proposal: Proposal) -> None:
+        if proposal.approval_status is not ApprovalStatus.PENDING:
+            raise InvalidStateTransitionError("a proposal is created PENDING")
+        if proposal.proposal_id in self.rows:
+            return
+        if self.list_pending(thread_id):
+            raise PendingProposalExistsError("the thread already holds a PENDING proposal")
+        self.rows[proposal.proposal_id] = (thread_id, proposal)
+
+    def get(self, proposal_id: str) -> Proposal | None:
+        row = self.rows.get(proposal_id)
+        return row[1] if row else None
+
+    def list_pending(self, thread_id: str) -> list[Proposal]:
+        return [
+            p
+            for t, p in self.rows.values()
+            if t == thread_id and p.approval_status is ApprovalStatus.PENDING
+        ]
+
+    def resolve(
+        self,
+        proposal_id: str,
+        status: ApprovalStatus,
+        *,
+        at: datetime,
+        rejection_reason: RejectionReason | None = None,
+    ) -> Proposal:
+        row = self.rows.get(proposal_id)
+        if row is None:
+            raise NotFoundError("proposal does not exist")
+        thread_id, proposal = row
+        if proposal.approval_status is not ApprovalStatus.PENDING or status is ApprovalStatus.PENDING:
+            raise InvalidStateTransitionError("only a PENDING proposal can be resolved")
+        resolved = proposal.model_copy(
+            update={"approval_status": status, "rejection_reason": rejection_reason}
+        )
+        self.rows[proposal_id] = (thread_id, resolved)
+        return resolved
+
+    def supersede_pending(self, thread_id: str, *, at: datetime) -> list[str]:
+        ids = [p.proposal_id for p in self.list_pending(thread_id)]
+        for proposal_id in ids:
+            self.resolve(proposal_id, ApprovalStatus.SUPERSEDED, at=at)
+        return ids

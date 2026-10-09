@@ -12,11 +12,12 @@ SessionStore, per call, and handed straight to the deterministic core. They are
 never returned into graph state [C19].
 """
 
+import logging
 from collections.abc import Callable, Iterator, Sequence
-from contextlib import AbstractContextManager, ExitStack, contextmanager
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Protocol
+from contextlib import AbstractContextManager, ExitStack, contextmanager, nullcontext
+from dataclasses import dataclass, field
+from datetime import date, datetime
+from typing import Any, Protocol
 
 from parkmind.core.contracts import PARK_TZ, AccessibilityRequirements, Attraction, Park
 from parkmind.services.clients.knowledge import magic_kingdom_knowledge_store
@@ -24,18 +25,26 @@ from parkmind.services.clients.open_meteo_client import OpenMeteoClient
 from parkmind.services.clients.postgres import (
     PostgresAttractionRepository,
     PostgresIdMappingRepository,
+    PostgresPlanRepository,
+    PostgresProposalRepository,
     PostgresSnapshotRepository,
     connect,
 )
 from parkmind.services.clients.routing_client import RoutingClient
 from parkmind.services.clients.themeparks_client import ThemeParksClient
+from parkmind.services.clients.themeparks_errors import ThemeParksClientError
 from parkmind.services.ports import (
     AttractionRepository,
     IdMappingRepository,
     KnowledgeStore,
+    PlanRepository,
+    ProposalRepository,
+    RepositoryUnavailableError,
+    RoutingError,
     RoutingPort,
     SessionStore,
     SnapshotRepository,
+    StoredDataError,
 )
 from parkmind.services.use_cases.collect_snapshot import (
     CollectResult,
@@ -43,15 +52,29 @@ from parkmind.services.use_cases.collect_snapshot import (
 )
 from parkmind.services.use_cases.session_memory import session_store
 
+logger = logging.getLogger(__name__)
+
 MAGIC_KINGDOM_PARK_ID = "75ea578a-adc8-4116-a54d-dccb60765ef9"  # ThemeParks Wiki entity id
 
 
-class ContextUnavailableError(RuntimeError):
+class PlanningUnavailableError(RuntimeError):
+    """Planning cannot go on: a port it needs failed or has no data. The graph ends with a plain message."""
+
+
+class ContextUnavailableError(PlanningUnavailableError):
     """No usable park data: no live snapshot, no valid stored one, or no schedule/catalog."""
 
 
 class SnapshotCollecting(Protocol):
     def collect(self, *, now: datetime) -> CollectResult: ...
+
+
+class ParkDataSource(Protocol):
+    """The park-data provider (ThemeParks): where a missing catalog or schedule is fetched."""
+
+    def get_catalog(self) -> list[Attraction]: ...
+
+    def get_schedule(self, on_date: date) -> Park: ...
 
 
 @dataclass(frozen=True)
@@ -63,8 +86,14 @@ class PlanningDeps:
     knowledge: KnowledgeStore
     routing: RoutingPort
     sessions: SessionStore
+    plans: PlanRepository
+    proposals: ProposalRepository
     collector: SnapshotCollecting | None = None
     """``None`` plans from the latest stored snapshot only (no provider call)."""
+    transaction: Callable[[], AbstractContextManager[Any]] = field(default=nullcontext)
+    """One atomic unit over ``plans`` and ``proposals`` (a DB transaction by default)."""
+    park_data: ParkDataSource | None = None
+    """Fetches (and caches in ``attractions``) a catalog or schedule the database lacks."""
 
 
 DepsFactory = Callable[[], AbstractContextManager[PlanningDeps]]
@@ -86,22 +115,62 @@ def default_planning_deps() -> Iterator[PlanningDeps]:
             knowledge=magic_kingdom_knowledge_store(),
             routing=RoutingClient(),
             sessions=session_store(conn),
+            plans=PostgresPlanRepository(conn),
+            proposals=PostgresProposalRepository(conn),
             collector=SnapshotCollector(parks, weather, snapshots, id_mappings),
+            transaction=lambda: conn.transaction(),
+            park_data=parks,
         )
 
 
+@contextmanager
+def open_deps(deps_factory: DepsFactory) -> Iterator[PlanningDeps]:
+    """``deps_factory()``, with a failing port reported as ``PlanningUnavailableError``.
+
+    The use cases open their ports here, so the graph handles one error type
+    instead of every adapter's.
+    """
+    try:
+        with deps_factory() as deps:
+            yield deps
+    except PlanningUnavailableError:
+        raise
+    except (
+        RoutingError,
+        RepositoryUnavailableError,
+        StoredDataError,
+        ThemeParksClientError,
+    ) as exc:
+        raise PlanningUnavailableError(f"{type(exc).__name__}: {exc}") from exc
+
+
 def load_catalog(deps: PlanningDeps) -> list[Attraction]:
+    """The stored catalog; an empty store is filled once from the provider (the DB is a cache)."""
     catalog = deps.attractions.list_attractions(deps.park_id)
-    if not catalog:
+    if catalog:
+        return catalog
+    if deps.park_data is None:
         raise ContextUnavailableError(f"no attraction catalog for park {deps.park_id!r}")
+    catalog = deps.park_data.get_catalog()
+    if not catalog:
+        raise ContextUnavailableError(f"the provider returned no catalog for park {deps.park_id!r}")
+    deps.attractions.save_catalog(deps.park_id, catalog)
     return catalog
 
 
 def load_park(deps: PlanningDeps, now: datetime) -> Park:
-    """Today's operating window; without it nothing can be bounded, so fail closed."""
-    park = deps.attractions.get_schedule(deps.park_id, now.astimezone(PARK_TZ).date())
-    if park is None:
-        raise ContextUnavailableError(f"no schedule for park {deps.park_id!r} on this date")
+    """Today's operating window; without it nothing can be bounded, so fail closed.
+
+    Read from the store, else fetched from the provider and stored for the next call.
+    """
+    today = now.astimezone(PARK_TZ).date()
+    park = deps.attractions.get_schedule(deps.park_id, today)
+    if park is not None:
+        return park
+    if deps.park_data is None:
+        raise ContextUnavailableError(f"no schedule for park {deps.park_id!r} on {today}")
+    park = deps.park_data.get_schedule(today)
+    deps.attractions.save_schedule(park)
     return park
 
 
@@ -127,8 +196,12 @@ class _DeferredAttractionRepository:
         self._deps_factory = deps_factory
 
     def list_attractions(self, park_id: str) -> list[Attraction]:
-        with self._deps_factory() as deps:
-            return deps.attractions.list_attractions(deps.park_id)
+        try:
+            with open_deps(self._deps_factory) as deps:
+                return load_catalog(deps)
+        except PlanningUnavailableError:
+            logger.warning("attraction names cannot be resolved: no catalog", exc_info=True)
+            return []
 
 
 def deferred_attraction_repository(deps_factory: DepsFactory) -> AttractionRepository:

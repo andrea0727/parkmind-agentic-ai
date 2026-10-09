@@ -13,9 +13,11 @@ each pair got a result and every guest the confirmation committed requirements
 for could be read back; otherwise the gap is named in ``coverage_gaps`` and rule 11
 refuses the plan.
 
-``AccessibilityRequirements`` are read here, used, and dropped: only the derived
-``AccessibilityCheck`` results reach the returned ``LiveContext`` [C19]. This is
-the first step of the graph that reads the session store.
+``AccessibilityRequirements`` are read here, used, and dropped [C19]. The derived
+``AccessibilityCheck`` results are in ``LoadedContext.live_context`` for in-process
+callers; ``LoadedContext.for_state()`` is what may be checkpointed: the coverage
+flag, without the per-guest results. The later use cases re-derive them from the
+SessionStore (``party_accessibility``).
 """
 
 from collections.abc import Sequence
@@ -26,10 +28,14 @@ from typing import Literal
 from parkmind.core.contracts import AccessibilityCheck, LiveContext
 from parkmind.services.clients.themeparks_errors import ThemeParksClientError
 from parkmind.services.ports import RepositoryError
-from parkmind.services.use_cases.check_accessibility import check_accessibility
 from parkmind.services.use_cases.latest_snapshot import (
     DEFAULT_MAX_AGE,
     latest_valid_snapshot,
+)
+from parkmind.services.use_cases.party_accessibility import (
+    party_checks,
+    with_checks,
+    without_guests,
 )
 from parkmind.services.use_cases.planning_deps import (
     ContextUnavailableError,
@@ -38,6 +44,7 @@ from parkmind.services.use_cases.planning_deps import (
     default_planning_deps,
     load_catalog,
     load_requirements,
+    open_deps,
 )
 from parkmind.services.use_cases.snapshot_normalization import ACCESSIBILITY_GAP
 
@@ -53,6 +60,11 @@ class LoadedContext:
     """``live`` when this call collected (or found this window's) snapshot; ``snapshot`` for the fallback."""
     age: timedelta
     """At ``now``; rule 11 judges freshness from the snapshot itself."""
+    party_guest_ids: tuple[str, ...] = ()
+
+    def for_state(self) -> LiveContext:
+        """The context without the party's per-guest accessibility results [C19]."""
+        return without_guests(self.live_context, self.party_guest_ids)
 
 
 class LoadContextUseCase:
@@ -70,17 +82,15 @@ class LoadContextUseCase:
     ) -> LoadedContext:
         if now.tzinfo is None or now.utcoffset() is None:
             raise ValueError("now must be timezone-aware")
-        with self._deps_factory() as deps:
+        with open_deps(self._deps_factory) as deps:
             base, source = self._base_context(deps, now)
             catalog = load_catalog(deps)
             requirements, missing = load_requirements(deps, thread_id, accessibility_ref)
-            checks = [
-                check_accessibility(req, attraction.node_id, deps.knowledge)
-                for req in requirements
-                for attraction in catalog
-            ]
+            checks = party_checks(requirements, catalog, deps.knowledge)
             live_context = _with_accessibility(base, checks, requirements_missing=missing)
-        return LoadedContext(live_context, source, now - live_context.retrieved_at)
+        return LoadedContext(
+            live_context, source, now - live_context.retrieved_at, tuple(accessibility_ref)
+        )
 
     def _base_context(self, deps: PlanningDeps, now: datetime) -> tuple[LiveContext, ContextSource]:
         if deps.collector is not None:
@@ -103,8 +113,6 @@ def _with_accessibility(
     *,
     requirements_missing: Sequence[str],
 ) -> LiveContext:
-    checked_guests = {c.guest_id for c in checks}
-    kept = [r for r in base.accessibility_results if r.guest_id not in checked_guests]
     gaps = [g for g in base.coverage.coverage_gaps if g != ACCESSIBILITY_GAP]
     for guest_id in requirements_missing:
         gaps.append(f"accessibility requirements of guest {guest_id} could not be read")
@@ -112,6 +120,4 @@ def _with_accessibility(
     coverage = base.coverage.model_copy(
         update={"accessibility_checks_complete": complete, "coverage_gaps": gaps}
     )
-    return base.model_copy(
-        update={"accessibility_results": [*kept, *checks], "coverage": coverage}
-    )
+    return with_checks(base.model_copy(update={"coverage": coverage}), checks)

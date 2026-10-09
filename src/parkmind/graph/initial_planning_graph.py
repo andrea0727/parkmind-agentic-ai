@@ -6,7 +6,7 @@ Workflow::
     ELICIT -> BUILD GUEST STATE -> CONFIRM HARD CONSTRAINTS -> VALIDATE      (elicitation graph)
       -> LOAD CONTEXT -> RESOLVE GROUP -> BUILD PLAN -> CHECK
            +-> EXPLAIN -> PROPOSE -> APPROVAL                                 (check passed)
-           +-> END, nothing explained or proposed                             (check failed)
+           +-> NO VALID PLAN -> END, nothing explained or proposed            (check failed)
 
 The elicitation graph (P0-29) is reused as is; the planning chain is its
 ``downstream`` stage, compiled as a subgraph that shares ``ParkMindState`` and the
@@ -32,19 +32,26 @@ one process-wide ``SESSION_MEMORY`` (``use_cases/session_memory.py``).
 
 Resume values: ``confirm_hard_constraints`` and ``ask_missing`` as documented in
 ``elicitation_graph``; ``approval``: ``{"decision": "APPROVED" | "REJECTED",
-"rejection_reason": <RejectionReason value>}`` (``EDITED``: P0-32).
+"rejection_reason": <RejectionReason value>}`` (``EDITED``: P0-32). The approval
+interrupt payload carries ``"kind": "plan_approval"``; a resume value that does not
+fit is answered with the same interrupt plus an ``"error"``, before any side effect.
+
+A port that fails or has no data (``PlanningUnavailableError``) ends the planning
+stage with a plain-language message and no plan, instead of an unhandled exception.
 
 Nothing before an ``interrupt()`` has a side effect: LangGraph re-runs a node from
 the top on resume.
 """
 
-from collections.abc import Callable
-from datetime import UTC, datetime
+import logging
+from collections.abc import Callable, Mapping
+from datetime import datetime
 from typing import Any, cast
 from uuid import uuid4
 
+from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import interrupt
+from langgraph.types import Command, interrupt
 
 from parkmind.agents.elicit_agent import GuestInfoExtractor
 from parkmind.core.contracts import PARK_TZ, ApprovalStatus, RejectionReason
@@ -64,6 +71,7 @@ from parkmind.services.use_cases.load_context import LoadContextUseCase
 from parkmind.services.use_cases.planning_deps import (
     MAGIC_KINGDOM_PARK_ID,
     DepsFactory,
+    PlanningUnavailableError,
     default_planning_deps,
     deferred_attraction_repository,
 )
@@ -71,7 +79,15 @@ from parkmind.services.use_cases.propose_plan import ProposePlanUseCase
 from parkmind.services.use_cases.resolve_attraction_names import AttractionNameResolver
 from parkmind.services.use_cases.resolve_proposal import ResolveProposalUseCase
 
+logger = logging.getLogger(__name__)
+
 Clock = Callable[[], datetime]
+
+APPROVAL_INTERRUPT_KIND = "plan_approval"
+UNAVAILABLE_MESSAGE = (
+    "I couldn't put a plan together right now because some of the park information "
+    "I need isn't available. Nothing was proposed. Please try again in a few minutes."
+)
 
 
 def park_clock() -> datetime:
@@ -89,6 +105,32 @@ def _require_valid_candidate(state: ParkMindState) -> None:
         raise CheckNotPassedError("the candidate plan has not passed the constraint checker")
 
 
+def _guarded(node: StateNode, *, then: str | None) -> StateNode:
+    """Turn a ``PlanningUnavailableError`` into a message and the end of the stage.
+
+    A static edge would still fire after a ``Command(goto=END)``, so the node moves
+    on to ``then`` itself (``None``: a conditional edge decides).
+    """
+
+    def guarded(state: ParkMindState) -> dict[str, Any] | Command[Any]:
+        try:
+            update = node(state)
+        except PlanningUnavailableError:
+            logger.exception("planning is unavailable")
+            return Command(
+                update={
+                    "messages": [AIMessage(content=UNAVAILABLE_MESSAGE)],
+                    "candidate_plan": None,
+                    "check_result": None,
+                    "explanation": None,
+                },
+                goto=END,
+            )
+        return update if then is None else Command(update=update, goto=then)
+
+    return cast(StateNode, guarded)
+
+
 def _make_load_context_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
     use_case = LoadContextUseCase(deps_factory)
 
@@ -97,7 +139,7 @@ def _make_load_context_node(deps_factory: DepsFactory, clock: Clock) -> StateNod
         loaded = use_case.execute(
             state["thread_id"], state.get("accessibility_ref") or [], clock()
         )
-        return {"live_context": loaded.live_context}
+        return {"live_context": loaded.for_state()}
 
     return load_context
 
@@ -133,7 +175,7 @@ def _make_build_plan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
         objective = state.get("group_objective")
         if constraints is None or live_context is None or objective is None:
             raise ValueError("constraints, live context and group objective are required")
-        plan = use_case.build(
+        built = use_case.build(
             thread_id=state["thread_id"],
             constraints=constraints,
             profiles=state.get("guest_profiles") or [],
@@ -142,7 +184,12 @@ def _make_build_plan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
             objective=objective,
             now=clock(),
         )
-        return {"candidate_plan": plan, "check_result": None, "explanation": None}
+        return {
+            "candidate_plan": built.plan,
+            "live_context": built.live_context,
+            "check_result": None,
+            "explanation": None,
+        }
 
     return build_plan
 
@@ -172,7 +219,17 @@ def _make_check_plan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
 
 def _route_after_check(state: ParkMindState) -> str:
     check = state.get("check_result")
-    return "explain" if check is not None and check.valid else END
+    return "explain" if check is not None and check.valid else "no_valid_plan"
+
+
+def _no_valid_plan(state: ParkMindState) -> dict[str, Any]:
+    """Tell the user why nothing was proposed; ``check_result`` stays in state."""
+    check = state.get("check_result")
+    reasons = [v.message for v in check.violations] if check is not None else []
+    lines = ["I couldn't build a plan that meets every requirement, so nothing was proposed."]
+    lines += [f"- {reason}" for reason in reasons]
+    lines.append("You can relax a constraint (for example the must-dos or the departure time) and I'll try again.")
+    return {"messages": [AIMessage(content="\n".join(lines))], "candidate_plan": None}
 
 
 def _make_explain_node(deps_factory: DepsFactory) -> StateNode:
@@ -188,7 +245,12 @@ def _make_explain_node(deps_factory: DepsFactory) -> StateNode:
     return explain
 
 
-def _propose_plan(state: ParkMindState) -> ParkMindState:
+def _propose_plan(
+    state: ParkMindState,
+    *,
+    deps_factory: DepsFactory = default_planning_deps,
+    clock: Clock = park_clock,
+) -> ParkMindState:
     """Persist the candidate plan and open a PENDING proposal for human review.
 
     Runs once per candidate: this is the side effect that must happen before
@@ -202,17 +264,47 @@ def _propose_plan(state: ParkMindState) -> ParkMindState:
         raise ValueError("No candidate plan to propose")
     _require_valid_candidate(state)
 
-    proposal = ProposePlanUseCase().execute(
+    proposal = ProposePlanUseCase(deps_factory).execute(
         state["thread_id"],
         plan,
         proposal_id=f"prop_{uuid4().hex[:8]}",
         reason="Initial plan for the party",
         explanation=state.get("explanation") or "",
+        at=clock(),
     )
     return propose_plan_change(state, proposal)
 
 
-def _interrupt_for_approval(state: ParkMindState) -> ParkMindState:
+_NOT_DECIDABLE = frozenset({ApprovalStatus.PENDING, ApprovalStatus.SUPERSEDED})
+
+
+def _parse_approval(value: Any) -> tuple[ApprovalStatus, RejectionReason | None] | str:
+    """The decision and the rejection reason given, or why the resume value is not valid."""
+    if not isinstance(value, Mapping):
+        return "the decision must be a mapping with a 'decision' key"
+    try:
+        status = ApprovalStatus(value.get("decision"))
+    except ValueError:
+        return "'decision' must be APPROVED or REJECTED"
+    if status is ApprovalStatus.EDITED:
+        return "EDITED decisions are not supported yet (P0-32); use APPROVED or REJECTED"
+    if status in _NOT_DECIDABLE:
+        return "'decision' must be APPROVED or REJECTED"
+    raw_reason = value.get("rejection_reason")
+    if raw_reason in (None, ""):
+        return status, None
+    try:
+        return status, RejectionReason(raw_reason)
+    except ValueError:
+        return "'rejection_reason' is not a known reason"
+
+
+def _interrupt_for_approval(
+    state: ParkMindState,
+    *,
+    deps_factory: DepsFactory = default_planning_deps,
+    clock: Clock = park_clock,
+) -> ParkMindState:
     """Pause for a human decision, then resolve the proposal accordingly.
 
     Nothing here before interrupt() may have a side effect: LangGraph
@@ -222,39 +314,38 @@ def _interrupt_for_approval(state: ParkMindState) -> ParkMindState:
     services/ports/plan_repository.py).
 
     Expects the resume value to be a mapping with a ``"decision"`` key set to
-    an ApprovalStatus value (e.g. ``{"decision": "APPROVED"}``) and, for a
-    rejection, an optional ``"rejection_reason"`` RejectionReason value.
+    ``APPROVED`` or ``REJECTED`` and, for a rejection, an optional
+    ``"rejection_reason"`` RejectionReason value. Anything else is answered with the
+    same interrupt carrying an ``"error"``; the decision is only applied once valid.
     """
     plan = state.get("candidate_plan")
     proposal = state.get("proposal")
     if not plan or not proposal:
         raise ValueError("No candidate plan/proposal to approve")
 
-    decision = interrupt({"candidate_plan": plan, "proposal": proposal})
-    status = ApprovalStatus(decision["decision"])
+    payload: dict[str, Any] = {
+        "kind": APPROVAL_INTERRUPT_KIND,
+        "candidate_plan": plan,
+        "proposal": proposal,
+    }
+    while True:
+        parsed = _parse_approval(interrupt(payload))
+        if not isinstance(parsed, str):
+            break
+        payload = {**payload, "error": parsed}
+    status, given_reason = parsed
+    approved = status is ApprovalStatus.APPROVED
+    rejection_reason = None if approved else given_reason or RejectionReason.OTHER
 
-    if status is ApprovalStatus.EDITED:
-        raise NotImplementedError(
-            "EDITED approval decisions are not supported yet (see P0-32)"
-        )
-
-    rejection_reason = (
-        RejectionReason(decision["rejection_reason"])
-        if decision.get("rejection_reason")
-        else RejectionReason.OTHER
-    )
-
-    ResolveProposalUseCase().execute(
+    ResolveProposalUseCase(deps_factory).execute(
         state["thread_id"],
         proposal.proposal_id,
         status,
-        at=datetime.now(UTC),
-        rejection_reason=rejection_reason
-        if status is not ApprovalStatus.APPROVED
-        else None,
+        at=clock(),
+        rejection_reason=rejection_reason,
     )
 
-    if status is ApprovalStatus.APPROVED:
+    if rejection_reason is None:
         return approve_plan(state)
     return reject_plan(state, rejection_reason)
 
@@ -264,21 +355,29 @@ def build_planning_stage(
 ) -> Any:
     """LOAD CONTEXT -> RESOLVE GROUP -> BUILD PLAN -> CHECK -> EXPLAIN -> PROPOSE -> APPROVAL."""
     graph = StateGraph(ParkMindState)
-    graph.add_node("load_context", _make_load_context_node(deps_factory, clock))
-    graph.add_node("resolve_group", _make_resolve_group_node(deps_factory))
-    graph.add_node("build_plan", _make_build_plan_node(deps_factory, clock))
-    graph.add_node("check_plan", _make_check_plan_node(deps_factory, clock))
-    graph.add_node("explain", _make_explain_node(deps_factory))
-    graph.add_node("propose_plan", _propose_plan)
-    graph.add_node("interrupt_approval", _interrupt_for_approval)
+
+    def propose_plan(state: ParkMindState) -> ParkMindState:
+        return _propose_plan(state, deps_factory=deps_factory, clock=clock)
+
+    def interrupt_approval(state: ParkMindState) -> ParkMindState:
+        return _interrupt_for_approval(state, deps_factory=deps_factory, clock=clock)
+
+    def guarded_node(name: str, node: StateNode, then: str | None) -> None:
+        destinations = (END,) if then is None else (then, END)
+        graph.add_node(name, _guarded(node, then=then), destinations=destinations)
+
+    guarded_node("load_context", _make_load_context_node(deps_factory, clock), "resolve_group")
+    guarded_node("resolve_group", _make_resolve_group_node(deps_factory), "build_plan")
+    guarded_node("build_plan", _make_build_plan_node(deps_factory, clock), "check_plan")
+    guarded_node("check_plan", _make_check_plan_node(deps_factory, clock), None)
+    guarded_node("explain", _make_explain_node(deps_factory), "propose_plan")
+    guarded_node("propose_plan", cast(StateNode, propose_plan), "interrupt_approval")
+    graph.add_node("no_valid_plan", _no_valid_plan)
+    graph.add_node("interrupt_approval", interrupt_approval)
 
     graph.add_edge(START, "load_context")
-    graph.add_edge("load_context", "resolve_group")
-    graph.add_edge("resolve_group", "build_plan")
-    graph.add_edge("build_plan", "check_plan")
-    graph.add_conditional_edges("check_plan", _route_after_check, ["explain", END])
-    graph.add_edge("explain", "propose_plan")
-    graph.add_edge("propose_plan", "interrupt_approval")
+    graph.add_conditional_edges("check_plan", _route_after_check, ["explain", "no_valid_plan"])
+    graph.add_edge("no_valid_plan", END)
     graph.add_edge("interrupt_approval", END)
     return graph.compile()
 

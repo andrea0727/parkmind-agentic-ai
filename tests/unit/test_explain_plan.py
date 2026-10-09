@@ -47,3 +47,14 @@ def test_the_use_case_resolves_names_from_the_catalog():
     text = ExplainPlanUseCase(factory_for(make_deps())).execute(plan, CheckResult(valid=True))
 
     assert "TRON" in text
+
+
+def test_a_meal_without_a_restaurant_reads_as_lunch_not_as_a_placeholder_id():
+    from parkmind.core.contracts import StopKind
+    from parkmind.services.planning.optimizer import MEAL_VENUE_TBD
+
+    plan = factories.plan(stops=[factories.stop(node_id=MEAL_VENUE_TBD, kind=StopKind.MEAL)])
+
+    text = explain_plan(plan, CheckResult(valid=True), {})
+
+    assert "Lunch" in text and MEAL_VENUE_TBD not in text
