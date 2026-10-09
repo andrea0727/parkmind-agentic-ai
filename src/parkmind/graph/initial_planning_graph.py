@@ -1,132 +1,191 @@
 """
-Initial planning state machine.
+Initial planning graph (P0-30).
 
-Workflow: START → resolve_preferences → fetch_context → synthesize_plan →
-          propose_plan → interrupt_approval → END
+Workflow::
 
-Exposes a module-level compiled `graph` for orchestration.py to use.
+    ELICIT -> BUILD GUEST STATE -> CONFIRM HARD CONSTRAINTS -> VALIDATE      (elicitation graph)
+      -> LOAD CONTEXT -> RESOLVE GROUP -> BUILD PLAN -> CHECK
+           +-> EXPLAIN -> PROPOSE -> APPROVAL                                 (check passed)
+           +-> END, nothing explained or proposed                             (check failed)
 
-Deferred to P0-30 (load_context):
-- Wiring a single process-scoped ``SessionMemory`` through every
-  ``PostgresSessionStore`` the graph opens. Today no node in this graph
-  reads accessibility requirements from the store, so there is nothing to
-  share yet; the wiring lands with ``load_context``, which is where the
-  first read happens. The #42 Done-when criterion "the graph connects
-  exactly one process-scoped ``SessionMemory`` to each
-  ``PostgresSessionStore``" therefore moves to P0-30. See the README
-  section "Wiring the session store" for the required shape.
+The elicitation graph (P0-29) is reused as is; the planning chain is its
+``downstream`` stage, compiled as a subgraph that shares ``ParkMindState`` and the
+parent's checkpointer. Context is loaded before the group is resolved [C23].
+
+Ordering guarantees:
+
+* ``propose`` is reachable only through the valid edge of ``check``, and
+  ``_propose_plan`` re-asserts ``check_result.valid``: an unchecked or failing
+  candidate is never proposed.
+* ``explain`` runs after ``check`` and raises for an invalid result.
+* The plan is activated only by ``_interrupt_for_approval`` on the resumed,
+  human-driven path (invariant: the LLM never activates a plan).
+
+Nodes call use cases in-process; the use cases take their ports from a
+``DepsFactory`` (Postgres, the notice corpus and the snapshot collector by
+default), so no MCP server is involved and the graph runs with it stopped.
+
+Privacy [C19]: state holds only ``accessibility_ref`` (guest ids). Every node that
+needs requirements reads them from the SessionStore through its use case, keyed by
+``thread_id``. ``load_context`` is the first node to do so. All stores share the
+one process-wide ``SESSION_MEMORY`` (``use_cases/session_memory.py``).
+
+Resume values: ``confirm_hard_constraints`` and ``ask_missing`` as documented in
+``elicitation_graph``; ``approval``: ``{"decision": "APPROVED" | "REJECTED",
+"rejection_reason": <RejectionReason value>}`` (``EDITED``: P0-32).
+
+Nothing before an ``interrupt()`` has a side effect: LangGraph re-runs a node from
+the top on resume.
 """
 
+from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any, cast
 from uuid import uuid4
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
-from parkmind.agents.plan_synthesis_agent import synthesize_plan
-from parkmind.agents.preference_resolver_agent import resolve_guest_preferences
-from parkmind.core.contracts import (
-    PARK_TZ,
-    ApprovalStatus,
-    CoverageReport,
-    LiveContext,
-    RejectionReason,
-)
+from parkmind.agents.elicit_agent import GuestInfoExtractor
+from parkmind.core.contracts import PARK_TZ, ApprovalStatus, RejectionReason
 from parkmind.graph.checkpointing import default_checkpointer
+from parkmind.graph.elicitation_graph import (
+    StateNode,
+    build_elicitation_graph,
+    ensure_confirmed,
+)
 from parkmind.graph.state import ParkMindState
 from parkmind.graph.state_helpers import approve_plan, propose_plan_change, reject_plan
-from parkmind.services.use_cases.load_live_context import LoadLiveContextUseCase
+from parkmind.services.use_cases.accessibility_intake import AccessibilityIntakeUseCase
+from parkmind.services.use_cases.build_plan import BuildPlanUseCase
+from parkmind.services.use_cases.check_plan import CheckPlanUseCase
+from parkmind.services.use_cases.explain_plan import ExplainPlanUseCase
+from parkmind.services.use_cases.load_context import LoadContextUseCase
+from parkmind.services.use_cases.planning_deps import (
+    MAGIC_KINGDOM_PARK_ID,
+    DepsFactory,
+    default_planning_deps,
+    deferred_attraction_repository,
+)
 from parkmind.services.use_cases.propose_plan import ProposePlanUseCase
+from parkmind.services.use_cases.resolve_attraction_names import AttractionNameResolver
 from parkmind.services.use_cases.resolve_proposal import ResolveProposalUseCase
 
-# Magic Kingdom, Walt Disney World (themeparks.wiki entity id + coordinates).
-_DEFAULT_PARK_ID = "75ea578a-adc8-4116-a54d-dccb60765ef9"
-_DEFAULT_LATITUDE = 28.4177
-_DEFAULT_LONGITUDE = -81.5812
+Clock = Callable[[], datetime]
 
 
-def build_initial_planning_graph(checkpointer=None):
-    """Build the initial planning orchestration graph.
-
-    MVP version:
-    - Resolve guest preferences
-    - Fetch live context (weather & attractions)
-    - Generate plan
-    - Persist it and open a PENDING proposal
-    - Interrupt for approval; resolve the proposal and activate on approval
-
-    Future: Includes constraint validation (ConstraintChecker [P0-20]),
-    hallucination checks, and real-time replanning.
-    """
-    graph = StateGraph(ParkMindState)
-
-    # Nodes
-    graph.add_node("resolve_preferences", resolve_guest_preferences)
-    graph.add_node("fetch_context", _fetch_context_from_apis)
-    graph.add_node("synthesize_plan", synthesize_plan)
-    graph.add_node("propose_plan", _propose_plan)
-    graph.add_node("interrupt_approval", _interrupt_for_approval)
-
-    # Edges
-    graph.add_edge(START, "resolve_preferences")
-    graph.add_edge("resolve_preferences", "fetch_context")
-    graph.add_edge("fetch_context", "synthesize_plan")
-    graph.add_edge("synthesize_plan", "propose_plan")
-    graph.add_edge("propose_plan", "interrupt_approval")
-    graph.add_edge("interrupt_approval", END)
-
-    return graph.compile(checkpointer=checkpointer or default_checkpointer())
+def park_clock() -> datetime:
+    """Timezone-aware 'now' in park time; core code only ever receives it injected."""
+    return datetime.now(PARK_TZ)
 
 
-async def _fetch_context_from_apis(state: ParkMindState) -> ParkMindState:
-    """Fetch live weather & attractions and assemble a LiveContext snapshot."""
-    constraints = state.get("constraints")
-    if not constraints:
-        raise ValueError("Constraints must be set before fetching context")
+class CheckNotPassedError(RuntimeError):
+    """A plan reached a step that requires a passing ConstraintChecker result."""
 
-    use_case = LoadLiveContextUseCase(
-        park_id=_DEFAULT_PARK_ID,
-        latitude=_DEFAULT_LATITUDE,
-        longitude=_DEFAULT_LONGITUDE,
-    )
-    today = datetime.now(PARK_TZ).date()
-    weather = use_case.fetch_weather(start_date=today, end_date=today)
-    attractions = use_case.fetch_attractions()
 
-    # Honest coverage: only catalog + weather are available from this loader.
-    # No live waits, statuses, showtimes, or accessibility checks yet [P0-23].
-    coverage_gaps = []
-    if not weather:
-        coverage_gaps.append("weather")
-    if not attractions:
-        coverage_gaps.append("required_attractions")
+def _require_valid_candidate(state: ParkMindState) -> None:
+    check = state.get("check_result")
+    if check is None or not check.valid:
+        raise CheckNotPassedError("the candidate plan has not passed the constraint checker")
 
-    # snapshot_id is a placeholder uuid until P0-30 wires this node to
-    # SnapshotRepository via SnapshotCollector. On purpose NOT the
-    # collector's deterministic key snapshot_id_for(park, now): that key
-    # would silently collide with a real, differently-sourced row the
-    # collector persisted in the same 5-min window, and Provenance would
-    # then point at a snapshot whose LiveContext is not what this node
-    # observed. A dangling uuid is honest; a colliding real key is not.
-    state["live_context"] = LiveContext(
-        snapshot_id=uuid4().hex,
-        retrieved_at=datetime.now(UTC),
-        waits={},
-        statuses={},
-        showtimes={},
-        weather=weather,
-        accessibility_results=[],
-        coverage=CoverageReport(
-            required_attractions_covered=bool(attractions),
-            required_shows_covered=False,
-            weather_covered=bool(weather),
-            accessibility_checks_complete=False,
-            coverage_gaps=coverage_gaps,
-        ),
-        tool_trace=[],
-    )
 
-    return state
+def _make_load_context_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
+    use_case = LoadContextUseCase(deps_factory)
+
+    def load_context(state: ParkMindState) -> dict[str, Any]:
+        ensure_confirmed(state)
+        loaded = use_case.execute(
+            state["thread_id"], state.get("accessibility_ref") or [], clock()
+        )
+        return {"live_context": loaded.live_context}
+
+    return load_context
+
+
+def _make_resolve_group_node(deps_factory: DepsFactory) -> StateNode:
+    use_case = BuildPlanUseCase(deps_factory)
+
+    def resolve_group(state: ParkMindState) -> dict[str, Any]:
+        ensure_confirmed(state)
+        constraints = state["constraints"]
+        live_context = state.get("live_context")
+        if constraints is None or live_context is None:
+            raise ValueError("constraints and live context must be loaded before resolving")
+        objective = use_case.resolve_group(
+            thread_id=state["thread_id"],
+            constraints=constraints,
+            profiles=state.get("guest_profiles") or [],
+            accessibility_ref=state.get("accessibility_ref") or [],
+            live_context=live_context,
+        )
+        return {"group_objective": objective}
+
+    return resolve_group
+
+
+def _make_build_plan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
+    use_case = BuildPlanUseCase(deps_factory)
+
+    def build_plan(state: ParkMindState) -> dict[str, Any]:
+        ensure_confirmed(state)
+        constraints = state["constraints"]
+        live_context = state.get("live_context")
+        objective = state.get("group_objective")
+        if constraints is None or live_context is None or objective is None:
+            raise ValueError("constraints, live context and group objective are required")
+        plan = use_case.build(
+            thread_id=state["thread_id"],
+            constraints=constraints,
+            profiles=state.get("guest_profiles") or [],
+            accessibility_ref=state.get("accessibility_ref") or [],
+            live_context=live_context,
+            objective=objective,
+            now=clock(),
+        )
+        return {"candidate_plan": plan, "check_result": None, "explanation": None}
+
+    return build_plan
+
+
+def _make_check_plan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
+    use_case = CheckPlanUseCase(deps_factory)
+
+    def check_plan(state: ParkMindState) -> dict[str, Any]:
+        ensure_confirmed(state)
+        plan = state.get("candidate_plan")
+        constraints = state["constraints"]
+        live_context = state.get("live_context")
+        if plan is None or constraints is None or live_context is None:
+            raise ValueError("a candidate plan, constraints and live context are required")
+        result = use_case.execute(
+            thread_id=state["thread_id"],
+            plan=plan,
+            constraints=constraints,
+            accessibility_ref=state.get("accessibility_ref") or [],
+            live_context=live_context,
+            now=clock(),
+        )
+        return {"check_result": result}
+
+    return check_plan
+
+
+def _route_after_check(state: ParkMindState) -> str:
+    check = state.get("check_result")
+    return "explain" if check is not None and check.valid else END
+
+
+def _make_explain_node(deps_factory: DepsFactory) -> StateNode:
+    use_case = ExplainPlanUseCase(deps_factory)
+
+    def explain(state: ParkMindState) -> dict[str, Any]:
+        plan = state.get("candidate_plan")
+        check = state.get("check_result")
+        if plan is None or check is None:
+            raise ValueError("a checked candidate plan is required")
+        return {"explanation": use_case.execute(plan, check)}
+
+    return explain
 
 
 def _propose_plan(state: ParkMindState) -> ParkMindState:
@@ -135,23 +194,20 @@ def _propose_plan(state: ParkMindState) -> ParkMindState:
     Runs once per candidate: this is the side effect that must happen before
     the interrupt, not inside the same node as interrupt() (see
     _interrupt_for_approval -- LangGraph re-executes a node from the top on
-    every resume).
-
-    TODO [P0-20]: gate this on ConstraintChecker passing once
-    ``CheckPlanUseCase.execute`` is implemented (see
-    ``services/use_cases/check_plan.py``, still ``NotImplementedError``).
-    Today an unchecked candidate is still sent for approval.
+    every resume). Only a plan that passed the ConstraintChecker, with its
+    explanation, may be proposed.
     """
     plan = state.get("candidate_plan")
     if not plan:
         raise ValueError("No candidate plan to propose")
+    _require_valid_candidate(state)
 
     proposal = ProposePlanUseCase().execute(
         state["thread_id"],
         plan,
         proposal_id=f"prop_{uuid4().hex[:8]}",
         reason="Initial plan for the party",
-        explanation="First candidate generated from constraints and live context.",
+        explanation=state.get("explanation") or "",
     )
     return propose_plan_change(state, proposal)
 
@@ -203,5 +259,51 @@ def _interrupt_for_approval(state: ParkMindState) -> ParkMindState:
     return reject_plan(state, rejection_reason)
 
 
-# Compiled graph for use in orchestration
-graph = build_initial_planning_graph()
+def build_planning_stage(
+    deps_factory: DepsFactory = default_planning_deps, clock: Clock = park_clock
+) -> Any:
+    """LOAD CONTEXT -> RESOLVE GROUP -> BUILD PLAN -> CHECK -> EXPLAIN -> PROPOSE -> APPROVAL."""
+    graph = StateGraph(ParkMindState)
+    graph.add_node("load_context", _make_load_context_node(deps_factory, clock))
+    graph.add_node("resolve_group", _make_resolve_group_node(deps_factory))
+    graph.add_node("build_plan", _make_build_plan_node(deps_factory, clock))
+    graph.add_node("check_plan", _make_check_plan_node(deps_factory, clock))
+    graph.add_node("explain", _make_explain_node(deps_factory))
+    graph.add_node("propose_plan", _propose_plan)
+    graph.add_node("interrupt_approval", _interrupt_for_approval)
+
+    graph.add_edge(START, "load_context")
+    graph.add_edge("load_context", "resolve_group")
+    graph.add_edge("resolve_group", "build_plan")
+    graph.add_edge("build_plan", "check_plan")
+    graph.add_conditional_edges("check_plan", _route_after_check, ["explain", END])
+    graph.add_edge("explain", "propose_plan")
+    graph.add_edge("propose_plan", "interrupt_approval")
+    graph.add_edge("interrupt_approval", END)
+    return graph.compile()
+
+
+def build_initial_planning_graph(
+    extractor: GuestInfoExtractor | None = None,
+    intake: AccessibilityIntakeUseCase | None = None,
+    checkpointer: Any = None,
+    *,
+    deps_factory: DepsFactory = default_planning_deps,
+    clock: Clock = park_clock,
+    names: AttractionNameResolver | None = None,
+) -> Any:
+    """Compile the end-to-end initial planning graph.
+
+    Nothing is opened here: connections and provider clients are created per node
+    by ``deps_factory``, so building the graph needs no database or network.
+    """
+    resolver = names or AttractionNameResolver(
+        deferred_attraction_repository(deps_factory), MAGIC_KINGDOM_PARK_ID
+    )
+    return build_elicitation_graph(
+        extractor,
+        intake,
+        checkpointer or default_checkpointer(),
+        cast(StateNode, build_planning_stage(deps_factory, clock)),
+        names=resolver,
+    )
