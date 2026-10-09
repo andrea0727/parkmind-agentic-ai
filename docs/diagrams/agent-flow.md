@@ -1,41 +1,41 @@
-# Flujo del grafo de agentes (ParkMind)
+# Agent graph flow (ParkMind)
 
-Verde = implementado, naranja = parcial (placeholder), amarillo punteado = estado objetivo.
+Green = implemented, orange = partial (placeholder), dashed yellow = target state.
 
-Hay tres diagramas: el grafo de elicitación (ya implementado), el grafo de planificación **tal como está hoy** y el flujo **objetivo** según §35 del baseline. El orden del grafo de planificación actual es provisional: P0-30 lo reemplaza por el orden de §35.
+There are four diagrams: the elicitation graph (already implemented), the initial planning graph **as it is today**, the **target** initial planning flow per §35 of the baseline, and the replanning flow per §36. The order of the current planning graph is provisional: P0-30 replaces it with the §35 order.
 
-## 1. Elicitación (implementado, #78)
+## 1. Elicitation (implemented, #78)
 
-El LLM solo propone. Una restricción dura nueva no llega al checker sin que una persona la confirme, y la accesibilidad exige consentimiento y `retention_policy` (por defecto `session_only`).
+The LLM only proposes. A new hard constraint does not reach the checker until a person confirms it, and accessibility requires consent and a `retention_policy` (default `session_only`).
 
 ```mermaid
 flowchart TD
-  S([START]) --> EL["elicit<br/>extracción estructurada (AnthropicExtractor)"]:::impl
-  EL -- falta información --> AM["ask_missing<br/>interrupt()"]:::impl
+  S([START]) --> EL["elicit<br/>structured extraction (AnthropicExtractor)"]:::impl
+  EL -- missing information --> AM["ask_missing<br/>interrupt()"]:::impl
   AM --> EL
-  EL -- restricciones extraídas --> CH{"confirm_hard_constraints<br/>interrupt(): eco + consentimiento + retención"}:::impl
-  CH -- corrige --> EL
-  CH -- confirma --> VA["validate_constraints<br/>único que escribe constraints_valid=True"]:::impl
-  VA --> DS["downstream<br/>placeholder: aquí se engancha load_context [P0-30]"]:::partial
+  EL -- constraints extracted --> CH{"confirm_hard_constraints<br/>interrupt(): echo + consent + retention"}:::impl
+  CH -- corrects --> EL
+  CH -- confirms --> VA["validate_constraints<br/>only node that writes constraints_valid=True"]:::impl
+  VA --> DS["downstream<br/>placeholder: load_context hooks in here [P0-30]"]:::partial
   DS --> Z([END])
 
   classDef impl fill:#d5e8d4,stroke:#82b366,color:#000
   classDef partial fill:#ffe6cc,stroke:#d79b00,color:#000
 ```
 
-## 2. Planificación inicial: estado actual
+## 2. Initial planning: current state
 
-Este grafo todavía no está conectado al de elicitación. Su orden es provisional.
+This graph is not yet connected to the elicitation graph. Its order is provisional.
 
 ```mermaid
 flowchart TD
-  S([START]) --> A["resolve_preferences<br/>promedio placeholder"]:::partial
-  A --> B["fetch_context<br/>LiveContext sin esperas"]:::partial
-  B --> C["synthesize_plan<br/>plan vacío placeholder"]:::partial
-  C --> D["propose_plan<br/>Proposal PENDING (gate del checker pendiente)"]:::partial
-  D --> E{"interrupt_approval<br/>decisión humana"}:::impl
-  E -- aprobar --> F["Plan ACTIVO"]:::impl
-  E -- rechazar --> G["Proposal RECHAZADA"]:::impl
+  S([START]) --> A["resolve_preferences<br/>placeholder average"]:::partial
+  A --> B["fetch_context<br/>LiveContext without waits"]:::partial
+  B --> C["synthesize_plan<br/>empty placeholder plan"]:::partial
+  C --> D["propose_plan<br/>PENDING Proposal (checker gate pending)"]:::partial
+  D --> E{"interrupt_approval<br/>human decision"}:::impl
+  E -- approve --> F["ACTIVE Plan"]:::impl
+  E -- reject --> G["REJECTED Proposal"]:::impl
   F --> Z([END])
   G --> Z
 
@@ -43,9 +43,9 @@ flowchart TD
   classDef partial fill:#ffe6cc,stroke:#d79b00,color:#000
 ```
 
-## 3. Planificación inicial: objetivo (§35)
+## 3. Initial planning: target (§35)
 
-`RESOLVE GROUP OBJECTIVE` va **después** de `LOAD CONTEXT` porque necesita `accessibility_results` (C23). Hoy `resolve_preferences` va primero; reordenarlo es parte de P0-30.
+`RESOLVE GROUP OBJECTIVE` comes **after** `LOAD CONTEXT` because it needs `accessibility_results` (C23). Today `resolve_preferences` runs first; reordering it is part of P0-30.
 
 ```mermaid
 flowchart TD
@@ -56,14 +56,14 @@ flowchart TD
   LC --> GO["RESOLVE GROUP OBJECTIVE"]:::target
   GO --> SO["SYNTHESIZE / SOLVE<br/>BuildPlan: resolver + forecast + optimizer"]:::target
   SO --> CK{"CHECK<br/>ConstraintChecker"}:::target
-  CK -- viola reglas --> RS["RE-SOLVE [P0-21]"]:::target
+  CK -- violates rules --> RS["RE-SOLVE [P0-21]"]:::target
   RS --> CK
-  CK -- válido --> EX["EXPLAIN<br/>Concierge LLM"]:::target
-  EX --> PR["PROPOSE<br/>Proposal PENDING"]:::target
-  PR --> IN{"INTERRUPT<br/>decisión humana"}:::impl
-  IN -- aprobar --> OK["Plan ACTIVO"]:::impl
-  IN -- rechazar --> RJ["Proposal RECHAZADA"]:::impl
-  IN -- editar --> ED["EDIT<br/>ajuste humano"]:::target
+  CK -- valid --> EX["EXPLAIN<br/>Concierge LLM"]:::target
+  EX --> PR["PROPOSE<br/>PENDING Proposal"]:::target
+  PR --> IN{"INTERRUPT<br/>human decision"}:::impl
+  IN -- approve --> OK["ACTIVE Plan"]:::impl
+  IN -- reject --> RJ["REJECTED Proposal"]:::impl
+  IN -- edit --> ED["EDIT<br/>human adjustment"]:::target
   ED --> CK
   OK --> Z([END])
   RJ --> Z
@@ -72,26 +72,26 @@ flowchart TD
   classDef target fill:#fff2cc,stroke:#d6b656,stroke-dasharray:5 5,color:#000
 ```
 
-## 4. Replanning (§36, objetivo)
+## 4. Replanning (§36, target)
 
-Hoy `replanning_graph.py` solo tiene el docstring con el flujo y lanza `NotImplementedError`. `RESOLVE GROUP OBJECTIVE` se vuelve a ejecutar con el contexto fresco, y `RE-SOLVE` forma parte del contrato.
+Today `replanning_graph.py` only has the docstring describing the flow and raises `NotImplementedError`. `RESOLVE GROUP OBJECTIVE` runs again with fresh context, and `RE-SOLVE` is part of the contract.
 
 ```mermaid
 flowchart TD
-  EV[["Evento: espera, clima, cierre"]]:::target --> EP["EVENT POLICY"]:::target
-  EP --> LC["LOAD CONTEXT<br/>contexto fresco"]:::target
-  LC --> GO["RESOLVE GROUP OBJECTIVE<br/>re-ejecutado"]:::target
+  EV[["Event: wait time, weather, closure"]]:::target --> EP["EVENT POLICY"]:::target
+  EP --> LC["LOAD CONTEXT<br/>fresh context"]:::target
+  LC --> GO["RESOLVE GROUP OBJECTIVE<br/>re-run"]:::target
   GO --> RP["REPLAN"]:::target
   RP --> CP{"CHECK PLAN"}:::target
-  CP -- viola reglas --> RS["RE-SOLVE [P0-21]"]:::target
+  CP -- violates rules --> RS["RE-SOLVE [P0-21]"]:::target
   RS --> CP
-  CP -- válido --> PD["PLAN DIFF"]:::impl
+  CP -- valid --> PD["PLAN DIFF"]:::impl
   PD --> EX["EXPLAIN<br/>Concierge LLM"]:::target
   EX --> PR["PROPOSE"]:::target
-  PR --> IN{"INTERRUPT<br/>decisión humana"}:::impl
+  PR --> IN{"INTERRUPT<br/>human decision"}:::impl
 
   classDef impl fill:#d5e8d4,stroke:#82b366,color:#000
   classDef target fill:#fff2cc,stroke:#d6b656,stroke-dasharray:5 5,color:#000
 ```
 
-`PLAN DIFF` aparece en verde porque `diff_plans` ya existe; el nodo del grafo que lo invoca sigue pendiente.
+`PLAN DIFF` is green because `diff_plans` already exists; the graph node that calls it is still pending.

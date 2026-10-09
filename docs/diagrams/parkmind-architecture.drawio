@@ -1,117 +1,355 @@
-<mxfile host="app.diagrams.net"><diagram id="parkmind-arch" name="ParkMind arquitectura"><mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2000" pageHeight="1280" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/>
-<mxCell id="zUser" value="Usuario / interfaz" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;dashed=1;dashPattern=8 4;verticalAlign=top;fontStyle=1;strokeColor=#666666;" vertex="1" parent="1"><mxGeometry x="20" y="40" width="200" height="1160" as="geometry"/></mxCell>
-<mxCell id="zOrch" value="Orquestaci&#243;n (LangGraph + checkpointing)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;dashed=1;dashPattern=8 4;verticalAlign=top;fontStyle=1;strokeColor=#666666;" vertex="1" parent="1"><mxGeometry x="260" y="40" width="400" height="1160" as="geometry"/></mxCell>
-<mxCell id="zUC" value="Casos de uso (capa de aplicaci&#243;n)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;dashed=1;dashPattern=8 4;verticalAlign=top;fontStyle=1;strokeColor=#666666;" vertex="1" parent="1"><mxGeometry x="700" y="40" width="300" height="1160" as="geometry"/></mxCell>
-<mxCell id="zDom" value="N&#250;cleo de dominio (puro: sin LLM ni I/O)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;dashed=1;dashPattern=8 4;verticalAlign=top;fontStyle=1;strokeColor=#666666;" vertex="1" parent="1"><mxGeometry x="1040" y="40" width="300" height="700" as="geometry"/></mxCell>
-<mxCell id="zPorts" value="Puertos (interfaces)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;dashed=1;dashPattern=8 4;verticalAlign=top;fontStyle=1;strokeColor=#666666;" vertex="1" parent="1"><mxGeometry x="1380" y="40" width="240" height="1160" as="geometry"/></mxCell>
-<mxCell id="zExt" value="Infraestructura / externos" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;dashed=1;dashPattern=8 4;verticalAlign=top;fontStyle=1;strokeColor=#666666;" vertex="1" parent="1"><mxGeometry x="1660" y="40" width="280" height="1160" as="geometry"/></mxCell>
-<mxCell id="guest" value="Grupo de invitados" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1"><mxGeometry x="50" y="100" width="140" height="50" as="geometry"/></mxCell>
-<mxCell id="ui" value="UI Streamlit (ui/app.py)&lt;br&gt;stub &#8594; objetivo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" vertex="1" parent="1"><mxGeometry x="50" y="200" width="140" height="60" as="geometry"/></mxCell>
-<mxCell id="api" value="API FastAPI (P0-35)&lt;br&gt;src/parkmind/api/&lt;br&gt;objetivo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" vertex="1" parent="1"><mxGeometry x="50" y="310" width="140" height="70" as="geometry"/></mxCell>
-<mxCell id="l1" value="Grafo de elicitaci&#243;n (#78)" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="300" y="78" width="220" height="20" as="geometry"/></mxCell>
-<mxCell id="el" value="elicit&lt;br&gt;(extracci&#243;n estructurada)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="300" y="100" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="am" value="ask_missing&lt;br&gt;interrupt() si falta informaci&#243;n" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="300" y="156" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="ch" value="confirm_hard_constraints&lt;br&gt;interrupt(): eco + consentimiento" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="300" y="212" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="va" value="validate_constraints" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="300" y="268" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="l2" value="Grafo de planificaci&#243;n inicial" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="300" y="324" width="220" height="20" as="geometry"/></mxCell>
-<mxCell id="g1" value="resolve_preferences&lt;br&gt;(promedio placeholder)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1"><mxGeometry x="300" y="346" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="g2" value="fetch_context&lt;br&gt;(esperas vac&#237;as)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1"><mxGeometry x="300" y="402" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="g3" value="synthesize_plan&lt;br&gt;(plan vac&#237;o placeholder)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1"><mxGeometry x="300" y="458" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="g4" value="propose_plan&lt;br&gt;(gate checker TODO)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1"><mxGeometry x="300" y="514" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="g5" value="interrupt_approval&lt;br&gt;interrupt() humano" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="300" y="570" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="l3" value="Replanning y agentes (objetivo)" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="300" y="626" width="220" height="20" as="geometry"/></mxCell>
-<mxCell id="gR" value="replanning_graph&lt;br&gt;evento &#8594; replan &#8594; diff" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" vertex="1" parent="1"><mxGeometry x="300" y="648" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="gC" value="Concierge Agent (LLM)&lt;br&gt;explica y conversa" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" vertex="1" parent="1"><mxGeometry x="300" y="704" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="gT" value="Tools / MCP server&lt;br&gt;data, knowledge, planner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" vertex="1" parent="1"><mxGeometry x="300" y="760" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="note" value="Nota: el orden del grafo de planificaci&#243;n es provisional. El baseline (&#167;35) pone RESOLVE GROUP OBJECTIVE despu&#233;s de LOAD CONTEXT, porque necesita accessibility_results (C23); P0-30 lo reordena. Ver agent-flow.md." style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;" vertex="1" parent="1"><mxGeometry x="285" y="830" width="370" height="110" as="geometry"/></mxCell>
-<mxCell id="uNames" value="ResolveAttractionNames" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="740" y="160" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="uIntake" value="AccessibilityIntake&lt;br&gt;(staging + commit con consentimiento)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="740" y="216" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="uRG" value="ResolveGroupPreferences" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="740" y="300" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="uSP" value="ScorePreferences" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="740" y="356" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="uBP" value="BuildPlan&lt;br&gt;(compone resolver + forecast + optimizer)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" vertex="1" parent="1"><mxGeometry x="740" y="412" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="uCP" value="CheckPlan&lt;br&gt;(hoy NotImplementedError)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" vertex="1" parent="1"><mxGeometry x="740" y="540" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="uRP" value="Replan&lt;br&gt;(hoy NotImplementedError)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" vertex="1" parent="1"><mxGeometry x="740" y="612" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="uLL" value="LoadLiveContext" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="740" y="780" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="uCS" value="CollectSnapshot [P0-11]&lt;br&gt;/live + /schedule + clima" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="740" y="836" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="uLP" value="LoadGuestProfiles" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="740" y="892" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="uPP" value="ProposePlan (Proposal PENDING)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="740" y="948" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="uRS" value="ResolveProposal (aprobar / rechazar)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="740" y="1004" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="uFC" value="build_forecast_service&lt;br&gt;(forecast.py, desde snapshots)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="740" y="1060" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="uCA" value="check_accessibility [P0-26a]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="740" y="1116" width="220" height="44" as="geometry"/></mxCell>
-<mxCell id="d1" value="GroupPreferenceResolver&lt;br&gt;(objetivo grupal con equidad)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="1060" y="300" width="260" height="44" as="geometry"/></mxCell>
-<mxCell id="d2" value="PreferenceScorer&lt;br&gt;(utilidad por invitado + fairness)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="1060" y="356" width="260" height="44" as="geometry"/></mxCell>
-<mxCell id="d4" value="GreedyInsertionOptimizer + ParkGraph&lt;br&gt;(esperas previstas por parada)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="1060" y="412" width="260" height="44" as="geometry"/></mxCell>
-<mxCell id="d3" value="ForecastService (puro)&lt;br&gt;API &#8594; hist&#243;rico &#8594; snapshot actual" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="1060" y="468" width="260" height="44" as="geometry"/></mxCell>
-<mxCell id="d5" value="ConstraintChecker" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="1060" y="540" width="260" height="44" as="geometry"/></mxCell>
-<mxCell id="d6" value="diff_plans (PlanDiff)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="1060" y="612" width="260" height="44" as="geometry"/></mxCell>
-<mxCell id="d7" value="EventDetector + Replanner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" vertex="1" parent="1"><mxGeometry x="1060" y="668" width="260" height="44" as="geometry"/></mxCell>
-<mxCell id="pLLM" value="GuestInfoExtractor&lt;br&gt;(puerto del extractor LLM)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="1400" y="100" width="200" height="44" as="geometry"/></mxCell>
-<mxCell id="pRoute" value="RoutingPort" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="1400" y="412" width="200" height="44" as="geometry"/></mxCell>
-<mxCell id="pPark" value="ParkDataPort + WeatherPort" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="1400" y="780" width="200" height="44" as="geometry"/></mxCell>
-<mxCell id="pRepo" value="Repositorios&lt;br&gt;Snapshot, Plan, Proposal, Guest, Profile, Session, Provenance&#8230;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="1400" y="892" width="200" height="110" as="geometry"/></mxCell>
-<mxCell id="pKnow" value="KnowledgeStore&lt;br&gt;(avisos de seguridad)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="1400" y="1116" width="200" height="44" as="geometry"/></mxCell>
-<mxCell id="eLLM" value="Anthropic (Claude)&lt;br&gt;elicit hoy; explain = objetivo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="1680" y="100" width="240" height="44" as="geometry"/></mxCell>
-<mxCell id="eLF" value="Langfuse (observabilidad)&lt;br&gt;en pyproject, sin uso en src" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" vertex="1" parent="1"><mxGeometry x="1680" y="160" width="240" height="44" as="geometry"/></mxCell>
-<mxCell id="eRoute" value="RoutingClient (local, sin red)&lt;br&gt;tabla curada + Haversine" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="1680" y="412" width="240" height="44" as="geometry"/></mxCell>
-<mxCell id="eTP" value="ThemeParks.wiki&lt;br&gt;cat&#225;logo, esperas, horarios" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="1680" y="780" width="240" height="44" as="geometry"/></mxCell>
-<mxCell id="eOM" value="Open-Meteo (clima)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="1680" y="836" width="240" height="44" as="geometry"/></mxCell>
-<mxCell id="eDB" value="PostgreSQL 16 + Alembic&lt;br&gt;planes, proposals, snapshots,&lt;br&gt;perfiles, sesiones, provenance" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="1680" y="892" width="240" height="110" as="geometry"/></mxCell>
-<mxCell id="eKS" value="KnowledgeStore en memoria&lt;br&gt;+ safety_notices" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="1680" y="1116" width="240" height="44" as="geometry"/></mxCell>
-<mxCell id="lg0" value="Implementado" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="260" y="1200" width="160" height="36" as="geometry"/></mxCell>
-<mxCell id="lg1" value="Parcial (placeholder)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1"><mxGeometry x="440" y="1200" width="170" height="36" as="geometry"/></mxCell>
-<mxCell id="lg2" value="Estado objetivo (pendiente)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" vertex="1" parent="1"><mxGeometry x="630" y="1200" width="190" height="36" as="geometry"/></mxCell>
-<mxCell id="lg3" value="Externo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="840" y="1200" width="120" height="36" as="geometry"/></mxCell>
-<mxCell id="lg4" value="Gris: actor / sin estado" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1"><mxGeometry x="980" y="1200" width="170" height="36" as="geometry"/></mxCell>
-<mxCell id="x1" value="usa" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="guest" target="ui"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="x2" value="HTTP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="ui" target="api"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="x3" value="mensajes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="api" target="el"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="c1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;startArrow=block;" edge="1" parent="1" source="el" target="am"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="c2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="el" target="ch"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="c3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="ch" target="va"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="c4" value="P0-30: hoy sin conectar" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="va" target="g1"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="c5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="g1" target="g2"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="c6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="g2" target="g3"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="c7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="g3" target="g4"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="c8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="g4" target="g5"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="c9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="gC" target="gT"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="n1" value="ids de atracciones" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="el" target="uNames"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="n2" value="commit" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="ch" target="uIntake"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="n3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="g1" target="uLP"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="n4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="g2" target="uLL"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="n5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="g3" target="uBP"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="n6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="g4" target="uPP"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="n7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="g5" target="uRS"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="n8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="gR" target="uRP"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="u1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="uRG" target="d1"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="u2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="uSP" target="d2"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="u3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="uBP" target="d1"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="u4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="uBP" target="d4"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="u5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="uBP" target="d3"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="u6" value="alimenta" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="uFC" target="d3"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="u7" value="gate" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="uPP" target="d5"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="u8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="uCP" target="d5"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="u9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="uRP" target="d6"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="u10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="uRP" target="d7"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="q1" value="objetivo" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="d1" target="d2"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="q2" value="satisfacci&#243;n" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="d2" target="d4"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="q3" value="esperas previstas" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="d3" target="d4"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="r1" value="usa" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="d4" target="pRoute"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="r2" value="intensidad" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="d2" target="pKnow"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="r3" value="extrae" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="el" target="pLLM"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="p1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="uLL" target="pPark"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="p2" value="llama a la API" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="uCS" target="pPark"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="p3" value="escribe snapshots" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="uCS" target="pRepo"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="p4" value="lee perfiles" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="uLP" target="pRepo"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="p5" value="persiste plan + proposal" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="uPP" target="pRepo"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="p6" value="registra decisi&#243;n" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="uRS" target="pRepo"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="p7" value="lee snapshots" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="uFC" target="pRepo"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="p8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="uCA" target="pKnow"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="p9" value="SessionStore" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="uIntake" target="pRepo"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a1" value="adaptador" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="pLLM" target="eLLM"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a2" value="adaptador" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="pRoute" target="eRoute"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a3" value="httpx + retry" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="pPark" target="eTP"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a4" value="httpx + retry" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="pPark" target="eOM"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a5" value="adaptador" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="pRepo" target="eDB"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a6" value="adaptador" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" edge="1" parent="1" source="pKnow" target="eKS"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a7" value="trazas" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" edge="1" parent="1" source="eLLM" target="eLF"><mxGeometry relative="1" as="geometry"/></mxCell>
-</root></mxGraphModel></diagram></mxfile>
+<mxfile host="65bd71144e">
+    <diagram id="parkmind-arch" name="ParkMind architecture">
+        <mxGraphModel dx="1151" dy="982" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2000" pageHeight="1280" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="zUser" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;dashed=1;dashPattern=8 4;verticalAlign=top;fontStyle=1;strokeColor=#666666;" value="User / interface" vertex="1">
+                    <mxGeometry height="1160" width="200" x="20" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="zOrch" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;dashed=1;dashPattern=8 4;verticalAlign=top;fontStyle=1;strokeColor=#666666;" value="Orchestration (LangGraph + checkpointing)" vertex="1">
+                    <mxGeometry height="1160" width="400" x="260" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="zUC" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;dashed=1;dashPattern=8 4;verticalAlign=top;fontStyle=1;strokeColor=#666666;" value="Use cases (application layer)" vertex="1">
+                    <mxGeometry height="1160" width="300" x="700" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="zDom" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;dashed=1;dashPattern=8 4;verticalAlign=top;fontStyle=1;strokeColor=#666666;" value="Domain core (pure: no LLM, no I/O)" vertex="1">
+                    <mxGeometry height="700" width="300" x="1040" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="zPorts" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;dashed=1;dashPattern=8 4;verticalAlign=top;fontStyle=1;strokeColor=#666666;" value="Ports (interfaces)" vertex="1">
+                    <mxGeometry height="1160" width="240" x="1380" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="zExt" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;dashed=1;dashPattern=8 4;verticalAlign=top;fontStyle=1;strokeColor=#666666;" value="Infrastructure / external" vertex="1">
+                    <mxGeometry height="1160" width="280" x="1660" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="guest" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" value="Guest party" vertex="1">
+                    <mxGeometry height="50" width="140" x="50" y="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="ui" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" value="UI Streamlit (ui/app.py)&lt;br&gt;stub → target" vertex="1">
+                    <mxGeometry height="60" width="140" x="50" y="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="api" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" value="API FastAPI (P0-35)&lt;br&gt;src/parkmind/api/&lt;br&gt;target" vertex="1">
+                    <mxGeometry height="70" width="140" x="50" y="310" as="geometry"/>
+                </mxCell>
+                <mxCell id="l1" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;" value="Elicitation graph (#78)" vertex="1">
+                    <mxGeometry height="20" width="220" x="300" y="78" as="geometry"/>
+                </mxCell>
+                <mxCell id="el" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="elicit&lt;br&gt;(structured extraction)" vertex="1">
+                    <mxGeometry height="44" width="220" x="300" y="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="am" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="ask_missing&lt;br&gt;interrupt() if information is missing" vertex="1">
+                    <mxGeometry height="44" width="220" x="300" y="156" as="geometry"/>
+                </mxCell>
+                <mxCell id="ch" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="confirm_hard_constraints&lt;br&gt;interrupt(): echo + consent" vertex="1">
+                    <mxGeometry height="44" width="220" x="300" y="212" as="geometry"/>
+                </mxCell>
+                <mxCell id="va" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="validate_constraints" vertex="1">
+                    <mxGeometry height="44" width="220" x="300" y="268" as="geometry"/>
+                </mxCell>
+                <mxCell id="l2" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;" value="Initial planning graph" vertex="1">
+                    <mxGeometry height="20" width="220" x="300" y="324" as="geometry"/>
+                </mxCell>
+                <mxCell id="g1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="resolve_preferences&lt;br&gt;(placeholder average)" vertex="1">
+                    <mxGeometry height="44" width="220" x="300" y="346" as="geometry"/>
+                </mxCell>
+                <mxCell id="g2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="fetch_context&lt;br&gt;(empty waits)" vertex="1">
+                    <mxGeometry height="44" width="220" x="300" y="402" as="geometry"/>
+                </mxCell>
+                <mxCell id="g3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="synthesize_plan&lt;br&gt;(empty placeholder plan)" vertex="1">
+                    <mxGeometry height="44" width="220" x="300" y="458" as="geometry"/>
+                </mxCell>
+                <mxCell id="g4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="propose_plan&lt;br&gt;(checker gate TODO)" vertex="1">
+                    <mxGeometry height="44" width="220" x="300" y="514" as="geometry"/>
+                </mxCell>
+                <mxCell id="g5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="interrupt_approval&lt;br&gt;human interrupt()" vertex="1">
+                    <mxGeometry height="44" width="220" x="300" y="570" as="geometry"/>
+                </mxCell>
+                <mxCell id="l3" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontStyle=1;" value="Replanning and agents (target)" vertex="1">
+                    <mxGeometry height="20" width="220" x="300" y="626" as="geometry"/>
+                </mxCell>
+                <mxCell id="gR" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" value="replanning_graph&lt;br&gt;event → replan → diff" vertex="1">
+                    <mxGeometry height="44" width="220" x="300" y="648" as="geometry"/>
+                </mxCell>
+                <mxCell id="gC" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" value="Concierge Agent (LLM)&lt;br&gt;explains and converses" vertex="1">
+                    <mxGeometry height="44" width="220" x="300" y="704" as="geometry"/>
+                </mxCell>
+                <mxCell id="gT" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" value="Tools / MCP server&lt;br&gt;data, knowledge, planner" vertex="1">
+                    <mxGeometry height="44" width="220" x="300" y="760" as="geometry"/>
+                </mxCell>
+                <mxCell id="note" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;" value="Note: the planning graph order is provisional. The baseline (§35) places RESOLVE GROUP OBJECTIVE after LOAD CONTEXT because it needs accessibility_results (C23); P0-30 reorders it. See agent-flow.md." vertex="1">
+                    <mxGeometry height="110" width="370" x="285" y="830" as="geometry"/>
+                </mxCell>
+                <mxCell id="uNames" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="ResolveAttractionNames" vertex="1">
+                    <mxGeometry height="44" width="220" x="740" y="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="uIntake" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="AccessibilityIntake&lt;br&gt;(staging + commit with consent)" vertex="1">
+                    <mxGeometry height="44" width="220" x="740" y="216" as="geometry"/>
+                </mxCell>
+                <mxCell id="uRG" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="ResolveGroupPreferences" vertex="1">
+                    <mxGeometry height="44" width="220" x="740" y="300" as="geometry"/>
+                </mxCell>
+                <mxCell id="uSP" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="ScorePreferences" vertex="1">
+                    <mxGeometry height="44" width="220" x="740" y="356" as="geometry"/>
+                </mxCell>
+                <mxCell id="uBP" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" value="BuildPlan&lt;br&gt;(composes resolver + forecast + optimizer)" vertex="1">
+                    <mxGeometry height="44" width="220" x="740" y="412" as="geometry"/>
+                </mxCell>
+                <mxCell id="uCP" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" value="CheckPlan&lt;br&gt;(NotImplementedError today)" vertex="1">
+                    <mxGeometry height="44" width="220" x="740" y="540" as="geometry"/>
+                </mxCell>
+                <mxCell id="uRP" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" value="Replan&lt;br&gt;(NotImplementedError today)" vertex="1">
+                    <mxGeometry height="44" width="220" x="740" y="612" as="geometry"/>
+                </mxCell>
+                <mxCell id="uLL" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="LoadLiveContext" vertex="1">
+                    <mxGeometry height="44" width="220" x="740" y="780" as="geometry"/>
+                </mxCell>
+                <mxCell id="uCS" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="CollectSnapshot [P0-11]&lt;br&gt;/live + /schedule + weather" vertex="1">
+                    <mxGeometry height="44" width="220" x="740" y="836" as="geometry"/>
+                </mxCell>
+                <mxCell id="uLP" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="LoadGuestProfiles" vertex="1">
+                    <mxGeometry height="44" width="220" x="740" y="892" as="geometry"/>
+                </mxCell>
+                <mxCell id="uPP" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="ProposePlan (Proposal PENDING)" vertex="1">
+                    <mxGeometry height="44" width="220" x="740" y="948" as="geometry"/>
+                </mxCell>
+                <mxCell id="uRS" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="ResolveProposal (approve / reject)" vertex="1">
+                    <mxGeometry height="44" width="220" x="740" y="1004" as="geometry"/>
+                </mxCell>
+                <mxCell id="uFC" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="build_forecast_service&lt;br&gt;(forecast.py, from snapshots)" vertex="1">
+                    <mxGeometry height="44" width="220" x="740" y="1060" as="geometry"/>
+                </mxCell>
+                <mxCell id="uCA" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="check_accessibility [P0-26a]" vertex="1">
+                    <mxGeometry height="44" width="220" x="740" y="1116" as="geometry"/>
+                </mxCell>
+                <mxCell id="d1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="GroupPreferenceResolver&lt;br&gt;(group objective with fairness)" vertex="1">
+                    <mxGeometry height="44" width="260" x="1060" y="300" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="PreferenceScorer&lt;br&gt;(per-guest utility + fairness)" vertex="1">
+                    <mxGeometry height="44" width="260" x="1060" y="356" as="geometry"/>
+                </mxCell>
+                <mxCell id="d4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="GreedyInsertionOptimizer + ParkGraph&lt;br&gt;(forecast waits per stop)" vertex="1">
+                    <mxGeometry height="44" width="260" x="1060" y="412" as="geometry"/>
+                </mxCell>
+                <mxCell id="d3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="ForecastService (puro)&lt;br&gt;API → historical → current snapshot" vertex="1">
+                    <mxGeometry height="44" width="260" x="1060" y="468" as="geometry"/>
+                </mxCell>
+                <mxCell id="d5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="ConstraintChecker" vertex="1">
+                    <mxGeometry height="44" width="260" x="1060" y="540" as="geometry"/>
+                </mxCell>
+                <mxCell id="d6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="diff_plans (PlanDiff)" vertex="1">
+                    <mxGeometry height="44" width="260" x="1060" y="612" as="geometry"/>
+                </mxCell>
+                <mxCell id="d7" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" value="EventDetector + Replanner" vertex="1">
+                    <mxGeometry height="44" width="260" x="1060" y="668" as="geometry"/>
+                </mxCell>
+                <mxCell id="pLLM" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="GuestInfoExtractor&lt;br&gt;(LLM extractor port)" vertex="1">
+                    <mxGeometry height="44" width="200" x="1400" y="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="pRoute" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="RoutingPort" vertex="1">
+                    <mxGeometry height="44" width="200" x="1400" y="412" as="geometry"/>
+                </mxCell>
+                <mxCell id="pPark" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="ParkDataPort + WeatherPort" vertex="1">
+                    <mxGeometry height="44" width="200" x="1400" y="780" as="geometry"/>
+                </mxCell>
+                <mxCell id="pRepo" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="Repositories&lt;br&gt;Snapshot, Plan, Proposal, Guest, Profile, Session, Provenance…" vertex="1">
+                    <mxGeometry height="110" width="200" x="1400" y="892" as="geometry"/>
+                </mxCell>
+                <mxCell id="pKnow" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="KnowledgeStore&lt;br&gt;(safety notices)" vertex="1">
+                    <mxGeometry height="44" width="200" x="1400" y="1116" as="geometry"/>
+                </mxCell>
+                <mxCell id="eLLM" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Anthropic (Claude)&lt;br&gt;elicit today; explain = target" vertex="1">
+                    <mxGeometry height="44" width="240" x="1680" y="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="eLF" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" value="Langfuse (observability)&lt;br&gt;in pyproject, unused in src" vertex="1">
+                    <mxGeometry height="44" width="240" x="1680" y="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="eRoute" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="RoutingClient (local, no network)&lt;br&gt;curated table + Haversine" vertex="1">
+                    <mxGeometry height="44" width="240" x="1680" y="412" as="geometry"/>
+                </mxCell>
+                <mxCell id="eTP" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="ThemeParks.wiki&lt;br&gt;catalog, waits, schedules" vertex="1">
+                    <mxGeometry height="44" width="240" x="1680" y="780" as="geometry"/>
+                </mxCell>
+                <mxCell id="eOM" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Open-Meteo (weather)" vertex="1">
+                    <mxGeometry height="44" width="240" x="1680" y="836" as="geometry"/>
+                </mxCell>
+                <mxCell id="eDB" parent="1" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="PostgreSQL 16 + Alembic&lt;br&gt;plans, proposals, snapshots,&lt;br&gt;profiles, sessions, provenance" vertex="1">
+                    <mxGeometry height="110" width="240" x="1680" y="892" as="geometry"/>
+                </mxCell>
+                <mxCell id="eKS" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="In-memory KnowledgeStore&lt;br&gt;+ safety_notices" vertex="1">
+                    <mxGeometry height="44" width="240" x="1680" y="1116" as="geometry"/>
+                </mxCell>
+                <mxCell id="lg0" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="Implemented" vertex="1">
+                    <mxGeometry height="36" width="160" x="260" y="1200" as="geometry"/>
+                </mxCell>
+                <mxCell id="lg1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="Partial (placeholder)" vertex="1">
+                    <mxGeometry height="36" width="170" x="440" y="1200" as="geometry"/>
+                </mxCell>
+                <mxCell id="lg2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" value="Target state (pending)" vertex="1">
+                    <mxGeometry height="36" width="190" x="630" y="1200" as="geometry"/>
+                </mxCell>
+                <mxCell id="lg3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="External" vertex="1">
+                    <mxGeometry height="36" width="120" x="840" y="1200" as="geometry"/>
+                </mxCell>
+                <mxCell id="lg4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" value="Grey: actor / stateless" vertex="1">
+                    <mxGeometry height="36" width="170" x="980" y="1200" as="geometry"/>
+                </mxCell>
+                <mxCell id="x1" edge="1" parent="1" source="guest" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="ui" value="uses">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="x2" edge="1" parent="1" source="ui" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" target="api" value="HTTP">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="x3" edge="1" parent="1" source="api" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" target="el" value="messages">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c1" edge="1" parent="1" source="el" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;startArrow=block;" target="am">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c2" edge="1" parent="1" source="el" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="ch">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c3" edge="1" parent="1" source="ch" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="va">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c4" edge="1" parent="1" source="va" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" target="g1" value="P0-30: not connected today">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c5" edge="1" parent="1" source="g1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="g2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c6" edge="1" parent="1" source="g2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="g3">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c7" edge="1" parent="1" source="g3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="g4">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c8" edge="1" parent="1" source="g4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="g5">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c9" edge="1" parent="1" source="gC" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" target="gT">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="n1" edge="1" parent="1" source="el" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="uNames" value="attraction ids">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="n2" edge="1" parent="1" source="ch" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="uIntake" value="commit">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="n3" edge="1" parent="1" source="g1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="uLP">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="n4" edge="1" parent="1" source="g2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="uLL">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="n5" edge="1" parent="1" source="g3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" target="uBP">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="n6" edge="1" parent="1" source="g4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="uPP">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="n7" edge="1" parent="1" source="g5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="uRS">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="n8" edge="1" parent="1" source="gR" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" target="uRP">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="u1" edge="1" parent="1" source="uRG" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="d1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="u2" edge="1" parent="1" source="uSP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="d2">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="u3" edge="1" parent="1" source="uBP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" target="d1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="u4" edge="1" parent="1" source="uBP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" target="d4">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="u5" edge="1" parent="1" source="uBP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" target="d3">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="u6" edge="1" parent="1" source="uFC" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="d3" value="feeds">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="u7" edge="1" parent="1" source="uPP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" target="d5" value="gate">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="u8" edge="1" parent="1" source="uCP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" target="d5">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="u9" edge="1" parent="1" source="uRP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" target="d6">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="u10" edge="1" parent="1" source="uRP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" target="d7">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="q1" edge="1" parent="1" source="d1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="d2" value="objective">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="q2" edge="1" parent="1" source="d2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="d4" value="satisfaction">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="q3" edge="1" parent="1" source="d3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="d4" value="forecast waits">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="r1" edge="1" parent="1" source="d4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="pRoute" value="uses">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="r2" edge="1" parent="1" source="d2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="pKnow" value="intensity">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="r3" edge="1" parent="1" source="el" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="pLLM" value="extracts">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="p1" edge="1" parent="1" source="uLL" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="pPark">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="p2" edge="1" parent="1" source="uCS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="pPark" value="calls the API">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="p3" edge="1" parent="1" source="uCS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="pRepo" value="writes snapshots">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="p4" edge="1" parent="1" source="uLP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="pRepo" value="reads profiles">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="p5" edge="1" parent="1" source="uPP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="pRepo" value="persists plan + proposal">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="p6" edge="1" parent="1" source="uRS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="pRepo" value="records decision">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="p7" edge="1" parent="1" source="uFC" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="pRepo" value="reads snapshots">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="p8" edge="1" parent="1" source="uCA" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="pKnow">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="p9" edge="1" parent="1" source="uIntake" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="pRepo" value="SessionStore">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a1" edge="1" parent="1" source="pLLM" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="eLLM" value="adapter">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a2" edge="1" parent="1" source="pRoute" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="eRoute" value="adapter">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a3" edge="1" parent="1" source="pPark" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="eTP" value="httpx + retry">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a4" edge="1" parent="1" source="pPark" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="eOM" value="httpx + retry">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a5" edge="1" parent="1" source="pRepo" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="eDB" value="adapter">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a6" edge="1" parent="1" source="pKnow" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;" target="eKS" value="adapter">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a7" edge="1" parent="1" source="eLLM" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;" target="eLF" value="traces">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

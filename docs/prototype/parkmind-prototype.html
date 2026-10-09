@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ParkMind · Prototipo</title>
+<title>ParkMind · Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -319,55 +319,55 @@ h2.greet{font-size:33px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
 <body>
 
 <div class="stage-head">
-  <h1>ParkMind · prototipo navegable</h1>
-  <p>Parque Aurora</p>
+  <h1>ParkMind · clickable prototype</h1>
+  <p>Aurora Park</p>
 </div>
 
 <div class="device" id="device">
   <div class="notch"></div>
   <div class="statusbar"><span id="clock">10:47</span><span class="sig">▂▄▆ ᯤ ▮</span></div>
-  <div class="demotag">Datos de demostración</div>
+  <div class="demotag">Demo data</div>
 
   <div class="viewport">
 
-    <!-- INICIO -->
+    <!-- HOME -->
     <section class="screen on" id="s-home">
       <div class="brandbar">
         <div class="wordmark">park<i>mind</i></div>
         <div class="brand-actions">
           <div class="avatar">A</div>
-          <button class="spark-btn ping" id="openAssistant" aria-label="Abrir asistente"><span>✦</span></button>
+          <button class="spark-btn ping" id="openAssistant" aria-label="Open assistant"><span>✦</span></button>
         </div>
       </div>
-      <h2 class="greet">Buenos días,<br>Andrea</h2>
-      <p class="subline">Parque Aurora · día 1 de 1 · grupo de 3</p>
+      <h2 class="greet">Good morning,<br>Andrea</h2>
+      <p class="subline">Aurora Park · day 1 of 1 · party of 3</p>
       <div class="pills">
         <span class="pill">☀️ 29°</span>
-        <span class="pill warn">Lluvia 60% · 15:00</span>
-        <span class="pill live">Afluencia alta</span>
+        <span class="pill warn">Rain 60% · 3:00 PM</span>
+        <span class="pill live">High crowds</span>
       </div>
 
-      <h3 class="sect">Tu día</h3>
+      <h3 class="sect">Your day</h3>
       <div class="tiles">
         <button class="tile plan" data-go="plan">
           <div class="ico">🗺️</div>
-          <div><span class="big" id="tileStops">6</span><b>Mi plan</b><small>paradas · salida 18:00</small></div>
+          <div><span class="big" id="tileStops">6</span><b>My plan</b><small>stops · exit 6:00 PM</small></div>
         </button>
         <button class="tile waits" data-go="park">
           <div class="ico">⏱️</div>
-          <div><b>Tiempos de espera</b><small>en vivo · 32 atracciones</small></div>
+          <div><b>Wait times</b><small>live · 32 attractions</small></div>
         </button>
       </div>
 
       <div class="panel">
-        <div class="panel-head"><b>Ahora</b><span>actualizado hace 2 min</span></div>
+        <div class="panel-head"><b>Now</b><span>updated 2 min ago</span></div>
         <div class="nowrow">
           <div class="t" id="nowTime">10:55</div>
           <div class="rail"><div class="dot"></div><div class="line"></div></div>
           <div>
             <div class="b" id="nowName">Cohete Nebulosa</div>
-            <div class="m" id="nowMeta">espera 25 min · 350 m · rampa por el lado este</div>
-            <div class="a11y">♿ Ruta sin escaleras</div>
+            <div class="m" id="nowMeta">25 min wait · 350 m · ramp on the east side</div>
+            <div class="a11y">♿ Step-free route</div>
           </div>
         </div>
       </div>
@@ -375,58 +375,58 @@ h2.greet{font-size:33px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
       <div id="homeAlert"></div>
     </section>
 
-    <!-- MI PLAN -->
+    <!-- MY PLAN -->
     <section class="screen" id="s-plan">
       <div class="screen-head">
-        <h2>Mi plan</h2>
-        <p>Parque Aurora · <span id="planCount">6</span> paradas · salida 18:00</p>
-        <span class="status-chip" id="planStatus">Plan válido · 11 reglas verificadas</span>
+        <h2>My plan</h2>
+        <p>Aurora Park · <span id="planCount">6</span> stops · exit 6:00 PM</p>
+        <span class="status-chip" id="planStatus">Valid plan · 11 rules checked</span>
       </div>
       <div id="timeline"></div>
-      <p class="note">Toda parada pasó por la puerta de restricciones antes de proponerse. Accesibilidad falla cerrado: si no se puede verificar, el plan se aborta.</p>
+      <p class="note">Every stop went through the constraint gate before being proposed. Accessibility fails closed: if it cannot be verified, the plan is aborted.</p>
     </section>
 
-    <!-- PARQUE -->
+    <!-- PARK -->
     <section class="screen" id="s-park">
       <div class="screen-head">
-        <h2>Parque</h2>
-        <p>Esperas en vivo · ThemeParks.wiki</p>
+        <h2>Park</h2>
+        <p>Live waits · ThemeParks.wiki</p>
       </div>
       <div id="rides"></div>
-      <p class="note">Las atracciones sin acceso en silla de ruedas quedan excluidas del optimizador, no penalizadas.</p>
+      <p class="note">Attractions without wheelchair access are excluded from the optimizer, not penalized.</p>
     </section>
 
-    <!-- MÁS -->
+    <!-- MORE -->
     <section class="screen" id="s-more">
       <div class="screen-head">
-        <h2>Más</h2>
-        <p>Grupo, accesibilidad y medición</p>
+        <h2>More</h2>
+        <p>Party, accessibility and measurement</p>
       </div>
 
-      <button class="row" data-go="eval"><span>Panel de evaluación<small>ParkMind vs. baseline LLM-only</small></span><span class="chev">›</span></button>
-      <button class="row" id="rowConstraints"><span>Restricciones del grupo<small>4 obligatorias · 2 preferencias</small></span><span class="chev">›</span></button>
-      <button class="row" id="rowReset"><span>Reiniciar demostración<small>Vuelve al estado inicial</small></span><span class="chev">↺</span></button>
+      <button class="row" data-go="eval"><span>Evaluation dashboard<small>ParkMind vs. LLM-only baseline</small></span><span class="chev">›</span></button>
+      <button class="row" id="rowConstraints"><span>Party constraints<small>4 hard · 2 preferences</small></span><span class="chev">›</span></button>
+      <button class="row" id="rowReset"><span>Reset demo<small>Back to the initial state</small></span><span class="chev">↺</span></button>
 
-      <p class="note" style="margin-top:22px">Fuente de datos</p>
+      <p class="note" style="margin-top:22px">Data source</p>
       <div class="switch" style="margin-top:8px">
         <button class="on" id="modeMock">Mock (fixture)</button>
         <button id="modeLive">Live (API)</button>
       </div>
-      <p class="note">En <b>mock</b> la UI lee un fixture ilustrativo (su forma no es el contrato). Esta página es una maqueta visual, no el cliente final: el MVP es Streamlit sobre los endpoints FastAPI, y las rutas y formas de respuesta saldrán del contrato P0-35.</p>
+      <p class="note">In <b>mock</b> mode the UI reads an illustrative fixture (its shape is not the contract). This page is a visual mock, not the final client: the MVP is Streamlit consuming the FastAPI endpoints, and the routes and response shapes will come from the P0-35 contract.</p>
     </section>
 
-    <!-- EVALUACIÓN -->
+    <!-- EVALUATION -->
     <section class="screen" id="s-eval">
       <div class="screen-head">
-        <h2>Evaluación</h2>
-        <p>Mismo escenario, mismas herramientas</p>
+        <h2>Evaluation</h2>
+        <p>Same scenario, same tools</p>
       </div>
-      <div class="metric"><div class="n">Preference Alignment Score<small>qué tanto el plan refleja al grupo</small></div><div class="v">0.87</div><div class="base">0.61</div></div>
-      <div class="metric"><div class="n">Personalization Lift<small>distancia Jaccard vs. plan genérico</small></div><div class="v">+0.34</div><div class="base">—</div></div>
-      <div class="metric"><div class="n">Violaciones de restricciones<small>sobre 40 escenarios</small></div><div class="v">0</div><div class="base">7</div></div>
-      <div class="metric"><div class="n">Replanes aceptados<small>sin editar a mano</small></div><div class="v">91%</div><div class="base">—</div></div>
-      <p class="note">La columna gris es el baseline LLM-only con acceso a las mismas herramientas. Si ParkMind no le gana en violaciones y en lift, la complejidad no se justificó. Cifras ilustrativas del prototipo.</p>
-      <button class="row" data-go="more" style="margin-top:14px"><span>Volver</span><span class="chev">‹</span></button>
+      <div class="metric"><div class="n">Preference Alignment Score<small>how well the plan reflects the party</small></div><div class="v">0.87</div><div class="base">0.61</div></div>
+      <div class="metric"><div class="n">Personalization Lift<small>Jaccard distance vs. generic plan</small></div><div class="v">+0.34</div><div class="base">—</div></div>
+      <div class="metric"><div class="n">Constraint violations<small>across 40 scenarios</small></div><div class="v">0</div><div class="base">7</div></div>
+      <div class="metric"><div class="n">Accepted replans<small>without manual edits</small></div><div class="v">91%</div><div class="base">—</div></div>
+      <p class="note">The grey column is the LLM-only baseline with access to the same tools. If ParkMind does not beat it on violations and lift, the complexity was not justified. Illustrative prototype figures.</p>
+      <button class="row" data-go="more" style="margin-top:14px"><span>Back</span><span class="chev">‹</span></button>
     </section>
 
   </div>
@@ -436,13 +436,13 @@ h2.greet{font-size:33px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
   <div class="sheet" id="sheet">
     <div class="grab"></div>
     <div class="sheet-head">
-      <div><h3>Asistente</h3><div class="sub" id="assistStatus">escuchando</div></div>
-      <button class="xbtn" id="closeSheet" aria-label="Cerrar">✕</button>
+      <div><h3>Assistant</h3><div class="sub" id="assistStatus">listening</div></div>
+      <button class="xbtn" id="closeSheet" aria-label="Close">✕</button>
     </div>
     <div class="chat" id="chat"></div>
     <div class="composer">
-      <input id="chatInput" placeholder="Escribe o habla…" autocomplete="off">
-      <button class="send" id="sendBtn" aria-label="Enviar">↑</button>
+      <input id="chatInput" placeholder="Type or speak…" autocomplete="off">
+      <button class="send" id="sendBtn" aria-label="Send">↑</button>
     </div>
   </div>
 
@@ -450,22 +450,22 @@ h2.greet{font-size:33px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
   <div class="psheet" id="psheet">
     <div class="grab"></div>
     <div class="pbody">
-      <h3>Cambio propuesto</h3>
+      <h3>Proposed change</h3>
       <p class="why" id="pWhy"></p>
       <div class="diff" id="pDiff"></div>
       <div class="stats" id="pStats"></div>
       <div class="verified">
-        <b>♿ Accesibilidad verificada</b>
+        <b>♿ Accessibility verified</b>
         <p id="pA11y"></p>
       </div>
       <p class="note" id="pProv"></p>
     </div>
     <div class="pfoot">
       <div class="pactions">
-        <button class="btn keep" id="btnKeep">Mantener</button>
-        <button class="btn apply" id="btnApply">Aplicar cambios</button>
+        <button class="btn keep" id="btnKeep">Keep</button>
+        <button class="btn apply" id="btnApply">Apply changes</button>
       </div>
-      <p class="fine">Nada cambia en tu día hasta que toques Aplicar.</p>
+      <p class="fine">Nothing changes in your day until you tap Apply.</p>
     </div>
   </div>
 
@@ -473,17 +473,17 @@ h2.greet{font-size:33px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
 
   <!-- TABS -->
   <nav class="tabs">
-    <button class="tab on" data-go="home"><span class="g">⌂</span>Inicio</button>
-    <button class="tab" data-go="park"><span class="g">▲</span>Parque</button>
-    <button class="tab" data-go="plan"><span class="g">◷</span>Mi plan</button>
-    <button class="tab" data-go="assistant"><span class="g">✦</span>Asistente</button>
-    <button class="tab" data-go="more"><span class="g">☰</span>Más</button>
+    <button class="tab on" data-go="home"><span class="g">⌂</span>Home</button>
+    <button class="tab" data-go="park"><span class="g">▲</span>Park</button>
+    <button class="tab" data-go="plan"><span class="g">◷</span>My plan</button>
+    <button class="tab" data-go="assistant"><span class="g">✦</span>Assistant</button>
+    <button class="tab" data-go="more"><span class="g">☰</span>More</button>
   </nav>
 </div>
 
 <div class="stage-foot">
-  <span style="font-size:12px;opacity:.6;font-weight:500">Maqueta visual · no es el cliente final (el MVP es Streamlit sobre la API FastAPI) · datos y rutas ilustrativos, el contrato real es P0-35</span>
-  <button class="ghost-btn" id="resetBtn">Reiniciar</button>
+  <span style="font-size:12px;opacity:.6;font-weight:500">Visual mock · not the final client (the MVP is Streamlit on the FastAPI API) · illustrative data and routes, the real contract is P0-35</span>
+  <button class="ghost-btn" id="resetBtn">Reset</button>
 </div>
 
 <script>
@@ -510,53 +510,53 @@ const FIXTURE = {
   party_constraints: {
     // hard constraints (what the confirmation card echoes)
     exit_by: "18:00",
-    min_height_note: "Altura del menor: 1,10 m",
+    min_height_note: "Child height: 1.10 m",
     accessibility: [   // illustrative; in the contract this lives per guest (C19)
-      { code: "wheelchair_access", label: "Silla de ruedas", mandatory: true },
-      { code: "no_stairs",         label: "Sin escaleras",   mandatory: true }
+      { code: "wheelchair_access", label: "Wheelchair", mandatory: true },
+      { code: "no_stairs",         label: "No stairs",   mandatory: true }
     ],
     preferences: [
-      { code: "thrill",  label: "Prefiere montañas rusas", weight: 0.9 },
-      { code: "shade",   label: "Evitar sol del mediodía", weight: 0.5 }
+      { code: "thrill",  label: "Prefers roller coasters", weight: 0.9 },
+      { code: "shade",   label: "Avoid midday sun", weight: 0.5 }
     ]
   },
   plan: {
     plan_id: "pl_7f31",
-    park: "Parque Aurora",
+    park: "Aurora Park",
     status: "valid",
     rules_checked: 11,
     events: [
-      { event_id:"e1", start:"10:55", title:"Cohete Nebulosa",      meta:"espera 25 min · 350 m · rampa lado este", kind:"ride",  state:"current" },
-      { event_id:"e2", start:"12:10", title:"Jardín de Faroles",    meta:"almuerzo · bajo techo · 45 min",          kind:"meal",  state:"upcoming" },
-      { event_id:"e3", start:"13:20", title:"Senda de Luciérnagas", meta:"espectáculo · espera 10 min",             kind:"show",  state:"upcoming" },
-      { event_id:"e4", start:"15:10", title:"Río Perdido",          meta:"al aire libre · espera 20 min",           kind:"ride",  state:"upcoming" },
-      { event_id:"e5", start:"16:00", title:"Torre Aurora",         meta:"mirador · espera 15 min",                 kind:"ride",  state:"upcoming" },
-      { event_id:"e6", start:"17:10", title:"Mirador del Lago",     meta:"cierre del día · 20 min",                 kind:"view",  state:"upcoming" }
+      { event_id:"e1", start:"10:55", title:"Nebula Rocket",        meta:"25 min wait · 350 m · east-side ramp", kind:"ride",  state:"current" },
+      { event_id:"e2", start:"12:10", title:"Lantern Garden",       meta:"lunch · indoors · 45 min",          kind:"meal",  state:"upcoming" },
+      { event_id:"e3", start:"13:20", title:"Firefly Trail",        meta:"show · 10 min wait",             kind:"show",  state:"upcoming" },
+      { event_id:"e4", start:"15:10", title:"Lost River",           meta:"outdoors · 20 min wait",           kind:"ride",  state:"upcoming" },
+      { event_id:"e5", start:"16:00", title:"Aurora Tower",         meta:"lookout · 15 min wait",                 kind:"ride",  state:"upcoming" },
+      { event_id:"e6", start:"17:10", title:"Lake Lookout",         meta:"end of day · 20 min",                 kind:"view",  state:"upcoming" }
     ]
   },
   proposal: {
     proposal_id: "pr_a18c",
-    trigger: "Lluvia 60% desde las 15:00 y cierre temporal de Río Perdido.",
-    explanation: "Río Perdido es al aire libre y cierra por clima. Teatro Solar está bajo techo, tiene acceso en silla de ruedas y mantiene el perfil del grupo. Torre Aurora se corre 40 minutos para no comprometer la salida a las 18:00.",
-    provenance: "Clima: Open-Meteo (pronóstico horario, 14:40). Estado de atracciones: ThemeParks.wiki (14:52). Decisión: Replanner + ConstraintChecker, 11 reglas.",
+    trigger: "Rain 60% from 3:00 PM and a temporary closure of Lost River.",
+    explanation: "Lost River is outdoors and closes for weather. Solar Theater is indoors, has wheelchair access and keeps the party profile. Aurora Tower shifts 40 minutes to protect the 6:00 PM exit.",
+    provenance: "Weather: Open-Meteo (hourly forecast, 2:40 PM). Attraction status: ThemeParks.wiki (2:52 PM). Decision: Replanner + ConstraintChecker, 11 rules.",
     diff: {
-      removed: [{ ref:"e4", start:"15:10", title:"Río Perdido",  meta:"al aire libre · cerrado por clima" }],
-      added:   [{ ref:"e7", start:"15:10", title:"Teatro Solar", meta:"bajo techo · espera 15 min · acceso silla de ruedas", kind:"show" }],
-      moved:   [{ ref:"e5", from:"16:00", to:"16:40", title:"Torre Aurora", meta:"movido para mantener la salida a las 18:00" }]
+      removed: [{ ref:"e4", start:"15:10", title:"Lost River",   meta:"outdoors · closed for weather" }],
+      added:   [{ ref:"e7", start:"15:10", title:"Solar Theater", meta:"indoors · 15 min wait · wheelchair access", kind:"show" }],
+      moved:   [{ ref:"e5", from:"16:00", to:"16:40", title:"Aurora Tower", meta:"moved to protect the 6:00 PM exit" }]
     },
-    metrics: { unchanged:"4/6", unchanged_label:"paradas sin cambio", walk_delta:"+12", walk_label:"min caminando", affinity:"92%", affinity_label:"afinidad con tus gustos" },
+    metrics: { unchanged:"4/6", unchanged_label:"stops unchanged", walk_delta:"+12", walk_label:"min walking", affinity:"92%", affinity_label:"match with your tastes" },
     accessibility_verified: true,
-    accessibility_note: "Ruta sin escaleras y acceso en silla de ruedas confirmados en las 6 paradas."
+    accessibility_note: "Step-free route and wheelchair access confirmed at all 6 stops."
   },
   rides: [
-    { name:"Cohete Nebulosa",      zone:"Ala este · acceso silla de ruedas", wait:25, access:true },
-    { name:"Teatro Solar",         zone:"Plaza central · bajo techo",        wait:15, access:true },
-    { name:"Río Perdido",          zone:"Ribera · al aire libre",            wait:null, access:true, closed:"Cerrado" },
-    { name:"Torre Aurora",         zone:"Ala norte · ascensor",              wait:15, access:true },
-    { name:"Caída de Cometas",     zone:"Ala sur · escaleras de acceso",     wait:65, access:false },
-    { name:"Senda de Luciérnagas", zone:"Bosque · ruta plana",               wait:10, access:true },
-    { name:"Carrusel de Nubes",    zone:"Plaza central",                     wait:5,  access:true },
-    { name:"Vértigo Solar",        zone:"Ala sur · escaleras de acceso",     wait:80, access:false }
+    { name:"Nebula Rocket",        zone:"East wing · wheelchair access", wait:25, access:true },
+    { name:"Solar Theater",         zone:"Central plaza · indoors",        wait:15, access:true },
+    { name:"Lost River",           zone:"Riverside · outdoors",              wait:null, access:true, closed:"Closed" },
+    { name:"Aurora Tower",         zone:"North wing · elevator",              wait:15, access:true },
+    { name:"Comet Drop",           zone:"South wing · access stairs",     wait:65, access:false },
+    { name:"Firefly Trail",        zone:"Forest · flat route",               wait:10, access:true },
+    { name:"Cloud Carousel",       zone:"Central plaza",                     wait:5,  access:true },
+    { name:"Solar Vertigo",        zone:"South wing · access stairs",     wait:80, access:false }
   ]
 };
 
@@ -651,16 +651,16 @@ function renderAlert(){
   if (STATE.proposalState === "pending"){
     const a = el("div","alert");
     a.innerHTML = `<div class="ic">🌧️</div>
-      <div><b>Hay un cambio propuesto</b><p>La lluvia de las 15:00 afecta 2 paradas al aire libre.</p></div>
-      <button class="cta" id="reviewBtn">Revisar</button>`;
+      <div><b>A change is proposed</b><p>The 3:00 PM rain affects 2 outdoor stops.</p></div>
+      <button class="cta" id="reviewBtn">Review</button>`;
     box.appendChild(a);
     $("#reviewBtn").onclick = openProposal;
     $("#openAssistant").classList.add("ping");
   } else if (STATE.proposalState === "kept"){
     const a = el("div","alert kept");
     a.innerHTML = `<div class="ic">🌧️</div>
-      <div><b>Mantuviste tu plan</b><p>Río Perdido sigue en tu día. Te aviso si cierra de verdad.</p></div>
-      <button class="cta" id="reviewBtn">Revisar</button>`;
+      <div><b>You kept your plan</b><p>Lost River is still in your day. I'll tell you if it really closes.</p></div>
+      <button class="cta" id="reviewBtn">Review</button>`;
     box.appendChild(a);
     $("#reviewBtn").onclick = openProposal;
     $("#openAssistant").classList.remove("ping");
@@ -668,8 +668,8 @@ function renderAlert(){
     $("#openAssistant").classList.remove("ping");
   }
   $("#planStatus").textContent = STATE.proposalState === "applied"
-    ? "Plan actualizado · 11 reglas verificadas"
-    : "Plan válido · 11 reglas verificadas";
+    ? "Plan updated · 11 rules checked"
+    : "Valid plan · 11 rules checked";
 }
 
 /* ========================= RENDER: PARK ========================= */
@@ -677,11 +677,11 @@ function renderRides(){
   const wrap = $("#rides"); wrap.innerHTML = "";
   FIXTURE.rides.forEach(r => {
     let cls = "wait low", txt = `${r.wait}<small>min</small>`;
-    if (r.closed){ cls = "wait closed"; txt = "Cerrado"; }
+    if (r.closed){ cls = "wait closed"; txt = "Closed"; }
     else if (r.wait >= 60) cls = "wait high";
     else if (r.wait >= 20) cls = "wait mid";
     const row = el("div","ride");
-    row.innerHTML = `<div><b>${r.name}</b><small>${r.zone}${r.access ? "" : " · sin acceso silla de ruedas"}</small></div>
+    row.innerHTML = `<div><b>${r.name}</b><small>${r.zone}${r.access ? "" : " · no wheelchair access"}</small></div>
                      <div class="${cls}">${txt}</div>`;
     if (!r.access) row.style.opacity = ".5";
     wrap.appendChild(row);
@@ -721,11 +721,11 @@ async function applyProposal(){
   const removedRefs = p.diff.removed.map(x => x.ref);
   let events = STATE.plan.events.filter(e => !removedRefs.includes(e.event_id));
   p.diff.added.forEach(a => events.push({
-    event_id:a.ref, start:a.start, title:a.title, meta:a.meta, kind:a.kind, state:"upcoming", changed:"Nuevo"
+    event_id:a.ref, start:a.start, title:a.title, meta:a.meta, kind:a.kind, state:"upcoming", changed:"New"
   }));
   p.diff.moved.forEach(mv => {
     const e = events.find(x => x.event_id === mv.ref);
-    if (e){ e.start = mv.to; e.meta = mv.meta; e.changed = "Movido"; }
+    if (e){ e.start = mv.to; e.meta = mv.meta; e.changed = "Moved"; }
   });
   events.sort((a,b) => a.start.localeCompare(b.start));
   STATE.plan.events = events;
@@ -734,14 +734,14 @@ async function applyProposal(){
   closeProposal();
   renderPlan(); renderAlert();
   go("plan");
-  toast("Cambios aplicados. Tu plan quedó en " + events.length + " paradas.");
+  toast("Changes applied. Your plan now has " + events.length + " stops.");
 }
 
 async function keepPlan(){
   await Adapter.decide(STATE.proposal.proposal_id, "reject");
   STATE.proposalState = "kept";
   closeProposal(); renderAlert();
-  toast("Mantuviste tu plan. Nada cambió.");
+  toast("You kept your plan. Nothing changed.");
 }
 
 /* ========================= ASSISTANT SHEET ========================= */
@@ -781,11 +781,11 @@ function typing(){
 }
 
 function seedChat(){
-  bubbleBot(`<p>Hola Andrea. Cuéntame con quién vienes y qué necesitan, y armo el día.</p>`);
+  bubbleBot(`<p>Hi Andrea. Tell me who is coming and what they need, and I'll build the day.</p>`);
   renderChips([
-    "Vamos con mi mamá, usa silla de ruedas",
-    "Somos 3 y salimos a las 6",
-    "¿Qué hago con la lluvia?"
+    "I'm going with my mom, she uses a wheelchair",
+    "There are 3 of us and we leave at 6",
+    "What do I do about the rain?"
   ]);
 }
 
@@ -804,7 +804,7 @@ function renderChips(options){
 }
 
 function renderSuggestions(items){
-  const lab = el("div","suggest-label", `<span class="sp">✨</span> ¿Necesitas más información?`);
+  const lab = el("div","suggest-label", `<span class="sp">✨</span> Need more information?`);
   const car = el("div","suggest");
   items.forEach(it => {
     const c = el("button","scard", `<b>${esc(it.title)}</b><span>${esc(it.sub)}</span>`);
@@ -817,40 +817,40 @@ function renderSuggestions(items){
 /* scripted mock conversation — replaced by the real agent in live mode */
 function mockReply(text){
   const t = text.toLowerCase();
-  if (t.includes("silla") || t.includes("mamá") || t.includes("mama") || t.includes("3") || t.includes("salimos")){
+  if (t.includes("wheelchair") || t.includes("mom") || t.includes("3") || t.includes("leave at")){
     return {
-      text: "Entendí esto. Antes de armar el día, confirma las restricciones obligatorias:",
+      text: "Here is what I understood. Before I build the day, please confirm the hard constraints:",
       confirm: {
         hard: [
-          { label:"♿ Silla de ruedas · obligatorio" },
-          { label:"Sin escaleras · obligatorio" },
-          { label:"Altura del menor: 1,10 m · obligatorio" },
-          { label:"Salida 18:00 · obligatorio" }
+          { label:"♿ Wheelchair · required" },
+          { label:"No stairs · required" },
+          { label:"Child height: 1.10 m · required" },
+          { label:"Exit 6:00 PM · required" }
         ],
-        soft: [ { label:"Prefiere montañas rusas · preferencia" } ]
+        soft: [ { label:"Prefers roller coasters · preference" } ]
       },
-      follow: "Con eso armé el día. Empieza temprano por el ala este para evitar la fila de mediodía.",
+      follow: "With that, I built the day. Start early on the east wing to avoid the midday queue.",
       plan_preview: true,
       suggestions: [
-        { title:"Ver el plan completo", sub:"6 paradas y la ruta sin escaleras" },
-        { title:"¿Por qué ese orden?",  sub:"la explicación detrás de la decisión" }
+        { title:"See the full plan", sub:"6 stops and the step-free route" },
+        { title:"Why that order?",  sub:"the reasoning behind the decision" }
       ]
     };
   }
-  if (t.includes("lluvia") || t.includes("clima") || t.includes("por qué") || t.includes("porque") || t.includes("orden")){
+  if (t.includes("rain") || t.includes("weather") || t.includes("why") || t.includes("because") || t.includes("order")){
     return {
-      text: "Hay 60% de lluvia desde las 15:00 y Río Perdido ya reportó cierre temporal. Preparé un cambio: entra Teatro Solar, que está bajo techo y tiene acceso en silla de ruedas. No lo aplico hasta que lo revises.",
+      text: "There is a 60% chance of rain from 3:00 PM and Lost River has already reported a temporary closure. I prepared a change: Solar Theater comes in, which is indoors and has wheelchair access. I won't apply it until you review it.",
       open_proposal: true
     };
   }
-  if (t.includes("plan completo") || t.includes("ver el plan")){
-    return { text:"Te llevo al plan. Las paradas marcadas en verde son las que cambiaron.", goto:"plan" };
+  if (t.includes("full plan") || t.includes("see the plan")){
+    return { text:"Taking you to the plan. The stops marked in green are the ones that changed.", goto:"plan" };
   }
   return {
-    text: "Lo anoté. Puedo ajustar el plan con eso, pero cualquier cambio te lo propongo primero — nunca lo aplico solo.",
+    text: "Noted. I can adjust the plan with that, but I always propose any change first — I never apply it on my own.",
     suggestions: [
-      { title:"¿Qué hago con la lluvia?", sub:"afecta 2 paradas al aire libre" },
-      { title:"Ver el plan completo",     sub:"6 paradas y la ruta sin escaleras" }
+      { title:"What do I do about the rain?", sub:"affects 2 outdoor stops" },
+      { title:"See the full plan",     sub:"6 stops and the step-free route" }
     ]
   };
 }
@@ -859,13 +859,13 @@ async function send(text){
   if (!text || !text.trim()) return;
   bubbleMe(text);
   $("#chatInput").value = "";
-  $("#assistStatus").textContent = "pensando";
+  $("#assistStatus").textContent = "thinking";
   const t = typing();
 
   const r = await Adapter.sendMessage(text);
   await new Promise(res => setTimeout(res, 820));
   t.remove();
-  $("#assistStatus").textContent = "escuchando";
+  $("#assistStatus").textContent = "listening";
 
   let html = `<p>${esc(r.text)}</p>`;
   if (r.confirm){
@@ -877,23 +877,23 @@ async function send(text){
   await continueAfter(r);
 }
 
-/* hard-constraint confirmation (mirrors the elicitation graph: eco + consentimiento + retención) */
+/* hard-constraint confirmation (mirrors the elicitation graph: echo + consent + retention) */
 function renderConfirm(r){
   const c = r.confirm;
   const card = el("div","confirm");
   card.innerHTML =
-    `<div class="tag2">RESTRICCIONES OBLIGATORIAS</div>` +
+    `<div class="tag2">HARD CONSTRAINTS</div>` +
     `<div class="constraints">` + c.hard.map(h => `<span class="cst hard">${esc(h.label)}</span>`).join("") + `</div>` +
-    (c.soft.length ? `<div class="tag2 soft-t">PREFERENCIAS (no bloquean el plan)</div>` +
+    (c.soft.length ? `<div class="tag2 soft-t">PREFERENCES (they don't block the plan)</div>` +
       `<div class="constraints">` + c.soft.map(h => `<span class="cst soft">${esc(h.label)}</span>`).join("") + `</div>` : "") +
-    `<label class="consent"><input type="checkbox" id="cfConsent"> Acepto que la información de accesibilidad se use solo para planificar este día.</label>` +
-    `<div class="tag2 soft-t">¿CUÁNTO TIEMPO LA GUARDAMOS?</div>` +
+    `<label class="consent"><input type="checkbox" id="cfConsent"> I agree that the accessibility information is used only to plan this day.</label>` +
+    `<div class="tag2 soft-t">HOW LONG DO WE KEEP IT?</div>` +
     `<div class="retention">` +
-      `<label><input type="radio" name="cfRet" value="session_only" checked> Solo esta sesión</label>` +
-      `<label><input type="radio" name="cfRet" value="saved"> Guardar en mi perfil</label>` +
+      `<label><input type="radio" name="cfRet" value="session_only" checked> This session only</label>` +
+      `<label><input type="radio" name="cfRet" value="saved"> Save to my profile</label>` +
     `</div>` +
-    `<div class="cf-actions"><button class="cf-fix" id="cfFix">Corregir</button>` +
-    `<button class="cf-ok" id="cfOk" disabled>Confirmar</button></div>`;
+    `<div class="cf-actions"><button class="cf-fix" id="cfFix">Correct</button>` +
+    `<button class="cf-ok" id="cfOk" disabled>Confirm</button></div>`;
   const w = el("div","bot-wrap");
   w.innerHTML = `<div class="bot-av">✦</div>`;
   const b = el("div","bot"); b.appendChild(card); w.appendChild(b);
@@ -905,14 +905,14 @@ function renderConfirm(r){
   ok.onclick = async () => {
     const ret = card.querySelector("input[name=cfRet]:checked").value;
     lock();
-    bubbleMe("Confirmo");
-    metaLine(ret === "saved" ? "Accesibilidad guardada en tu perfil" : "Accesibilidad solo durante esta sesión");
+    bubbleMe("Confirm");
+    metaLine(ret === "saved" ? "Accessibility saved to your profile" : "Accessibility kept for this session only");
     await continueAfter(r);
   };
   card.querySelector("#cfFix").onclick = () => {
     lock();
-    bubbleMe("Quiero corregir algo");
-    bubbleBot(`<p>Dime qué cambiar y vuelvo a pedirte la confirmación. No armo el plan con restricciones sin confirmar.</p>`);
+    bubbleMe("I want to correct something");
+    bubbleBot(`<p>Tell me what to change and I'll ask for confirmation again. I won't build the plan with unconfirmed constraints.</p>`);
   };
 }
 
@@ -921,10 +921,10 @@ async function continueAfter(r){
     await new Promise(res => setTimeout(res, 520));
     let h = `<p>${esc(r.follow)}</p>`;
     if (r.plan_preview){
-      h += `<div class="propcard"><b>Propuesta · ${STATE.plan.events.length} paradas</b>` +
+      h += `<div class="propcard"><b>Proposal · ${STATE.plan.events.length} stops</b>` +
         STATE.plan.events.slice(0,3).map(e =>
           `<div class="propline"><span class="t">${e.start}</span><span>${esc(e.title)}</span></div>`).join("") +
-        `<button class="go" onclick="closeSheet();go('plan')">Ver el día completo</button></div>`;
+        `<button class="go" onclick="closeSheet();go('plan')">See the full day</button></div>`;
     }
     bubbleBot(h);
   }
@@ -932,7 +932,7 @@ async function continueAfter(r){
   if (r.goto){ setTimeout(() => { closeSheet(); go(r.goto); }, 700); }
   if (r.open_proposal){
     await new Promise(res => setTimeout(res, 500));
-    metaLine("ParkMind preparó un cambio · espera tu aprobación");
+    metaLine("ParkMind prepared a change · waiting for your approval");
     openProposal();
   }
 }
@@ -951,7 +951,7 @@ function reset(){
   $("#chat").innerHTML = "";
   closeSheet(); closeProposal();
   renderPlan(); renderAlert(); go("home");
-  toast("Demostración reiniciada.");
+  toast("Demo reset.");
 }
 
 $("#closeSheet").onclick = closeSheet;
@@ -964,11 +964,11 @@ $("#resetBtn").onclick = reset;
 $("#rowReset").onclick = reset;
 $("#rowConstraints").onclick = () => {
   const c = FIXTURE.party_constraints;
-  toast(c.accessibility.map(a => a.label).join(" · ") + " · " + c.min_height_note + " · salida " + c.exit_by + " (todas obligatorias)");
+  toast(c.accessibility.map(a => a.label).join(" · ") + " · " + c.min_height_note + " · exit " + c.exit_by + " (all required)");
 };
-$("#modeMock").onclick = function(){ Adapter.mode="mock"; this.classList.add("on"); $("#modeLive").classList.remove("on"); toast("Leyendo del fixture local."); };
+$("#modeMock").onclick = function(){ Adapter.mode="mock"; this.classList.add("on"); $("#modeLive").classList.remove("on"); toast("Reading from the local fixture."); };
 $("#modeLive").onclick = function(){ this.classList.add("on"); $("#modeMock").classList.remove("on");
-  toast("Sin backend conectado. Las rutas /api son ilustrativas; el contrato real es P0-35."); 
+  toast("No backend connected. The /api routes are illustrative; the real contract is P0-35."); 
   setTimeout(()=>{ $("#modeMock").click(); }, 2600); };
 
 document.addEventListener("keydown", e => { if (e.key === "Escape"){ closeProposal(); closeSheet(); } });
