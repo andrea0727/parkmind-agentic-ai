@@ -1,0 +1,61 @@
+name: Embedding smoke
+
+# P0-26: the `requires_model` tests with the real multilingual embedding model.
+# Manual on purpose: the PR CI never downloads the model (its tests use the
+# deterministic HashingEmbedder), so a Hugging Face outage can never fail a PR.
+# Run it from the Actions tab after changing the corpus, the model or the
+# knowledge store. The model (~220 MB) is cached between runs.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  embedding-smoke:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:16
+        env:
+          POSTGRES_USER: parkmind
+          POSTGRES_PASSWORD: parkmind
+          POSTGRES_DB: parkmind
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U parkmind"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pgvector into the Postgres service
+        # Same package as database/Dockerfile and the CI workflow.
+        run: |
+          docker exec ${{ job.services.postgres.id }} sh -c \
+            'apt-get -o Acquire::Retries=5 update \
+             && apt-get -o Acquire::Retries=5 install -y --no-install-recommends "postgresql-$PG_MAJOR-pgvector"'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Cache the embedding model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/parkmind/fastembed
+          key: fastembed-paraphrase-multilingual-MiniLM-L12-v2
+
+      - name: Fetch the embedding model (a no-op when cached)
+        run: poetry run python scripts/fetch_embedding_model.py
+
+      - name: Real-model tests
+        run: poetry run pytest -m requires_model -v
+        env:
+          PARKMIND_TEST_DATABASE_URL: postgresql://parkmind:parkmind@localhost:5432/parkmind
