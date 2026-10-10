@@ -16,9 +16,12 @@ without importing an adapter (and therefore a DB driver).
 
 from .attraction_repository import AttractionRepository
 from .behavior_log_repository import BehaviorLogRepository
+from .context_data import ContextDataPort, FromSnapshotRef, SnapshotRef
 from .errors import (
     ConflictError,
     ConsentRequiredError,
+    ContextDataUnavailableError,
+    ContextTransportError,
     ForecastSourceError,
     IdMappingConflictError,
     InvalidRouteError,
@@ -67,11 +70,15 @@ __all__ = [
     "BehaviorLogRepository",
     "ConflictError",
     "ConsentRequiredError",
+    "ContextDataPort",
+    "ContextDataUnavailableError",
+    "ContextTransportError",
     "EntityKind",
     "EventRepository",
     "ExecutionStateRepository",
     "ForecastSourceError",
     "ForecastStrategy",
+    "FromSnapshotRef",
     "GuestRepository",
     "IdMappingConflictError",
     "IdMappingRepository",
@@ -107,6 +114,7 @@ __all__ = [
     "RoutingUnavailableError",
     "SessionStore",
     "SnapshotMeta",
+    "SnapshotRef",
     "SnapshotRepository",
     "StoredDataError",
     "WaitForecast",

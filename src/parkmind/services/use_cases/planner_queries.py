@@ -36,7 +36,7 @@ from parkmind.core.contracts import (
 )
 from parkmind.services.personalization.preference_scorer import PreferenceScores
 from parkmind.services.planning.park_graph import ParkGraph
-from parkmind.services.ports import WaitForecast
+from parkmind.services.ports import ContextDataPort, WaitForecast
 from parkmind.services.use_cases.build_plan import BuildPlanUseCase
 from parkmind.services.use_cases.check_plan import CheckPlanUseCase
 from parkmind.services.use_cases.forecast import build_forecast_service
@@ -153,9 +153,18 @@ def _stamp(
 
 
 class PlannerQueries:
-    def __init__(self, deps_factory: DepsFactory = default_planning_deps) -> None:
+    def __init__(
+        self,
+        deps_factory: DepsFactory = default_planning_deps,
+        *,
+        context_data: ContextDataPort | None = None,
+    ) -> None:
+        """Context is read in-process unless ``context_data`` is given: ``planner.*``
+        is served by parkmind-mcp itself, which never reads itself over MCP."""
         self._deps_factory = deps_factory
-        self._load = LoadContextUseCase(deps_factory)
+        self._load = LoadContextUseCase(
+            deps_factory, context_data=context_data, transport_from_settings=False
+        )
         self._build = BuildPlanUseCase(deps_factory)
         self._check = CheckPlanUseCase(deps_factory)
 

@@ -22,6 +22,9 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+# The server is the capability boundary: it reads its own data in-process and
+# never through itself over MCP, whatever .env says (set before settings load).
+os.environ["PARKMIND_CONTEXT_TRANSPORT"] = "in_process"
 
 from parkmind.tools.mcp_server import create_server
 
