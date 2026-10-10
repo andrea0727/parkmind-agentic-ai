@@ -248,6 +248,59 @@ poetry run python scripts/renormalize_snapshots.py             # rows from an ol
 poetry run python scripts/renormalize_snapshots.py --all       # or every snapshot
 ```
 
+### MCP capability boundary (P0-24..P0-27)
+
+`parkmind-mcp` publishes the same use cases the graph calls in-process as typed
+MCP tools (Architecture §27, C22/C23). The graph never depends on it; external
+clients (the LLM-only baseline, P1-15) and, when configured, LOAD CONTEXT do.
+Every result is `{data, provenance}` (§32); failures are structured
+`{"error": {code, message, retryable, details}}`. No tool proposes, persists or
+activates a plan.
+
+| Namespace | Tools |
+|---|---|
+| `data.*` (P0-25) | `get_live_waits`, `get_attraction_status`, `get_schedule`, `get_showtimes`, `get_weather`, `get_walking_time`, `get_attraction_info` |
+| `knowledge.*` (P0-26) | `search_policies`, `find_similar_attractions`, `check_accessibility` |
+| `planner.*` (P0-27) | `build_plan`, `check_plan`, `score_preferences`, `forecast_waits` (`replan` follows P0-23) |
+
+```bash
+# stdio (what an MCP client launches), or streamable HTTP at http://127.0.0.1:8765/mcp
+poetry run python scripts/run_mcp_server.py
+poetry run python scripts/run_mcp_server.py --http
+
+# explore it in the MCP Inspector
+npx @modelcontextprotocol/inspector poetry run python scripts/run_mcp_server.py
+```
+
+**Knowledge store (P0-26).** Semantic search runs on pgvector with a local
+multilingual model (fastembed, `paraphrase-multilingual-MiniLM-L12-v2`, ~220 MB,
+English questions against the Spanish corpus quoted from the official park
+pages). One-time setup, after `docker compose up -d --build` and
+`alembic ... upgrade head`:
+
+```bash
+poetry run python scripts/fetch_embedding_model.py   # download once into ~/.cache/parkmind/fastembed
+poetry run python scripts/index_knowledge.py         # embed the corpus into pgvector (idempotent)
+```
+
+Without the model or the index, `knowledge.search_policies` answers by keyword
+search over the same passages and says so in `provenance.degraded` (§43);
+`knowledge.check_accessibility` never degrades (fail-closed, P0-26a). PR CI never
+downloads the model; the manual **Embedding smoke** workflow runs the
+`requires_model` tests with it.
+
+**LOAD CONTEXT over MCP (P0-24).** `PARKMIND_CONTEXT_TRANSPORT=mcp` makes the graph
+read `data.*` and `knowledge.*` through the server at `PARKMIND_MCP_URL` (start
+it with `--http`); if the server is unreachable, the in-process adapter of the
+same port answers and `LoadedContext.transport` says `in_process_fallback`. The
+default, `in_process`, reads the snapshot directly.
+
+**Privacy (C19).** Planner tools take a `session_id` and `guest_ids`; the
+requirements are read from the SessionStore server-side and never travel in a
+request or a response (violations of the accessibility rules are reported
+without their values). A server in another process sees only `persisted`
+records, so a party with `session_only` requirements fails closed there.
+
 ### Using Poetry
 
 If you don't have Poetry installed:
@@ -281,6 +334,7 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 | **LangGraph State v2** | ✅ Done | Typed ParkMindState, state helpers, message reducer |
 | **Preference Resolution** | ✅ Done | Weighted aggregation from GuestProfile (queue, walking, categories) |
 | **Plan Synthesis** | ✅ Initial planning graph [P0-30] | ELICIT → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED. Runs on in-process use cases, no MCP server. EDITED approvals [P0-32] and replanning [P0-31] are follow-ups. |
+| **MCP capability boundary** | ✅ P0-24..P0-27 | `parkmind-mcp`: 14 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` follows P0-23. |
 | **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
 | **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
 | **PostgreSQL Repos** | ✅ Done | Profiles, Plans, Session store (in-memory for accessibility) |
