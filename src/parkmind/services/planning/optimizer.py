@@ -134,6 +134,7 @@ class GreedyInsertionOptimizer:
         forecast_service: ForecastService | None = None,
         now: datetime | None = None,
         scores: PreferenceScores | None = None,
+        start_location_node_id: str | None = None,
     ) -> Plan:
         """Build a candidate plan.
 

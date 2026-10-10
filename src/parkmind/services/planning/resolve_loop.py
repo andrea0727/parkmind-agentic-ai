@@ -79,6 +79,7 @@ class PlannerResolveLoop:
         provenance: Provenance | None = None,
         group_objective: GroupObjective | None = None,
         context_reloader: Callable[[], LiveContext] | None = None,
+        start_location_node_id: str | None = None,
     ) -> PlannerResolveResult:
         """
         Run the repair loop up to max_attempts.
@@ -104,6 +105,7 @@ class PlannerResolveLoop:
                 restaurant_node_ids=restaurant_node_ids,
                 provenance=provenance,
                 group_objective=group_objective,
+                start_location_node_id=start_location_node_id,
             )
 
             # 2. Check candidate plan
@@ -115,6 +117,7 @@ class PlannerResolveLoop:
                 park=park,
                 live_context=current_context,
                 now=now,
+                start_location_node_id=start_location_node_id,
             )
 
             # 3. If clean check, return success

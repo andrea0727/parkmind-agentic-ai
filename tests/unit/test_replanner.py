@@ -16,7 +16,7 @@ from parkmind.core.contracts import (
     Provenance,
 )
 from parkmind.core.contracts.models import Plan, Stop
-from parkmind.services.planning.replanner import Replanner, ReplanResult
+from parkmind.services.planning.replanner import Replanner
 
 DAY = datetime(2026, 10, 8, tzinfo=PARK_TZ)
 
