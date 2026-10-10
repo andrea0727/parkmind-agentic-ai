@@ -1,0 +1,46 @@
+{
+  "id": "sin_hora_salida",
+  "messages": [
+    "We are 2 adults and want to ride Dumbo."
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": null,
+  "now": "20:56",
+  "steps": [],
+  "llm_calls": 1,
+  "extracted": {
+    "party_size": 2,
+    "must_do": [
+      "Dumbo"
+    ],
+    "avoid": [],
+    "departure_time": null,
+    "lunch_window": null,
+    "heights": [
+      null,
+      null
+    ],
+    "n_guests": 2
+  },
+  "stages_elicit": [],
+  "interrupt1": {
+    "kind": "missing_information",
+    "payload": {
+      "kind": "missing_information",
+      "missing": [
+        "departure_time"
+      ],
+      "question": "What time do you plan to leave the park?"
+    }
+  },
+  "facts1": {
+    "last_ai": "What time do you plan to leave the park?"
+  },
+  "seconds": 14.2
+}

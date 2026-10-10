@@ -1,0 +1,86 @@
+{
+  "id": "presupuesto_caminata_minimo",
+  "messages": [
+    "We are 2 adults. Adults are 170 cm. We want Space Mountain, Seven Dwarfs Mine Train and Peter Pan's Flight. We can only walk 10 minutes in total. We leave at 10 PM."
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": null,
+  "now": "21:01",
+  "steps": [],
+  "llm_calls": 1,
+  "extracted": {
+    "party_size": 2,
+    "must_do": [
+      "Space Mountain",
+      "Seven Dwarfs Mine Train",
+      "Peter Pan's Flight"
+    ],
+    "avoid": [],
+    "departure_time": "22:00",
+    "lunch_window": null,
+    "heights": [
+      170,
+      170
+    ],
+    "n_guests": 2
+  },
+  "stages_elicit": [],
+  "interrupt1": {
+    "kind": "hard_constraint_confirmation",
+    "payload": {
+      "kind": "hard_constraint_confirmation",
+      "pending": [
+        "must_do: Space Mountain",
+        "must_do: Seven Dwarfs Mine Train",
+        "must_do: Peter Pan's Flight",
+        "departure_time: 22:00",
+        "walking_budget: 10",
+        "height:g1: 170",
+        "height:g2: 170"
+      ],
+      "echo": [
+        "'Space Mountain' is a must-do: the plan has to include it.",
+        "'Seven Dwarfs Mine Train' is a must-do: the plan has to include it.",
+        "'Peter Pan's Flight' is a must-do: the plan has to include it.",
+        "You leave the park at 22:00: the plan must end by then.",
+        "The party's total walking must not exceed 10 minutes.",
+        "Guest 1 is 170 cm tall (about 5'7\"): rides with a higher minimum will be skipped.",
+        "Guest 2 is 170 cm tall (about 5'7\"): rides with a higher minimum will be skipped."
+      ],
+      "accessibility_guests": []
+    }
+  },
+  "facts1": {},
+  "stages": [
+    "load_context",
+    "resolve_group",
+    "build_plan",
+    "check"
+  ],
+  "interrupt2": null,
+  "facts2": {
+    "check_valid": false,
+    "violations": [
+      {
+        "rule": "OPENING_HOURS",
+        "message": "Stop 72c7343a-f7fb-4f66-95df-c91016de7338 falls outside park operating hours"
+      },
+      {
+        "rule": "OPENING_HOURS",
+        "message": "Stop 5a43d1a7-ad53-4d25-abfe-25625f0da304 falls outside park operating hours"
+      },
+      {
+        "rule": "WALKING_BUDGET",
+        "message": "Plan walking total 85.4 minutes exceeds party budget of 10 minutes"
+      }
+    ],
+    "last_ai": "I couldn't build a plan that meets every requirement, so nothing was proposed.\n- Stop 72c7343a-f7fb-4f66-95df-c91016de7338 falls outside park operating hours\n- Stop 5a43d1a7-ad53-4d25-abfe-25625f0da304 falls outside park operating hours\n- Plan walking total 85.4 minutes exceeds party budget of 10 minutes\nYou can relax a constraint (for example the must-dos or the departure time) and I'll try again."
+  },
+  "seconds": 21.6
+}

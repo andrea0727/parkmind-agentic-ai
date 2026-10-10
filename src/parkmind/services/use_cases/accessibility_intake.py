@@ -21,9 +21,9 @@ from parkmind.core.contracts import (
     MobilityRequirement,
     RideRestriction,
 )
-from parkmind.services.clients.postgres import PostgresSessionStore, connect
+from parkmind.services.clients.postgres import connect
 from parkmind.services.ports import ConsentRequiredError, SessionStore
-from parkmind.services.use_cases.session_memory import SESSION_MEMORY
+from parkmind.services.use_cases.session_memory import session_store
 
 RetentionPolicy = Literal["session_only", "persisted"]
 DEFAULT_RETENTION: RetentionPolicy = "session_only"
@@ -70,7 +70,7 @@ class StagedAccessibility:
 def _default_store() -> Iterator[SessionStore]:
     conn = connect()
     try:
-        yield PostgresSessionStore(conn, SESSION_MEMORY)
+        yield session_store(conn)
     finally:
         conn.close()
 

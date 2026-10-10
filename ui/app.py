@@ -2,7 +2,7 @@
 Streamlit entrypoint. Calls the agent graphs directly, in-process — no API
 layer this month.
 
-TODO: chat input -> parkmind.graph.initial_planning_graph -> render
+TODO: chat input -> parkmind.graph.initial_planning_graph.build_initial_planning_graph() -> render
 Proposal as a card with Approve / Edit / Reject buttons -> on decision,
 resume the graph via LangGraph's checkpointer.
 """

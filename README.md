@@ -151,27 +151,20 @@ poetry run streamlit run ui/app.py
 
 #### Wiring the session store
 
-Create **one** `SessionMemory` per process at startup and pass that same
-instance to every `PostgresSessionStore`. A store is cheap and can live per
-request, but the memory must outlive it. A fresh memory per request would
-silently drop a guest's `session_only` accessibility needs mid-session.
+There is **one** `SessionMemory` per process, `SESSION_MEMORY` in
+`parkmind.services.use_cases.session_memory`. Build every store through
+`session_store(conn)`, never `PostgresSessionStore(conn, SessionMemory())`: a
+fresh memory would silently drop a guest's `session_only` accessibility needs
+between the intake and `load_context` (a test enforces this).
 
 ```python
-from parkmind.services.clients.postgres.connection import connect
-from parkmind.services.clients.postgres.session_store import (
-    PostgresSessionStore,
-    SessionMemory,
-)
-
-SESSION_MEMORY = SessionMemory()  # once, at process startup
-
+from parkmind.services.clients.postgres import connect
+from parkmind.services.use_cases.session_memory import session_store
 
 def handle_request(thread_id: str, guest_id: str) -> None:
     with connect() as conn:  # per request
-        store = PostgresSessionStore(conn, SESSION_MEMORY)
-        requirements = store.get(
-            thread_id, guest_id
-        )  # session_id == LangGraph thread_id
+        store = session_store(conn)
+        requirements = store.get(thread_id, guest_id)  # session_id == LangGraph thread_id
         ...
 ```
 
@@ -281,7 +274,7 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 |---|---|---|
 | **LangGraph State v2** | ✅ Done | Typed ParkMindState, state helpers, message reducer |
 | **Preference Resolution** | ✅ Done | Weighted aggregation from GuestProfile (queue, walking, categories) |
-| **Plan Synthesis** | 🚧 In progress | DRAFT plan generation (stub algorithm). The candidate is persisted alongside a PENDING proposal in `_propose_plan`; activation is deferred until the interrupt is resumed with an APPROVED decision. ConstraintChecker gating [P0-20] and real `snapshot_id` provenance [P0-30] are follow-ups. |
+| **Plan Synthesis** | ✅ Initial planning graph [P0-30] | ELICIT → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED. Runs on in-process use cases, no MCP server. EDITED approvals [P0-32] and replanning [P0-31] are follow-ups. |
 | **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
 | **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
 | **PostgreSQL Repos** | ✅ Done | Profiles, Plans, Session store (in-memory for accessibility) |

@@ -1,0 +1,54 @@
+{
+  "id": "confirmacion_basura",
+  "messages": [
+    "We are 2 adults. Adults are 170 cm. We want Dumbo. We leave at 10 PM."
+  ],
+  "confirm_payload": "yes",
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": null,
+  "now": "20:57",
+  "steps": [],
+  "llm_calls": 1,
+  "extracted": {
+    "party_size": 2,
+    "must_do": [
+      "Dumbo"
+    ],
+    "avoid": [],
+    "departure_time": "22:00",
+    "lunch_window": null,
+    "heights": [
+      170,
+      170
+    ],
+    "n_guests": 2
+  },
+  "stages_elicit": [],
+  "interrupt1": {
+    "kind": "hard_constraint_confirmation",
+    "payload": {
+      "kind": "hard_constraint_confirmation",
+      "pending": [
+        "must_do: Dumbo the Flying Elephant",
+        "departure_time: 22:00",
+        "height:g1: 170",
+        "height:g2: 170"
+      ],
+      "echo": [
+        "'Dumbo the Flying Elephant' is a must-do: the plan has to include it.",
+        "You leave the park at 22:00: the plan must end by then.",
+        "Guest 1 is 170 cm tall (about 5'7\"): rides with a higher minimum will be skipped.",
+        "Guest 2 is 170 cm tall (about 5'7\"): rides with a higher minimum will be skipped."
+      ],
+      "accessibility_guests": []
+    }
+  },
+  "facts1": {},
+  "exception": {
+    "type": "AttributeError",
+    "message": "'str' object has no attribute 'get'"
+  },
+  "seconds": 17.2
+}
