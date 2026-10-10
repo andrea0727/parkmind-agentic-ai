@@ -13,7 +13,7 @@ from typing import Any
 
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from parkmind.services.use_cases.planning_deps import ContextUnavailableError
 from parkmind.tools.contracts import ToolProvenance, ToolResult
@@ -173,3 +173,42 @@ def test_stdio_client_lists_all_namespaced_tools() -> None:
 
     assert server_info is not None and server_info.name == SERVER_NAME
     assert sorted(names) == sorted(build_registry().names())
+
+
+class _TagsRequest(BaseModel):
+    name: str
+    tags: list[str] = Field(default_factory=list)
+
+
+def test_fields_with_a_default_factory_are_optional_over_mcp() -> None:
+    """Regression: a ``default_factory`` field was published as required."""
+
+    def handler(request: _TagsRequest) -> ToolResult[WaitsData]:
+        return ToolResult[WaitsData](
+            data=WaitsData(waits={t: 0.0 for t in request.tags}),
+            provenance=ToolProvenance(source="test"),
+        )
+
+    registry = ToolRegistry(
+        [
+            ToolSpec(
+                namespace="data",
+                name="tagged",
+                description="Tagged.",
+                request_model=_TagsRequest,
+                data_model=WaitsData,
+                handler=handler,
+            )
+        ]
+    )
+
+    async def run() -> Any:
+        async with Client(create_server(registry)) as client:
+            (tool,) = (await client.list_tools()).tools
+            return tool, await client.call_tool("data.tagged", {"name": "x"})
+
+    tool, result = asyncio.run(run())
+
+    assert tool.input_schema["required"] == ["name"]
+    assert result.is_error is False
+    assert result.structured_content["data"] == {"waits": {}}

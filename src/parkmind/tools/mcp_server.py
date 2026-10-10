@@ -65,7 +65,7 @@ def _tool_function(registry: ToolRegistry, spec: ToolSpec) -> Any:
             annotation=info.annotation,
             default=inspect.Parameter.empty
             if info.is_required()
-            else info.get_default(),
+            else info.get_default(call_default_factory=True),
         )
         for name, info in spec.request_model.model_fields.items()
     ]
