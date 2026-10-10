@@ -23,6 +23,7 @@ from .errors import (
     IdMappingConflictError,
     InvalidRouteError,
     InvalidStateTransitionError,
+    KnowledgeUnavailableError,
     NotApprovedError,
     NotFoundError,
     PendingProposalExistsError,
@@ -44,7 +45,13 @@ from .execution_state_repository import ExecutionStateRepository
 from .forecast import ForecastStrategy, WaitForecast
 from .guest_repository import GuestRepository
 from .id_mapping_repository import EntityKind, IdMappingRepository
-from .knowledge_store import KnowledgeStore
+from .knowledge_store import (
+    KnowledgeChunk,
+    KnowledgeHit,
+    KnowledgeKind,
+    KnowledgeSearch,
+    KnowledgeStore,
+)
 from .park_data import ParkDataPort
 from .plan_repository import PlanRepository
 from .profile_repository import ProfileRepository
@@ -70,7 +77,12 @@ __all__ = [
     "IdMappingRepository",
     "InvalidRouteError",
     "InvalidStateTransitionError",
+    "KnowledgeChunk",
+    "KnowledgeHit",
+    "KnowledgeKind",
+    "KnowledgeSearch",
     "KnowledgeStore",
+    "KnowledgeUnavailableError",
     "NotApprovedError",
     "NotFoundError",
     "ParkDataPort",

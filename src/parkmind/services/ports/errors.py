@@ -103,3 +103,12 @@ class RoutingSchemaError(RoutingError):
 
 class ForecastSourceError(Exception):
     """A forecast strategy's source failed or is malformed (section 43: fall back)."""
+
+
+# --- Knowledge port exceptions ---
+
+
+class KnowledgeUnavailableError(Exception):
+    """Semantic retrieval cannot answer: no index for this corpus and embedder,
+    the embedding model is not available, or the store failed (section 43:
+    degrade to keyword search; accessibility checks never degrade)."""
