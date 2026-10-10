@@ -16,7 +16,9 @@ on:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
+    # Pinned: GitHub moves `ubuntu-latest` to Ubuntu 26 from 2026-10-19; change
+    # the image on purpose, not by surprise.
+    runs-on: ubuntu-24.04
     services:
       postgres:
         # Official Docker Hub image via its AWS ECR Public mirror: anonymous
