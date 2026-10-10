@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ParkMind · Agent graph (interactive)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --dusk:#241A54;--twilight:#4A2FA8;--flamingo:#E0218A;--lagoon:#12938C;--marigold:#FFB627;
+  --ink:#241A54;--muted:#6F6893;--faint:#9B95B5;--wash:#F4F2FB;--line:#E7E3F4;--page:#E9E6F3;
+  --card:#FFFFFF;--bound:#CFC9E6;--red:#D64545;--sub:#6B55C9;--shadow:0 1px 2px rgba(36,26,84,.08),0 4px 14px rgba(36,26,84,.06);
+}
+:root[data-theme=dark]{
+  --ink:#E8E4F6;--muted:#B0A9D2;--faint:#8A83AE;--wash:#1F1940;--line:#352C66;--page:#17122F;
+  --card:#241D4A;--bound:#43397F;--twilight:#8F78F0;--shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]){
+    --ink:#E8E4F6;--muted:#B0A9D2;--faint:#8A83AE;--wash:#1F1940;--line:#352C66;--page:#17122F;
+    --card:#241D4A;--bound:#43397F;--twilight:#8F78F0;--shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3);
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--page);color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+body{padding-bottom:300px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:14px 24px 6px}
+h1{font-size:20px;margin:0;font-weight:800;letter-spacing:-.2px}
+h1 small{font-weight:600;color:var(--muted);font-size:13px;margin-left:8px}
+.spacer{flex:1}
+.btn,select{font:600 12px 'Plus Jakarta Sans',sans-serif;color:var(--ink);background:var(--card);border:1px solid var(--line);
+  border-radius:999px;padding:6px 12px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn:hover,select:hover{border-color:var(--twilight)}
+.btn.primary{background:var(--twilight);color:#fff;border-color:var(--twilight)}
+.btn.on{background:var(--flamingo);color:#fff;border-color:var(--flamingo)}
+.btn:disabled{opacity:.4;cursor:default}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:4px 24px 8px}
+.toolbar label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+#scn{min-width:300px;border-radius:10px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;padding:0 24px 8px;font-size:11.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.lg{width:14px;height:10px;border-radius:3px;border:2px solid var(--k)}
+.lg.dash{border-style:dashed}
+.caption{margin:0 16px 8px;padding:10px 16px;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--twilight);
+  border-radius:12px;box-shadow:var(--shadow);font-size:13px;min-height:58px}
+.caption b{font-weight:800}
+.caption .meta{font-size:10.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:2px}
+.caption code,#dock code{font:500 11px ui-monospace,Menlo,monospace;background:var(--wash);padding:1px 6px;border-radius:5px}
+.caption .io{margin-top:4px;font-size:11.5px;color:var(--muted)}
+.caption.human{border-left-color:var(--flamingo)}.caption.error{border-left-color:var(--red)}
+.stage{margin:0 16px;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:auto}
+svg{display:block;min-width:1250px;width:100%;height:auto}
+svg text{font-family:'Plus Jakarta Sans',system-ui,sans-serif;fill:var(--ink)}
+.lane rect{fill:var(--wash);fill-opacity:.55;stroke:var(--bound);stroke-width:1.5;stroke-dasharray:7 5;rx:16}
+.lane.target rect{stroke:var(--marigold);fill:rgba(255,182,39,.07)}
+.lane text{font-size:11px;font-weight:800;letter-spacing:.8px;fill:var(--muted)}
+.guard rect{fill:rgba(214,69,69,.04);stroke:var(--red);stroke-width:1.5;stroke-dasharray:6 5;rx:14}
+.guard text{font-size:10px;font-weight:800;fill:var(--red);letter-spacing:.5px}
+.edge path{fill:none;stroke:var(--faint);stroke-width:1.8;stroke-linejoin:round;opacity:.75}
+.edge polygon{fill:var(--faint);opacity:.75}
+.edge text{font-size:10px;font-weight:700;fill:var(--muted);paint-order:stroke;stroke:var(--card);stroke-width:4px;stroke-linejoin:round}
+.flow .edge.live path{stroke-dasharray:6 6;animation:march 1.2s linear infinite}
+.edge.target path{stroke:var(--marigold);stroke-dasharray:5 5}.edge.target polygon{fill:var(--marigold)}
+.edge.errp path{stroke:var(--red)}.edge.errp polygon{fill:var(--red)}.edge.errp text{fill:var(--red)}
+.edge.done path{stroke:var(--twilight);opacity:1;stroke-width:2.6}.edge.done polygon{fill:var(--twilight);opacity:1}
+.edge.done text{fill:var(--twilight)}
+.edge.active path{stroke:var(--flamingo);opacity:1;stroke-width:3.4;stroke-dasharray:none;animation:none}
+.edge.active polygon{fill:var(--flamingo);opacity:1}
+@keyframes march{to{stroke-dashoffset:-24}}
+.node{cursor:pointer}
+.node rect.card{fill:var(--card);stroke:var(--k);stroke-width:2;rx:11;filter:drop-shadow(0 1px 2px rgba(36,26,84,.14))}
+.node circle.card{fill:var(--card);stroke:var(--k);stroke-width:2.2}
+.node.human rect.card{stroke-dasharray:7 4}
+.node.target rect.card{stroke-dasharray:6 4}
+.node rect.tint,.node circle.tint{fill:var(--k);opacity:0;rx:11;pointer-events:none}
+.node.visited rect.tint,.node.visited circle.tint{opacity:.13}
+.node.active rect.tint,.node.active circle.tint{opacity:.30}
+.node.active rect.card,.node.active circle.card{stroke-width:3.6;animation:glow 1.3s ease-in-out infinite}
+@keyframes glow{0%,100%{filter:drop-shadow(0 0 0 var(--k))}50%{filter:drop-shadow(0 0 11px var(--k))}}
+.node.sel rect.card{stroke-width:3.2}
+.node .t{font-size:12.5px;font-weight:800;text-anchor:middle}
+.node .s{font-size:9.5px;font-weight:500;text-anchor:middle;fill:var(--muted)}
+.node .pill{fill:var(--k)}.node .pt{font-size:8.5px;font-weight:800;fill:#fff;letter-spacing:.4px}
+.node.target .pt{fill:#241A54}
+.node .ib{fill:var(--k);stroke:var(--card);stroke-width:2;pointer-events:none}
+.node .ic{fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.node.target .ic{stroke:#241A54}.node.term .ic{stroke:var(--k)}
+.llm{--k:var(--twilight)}.human{--k:var(--flamingo)}.det{--k:var(--lagoon)}.sub{--k:var(--sub)}
+.err{--k:var(--red)}.target{--k:var(--marigold)}.term{--k:var(--muted)}
+.pay{font:600 10px ui-monospace,Menlo,monospace;fill:var(--flamingo)!important;paint-order:stroke;stroke:var(--card);stroke-width:4px}
+.pay.out{fill:var(--twilight)!important}
+.pay.errt{fill:var(--red)!important}
+#token circle{fill:var(--flamingo)}
+#token .halo{fill:var(--flamingo);opacity:.25}
+@media (prefers-reduced-motion:reduce){.flow .edge.live path,.node.active rect.card{animation:none}}
+#dock{position:fixed;left:0;right:0;bottom:0;height:290px;background:var(--card);border-top:2px solid var(--twilight);
+  box-shadow:0 -6px 24px rgba(36,26,84,.14);display:grid;grid-template-columns:1.15fr 1fr .85fr;z-index:5}
+#dock>section{padding:10px 18px;overflow:auto;border-right:1px solid var(--line)}
+#dock>section:last-child{border-right:0}
+#dock h2{margin:0 0 3px;font-size:14px;font-weight:800}
+#dock h3{font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin:8px 0 3px}
+#dock ul{margin:0;padding-left:16px;font-size:11.5px;line-height:1.45}
+#dock .hint{font-size:12px;color:var(--muted)}
+.kind{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;padding:2px 8px;border-radius:999px;margin-left:8px;color:#fff;background:var(--k)}
+.target.kind{color:#241A54}
+.st{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:11px;align-items:baseline}
+.st dt{font:600 10.5px ui-monospace,Menlo,monospace;color:var(--muted)}
+.st dd{margin:0;color:var(--faint)}
+.st dd.set{color:var(--ink);font-weight:600}
+.st dd.chg{color:var(--flamingo);font-weight:800}
+.tr{list-style:none;padding:0!important;margin:0}
+.tr li{display:flex;gap:8px;align-items:center;padding:3px 6px;border-radius:7px;font-size:11.5px;cursor:pointer}
+.tr li:hover{background:var(--wash)}
+.tr li.cur{background:var(--wash);font-weight:800}
+.tr li i{width:9px;height:9px;border-radius:50%;border:2px solid var(--k);flex:none}
+.tr li.past i{background:var(--k)}
+.tr li.fut{opacity:.5}
+.tr li.fail{color:var(--red)}
+</style>
+</head>
+<body>
+<header>
+  <h1>ParkMind <small>Agent graph · how the agent works</small></h1>
+  <span class="spacer"></span>
+  <button class="btn" id="theme">Theme</button>
+  <a class="btn primary" href="architecture.html">← Architecture</a>
+</header>
+<div class="toolbar">
+  <label for="scn">Scenario</label><select id="scn"></select>
+  <button class="btn" id="prev" title="Previous step">◀ Prev</button>
+  <button class="btn primary" id="play">▶ Play</button>
+  <button class="btn" id="next" title="Next step">Next ▶</button>
+  <button class="btn" id="reset">Reset</button>
+  <label for="speed">Speed</label>
+  <select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
+  <button class="btn on" id="flowBtn">Live lines</button>
+  <button class="btn" id="dockBtn">Hide panels</button>
+</div>
+<div class="legend">
+  <span style="--k:var(--twilight)"><i class="lg"></i>LLM</span>
+  <span style="--k:var(--flamingo)"><i class="lg dash"></i>Human interrupt</span>
+  <span style="--k:var(--lagoon)"><i class="lg"></i>Deterministic</span>
+  <span style="--k:var(--sub)"><i class="lg"></i>Subgraph</span>
+  <span style="--k:var(--red)"><i class="lg"></i>Error path</span>
+  <span style="--k:var(--marigold)"><i class="lg dash"></i>Target / stub</span>
+  <span>Click a node for details · scenarios replay the real agent flows</span>
+</div>
+<div class="caption" id="cap"></div>
+<div class="stage" id="stage"><svg id="svg" viewBox="0 44 1500 1000" role="img" aria-label="ParkMind agent graph"></svg></div>
+<div id="dock">
+  <section id="pNode"></section>
+  <section id="pState"></section>
+  <section id="pTrace"></section>
+</div>
+
+<script>
+const NS='http://www.w3.org/2000/svg';
+const LANES=[
+ {y:60,h:310,label:'1 · ELICITATION GRAPH · P0-29'},
+ {y:410,h:390,label:'2 · PLANNING STAGE · P0-30 · compiled as the "downstream" subgraph'},
+ {y:830,h:210,label:'3 · REPLANNING GRAPH · §36 · TARGET / STUB',target:true}
+];
+const KIND={llm:'LLM',human:'HUMAN INTERRUPT',det:'DETERMINISTIC',sub:'SUBGRAPH',err:'ERROR PATH',target:'TARGET',term:''};
+const G='graph/elicitation_graph.py',P='graph/initial_planning_graph.py';
+const R=(cx,cy,w,h)=>({x:cx-w/2,y:cy-h/2,w,h,cx,cy});
+const NODES=[
+ {id:'start',kind:'term',shape:'circle',cx:60,cy:230,r:18,title:'START',dock:{what:'Thread starts; the guest message is added to state.messages.',notes:['<code>thread_id</code> keys the checkpointer and the SessionStore']}},
+ {id:'elicit',kind:'llm',...R(240,230,200,60),title:'elicit',sub:'extractor proposes constraints',pay:{x:240,y:282,a:'middle'},
+  dock:{file:G+' · agents/elicit_agent.py',calls:'GuestInfoExtractor (AnthropicExtractor, Claude Haiku 4.5) · AccessibilityIntakeUseCase.stage · AttractionNameResolver',
+   reads:'messages',writes:'constraints · guest_profiles · pending_hard_constraint_confirmation · messages',
+   notes:['Only <b>proposes</b>: <code>constraints_valid</code> stays False','Accessibility flags are staged in the intake use case; state keeps guest ids only [C19]','Must-do / avoid names are resolved to catalog node_ids, fail-closed','Router: constraints → confirm; last message is AI → ask_missing; otherwise elicit again']}},
+ {id:'ask',kind:'human',...R(240,110,200,60),title:'ask_missing',sub:'interrupt · missing information',pay:{x:240,y:74,a:'middle'},
+  dock:{file:G,calls:'langgraph.types.interrupt',reads:'messages[-1] (AI question)',writes:'messages (answer as HumanMessage)',
+   notes:['Interrupt payload: <code>{kind:"missing_information", missing, question}</code>','Resume value: the answer text (str)','Then back to <code>elicit</code>']}},
+ {id:'confirm',kind:'human',...R(560,230,230,60),title:'confirm_hard_constraints',sub:'interrupt · human confirms + consents',pay:{x:578,y:290,a:'start'},
+  dock:{file:G,calls:'interrupt · AccessibilityIntakeUseCase.commit / discard',reads:'pending_hard_constraint_confirmation',writes:'pending (cleared) · accessibility_ref (ids) · or resets constraints',
+   notes:['Payload: <code>{kind:"hard_constraint_confirmation", pending, echo, accessibility_guests}</code>','Resume: <code>{confirmed, consent, retention_policy, correction}</code>','Re-interrupts with <code>reason:"consent_required"</code> until consent is given or confirmed is false','Not confirmed: discards staged flags; an empty correction goes to ask_missing, a text correction to elicit','If the staged flags were lost (restart) it re-extracts and asks again','Retention defaults to <code>session_only</code>; consent comes from the human, never the LLM [C19]']}},
+ {id:'validate',kind:'det',...R(860,230,200,60),title:'validate_constraints',sub:'only writer of constraints_valid',
+  dock:{file:G,calls:'pure checks',reads:'constraints · pending · accessibility_ref',writes:'constraints_valid = True',
+   notes:['Refuses if hard constraints are still unconfirmed','accessibility_ref must be a subset of the party guests; party_size must equal the number of guests']}},
+ {id:'down',kind:'sub',...R(1150,230,200,60),title:'downstream',sub:'planning stage subgraph',
+  dock:{file:P,calls:'build_planning_stage()',notes:['Shares <code>ParkMindState</code> and the parent checkpointer','Every planning node starts with <code>ensure_confirmed()</code>, which fails loudly if constraints are unconfirmed']}},
+ {id:'load',kind:'det',...R(140,560,150,56),title:'load_context',sub:'§43 snapshot fallback',
+  dock:{file:P,calls:'LoadContextUseCase',reads:'thread_id · accessibility_ref',writes:'live_context',
+   notes:['Order: fresh SnapshotCollector (ThemeParks /live + /schedule, Open-Meteo hourly) → latest valid stored snapshot → <code>ContextUnavailableError</code>','First node that reads accessibility requirements, from the SessionStore keyed by thread_id [C19]','With ThemeParks down and a populated DB it degrades to the stored snapshot and still plans']}},
+ {id:'group',kind:'det',...R(350,560,150,56),title:'resolve_group',sub:'one group objective',
+  dock:{file:P,calls:'BuildPlanUseCase.resolve_group → GroupPreferenceResolver',reads:'constraints · guest_profiles · live_context',writes:'group_objective',
+   notes:['Hard constraints are a <b>union</b>, never an average','Soft preferences are weighted into one objective']}},
+ {id:'build',kind:'det',...R(560,560,150,56),title:'build_plan',sub:'optimizer + resolve loop',
+  dock:{file:P,calls:'BuildPlanUseCase.build → PreferenceScorer · GreedyInsertionOptimizer on ParkGraph · ForecastService · RoutingClient · PlannerResolveLoop + repair_moves (§21)',
+   reads:'constraints · group_objective · live_context · now',writes:'candidate_plan · live_context · check_result=None · explanation=None',
+   notes:['Deterministic: the LLM never edits the plan','Walking times come from the routing client; waits come from the forecast service']}},
+ {id:'check',kind:'det',...R(770,560,150,56),title:'check_plan',sub:'ConstraintChecker · 11 rules',
+  dock:{file:P,calls:'CheckPlanUseCase → ConstraintChecker',reads:'candidate_plan · constraints · accessibility (per thread_id) · live_context',writes:'check_result',
+   notes:['RuleId: OPENING_HOURS, HEIGHT, SHOW_ARRIVAL, MUST_DO, AVOID, WALKING_BUDGET, LUNCH_WINDOW, DEPARTURE, ACCESSIBILITY, RIDE_RESTRICTION, DATA_FRESHNESS','Conditional edge: valid → explain; invalid → no_valid_plan','HEIGHT is fail-closed: an unknown height makes the plan invalid']}},
+ {id:'explain',kind:'det',...R(985,490,150,56),title:'explain',sub:'deterministic template',
+  dock:{file:P,calls:'ExplainPlanUseCase',reads:'candidate_plan · check_result',writes:'explanation',
+   notes:['Raises <code>ExplainBeforeValidationError</code> for an invalid result']}},
+ {id:'propose',kind:'det',...R(1175,490,150,56),title:'propose_plan',sub:'save + PENDING proposal',
+  dock:{file:P,calls:'ProposePlanUseCase',reads:'candidate_plan · explanation · check_result',writes:'proposal',
+   notes:['Re-asserts <code>check_result.valid</code> (CheckNotPassedError)','Saves the plan and a PENDING proposal in one transaction; supersedes earlier open proposals','Runs as its own node so no side effect sits before the interrupt']}},
+ {id:'approve',kind:'human',...R(1365,490,150,56),title:'interrupt_approval',sub:'human decides',pay:{x:1440,y:540,a:'end'},
+  dock:{file:P,calls:'interrupt · ResolveProposalUseCase',reads:'candidate_plan · proposal',writes:'approval · rejection_reason · current_plan (on approval)',
+   notes:['Payload: <code>{kind:"plan_approval", candidate_plan, proposal}</code>','Resume: <code>{decision: APPROVED | REJECTED, rejection_reason}</code>','EDITED is not supported yet (P0-32); an invalid resume re-interrupts with an "error", before any side effect','<b>The only place a plan is activated</b>: ResolveProposalUseCase is the sole call site of PlanRepository.activate']}},
+ {id:'novalid',kind:'det',...R(985,650,150,56),title:'no_valid_plan',sub:'explains why · no proposal',
+  dock:{file:P,calls:'(pure)',reads:'check_result',writes:'messages · candidate_plan=None',notes:['check_result stays in state','Message lists each violation and suggests relaxing a constraint']}},
+ {id:'end',kind:'term',shape:'circle',cx:1365,cy:650,r:18,title:'END',dock:{what:'The run ends. Whether the thread continues depends on whether a plan was activated.'}},
+ {id:'unav',kind:'err',...R(770,740,230,50),title:'UNAVAILABLE_MESSAGE',sub:'no plan, nothing proposed',
+  dock:{file:P,calls:'_guarded()',writes:'messages (plain-language message) · candidate_plan / check_result / explanation = None',
+   notes:['Any <code>PlanningUnavailableError</code> raised inside a guarded node ends the stage with a message, not an exception','Guarded: load_context, resolve_group, build_plan, check_plan, explain, propose_plan. Not guarded: no_valid_plan, interrupt_approval and the elicitation nodes']}},
+...[['EVENT','event_detector (stub)'],['EVENT POLICY','policy'],['LOAD CONTEXT','reuse'],['REPLAN','Replanner (stub)'],['CHECK PLAN','reuse + resolve_loop'],
+   ['PLAN DIFF','plan_diff ✓ exists'],['EXPLAIN','reuse'],['PROPOSE','reuse'],['INTERRUPT','human'],['HUMAN DECISION','approve / reject']]
+  .map(([t,s],i)=>({id:'r'+i,kind:'target',...R(144+142*i,930,118,56),title:t,sub:s,
+   dock:{file:'graph/replanning_graph.py',notes:['Target state machine (§36). <code>build_replanning_graph()</code> raises <code>NotImplementedError</code>; commented out in agent.py and langgraph.json','EventDetector, Replanner, MonitorEvents and ReplanUseCase are stubs','<code>diff_plans</code> exists in services/planning but is not wired into any graph']}}))
+];
+const NODE=Object.fromEntries(NODES.map(n=>[n.id,n]));
+
+const E=(from,to,pts,o={})=>({from,to,pts,...o});
+const EDGES=[
+ E('start','elicit',[[78,230],[140,230]]),
+ E('elicit','ask',[[205,200],[205,140]],{label:'AI question pending',lx:196,ly:172,a:'end'}),
+ E('ask','elicit',[[275,140],[275,200]],{label:'answer',lx:284,ly:172,a:'start'}),
+ E('elicit','elicit',[[165,260],[165,286],[225,286],[225,260]],{label:'new input',lx:195,ly:300}),
+ E('elicit','confirm',[[340,230],[445,230]],{label:'proposed',lx:392,ly:221}),
+ E('confirm','ask',[[560,200],[560,110],[340,110]],{label:'empty correction',lx:450,ly:101}),
+ E('confirm','elicit',[[560,260],[560,332],[300,332],[300,260]],{label:'correction · back to extraction',lx:430,ly:325}),
+ E('confirm','validate',[[675,230],[760,230]],{label:'confirmed',lx:718,ly:221}),
+ E('validate','down',[[960,230],[1050,230]]),
+ E('down','load',[[1150,260],[1150,395],[30,395],[30,560],[65,560]],{label:'ensure_confirmed() · state shared with the parent graph',lx:600,ly:388}),
+ E('load','group',[[215,560],[275,560]]),
+ E('group','build',[[425,560],[485,560]]),
+ E('build','check',[[635,560],[695,560]]),
+ E('check','explain',[[845,560],[878,560],[878,490],[910,490]],{label:'valid',lx:886,ly:520,a:'start'}),
+ E('check','novalid',[[845,560],[878,560],[878,650],[910,650]],{label:'invalid',lx:886,ly:610,a:'start'}),
+ E('explain','propose',[[1060,490],[1100,490]]),
+ E('propose','approve',[[1250,490],[1290,490]]),
+ E('approve','end',[[1365,518],[1365,632]],{label:'approved / rejected',lx:1357,ly:585,a:'end'}),
+ E('novalid','end',[[1060,650],[1347,650]]),
+ E('guard','unav',[[770,600],[770,715]],{label:'PlanningUnavailableError',lx:780,ly:660,a:'start',cls:'errp'}),
+ E('unav','end',[[885,740],[1365,740],[1365,668]],{cls:'errp'}),
+ ...[0,1,2,3,4,5,6,7,8].map(i=>E('r'+i,'r'+(i+1),[[203+142*i,930],[227+142*i,930]],{cls:'target'}))
+];
+EDGES.forEach((e,i)=>e.id='e'+i);
+const EDGE=Object.fromEntries(EDGES.map(e=>[e.from+'>'+e.to,e]));
+
+
+const FIELDS=['thread_id','messages','constraints','constraints_valid','pending_hard_constraint_confirmation','guest_profiles','accessibility_ref','group_objective','live_context','candidate_plan','check_result','explanation','proposal','approval','rejection_reason','current_plan'];
+const DEFAULTS={constraints_valid:'false'};
+const S=(node,cap,set={},o={})=>({node,cap,set,...o});
+const HC_OUT='{kind:"hard_constraint_confirmation", pending, echo, accessibility_guests}';
+const OK_RESUME='{confirmed:true, consent:true, retention_policy:"session_only"}';
+const head=()=>[
+ S('start','A guest describes the party. The thread starts and the message lands in state.',{thread_id:'thread id',messages:'1 human message'}),
+ S('elicit','The extractor (the only LLM in this path) proposes constraints. Nothing is trusted yet: constraints_valid stays False and the unconfirmed items are listed as pending.',
+   {constraints:'party + must-do / avoid (proposed)',guest_profiles:'one profile per guest',pending_hard_constraint_confirmation:'[unconfirmed constraints, accessibility:guest]'}),
+ S('confirm','Interrupt: a human must confirm the hard constraints. Accessibility data carries guest ids only; consent and retention come from the human, never the LLM.',
+   {pending_hard_constraint_confirmation:'[ ]  (cleared by the human)',accessibility_ref:'guest ids only [C19]'},{human:{out:HC_OUT,resume:OK_RESUME}}),
+ S('validate','Deterministic validation. This is the only writer of constraints_valid=True.',{constraints_valid:'true'}),
+ S('down','The planning stage starts as a subgraph on the same state and checkpointer.')
+];
+const plan=(o={})=>[
+ S('load',o.loadCap||'Fresh snapshot of park + weather (ThemeParks /live + /schedule, Open-Meteo). Accessibility requirements are read here, by thread_id, from the SessionStore.',
+   {live_context:o.live||'fresh snapshot: queues, hours, weather'}),
+ S('group','Group preferences become one objective. Hard constraints are a union, never an average.',{group_objective:'union of hard constraints + weighted soft preferences'}),
+ S('build','Scorer, greedy optimizer, routing and forecast build a candidate. The LLM does not touch it.',{candidate_plan:'candidate stops with times (not yet checked)'},o.build||{})
+];
+const tail=()=>[
+ S('explain','Only a checked plan gets a deterministic explanation.',{explanation:'template over plan + check result'}),
+ S('propose','The plan and a PENDING proposal are saved in one transaction; earlier open proposals are superseded.',{proposal:'PENDING'})
+];
+const approve=()=>S('approve','Interrupt: a human decides. This is the only place a plan becomes active.',
+ {approval:'APPROVED',current_plan:'ACTIVE (via ResolveProposalUseCase)'},{human:{out:'{kind:"plan_approval", candidate_plan, proposal}',resume:'{decision:"APPROVED"}'}});
+const checkOk=()=>S('check','ConstraintChecker runs the 11 rules. Valid, so the conditional edge goes to explain.',{check_result:'valid'});
+const end=(c)=>S('end',c||'Run ends.');
+
+const SCENARIOS=[
+ {name:'Happy path · plan approved',steps:[...head(),...plan(),checkOk(),...tail(),approve(),end('A plan is active. Only this human-driven path can activate it.')]},
+ {name:'Plan rejected by the human',steps:[...head(),...plan(),checkOk(),...tail(),
+   S('approve','The human rejects. The proposal is resolved as REJECTED and no plan becomes active.',{approval:'REJECTED',rejection_reason:'RejectionReason (OTHER if none given)'},{human:{out:'{kind:"plan_approval", candidate_plan, proposal}',resume:'{decision:"REJECTED", rejection_reason}'}}),
+   end('No active plan. The candidate exists only as a REJECTED proposal.')]},
+ {name:'Missing information · asks and waits',steps:[
+   S('start','A guest gives a partial description (no departure time).',{thread_id:'thread id',messages:'1 human message'}),
+   S('elicit','The extractor cannot build complete constraints. It adds an AI question listing what is missing; the router sees an AI message last.',{messages:'human + AI question'}),
+   S('ask','Interrupt: the run pauses here until the guest answers; the answer goes back to elicit.',{},{human:{out:'{kind:"missing_information", missing:["departure"], question}',resume:'"answer text" (str)'}}),
+   end('The run waits at ask_missing until the guest answers.')]},
+ {name:'Guest rejects the confirmation',steps:[
+   S('start','Guest describes the party.',{thread_id:'thread id',messages:'1 human message'}),
+   S('elicit','Constraints proposed, pending confirmation.',{constraints:'proposed',pending_hard_constraint_confirmation:'[unconfirmed constraints]'}),
+   S('confirm','The guest says the echoed constraint is wrong. Staged accessibility flags are discarded and constraints are reset.',{constraints:'null',constraints_valid:'false',pending_hard_constraint_confirmation:'null'},{human:{out:HC_OUT,resume:'{confirmed:false, correction:""}'}}),
+   S('ask','With an empty correction the router goes to ask_missing: "What should I change?"',{messages:'human + AI "What should I change?"'},{human:{out:'{kind:"missing_information", missing:["correction"]}',resume:'(waiting)'}}),
+   end('The run waits at ask_missing for the correction.')]},
+ {name:'Consent withheld',steps:[
+   S('start','Guest describes a party that includes accessibility needs.',{thread_id:'thread id',messages:'1 human message'}),
+   S('elicit','Constraints proposed. Accessibility flags are staged in the intake use case, not in state.',{constraints:'proposed',pending_hard_constraint_confirmation:'[constraints, accessibility:guest]'}),
+   S('confirm','The guest confirms but gives no consent.',{},{human:{out:HC_OUT,resume:'{confirmed:true, consent:false}'}}),
+   S('confirm','Accessibility data cannot be used without consent, so the node interrupts again with reason "consent_required".',{},{stay:1,human:{out:'{...payload, reason:"consent_required"}',resume:'(waiting)'}}),
+   end('It keeps asking until consent is given or the guest says the constraint is wrong.')]},
+ {name:'ThemeParks down, degrades to stored data',steps:[...head(),
+   ...plan({loadCap:'ThemeParks is unavailable. LoadContext falls back to the latest valid stored snapshot (§43), so the stage keeps going.',live:'latest valid stored snapshot (degraded)'}),
+   S('check','The checker still enforces DATA_FRESHNESS against the stored snapshot.',{check_result:'valid'}),...tail(),approve(),end('Plan approved on stored data.')]},
+ {name:'Planning unavailable · guard (design path)',steps:[...head(),
+   S('load','A port fails or has no data and raises PlanningUnavailableError (for example no fresh and no stored snapshot).',{},{error:'ContextUnavailableError → PlanningUnavailableError'}),
+   S('unav','_guarded turns the error into UNAVAILABLE_MESSAGE, clears the candidate and ends the stage. No plan, nothing proposed.',{candidate_plan:'null',check_result:'null',explanation:'null'},{error:'handled'}),
+   end('Plain-language message instead of an exception.')]},
+ {name:'Plan fails the checker · no proposal',steps:[...head(),...plan(),
+   S('check','The ConstraintChecker finds a violated rule (for example OPENING_HOURS or HEIGHT), so the conditional edge goes to no_valid_plan.',{check_result:'invalid: rule violated'},{error:'rule violation'}),
+   S('novalid','Nothing is explained or proposed. The user gets the reasons and can relax a constraint to try again.',{candidate_plan:'null'}),
+   end('An invalid candidate never reaches explain or propose.')]},
+ {name:'Invalid approval value · asks again',steps:[...head(),...plan(),checkOk(),...tail(),
+   S('approve','The human answers with a value that does not fit. interrupt_approval re-interrupts with an "error", before any side effect.',{},{human:{out:'{kind:"plan_approval", ..., error:"the decision must be a mapping"}',resume:'"yes" (not a mapping)'}}),
+   {...approve(),stay:1},
+   end('The decision is applied only once the resume value is valid.')]}
+];
+/* ---------- helpers ---------- */
+const $=id=>document.getElementById(id);
+const svg=$('svg');
+const el=(t,a={},p)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e};
+
+const ICONS={
+ play:'M8 5.5l11 6.5-11 6.5z',
+ flag:'M5 21V4M5 4h12l-2.5 4L17 12H5',
+ sparkles:'M11 3l1.8 4.7L17.5 9.5l-4.7 1.8L11 16l-1.8-4.7L4.5 9.5l4.7-1.8zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z',
+ ask:'M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12zM9.6 9.6a2.4 2.4 0 0 1 4.7.6c0 1.6-2.3 1.9-2.3 3.4M12 16.6h.01',
+ shield:'M12 3l8 3v5.5c0 4.6-3.2 8-8 9.5-4.8-1.5-8-4.9-8-9.5V6zM8.5 12l2.5 2.5 4.5-5',
+ check:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM8 12l3 3 5-6',
+ layers:'M12 3l9 5-9 5-9-5zM3 12.5l9 5 9-5M3 16.5l9 5 9-5',
+ cloud:'M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 9.6 4.2 4.2 0 0 0 7 18z',
+ users:'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.8c2.2.6 3.5 2.3 3.5 5.2',
+ route:'M6 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM8 18h5.5a3.5 3.5 0 0 0 0-7h-3a3.5 3.5 0 0 1 0-7H16',
+ scale:'M12 3v18M7 21h10M5 7h14M5 7l-3 7a3 3 0 0 0 6 0zM19 7l-3 7a3 3 0 0 0 6 0z',
+ doc:'M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12zM8.5 10.5h7M8.5 13.5h4',
+ send:'M21 3L3 10.5l7 3 3 7zM10 13.5L21 3',
+ usercheck:'M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM3 21c0-3.9 3.1-7 7-7 1.7 0 3.2.5 4.4 1.4M16 19l2 2 4-4',
+ ban:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM5.6 5.6l12.8 12.8',
+ alert:'M12 4l9.5 16.5h-19zM12 10v4.5M12 17.5h.01',
+ hourglass:'M6 3h12M6 21h12M7 3c0 5 5 6 5 9s-5 4-5 9M17 3c0 5-5 6-5 9s5 4 5 9'
+};
+const ICON_OF={start:'play',end:'flag',elicit:'sparkles',ask:'ask',confirm:'shield',validate:'check',down:'layers',load:'cloud',group:'users',build:'route',check:'scale',explain:'doc',propose:'send',approve:'usercheck',novalid:'ban',unav:'alert'};
+const icon=(parent,name,cx,cy,size,cls)=>{
+  const k=size/24;
+  const g=el('g',{class:cls||'ic',transform:`translate(${cx-12*k} ${cy-12*k}) scale(${k})`},parent);
+  ICONS[name].split(/(?=M)/).forEach(d=>el('path',{d},g));
+  return g;
+};
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const clip=(s,n)=>s.length>n?s.slice(0,n-1)+'…':s;
+function pathD(pts,r=10){
+  let d=`M${pts[0][0]} ${pts[0][1]}`;
+  for(let i=1;i<pts.length-1;i++){
+    const [x0,y0]=pts[i-1],[x1,y1]=pts[i],[x2,y2]=pts[i+1];
+    const l1=Math.hypot(x1-x0,y1-y0),l2=Math.hypot(x2-x1,y2-y1),rr=Math.min(r,l1/2,l2/2);
+    d+=` L${x1+(x0-x1)/l1*rr} ${y1+(y0-y1)/l1*rr} Q${x1} ${y1} ${x1+(x2-x1)/l2*rr} ${y1+(y2-y1)/l2*rr}`;
+  }
+  const l=pts[pts.length-1];return d+` L${l[0]} ${l[1]}`;
+}
+function arrow(pts){
+  const [x0,y0]=pts[pts.length-2],[x,y]=pts[pts.length-1],a=Math.atan2(y-y0,x-x0),s=8;
+  const p=(da)=>`${x-Math.cos(a+da)*s},${y-Math.sin(a+da)*s}`;
+  return `${x},${y} ${p(.45)} ${p(-.45)}`;
+}
+
+/* ---------- render ---------- */
+const gLanes=el('g',{},svg),gEdges=el('g',{},svg),gNodes=el('g',{},svg),gPay=el('g',{},svg),tokenG=el('g',{id:'token',style:'opacity:0'},svg);
+LANES.forEach(l=>{
+  const g=el('g',{class:'lane'+(l.target?' target':'')},gLanes);
+  el('rect',{x:12,y:l.y,width:1476,height:l.h},g);
+  el('text',{x:1472,y:l.y+20,'text-anchor':'end'},g).textContent=l.label;
+});
+const guardG=el('g',{class:'guard'},gLanes);
+el('rect',{x:55,y:455,width:1207,height:145},guardG);
+el('text',{x:68,y:473},guardG).textContent='_guarded · PlanningUnavailableError → plain-language message + END';
+
+EDGES.forEach(e=>{
+  const g=el('g',{class:'edge'+(e.cls?' '+e.cls:'')+(e.cls==='target'?'':' live')},gEdges);
+  e.g=g;e.pathEl=el('path',{d:pathD(e.pts)},g);el('polygon',{points:arrow(e.pts)},g);
+  if(e.label)el('text',{x:e.lx,y:e.ly,'text-anchor':e.a||'middle'},g).textContent=e.label;
+});
+
+const ERRPOS={elicit:[290,318,'end'],check:[770,521,'middle']};
+NODES.forEach(n=>{
+  const g=el('g',{class:'node '+n.kind,'data-id':n.id},gNodes);n.g=g;
+  if(n.shape==='circle'){
+    el('circle',{class:'card',cx:n.cx,cy:n.cy,r:n.r},g);el('circle',{class:'tint',cx:n.cx,cy:n.cy,r:n.r},g);
+    icon(g,ICON_OF[n.id],n.cx,n.cy-7,15);
+    el('text',{class:'t',x:n.cx,y:n.cy+11,style:'font-size:7.5px'},g).textContent=n.title;
+  }else{
+    el('rect',{class:'card',x:n.x,y:n.y,width:n.w,height:n.h},g);el('rect',{class:'tint',x:n.x,y:n.y,width:n.w,height:n.h},g);
+    el('text',{class:'t',x:n.cx,y:n.cy-(n.sub?1:-4),style:n.kind==='target'?'font-size:10.5px':''},g).textContent=n.title;
+    if(n.sub)el('text',{class:'s',x:n.cx,y:n.cy+14},g).textContent=n.sub;
+    const lab=KIND[n.kind];
+    if(ICON_OF[n.id]){const bx=n.x+n.w-8;el('circle',{class:'ib',cx:bx,cy:n.y,r:14},g);icon(g,ICON_OF[n.id],bx,n.y,17);}
+    if(lab){const w=lab.length*6+16;el('rect',{class:'pill',x:n.x+10,y:n.y-7,width:w,height:14,rx:7},g);el('text',{class:'pt',x:n.x+17,y:n.y+3},g).textContent=lab;}
+  }
+  g.addEventListener('click',()=>{sel=n.id;NODES.forEach(m=>m.g.classList.toggle('sel',m===n));panels();});
+  const pp=n.pay||{x:n.cx,y:(n.y||n.cy)+(n.h||0)+14,a:'middle'};
+  n.payEl=el('text',{class:'pay',x:pp.x,y:pp.y,'text-anchor':pp.a},gPay);
+  const ep=ERRPOS[n.id]||[n.cx,(n.shape==='circle'?n.cy+n.r:n.y+n.h)+16,'middle'];
+  n.errEl=el('text',{class:'pay errt',x:ep[0],y:ep[1],'text-anchor':ep[2]},gPay);
+});
+
+
+const hist=[];
+const trail=[0,1,2,3,4].map(i=>el('circle',{r:5-i*.7,style:`opacity:${.34-i*.06}`},tokenG));
+const halo=el('circle',{class:'halo',r:15},tokenG),dot=el('circle',{r:7},tokenG);
+function moveToken(x,y){
+  hist.unshift([x,y]);hist.length=Math.min(hist.length,24);
+  [halo,dot].forEach(c=>{c.setAttribute('cx',x);c.setAttribute('cy',y)});
+  trail.forEach((c,i)=>{const p=hist[(i+1)*3]||hist[hist.length-1];c.setAttribute('cx',p[0]);c.setAttribute('cy',p[1])});
+}
+function placeToken(id){const n=NODE[id];hist.length=0;moveToken(n.cx,n.shape==='circle'?n.cy:n.y+n.h);tokenG.style.opacity=1;}
+
+/* ---------- playback ---------- */
+let scn=SCENARIOS[0],steps=scn.steps,cur=-1,playing=false,sel=null,timers=[],raf=0;
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const speed=()=>+$('speed').value;
+const after=(ms,fn)=>{timers.push(setTimeout(fn,ms))};
+function stopAnim(){timers.forEach(clearTimeout);timers=[];if(raf)cancelAnimationFrame(raf);raf=0;}
+function edgeFor(a,b){
+  const e=a!==b&&EDGE[a+'>'+b];if(e)return {e};
+  const g=EDGE['guard>'+b];return g?{e:g}:{};
+}
+function travel(edge,done){
+  const p=edge.pathEl,L=p.getTotalLength(),ms=Math.min(1700,Math.max(480,L/.9))/speed(),t0=performance.now();
+  const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+  hist.length=0;tokenG.style.opacity=1;
+  (function f(now){
+    const t=Math.min(1,(now-t0)/ms),pt=p.getPointAtLength(L*ease(t));moveToken(pt.x,pt.y);
+    if(t<1)raf=requestAnimationFrame(f);else{raf=0;done();}
+  })(t0);
+}
+function paint(k,arrived){
+  const s=steps[k];
+  const seen=new Set(steps.slice(0,Math.max(k,0)).map(x=>x.node));
+  NODES.forEach(n=>{
+    const act=!!(arrived&&s&&s.node===n.id);
+    n.g.classList.toggle('active',act);n.g.classList.toggle('visited',seen.has(n.id)&&!act);n.g.classList.toggle('sel',sel===n.id);
+    n.payEl.textContent='';n.payEl.setAttribute('class','pay');n.errEl.textContent='';
+  });
+  const done=new Set(),lim=arrived?k:k-1;
+  for(let j=1;j<=lim;j++){const r=edgeFor(steps[j-1].node,steps[j].node);if(r.e)done.add(r.e);}
+  EDGES.forEach(e=>{e.g.classList.toggle('done',done.has(e));e.g.classList.remove('active');});
+}
+function goto(k,animate){
+  stopAnim();k=Math.max(-1,Math.min(steps.length-1,k));cur=k;sel=null;
+  if(k<0){paint(-1,false);tokenG.style.opacity=0;panels();caption();controls();return;}
+  const prev=steps[k-1],s=steps[k];
+  const arrive=()=>{paint(k,true);placeToken(s.node);panels();caption();controls();onArrive(k);};
+  const r=prev?edgeFor(prev.node,s.node):{};
+  if(animate&&!reduced&&prev&&r.e){
+    paint(k,false);r.e.g.classList.add('active');controls();
+    travel(r.e,arrive);
+  }else if(animate&&!reduced&&prev&&prev.node!==s.node){
+    paint(k,false);tokenG.style.opacity=0;after(260/speed(),arrive);
+  }else arrive();
+}
+function onArrive(k){
+  const s=steps[k],n=NODE[s.node];
+  let dwell=900+s.cap.length*11;
+  if(s.human){
+    const kind=(s.human.out.match(/kind:"([^"]+)"/)||s.human.out.match(/reason:"([^"]+)"/)||[0,'interrupt'])[1];
+    n.payEl.textContent='⏸ interrupt · '+kind;dwell+=1500;
+    after(dwell*.5/speed(),()=>{n.payEl.textContent='▶ resume · '+clip(s.human.resume,34);n.payEl.setAttribute('class','pay out');});
+  }
+  if(s.error){
+    const show=()=>{n.errEl.textContent=s.error==='handled'?'✔ handled by _guarded':'✖ '+s.error;};
+    s.human?after(dwell*.7/speed(),show):show();
+  }
+  if(!playing)return;
+  if(k>=steps.length-1)after(dwell/speed(),()=>{playing=false;controls();});
+  else after(dwell/speed(),()=>goto(k+1,true));
+}
+
+/* ---------- panels ---------- */
+function caption(){
+  const c=$('cap'),s=steps[cur];
+  if(!s){c.className='caption';c.innerHTML=`<div class="meta">Ready · ${esc(scn.name)}</div>Press <b>Play</b> to watch the run move through the graph, or step with <b>Next</b>. Dashed pink nodes are human interrupts; click any node for the code behind it.`;return;}
+  const n=NODE[s.node];
+  c.className='caption'+(s.human?' human':'')+(s.error&&s.error!=='handled'?' error':'');
+  let h=`<div class="meta">Step ${cur+1} / ${steps.length} · ${esc(n.title)}${KIND[n.kind]?' · '+KIND[n.kind]:''}</div>${esc(s.cap)}`;
+  if(s.human)h+=`<div class="io">⏸ interrupt payload: <code>${esc(s.human.out)}</code> &nbsp; ▶ resume value: <code>${esc(s.human.resume)}</code></div>`;
+  if(s.error)h+=`<div class="io" style="color:var(--red)">${s.error==='handled'?'Handled by _guarded: no exception reaches the caller.':'Error: <code>'+esc(s.error)+'</code>'}</div>`;
+  c.innerHTML=h;
+}
+function panels(){
+  const s=steps[cur],n=NODE[sel||(s&&s.node)];
+  const row=(h,v)=>v?`<h3>${h}</h3><div style="font-size:11.5px">${v}</div>`:'';
+  if(!n)$('pNode').innerHTML='<h2>Node details</h2><div class="hint">Start a scenario or click any node to see its file, collaborators, state reads/writes and rules.</div>';
+  else{
+    const d=n.dock||{};
+    $('pNode').innerHTML=`<h2>${esc(n.title)}<span class="kind ${n.kind}">${KIND[n.kind]||'TERMINAL'}</span></h2>`+(n.sub?`<div class="hint">${esc(n.sub)}</div>`:'')+
+      row('What',d.what&&esc(d.what))+row('File',d.file&&`<code>src/parkmind/${esc(d.file)}</code>`)+row('Calls',d.calls&&esc(d.calls))+
+      row('Reads state',d.reads&&esc(d.reads))+row('Writes state',d.writes&&esc(d.writes))+
+      (d.notes?`<h3>Rules</h3><ul>${d.notes.map(x=>`<li>${x}</li>`).join('')}</ul>`:'');
+  }
+  const st={...DEFAULTS};for(let j=0;j<=cur;j++)Object.assign(st,steps[j].set);
+  const chg=cur>=0?steps[cur].set:{};
+  $('pState').innerHTML=`<h2>ParkMindState${cur>=0?' · after step '+(cur+1):''}</h2><div class="hint">Changes only through node updates. <code>accessibility_ref</code> holds guest ids only [C19].</div><dl class="st" style="margin-top:6px">`+
+    FIELDS.map(f=>{const v=st[f],c=f in chg?'chg':v!==undefined?'set':'';return `<dt>${f}</dt><dd class="${c}">${v===undefined?'—':esc(v)}</dd>`}).join('')+'</dl>';
+  $('pTrace').innerHTML=`<h2>Trace · ${esc(scn.name)}</h2><ol class="tr">`+steps.map((x,i)=>{
+    const m=NODE[x.node];
+    return `<li class="${m.kind} ${i<cur?'past':i===cur?'cur past':'fut'}${x.error&&x.error!=='handled'?' fail':''}" data-i="${i}"><i></i>${i+1}. ${esc(m.title)}${x.human?' ⏸':''}</li>`;
+  }).join('')+'</ol>';
+  const li=$('pTrace').querySelector('li.cur');if(li)$('pTrace').scrollTop=li.offsetTop-$('pTrace').clientHeight/2;
+}
+function controls(){
+  $('play').textContent=playing?'⏸ Pause':(cur>=steps.length-1&&cur>=0?'↻ Replay':'▶ Play');
+  $('prev').disabled=cur<0;$('next').disabled=cur>=steps.length-1;
+}
+
+/* ---------- wiring ---------- */
+SCENARIOS.forEach((s,i)=>{const o=document.createElement('option');o.value=i;o.textContent=s.name;$('scn').appendChild(o);});
+$('scn').onchange=()=>{scn=SCENARIOS[+$('scn').value];steps=scn.steps;playing=false;goto(-1);};
+$('play').onclick=()=>{
+  if(playing){playing=false;goto(cur,false);return;}
+  playing=true;goto(cur<0||cur>=steps.length-1?0:cur+1,true);
+};
+$('next').onclick=()=>{playing=false;goto(cur+1,true);};
+$('prev').onclick=()=>{playing=false;goto(cur-1,false);};
+$('reset').onclick=()=>{playing=false;goto(-1);};
+$('pTrace').addEventListener('click',e=>{const li=e.target.closest('li');if(li){playing=false;goto(+li.dataset.i,false);}});
+$('flowBtn').onclick=e=>{e.currentTarget.classList.toggle('on',svg.classList.toggle('flow'));};
+$('dockBtn').onclick=e=>{const h=$('dock').style.display==='none';$('dock').style.display=h?'':'none';document.body.style.paddingBottom=h?'300px':'20px';e.currentTarget.textContent=h?'Hide panels':'Show panels';};
+svg.classList.add('flow');
+const root=document.documentElement;
+if(localStorage.getItem('pm-theme'))root.dataset.theme=localStorage.getItem('pm-theme');
+$('theme').onclick=()=>{
+  const now=root.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+  const nx=now==='dark'?'light':'dark';root.dataset.theme=nx;localStorage.setItem('pm-theme',nx);
+};
+addEventListener('keydown',e=>{
+  if(/SELECT|INPUT|BUTTON/.test(e.target.tagName))return;
+  if(e.key==='ArrowRight')$('next').click();else if(e.key==='ArrowLeft')$('prev').click();
+  else if(e.key===' '){e.preventDefault();$('play').click();}
+});
+goto(-1);
+</script>
+</body>
+</html>

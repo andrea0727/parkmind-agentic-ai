@@ -1,0 +1,1851 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ParkMind · Prototipo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --dusk:#241A54; --twilight:#4A2FA8; --flamingo:#E0218A; --lagoon:#12938C; --marigold:#FFB627;
+  --ink:#241A54; --muted:#6F6893; --faint:#9B95B5; --wash:#F4F2FB; --line:#E7E3F4;
+  --page:#E9E6F3; --page-ink:#241A54;
+  --font:'Plus Jakarta Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --page:#17122F; --page-ink:#E8E4F6 } }
+:root[data-theme="dark"]{ --page:#17122F; --page-ink:#E8E4F6 }
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;font-family:var(--font);background:var(--page);color:var(--page-ink);
+  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;align-items:center;gap:16px;
+  padding:26px 16px 36px;min-height:100%}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+button:focus-visible,[tabindex]:focus-visible,input:focus-visible,a:focus-visible{
+  outline:3px solid var(--flamingo);outline-offset:2px;border-radius:6px}
+.pin:focus-visible circle{stroke:var(--flamingo);stroke-width:3.5}
+.pin:focus{outline:none}
+@media (prefers-reduced-motion: reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+.stage-head{width:100%;max-width:430px;display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.stage-head h1{font-size:15px;font-weight:800;letter-spacing:-.01em;margin:0}
+.stage-head p{margin:0;font-size:12px;opacity:.62}
+.stage-foot{width:100%;max-width:430px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.ghost-btn{font-size:12px;font-weight:600;padding:7px 13px;border-radius:999px;border:1px solid currentColor;opacity:.6}
+.ghost-btn:hover{opacity:1}
+
+.device{width:100%;max-width:390px;height:min(844px,calc(100dvh - 130px));min-height:480px;
+  background:#fff;border-radius:42px;position:relative;overflow:hidden;
+  box-shadow:0 0 0 11px #1B1626,0 0 0 13px #2E2840,0 36px 70px -24px rgba(26,16,60,.55);
+  color:var(--ink);display:flex;flex-direction:column}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:132px;height:28px;background:#1B1626;border-radius:0 0 17px 17px;z-index:60}
+.statusbar{flex:0 0 auto;height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:700;z-index:55;position:relative}
+.statusbar .sig{font-size:11px;letter-spacing:.08em}
+.viewport{flex:1 1 auto;position:relative;overflow:hidden}
+.screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;padding:0 20px 18px;display:none}
+.screen.on{display:block}
+.screen::-webkit-scrollbar{width:0}
+
+.brandbar{display:flex;align-items:center;justify-content:space-between;padding:4px 0 14px;position:sticky;top:0;background:#fff;z-index:20}
+.wordmark{font-size:21px;font-weight:800;letter-spacing:-.04em;color:var(--dusk)}
+.wordmark i{font-style:normal;color:var(--flamingo)}
+.brand-actions{display:flex;align-items:center;gap:7px}
+.avatar{width:38px;height:38px;border-radius:50%;background:var(--wash);color:var(--twilight);display:grid;place-items:center;font-weight:800;font-size:14px;border:1px solid var(--line)}
+.spark-btn{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;
+  background:conic-gradient(from 210deg,var(--flamingo),var(--marigold),var(--lagoon),var(--twilight),var(--flamingo))}
+.spark-btn span{width:34px;height:34px;border-radius:50%;background:var(--dusk);display:grid;place-items:center;color:#fff;font-size:15px}
+.spark-btn.ping span{animation:ping 1.6s ease-in-out infinite}
+@keyframes ping{0%,100%{transform:scale(1)}50%{transform:scale(1.09)}}
+
+h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;margin:4px 0 6px}
+.subline{font-size:14px;color:var(--muted);margin:0 0 13px;font-weight:500}
+.pills{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:18px}
+.pill{font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:999px;background:var(--wash);display:flex;align-items:center;gap:5px}
+.pill.warn{background:#FFF4DC;color:#7A5200}
+.pill.live{background:#E2F4F2;color:#0A6B66}
+.pill.live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--lagoon)}
+
+.sect{font-size:19px;font-weight:800;letter-spacing:-.02em;margin:0 0 11px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}
+.tile{border-radius:22px;padding:16px;min-height:132px;display:flex;flex-direction:column;justify-content:space-between;color:#fff;text-align:left}
+.tile.plan{background:linear-gradient(155deg,var(--twilight),var(--dusk))}
+.tile.waits{background:linear-gradient(155deg,#17A79F,#0C6F6A)}
+.tile .ico{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.17);display:grid;place-items:center;font-size:15px}
+.tile b{display:block;font-size:17px;font-weight:800;letter-spacing:-.02em}
+.tile .big{font-size:36px;font-weight:800;line-height:1;letter-spacing:-.04em}
+.tile small{display:block;font-size:12.5px;opacity:.78;font-weight:500;margin-top:3px;line-height:1.35}
+
+.panel{border:1px solid var(--line);border-radius:22px;padding:15px 16px;margin-bottom:12px}
+.panel-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:11px}
+.panel-head b{font-size:17px;font-weight:800;letter-spacing:-.02em}
+.panel-head span{font-size:11.5px;color:var(--faint);font-weight:500}
+.nowrow{display:grid;grid-template-columns:48px 16px 1fr;gap:4px;align-items:start}
+.nowrow .t{font-size:14px;font-weight:800;color:var(--twilight);padding-top:1px}
+.nowrow .rail{display:flex;flex-direction:column;align-items:center;padding-top:5px}
+.nowrow .dot{width:11px;height:11px;border-radius:50%;background:var(--marigold)}
+.nowrow .line{width:2px;flex:1;background:var(--line);margin-top:3px}
+.nowrow .b{font-size:16px;font-weight:800;letter-spacing:-.015em}
+.nowrow .m{font-size:12.5px;color:var(--muted);font-weight:500;margin-top:2px;line-height:1.4}
+.a11y{display:inline-flex;align-items:center;gap:6px;background:#E2F4F2;color:#0A6B66;font-size:12px;font-weight:700;padding:6px 10px;border-radius:9px;margin-top:8px}
+.a11y.no{background:#FDECF5;color:#A3156A}
+
+.alert{display:flex;gap:12px;align-items:flex-start;background:#FFF4DC;border-radius:20px;padding:15px;margin-bottom:10px}
+.alert .ic{font-size:21px;line-height:1}
+.alert b{display:block;font-size:15px;font-weight:800;color:#5A3D00;letter-spacing:-.01em}
+.alert p{margin:3px 0 0;font-size:13px;color:#7A5200;font-weight:500;line-height:1.42}
+.alert .cta{flex:0 0 auto;align-self:center;background:#4A3200;color:#fff;font-size:13px;font-weight:700;padding:10px 14px;border-radius:999px}
+.alert.kept{background:var(--wash)} .alert.kept b{color:var(--dusk)} .alert.kept p{color:var(--muted)} .alert.kept .cta{background:var(--dusk)}
+.alert.info{background:#EDE7FB} .alert.info b{color:var(--dusk)} .alert.info p{color:var(--twilight)}
+.alert.urgent{background:#FDECF5} .alert.urgent b{color:#A3156A} .alert.urgent p{color:#A3156A;opacity:.85}
+
+.screen-head{position:sticky;top:0;background:#fff;padding:4px 0 12px;z-index:20}
+.backbtn{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:#fff;
+  display:grid;place-items:center;font-size:20px;line-height:1;color:var(--ink);margin-bottom:12px;padding-bottom:3px}
+.backbtn:hover{background:var(--wash)}
+.screen-head h2{font-size:27px;font-weight:800;letter-spacing:-.03em;margin:0}
+.screen-head p{margin:3px 0 0;font-size:13.5px;color:var(--muted);font-weight:500}
+.status-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;background:#E2F4F2;color:#0A6B66;margin-top:10px}
+.status-chip::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--lagoon)}
+
+.stop{display:grid;grid-template-columns:50px 16px 1fr;gap:4px}
+.stop .t{font-size:13.5px;font-weight:800;color:var(--twilight);padding-top:2px}
+.stop .rail{display:flex;flex-direction:column;align-items:center;padding-top:6px}
+.stop .dot{width:10px;height:10px;border-radius:50%;background:var(--line);border:2px solid var(--line)}
+.stop.done .dot{background:var(--lagoon);border-color:var(--lagoon)}
+.stop.current .dot{background:var(--marigold);border-color:var(--marigold);box-shadow:0 0 0 4px #FFF0CF}
+.stop .line{width:2px;flex:1;background:var(--line);margin:4px 0}
+.stop:last-child .line{background:transparent}
+.stop .body{padding:0 0 20px 4px}
+.stop .b{font-size:15.5px;font-weight:800;letter-spacing:-.015em}
+.stop .m{font-size:12.5px;color:var(--muted);font-weight:500;margin-top:2px;line-height:1.4}
+.stop.changed .body{background:#F0FAF8;border-radius:12px;padding:10px 12px 14px;margin-bottom:8px}
+.tagnew{display:inline-block;font-size:10.5px;font-weight:800;color:#0A6B66;background:#CFEDE9;padding:3px 7px;border-radius:6px;margin-bottom:5px}
+.leg{font-size:12px;font-weight:600;color:var(--muted);margin:-12px 0 10px}
+.planmap{width:100%;height:auto;display:block;margin:12px 0 6px;border:1px solid var(--line);border-radius:16px}
+.walktotal{font-size:12.5px;font-weight:600;color:var(--muted);margin:0 0 16px;text-align:center}
+
+.mapfilters{display:flex;gap:7px;overflow-x:auto;padding:0 20px 10px;margin:0 -20px;scrollbar-width:none}
+.mapfilters::-webkit-scrollbar{height:0}
+.mf{flex:0 0 auto;font-size:12.5px;font-weight:700;padding:11px 15px;border-radius:999px;background:var(--wash);color:var(--muted)}
+.mf.on{background:var(--dusk);color:#fff}
+.mapwrap{position:relative;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:#EEF4E8}
+#bigMap{width:100%;height:auto;display:block;touch-action:none;cursor:grab}
+#bigMap:active{cursor:grabbing}
+.mapzoom{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px}
+.mapzoom button{width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,.95);color:var(--ink);
+  font-size:15px;font-weight:800;box-shadow:0 1px 4px rgba(36,26,84,.16);display:grid;place-items:center}
+.maplegend{position:absolute;left:10px;bottom:10px;display:flex;flex-wrap:wrap;gap:4px 10px;
+  background:rgba(255,255,255,.93);border-radius:10px;padding:7px 10px;max-width:70%}
+.maplegend span{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:var(--muted)}
+.maplegend i{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.ridecard{margin-top:12px;border:1px solid var(--line);border-radius:16px;padding:14px}
+.ridecard .hint{margin:0;font-size:13px;color:var(--muted);font-weight:500;text-align:center}
+.rc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.rc-head b{font-size:16.5px;font-weight:800;letter-spacing:-.02em;display:block}
+.rc-head small{font-size:12.5px;color:var(--muted);font-weight:500}
+.xsmall{width:32px;height:32px;border-radius:50%;background:var(--wash);color:var(--muted);font-size:13px;flex:0 0 auto}
+.rc-stats{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 4px}
+.rc-stat{font-size:12px;font-weight:700;padding:6px 10px;border-radius:999px;background:var(--wash)}
+.rc-stat.on{background:#EDE7FB;color:var(--twilight)}
+.rc-add{margin-top:11px;width:100%;background:var(--dusk);color:#fff;font-size:13.5px;font-weight:700;padding:12px;border-radius:12px}
+
+.ride{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 2px;width:100%;text-align:left;border-bottom:1px solid var(--line)}
+.ride:hover{background:var(--wash)}
+.ride b{font-size:15px;font-weight:700;display:block}
+.ride small{font-size:12px;color:var(--muted);font-weight:500}
+.wait{font-size:19px;font-weight:800;flex:0 0 auto;text-align:right;line-height:1.1}
+.wait small{display:block;font-size:10.5px;font-weight:600;color:var(--faint)}
+.wait.low{color:var(--lagoon)} .wait.mid{color:#B87A00} .wait.high{color:var(--flamingo)} .wait.closed{color:var(--faint);font-size:14px}
+
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 0;border-bottom:1px solid var(--line);font-size:15px;font-weight:600;width:100%;text-align:left}
+.row small{display:block;font-size:12px;color:var(--muted);font-weight:500;margin-top:2px}
+.row .chev{color:var(--faint);font-size:16px}
+.metric{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:13px 0;border-bottom:1px solid var(--line)}
+.metric .n{font-size:13.5px;font-weight:700}
+.metric .n small{display:block;font-size:11.5px;color:var(--muted);font-weight:500;margin-top:2px}
+.metric .v{font-size:17px;font-weight:800;color:var(--lagoon);text-align:right}
+.metric .base{font-size:12px;font-weight:600;color:var(--faint);text-align:right;min-width:52px}
+.note{font-size:12px;color:var(--muted);line-height:1.5;font-weight:500;margin:14px 0 0}
+.switch{display:flex;gap:6px;background:var(--wash);padding:4px;border-radius:999px}
+.switch button{flex:1;font-size:12.5px;font-weight:700;padding:8px;border-radius:999px;color:var(--muted)}
+.switch button.on{background:#fff;color:var(--dusk);box-shadow:0 1px 3px rgba(36,26,84,.14)}
+
+/* profile */
+.prof-head{display:flex;align-items:center;gap:14px;padding:6px 0 16px}
+.prof-av{width:62px;height:62px;border-radius:50%;background:linear-gradient(150deg,var(--twilight),var(--dusk));
+  color:#fff;display:grid;place-items:center;font-size:24px;font-weight:800;flex:0 0 auto}
+.prof-head b{font-size:22px;font-weight:800;letter-spacing:-.03em;display:block}
+.prof-head small{font-size:13px;color:var(--muted);font-weight:500}
+.tagrow{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0 2px}
+.tag{font-size:12.5px;font-weight:700;padding:8px 11px;border-radius:10px}
+.tag.hard{background:#E2F4F2;color:#0A6B66}
+.tag.soft{background:#FDECF5;color:#A3156A}
+.tag.plain{background:var(--wash);color:var(--ink)}
+.langbtn{width:38px;height:38px;border-radius:50%;background:var(--wash);border:1px solid var(--line);
+  display:grid;place-items:center;font-size:12px;font-weight:800;letter-spacing:.02em;color:var(--twilight)}
+.langsheet{position:absolute;left:0;right:0;bottom:0;z-index:86;background:#fff;border-radius:26px 26px 0 0;
+  transform:translateY(102%);transition:transform .3s cubic-bezier(.22,.9,.26,1);
+  box-shadow:0 -14px 40px rgba(27,18,56,.22);padding:0 20px calc(22px + env(safe-area-inset-bottom,0px))}
+.langsheet.on{transform:translateY(0)}
+.langsheet h3{font-size:21px;font-weight:800;letter-spacing:-.03em;margin:4px 0 4px}
+.langsheet p{margin:0 0 14px;font-size:13px;color:var(--muted);font-weight:500;line-height:1.45}
+.bell{position:relative;width:38px;height:38px;border-radius:50%;background:var(--wash);border:1px solid var(--line);display:grid;place-items:center}
+.bell .g{font-size:16px;line-height:1}
+.bell .badge{position:absolute;top:-5px;right:-5px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;
+  background:#C01570;color:#fff;font-size:10.5px;font-weight:800;display:grid;place-items:center;border:2px solid #fff}
+.bell .badge.hide{display:none}
+.bell.has .g{animation:ring 2.4s ease-in-out infinite}
+@keyframes ring{0%,88%,100%{transform:rotate(0)}91%{transform:rotate(12deg)}94%{transform:rotate(-10deg)}97%{transform:rotate(6deg)}}
+.nsheet{position:absolute;left:0;right:0;bottom:0;top:120px;z-index:85;background:#fff;border-radius:26px 26px 0 0;
+  display:flex;flex-direction:column;transform:translateY(102%);transition:transform .34s cubic-bezier(.22,.9,.26,1);
+  box-shadow:0 -14px 40px rgba(27,18,56,.22);overflow:hidden}
+.nsheet.on{transform:translateY(0)}
+.nbody{flex:1 1 auto;overflow-y:auto;padding:0 20px 10px}
+.nbody::-webkit-scrollbar{width:0}
+.nfoot{flex:0 0 auto;padding:12px 20px 18px;border-top:1px solid var(--line)}
+.nfoot button{width:100%;padding:13px;border-radius:13px;background:var(--wash);color:var(--ink);font-size:14px;font-weight:700}
+.notif{display:flex;gap:12px;align-items:flex-start;padding:15px;border-radius:16px;margin-bottom:9px;background:var(--wash)}
+.notif.info{background:#EDE7FB} .notif.urgent{background:#FDECF5} .notif.change{background:#FFF4DC}
+.notif.read{background:#FAF9FD;opacity:.62}
+.notif .ic{font-size:20px;line-height:1.1;flex:0 0 auto}
+.notif b{display:block;font-size:14.5px;font-weight:800;letter-spacing:-.01em;line-height:1.3}
+.notif p{margin:3px 0 0;font-size:13px;font-weight:500;line-height:1.42;opacity:.82}
+.notif .when{display:block;font-size:11.5px;font-weight:600;opacity:.75;margin-top:6px}
+.notif .act{flex:0 0 auto;align-self:center;font-size:12.5px;font-weight:800;padding:9px 13px;border-radius:999px;background:var(--dusk);color:#fff}
+.notif .dis{flex:0 0 auto;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.07);font-size:12px;display:grid;place-items:center}
+.nempty{text-align:center;font-size:13.5px;color:var(--faint);font-weight:500;padding:40px 10px}
+.ticket{border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.tk-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:15px 16px;
+  background:linear-gradient(140deg,var(--twilight),var(--dusk));color:#fff}
+.tk-top b{font-size:17px;font-weight:800;letter-spacing:-.02em;display:block}
+.tk-top small{font-size:12px;opacity:.76;font-weight:500}
+.tk-day{flex:0 0 auto;font-size:11.5px;font-weight:800;background:rgba(255,255,255,.18);padding:6px 10px;border-radius:999px}
+.tk-perf{padding:13px 16px 0}
+.tk-ll{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;margin-top:11px;
+  border-top:1px solid var(--line);background:#FFFBF2}
+.tk-ll b{font-size:14px;font-weight:800;display:block;color:#7A5200}
+.tk-ll small{font-size:12px;color:#8A6A42;font-weight:500}
+.tk-dots{display:flex;gap:5px;flex:0 0 auto}
+.tk-dots i{width:10px;height:10px;border-radius:50%;background:var(--marigold)}
+.tk-dots i.used{background:#E7DCC4}
+.tk-holders{display:flex;gap:6px;flex-wrap:wrap;padding:13px 16px;border-top:1px solid var(--line)}
+.lltag{display:inline-block;font-size:10.5px;font-weight:800;color:#7A5200;background:#FFF0CF;padding:3px 7px;border-radius:6px;margin-bottom:5px}
+.langgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.lang{display:flex;align-items:center;gap:9px;padding:13px;border:1px solid var(--line);border-radius:13px;font-size:14px;font-weight:700;text-align:left}
+.lang .fl{font-size:17px}
+.lang.on{border-color:var(--twilight);background:#F7F4FE;color:var(--twilight)}
+
+/* sheets */
+.scrim{position:absolute;inset:0;background:rgba(27,18,56,.42);opacity:0;pointer-events:none;transition:opacity .26s;z-index:70}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:absolute;left:0;right:0;bottom:0;top:44px;z-index:80;background:#fff;border-radius:26px 26px 0 0;
+  display:flex;flex-direction:column;transform:translateY(102%);transition:transform .34s cubic-bezier(.22,.9,.26,1);
+  box-shadow:0 -14px 40px rgba(27,18,56,.22);overflow:hidden}
+.sheet.on{transform:translateY(0)}
+.grab{width:44px;height:4px;border-radius:999px;background:#DCD7EC;margin:11px auto 0;flex:0 0 auto}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;padding:12px 20px 12px;flex:0 0 auto}
+.sheet-head h3{font-size:24px;font-weight:800;letter-spacing:-.03em;margin:0}
+.sheet-head .sub{font-size:12.5px;color:var(--lagoon);font-weight:700;margin-top:1px}
+.xbtn{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;font-size:17px;flex:0 0 auto}
+
+.chat{flex:1 1 auto;overflow-y:auto;padding:4px 20px 14px;
+  background:radial-gradient(120% 70% at 0% 0%,#DCEEFB 0%,rgba(220,238,251,0) 58%),
+             radial-gradient(110% 60% at 100% 22%,#FFE9D6 0%,rgba(255,233,214,0) 55%),
+             radial-gradient(130% 50% at 50% 100%,#E4E0F7 0%,rgba(228,224,247,0) 60%),#fff}
+.chat::-webkit-scrollbar{width:0}
+.welcome{padding:14px 0 6px}
+.welcome .em{font-size:26px;margin-bottom:12px}
+.welcome h4{font-size:27px;font-weight:800;letter-spacing:-.035em;margin:0 0 9px}
+.welcome p{margin:0;font-size:14.5px;line-height:1.5;color:var(--muted);font-weight:500}
+.msg{margin:0 0 14px;max-width:84%;overflow-wrap:anywhere;font-size:14.5px;line-height:1.45;font-weight:500}
+.msg.me{margin-left:auto;background:var(--dusk);color:#fff;padding:12px 15px;border-radius:17px 17px 5px 17px;font-weight:600}
+.bot-wrap{display:flex;gap:8px;align-items:flex-end;margin-bottom:14px}
+.bot-av{width:29px;height:29px;border-radius:50%;background:var(--dusk);color:#fff;display:grid;place-items:center;font-size:12px;flex:0 0 auto;margin-bottom:2px}
+.bot{background:#fff;border-radius:17px 17px 17px 5px;padding:13px 15px;max-width:84%;box-shadow:0 2px 10px rgba(36,26,84,.07)}
+.bot .tag{font-size:10px;font-weight:800;letter-spacing:.06em;color:var(--twilight);margin-bottom:5px}
+.bot .tag i{font-style:normal;color:var(--flamingo)}
+.bot p{margin:0;font-size:14.5px;line-height:1.45;font-weight:500;overflow-wrap:anywhere}
+.meta{text-align:center;font-size:12px;color:var(--faint);font-weight:500;margin:2px 0 14px}
+.constraints{margin-top:11px;display:flex;flex-direction:column;gap:7px;align-items:flex-start}
+.cst{font-size:13px;font-weight:700;padding:9px 12px;border-radius:11px}
+.cst.hard{background:#E2F4F2;color:#0A6B66;border:1px solid #BFE6E1}
+.cst.soft{background:#FDECF5;color:#A3156A;border:1px solid #F8D3E6}
+.cst.plain{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px 37px}
+.chip{font-size:13.5px;font-weight:700;padding:10px 15px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--muted);position:relative}
+.chip:hover{border-color:var(--twilight);color:var(--twilight)}
+.chip.picked{border-color:var(--twilight);color:var(--dusk)}
+.chip.picked::after{content:"✓";position:absolute;top:-7px;right:-7px;width:19px;height:19px;border-radius:50%;background:var(--dusk);color:#fff;font-size:11px;display:grid;place-items:center;font-weight:800}
+.chip[disabled]{opacity:.45;pointer-events:none}
+.suggest-label{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:700;margin:2px 0 10px 0}
+.carousel{position:relative;margin:0 -20px 2px}
+.suggest{display:flex;gap:10px;overflow-x:auto;padding:2px 20px 16px;
+  scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scrollbar-width:none;cursor:grab}
+.suggest.grabbing{cursor:grabbing;scroll-snap-type:none;scroll-behavior:auto}
+.suggest::-webkit-scrollbar{height:0}
+.scard{flex:0 0 auto;width:206px;user-select:none;text-align:left;border-radius:14px;padding:14px;scroll-snap-align:start;
+  border:1px solid #CFE6F7;background:linear-gradient(150deg,#F0F8FF 0%,#FFF7F0 100%)}
+.scard b{display:block;font-size:14px;font-weight:800;line-height:1.3}
+.scard span{font-size:13px;color:var(--muted);font-weight:500;line-height:1.35;display:block;margin-top:2px}
+.propcard{margin-top:12px;border:1px solid var(--line);border-radius:14px;padding:13px}
+.propcard b{font-size:14.5px;font-weight:800;display:block;margin-bottom:8px}
+.propline{display:grid;grid-template-columns:48px 1fr;gap:8px;font-size:13.5px;padding:3px 0;font-weight:500}
+.propline .t{font-weight:800;color:var(--twilight)}
+.propcard .go{margin-top:11px;width:100%;background:var(--dusk);color:#fff;font-size:13.5px;font-weight:700;padding:11px;border-radius:11px}
+.composer{flex:0 0 auto;padding:10px 16px 16px;background:#fff;border-top:1px solid var(--line);display:flex;gap:9px;align-items:center}
+.composer input{flex:1;border:1px solid var(--line);border-radius:999px;padding:13px 17px;font-size:14.5px;font-family:inherit;font-weight:500;color:var(--ink);min-width:0}
+.composer input::placeholder{color:var(--faint)}
+.composer input:focus{outline:none;border-color:var(--twilight)}
+.composer .send{width:42px;height:42px;border-radius:50%;background:var(--dusk);color:#fff;font-size:16px;display:grid;place-items:center;flex:0 0 auto}
+.typing{display:flex;gap:4px;padding:4px 2px}
+.typing i{width:6px;height:6px;border-radius:50%;background:var(--faint);animation:bob 1.1s infinite}
+.typing i:nth-child(2){animation-delay:.16s}.typing i:nth-child(3){animation-delay:.32s}
+@keyframes bob{0%,60%,100%{transform:translateY(0);opacity:.45}30%{transform:translateY(-4px);opacity:1}}
+
+.sessbar{position:absolute;left:14px;right:14px;top:56px;z-index:88;background:var(--dusk);color:#fff;
+  border-radius:14px;padding:13px 15px;display:flex;align-items:center;gap:11px;
+  opacity:0;transform:translateY(-8px);transition:.25s;pointer-events:none}
+.sessbar.on{opacity:1;transform:translateY(0);pointer-events:auto}
+.sessbar .ic{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.16);display:grid;place-items:center;font-size:12px;flex:0 0 auto}
+.sessbar b{display:block;font-size:13.5px;font-weight:700}
+.sessbar small{display:block;font-size:11.5px;opacity:.72;margin-top:1px}
+.sessbar button{flex:0 0 auto;font-size:13px;font-weight:800;color:#8FD4FF}
+
+.psheet{position:absolute;left:0;right:0;bottom:0;top:90px;z-index:90;background:#fff;border-radius:26px 26px 0 0;
+  display:flex;flex-direction:column;transform:translateY(102%);transition:transform .34s cubic-bezier(.22,.9,.26,1);
+  box-shadow:0 -14px 40px rgba(27,18,56,.22);overflow:hidden}
+.psheet.on{transform:translateY(0)}
+.pbody{flex:1 1 auto;overflow-y:auto;padding:4px 20px 10px}
+.pbody::-webkit-scrollbar{width:0}
+.pbody h3{font-size:27px;font-weight:800;letter-spacing:-.035em;margin:8px 0 7px}
+.pbody .why{font-size:14.5px;color:var(--muted);font-weight:500;line-height:1.46;margin:0 0 16px}
+.diff{border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:14px}
+.drow{display:grid;grid-template-columns:24px 1fr;gap:8px;padding:13px 14px;border-bottom:1px solid var(--line)}
+.drow:last-child{border-bottom:none}
+.drow .s{font-size:16px;font-weight:800}
+.drow .b{font-size:15px;font-weight:800;letter-spacing:-.015em}
+.drow .m{font-size:12.5px;color:var(--muted);font-weight:500;margin-top:2px;line-height:1.4}
+.drow.rm{background:#FDF0F5} .drow.rm .s,.drow.rm .b{color:#A3156A}
+.drow.add{background:#EEF9F7} .drow.add .s,.drow.add .b{color:#0A6B66}
+.drow.mv .s{color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:14px}
+.stat{border:1px solid var(--line);border-radius:13px;padding:13px 6px;text-align:center}
+.stat b{display:block;font-size:21px;font-weight:800;letter-spacing:-.03em}
+.stat small{display:block;font-size:11.5px;color:var(--muted);font-weight:500;line-height:1.3;margin-top:3px}
+.verified{background:#E2F4F2;border-radius:14px;padding:14px;margin-bottom:8px}
+.verified b{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800;color:#0A6B66}
+.verified p{margin:5px 0 0;font-size:13px;color:#0A6B66;font-weight:500;line-height:1.45;opacity:.92}
+.pfoot{flex:0 0 auto;padding:12px 20px 18px;background:#fff;border-top:1px solid var(--line)}
+.pactions{display:grid;grid-template-columns:1fr 1.35fr;gap:11px}
+.btn{padding:15px 12px;border-radius:14px;font-size:15px;font-weight:800}
+.btn.keep{background:var(--wash);color:var(--ink)}
+.btn.apply{background:var(--flamingo);color:#fff}
+.pfoot .fine{text-align:center;font-size:12px;color:var(--muted);font-weight:500;margin:11px 0 0}
+
+.tabs{flex:0 0 auto;display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line);
+  padding:9px 6px calc(10px + env(safe-area-inset-bottom,0px));background:#fff;z-index:65;position:relative}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--faint);padding:3px 0}
+.tab .g{font-size:17px;line-height:1}
+.tab.on{color:var(--twilight);font-weight:800}
+.toast{position:absolute;left:16px;right:16px;bottom:94px;background:var(--dusk);color:#fff;border-radius:14px;
+  padding:14px 16px;font-size:14px;font-weight:600;z-index:95;opacity:0;transform:translateY(10px);
+  transition:.25s;pointer-events:none;line-height:1.4;z-index:99}
+.toast.on{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<div class="stage-head">
+  <h1>ParkMind · prototipo navegable</h1>
+  <p>Magic Kingdom · Walt Disney World</p>
+</div>
+
+<div class="device">
+  <div class="notch"></div>
+  <div class="statusbar"><span id="clock">10:47</span><span class="sig">▂▄▆ ᯤ ▮</span></div>
+
+  <main class="viewport" id="viewport">
+
+    <!-- INICIO -->
+    <section class="screen on" id="s-home">
+      <div class="brandbar">
+        <div class="wordmark">park<i>mind</i></div>
+        <div class="brand-actions">
+          <button class="langbtn" id="openLang" aria-label="Idioma"><span id="langCode">ES</span></button>
+          <button class="bell" id="openNotifs" aria-label="Notificaciones">
+            <span class="g">🔔</span><span class="badge" id="notifBadge">0</span>
+          </button>
+          <button class="avatar" id="openProfile" aria-label="Perfil">A</button>
+          <button class="spark-btn ping" id="openAssistant" aria-label="Asistente"><span>✦</span></button>
+        </div>
+      </div>
+      <h2 class="greet" id="greeting"></h2>
+      <p class="subline" id="homeSub"></p>
+      <div class="pills">
+        <span class="pill">☀️ 29°</span>
+        <span class="pill warn" data-i18n="rain">Lluvia 60% · 15:00</span>
+        <span class="pill live" data-i18n="busy">Afluencia alta</span>
+      </div>
+
+      <h3 class="sect" data-i18n="your_day">Tu día</h3>
+      <div class="tiles">
+        <button class="tile plan" data-go="plan">
+          <div class="ico">🗺️</div>
+          <div><span class="big" id="tileStops">6</span><b data-i18n="my_plan">Mi plan</b><small data-i18n="stops_exit">paradas · salida 18:00</small></div>
+        </button>
+        <button class="tile waits" data-go="park">
+          <div class="ico">⏱️</div>
+          <div><b data-i18n="wait_times">Tiempos de espera</b><small data-i18n="live_rides">en vivo · 32 atracciones</small></div>
+        </button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><b data-i18n="now">Ahora</b><span data-i18n="updated">actualizado hace 2 min</span></div>
+        <div class="nowrow">
+          <div class="t" id="nowTime">10:55</div>
+          <div class="rail"><div class="dot"></div><div class="line"></div></div>
+          <div>
+            <div class="b" id="nowName"></div>
+            <div class="m" id="nowMeta"></div>
+            <div class="a11y" data-i18n="no_stairs">♿ Ruta sin escaleras</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="homeAlert"></div>
+    </section>
+
+    <!-- MI PLAN -->
+    <section class="screen" id="s-plan">
+      <div class="screen-head">
+        <h2 data-i18n="my_plan">Mi plan</h2>
+        <p>Magic Kingdom · <span id="planCount">6</span> <span data-i18n="stops_exit">paradas · salida 18:00</span></p>
+        <span class="status-chip" id="planStatus"></span>
+      </div>
+      <svg id="planMap" class="planmap" role="img" aria-label="Ruta del día"></svg>
+      <p class="walktotal" id="walkTotal"></p>
+      <div id="timeline"></div>
+      <p class="note" data-i18n="plan_note">Toda parada pasó por la puerta de restricciones antes de proponerse. Accesibilidad falla cerrado.</p>
+    </section>
+
+    <!-- PARQUE -->
+    <section class="screen" id="s-park">
+      <div class="screen-head">
+        <h2 data-i18n="park">Parque</h2>
+        <p data-i18n="park_sub">Magic Kingdom · esperas en vivo · ThemeParks.wiki</p>
+      </div>
+      <div class="mapfilters">
+        <button class="mf on" data-filter="all" data-i18n="f_all">Todo</button>
+        <button class="mf" data-filter="plan" data-i18n="f_route">Mi ruta</button>
+        <button class="mf" data-filter="access" data-i18n="f_access">Accesibles</button>
+        <button class="mf" data-filter="open" data-i18n="f_open">Abiertas</button>
+      </div>
+      <div class="mapwrap">
+        <svg id="bigMap" role="img" aria-label="Mapa del parque"></svg>
+        <div class="mapzoom">
+          <button id="zIn" aria-label="+">+</button>
+          <button id="zOut" aria-label="−">−</button>
+          <button id="zMe" aria-label="Mi ubicación">◎</button>
+          <button id="zReset" aria-label="Todo el parque">⤢</button>
+        </div>
+        <div class="maplegend">
+          <span><i style="background:#4A2FA8"></i><span data-i18n="l_route">Mi ruta</span></span>
+          <span><i style="background:#12938C"></i><span data-i18n="l_short">Espera corta</span></span>
+          <span><i style="background:#FFB627"></i><span data-i18n="l_long">Fila larga</span></span>
+          <span><i style="background:#E0218A"></i><span data-i18n="l_closed">Cerrada</span></span>
+        </div>
+      </div>
+      <div class="ridecard" id="rideCard"></div>
+      <h3 class="sect" style="margin-top:20px" data-i18n="all_rides">Todas las atracciones</h3>
+      <div id="rides"></div>
+    </section>
+
+    <!-- PERFIL -->
+    <section class="screen" id="s-profile">
+      <div class="screen-head">
+        <button class="backbtn" data-go="home" aria-label="Volver">‹</button>
+        <h2 data-i18n="profile">Perfil</h2>
+        <p data-i18n="profile_sub">Tu grupo, tus restricciones y tu idioma</p>
+      </div>
+      <div class="prof-head">
+        <div class="prof-av">A</div>
+        <div><b id="profName">Andrea</b><small id="profSub"></small></div>
+      </div>
+
+      <h3 class="sect" style="margin-top:4px" data-i18n="tickets">Entradas y passes</h3>
+      <div id="profTicket"></div>
+      <p class="note" data-i18n="tk_note">Tu ticket base no permite cambiar de parque hoy.</p>
+
+      <h3 class="sect" style="margin-top:20px" data-i18n="party">Tu grupo</h3>
+      <div id="profParty"></div>
+
+      <h3 class="sect" style="margin-top:20px" data-i18n="access_req">Accesibilidad · obligatorio</h3>
+      <div class="tagrow" id="profA11y"></div>
+      <p class="note" data-i18n="a11y_note">Estas no se negocian. El optimizador no ve las atracciones que no las cumplen.</p>
+
+      <h3 class="sect" style="margin-top:20px" data-i18n="prefs">Preferencias</h3>
+      <div class="tagrow" id="profPrefs"></div>
+
+
+    </section>
+
+    <!-- MÁS -->
+    <section class="screen" id="s-more">
+      <div class="screen-head">
+        <h2 data-i18n="more">Más</h2>
+        <p data-i18n="more_sub">Medición y fuente de datos</p>
+      </div>
+      <button class="row" data-go="profile"><span data-i18n="profile">Perfil</span><span class="chev">›</span></button>
+      <button class="row" data-go="eval"><span data-i18n="eval_row">Panel de evaluación<small>ParkMind vs. baseline LLM-only</small></span><span class="chev">›</span></button>
+      <button class="row" id="rowReset"><span data-i18n="reset_row">Reiniciar demostración<small>Vuelve al estado inicial</small></span><span class="chev">↺</span></button>
+      <p class="note" style="margin-top:22px" data-i18n="data_src">Fuente de datos</p>
+      <div class="switch" style="margin-top:8px">
+        <button class="on" id="modeMock">Mock (fixture)</button>
+        <button id="modeLive">Live (API)</button>
+      </div>
+      <p class="note" data-i18n="mode_note">En mock la UI lee un fixture que serializa los contratos del dominio. En live el mismo adaptador apunta al backend.</p>
+    </section>
+
+    <!-- EVALUACIÓN -->
+    <section class="screen" id="s-eval">
+      <div class="screen-head">
+        <button class="backbtn" data-go="more" aria-label="Volver">‹</button>
+        <h2 data-i18n="eval">Evaluación</h2>
+        <p data-i18n="eval_sub">Mismo escenario, mismas herramientas</p>
+      </div>
+      <div class="metric"><div class="n">Preference Alignment Score<small data-i18n="m1">qué tanto el plan refleja al grupo</small></div><div class="v">0.87</div><div class="base">0.61</div></div>
+      <div class="metric"><div class="n">Personalization Lift<small data-i18n="m2">distancia Jaccard vs. plan genérico</small></div><div class="v">+0.34</div><div class="base">—</div></div>
+      <div class="metric"><div class="n" data-i18n="m3">Violaciones de restricciones<small>sobre 40 escenarios</small></div><div class="v">0</div><div class="base">7</div></div>
+      <div class="metric"><div class="n" data-i18n="m4">Replanes aceptados<small>sin editar a mano</small></div><div class="v">91%</div><div class="base">—</div></div>
+      <p class="note" data-i18n="eval_note">La columna gris es el baseline LLM-only con las mismas herramientas. Cifras ilustrativas del prototipo.</p>
+    </section>
+  </main>
+
+  <div class="scrim" id="scrim"></div>
+
+  <!-- ASISTENTE -->
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" inert>
+    <div class="grab"></div>
+    <div class="sheet-head">
+      <div><h3 id="sheetTitle" data-i18n="assistant">Asistente</h3><div class="sub" id="assistStatus"></div></div>
+      <button class="xbtn" id="closeSheet" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="chat" id="chat"></div>
+    <div class="composer">
+      <input id="chatInput" autocomplete="off" aria-label="Mensaje para ParkMind">
+      <button class="send" id="sendBtn" aria-label="Enviar">↑</button>
+    </div>
+  </div>
+
+  <div class="langsheet" id="langsheet" role="dialog" aria-modal="true" aria-labelledby="lTitle" inert>
+    <div class="grab"></div>
+    <h3 id="lTitle" data-i18n="language">Idioma</h3>
+    <p data-i18n="lang_note">El asistente responde en el idioma que elijas.</p>
+    <div class="langgrid" id="langQuick"></div>
+  </div>
+
+  <div class="nsheet" id="nsheet" role="dialog" aria-modal="true" aria-labelledby="nTitle" inert>
+    <div class="grab"></div>
+    <div class="sheet-head">
+      <h3 id="nTitle" data-i18n="notifs">Notificaciones</h3>
+      <button class="xbtn" id="closeNotifs" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="nbody" id="notifList"></div>
+    <div class="nfoot"><button id="clearNotifs" data-i18n="notifs_clear">Marcar todas como leídas</button></div>
+  </div>
+
+  <div class="sessbar" id="sessbar" role="status" aria-live="polite" inert>
+    <div class="ic">✦</div>
+    <div style="flex:1"><b data-i18n="sess_title">La sesión va a cerrarse</b><small data-i18n="sess_sub">Puedes abrir otra cuando quieras</small></div>
+    <button id="sessDismiss" data-i18n="dismiss">Entendido</button>
+  </div>
+
+  <!-- PROPUESTA -->
+  <div class="psheet" id="psheet" role="dialog" aria-modal="true" aria-labelledby="pTitle" inert>
+    <div class="grab"></div>
+    <div class="pbody">
+      <h3 id="pTitle" data-i18n="proposed">Cambio propuesto</h3>
+      <p class="why" id="pWhy"></p>
+      <div class="diff" id="pDiff"></div>
+      <div class="stats" id="pStats"></div>
+      <div class="verified"><b data-i18n="a11y_ok">♿ Accesibilidad verificada</b><p id="pA11y"></p></div>
+      <p class="note" id="pProv"></p>
+    </div>
+    <div class="pfoot">
+      <div class="pactions">
+        <button class="btn keep" id="btnKeep" data-i18n="keep">Mantener</button>
+        <button class="btn apply" id="btnApply" data-i18n="apply">Aplicar cambios</button>
+      </div>
+      <p class="fine" data-i18n="nothing_until">Nada cambia en tu día hasta que toques Aplicar.</p>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <nav class="tabs" aria-label="Navegación principal">
+    <button class="tab on" data-go="home"><span class="g">⌂</span><span data-i18n="t_home">Inicio</span></button>
+    <button class="tab" data-go="park"><span class="g">▲</span><span data-i18n="t_park">Parque</span></button>
+    <button class="tab" data-go="plan"><span class="g">◷</span><span data-i18n="t_plan">Mi plan</span></button>
+    <button class="tab" data-go="assistant"><span class="g">✦</span><span data-i18n="t_ai">Asistente</span></button>
+    <button class="tab" data-go="more"><span class="g">☰</span><span data-i18n="t_more">Más</span></button>
+  </nav>
+</div>
+
+<div class="stage-foot">
+  <span style="font-size:12px;opacity:.6;font-weight:500">Maqueta de interfaz · datos ilustrativos · no es una implementación productiva</span>
+  <button class="ghost-btn" id="resetBtn">Reiniciar</button>
+</div>
+
+<script>
+/* =========================================================================
+   i18N — los cuatro idiomas más hablados por visitantes de Walt Disney World:
+   inglés, español, portugués (Brasil) y francés (Quebec/Francia).
+   ========================================================================= */
+const I18N = {
+  es:{ flag:"🇪🇸", name:"Español",
+    demo:"Datos de demostración", rain:"Lluvia 60% · 15:00", busy:"Afluencia alta",
+    your_day:"Tu día", my_plan:"Mi plan", stops_exit:"paradas · salida 18:00",
+    wait_times:"Tiempos de espera", live_rides:"en vivo · 32 atracciones",
+    now:"Ahora", updated:"actualizado hace 2 min", no_stairs:"♿ Ruta sin escaleras",
+    park:"Parque", park_sub:"Magic Kingdom · esperas en vivo · ThemeParks.wiki",
+    f_all:"Todo", f_route:"Mi ruta", f_access:"Accesibles", f_open:"Abiertas",
+    l_route:"Mi ruta", l_short:"Espera corta", l_long:"Fila larga", l_closed:"Cerrada",
+    all_rides:"Todas las atracciones", tap_hint:"Toca una atracción en el mapa para ver su detalle.",
+    in_plan:"En tu plan", wc_yes:"♿ Acceso en silla de ruedas",
+    wc_no:"♿ Sin acceso en silla de ruedas · excluida de tu plan",
+    ask_add:"Pedirle al asistente que la agregue", closed_now:"Cerrado ahora", min_wait:"min de espera",
+    profile:"Perfil", profile_sub:"Tu grupo, tus restricciones y tu idioma",
+    party:"Tu grupo", access_req:"Accesibilidad · obligatorio", prefs:"Preferencias",
+    a11y_note:"Estas no se negocian. El optimizador no ve las atracciones que no las cumplen.",
+    language:"Idioma", lang_note:"El asistente responde en el idioma que elijas.",
+    back:"Volver", more:"Más", more_sub:"Medición y fuente de datos",
+    eval_row:"Panel de evaluación", eval_row_sub:"ParkMind vs. baseline LLM-only",
+    reset_row:"Reiniciar demostración", reset_row_sub:"Vuelve al estado inicial",
+    data_src:"Fuente de datos",
+    mode_note:"En mock la UI lee un fixture que serializa los contratos del dominio. En live el mismo adaptador apunta al backend.",
+    eval:"Evaluación", eval_sub:"Mismo escenario, mismas herramientas",
+    m1:"qué tanto el plan refleja al grupo", m2:"distancia Jaccard vs. plan genérico",
+    m3:"Violaciones de restricciones", m4:"Replanes aceptados",
+    eval_note:"La columna gris es el baseline LLM-only con las mismas herramientas. Cifras ilustrativas del prototipo.",
+    plan_valid:"Plan válido · 11 reglas verificadas", plan_updated:"Plan actualizado · 11 reglas verificadas",
+    plan_note:"Toda parada pasó por la puerta de restricciones antes de proponerse. Accesibilidad falla cerrado.",
+    assistant:"Asistente", listening:"escuchando", thinking:"pensando",
+    composer:"Mensaje para ParkMind",
+    hi_morning:"Buenos días", hi_afternoon:"Buenas tardes", hi_evening:"Buenas noches",
+    welcome_desc:"Planeo tu día, vigilo las filas y el clima, y te propongo cambios cuando algo se mueve. Nada se aplica sin que lo apruebes.",
+    try_topics:"Empieza con uno de estos temas", need_more:"¿Necesitas más información?",
+    anything_else:"¿Te ayudo con algo más?",
+    sess_title:"La sesión va a cerrarse", sess_sub:"Puedes abrir otra cuando quieras", dismiss:"Entendido",
+    proposed:"Cambio propuesto", keep:"Mantener", apply:"Aplicar cambios",
+    nothing_until:"Nada cambia en tu día hasta que toques Aplicar.", a11y_ok:"♿ Accesibilidad verificada",
+    t_home:"Inicio", t_park:"Parque", t_plan:"Mi plan", t_ai:"Asistente", t_more:"Más",
+    change_title:"Hay un cambio propuesto", change_body:"La lluvia de las 15:00 afecta 2 paradas al aire libre.",
+    review:"Revisar", kept_title:"Mantuviste tu plan", kept_body:"Jungle Cruise sigue en tu día. Te aviso si cierra de verdad.",
+    applied:"Cambios aplicados. Tu plan quedó en {n} paradas.", kept_toast:"Mantuviste tu plan. Nada cambió.",
+    reset_toast:"Demostración reiniciada.",
+    walk_total:"{km} km · {min} min caminando en total", walk_leg:"{m} m · {min} min caminando",
+    park_closing:"El parque cierra en 90 minutos", park_closing_b:"Te queda tiempo para 2 paradas más de tu plan.",
+    ride_closing:"Big Thunder Mountain cierra temprano hoy", ride_closing_b:"Última entrada a las 16:50. Tu parada está a las 16:00.",
+    prompt1:"Vamos con mi mamá, usa silla de ruedas", prompt1s:"guardar las restricciones del grupo",
+    prompt2:"¿Qué hago con la lluvia de las 3?", prompt2s:"afecta 2 paradas al aire libre",
+    prompt3:"¿Cuánto vamos a caminar hoy?", prompt3s:"distancia total de tu ruta",
+    prompt4:"Busca algo bajo techo cerca", prompt4s:"alternativas a menos de 300 m",
+    prompt5:"¿Qué fila está más corta ahora?", prompt5s:"esperas en vivo del parque",
+    tag_new:"Nuevo", tag_moved:"Movido", notifs:"Notificaciones", notifs_empty:"No tienes notificaciones.", notifs_clear:"Marcar todas como leídas",
+    n_now:"ahora", n_min:"hace {n} min", tickets:"Entradas y passes", tk_base_3:"Ticket de 3 días · Base",
+    tk_day:"Día {i} de {n}", tk_valid:"Válido del {a} al {b}",
+    tk_hopper_no:"Sin Park Hopper · un parque por día", tk_hopper_yes:"Park Hopper · varios parques por día",
+    tk_ll:"Lightning Lane Multi Pass", tk_ll_left:"{n} de {t} reservas disponibles hoy",
+    tk_adult:"Adulto", tk_child:"Niño (3-9)",
+    tk_note:"Tu ticket base no permite cambiar de parque hoy, así que todo el plan se queda en Magic Kingdom. Las reservas de Lightning Lane se gastan en las filas más largas.",
+    ll_tag:"Lightning Lane",
+    prompt6:"¿Qué incluye mi ticket?", prompt6s:"días, parques y Lightning Lane",
+    prompt7:"¿Dónde almorzamos?", prompt7s:"opciones accesibles cerca de tu ruta",
+    prompt8:"Tomás quiere montañas rusas", prompt8s:"cuáles puede subir por estatura",
+    prompt9:"¿A qué hora deberíamos irnos?", prompt9s:"para llegar a la salida sin correr",
+    prompt10:"Muéstrame mi ruta en el mapa", prompt10s:"las 6 paradas y el camino sin escaleras" },
+
+  en:{ flag:"🇺🇸", name:"English",
+    demo:"Demo data", rain:"Rain 60% · 3:00 PM", busy:"Busy today",
+    your_day:"Your day", my_plan:"My plan", stops_exit:"stops · leaving 6:00 PM",
+    wait_times:"Wait times", live_rides:"live · 32 attractions",
+    now:"Now", updated:"updated 2 min ago", no_stairs:"♿ Step-free route",
+    park:"Park", park_sub:"Magic Kingdom · live waits · ThemeParks.wiki",
+    f_all:"All", f_route:"My route", f_access:"Accessible", f_open:"Open",
+    l_route:"My route", l_short:"Short wait", l_long:"Long line", l_closed:"Closed",
+    all_rides:"All attractions", tap_hint:"Tap an attraction on the map to see details.",
+    in_plan:"In your plan", wc_yes:"♿ Wheelchair accessible",
+    wc_no:"♿ Not wheelchair accessible · excluded from your plan",
+    ask_add:"Ask the assistant to add it", closed_now:"Closed now", min_wait:"min wait",
+    profile:"Profile", profile_sub:"Your party, your constraints, your language",
+    party:"Your party", access_req:"Accessibility · required", prefs:"Preferences",
+    a11y_note:"These are not negotiable. The optimizer never sees attractions that fail them.",
+    language:"Language", lang_note:"The assistant replies in the language you choose.",
+    back:"Back", more:"More", more_sub:"Measurement and data source",
+    eval_row:"Evaluation panel", eval_row_sub:"ParkMind vs. LLM-only baseline",
+    reset_row:"Reset demo", reset_row_sub:"Back to the initial state",
+    data_src:"Data source",
+    mode_note:"In mock the UI reads a fixture that serializes the domain contracts. In live the same adapter points at the backend.",
+    eval:"Evaluation", eval_sub:"Same scenario, same tools",
+    m1:"how well the plan reflects the party", m2:"Jaccard distance vs. a generic plan",
+    m3:"Constraint violations", m4:"Replans accepted",
+    eval_note:"The grey column is the LLM-only baseline with the same tools. Illustrative figures.",
+    plan_valid:"Plan valid · 11 rules checked", plan_updated:"Plan updated · 11 rules checked",
+    plan_note:"Every stop passed the constraint gate before being proposed. Accessibility fails closed.",
+    assistant:"Assistant", listening:"listening", thinking:"thinking",
+    composer:"Message ParkMind",
+    hi_morning:"Good morning", hi_afternoon:"Good afternoon", hi_evening:"Good evening",
+    welcome_desc:"I plan your day, watch the lines and the weather, and propose changes when things move. Nothing is applied without your approval.",
+    try_topics:"Try starting with one of these topics", need_more:"Need more information?",
+    anything_else:"Anything else I can help with?",
+    sess_title:"Chat session ending soon", sess_sub:"You can always start another when needed", dismiss:"Dismiss",
+    proposed:"Proposed change", keep:"Keep it", apply:"Apply changes",
+    nothing_until:"Nothing changes in your day until you tap Apply.", a11y_ok:"♿ Accessibility verified",
+    t_home:"Home", t_park:"Park", t_plan:"My plan", t_ai:"Assistant", t_more:"More",
+    change_title:"There's a proposed change", change_body:"The 3 PM rain affects 2 outdoor stops.",
+    review:"Review", kept_title:"You kept your plan", kept_body:"Jungle Cruise stays in your day. I'll tell you if it really closes.",
+    applied:"Changes applied. Your plan now has {n} stops.", kept_toast:"You kept your plan. Nothing changed.",
+    reset_toast:"Demo reset.",
+    walk_total:"{km} km · {min} min walking in total", walk_leg:"{m} m · {min} min walk",
+    park_closing:"The park closes in 90 minutes", park_closing_b:"There's still time for 2 more stops on your plan.",
+    ride_closing:"Big Thunder Mountain closes early today", ride_closing_b:"Last entry 4:50 PM. Your stop is at 4:00 PM.",
+    prompt1:"We're with my mom, she uses a wheelchair", prompt1s:"save the party constraints",
+    prompt2:"What about the 3 PM rain?", prompt2s:"it affects 2 outdoor stops",
+    prompt3:"How much will we walk today?", prompt3s:"total distance of your route",
+    prompt4:"Find something indoors nearby", prompt4s:"alternatives under 300 m",
+    prompt5:"Which line is shortest right now?", prompt5s:"live waits across the park",
+    tag_new:"New", tag_moved:"Moved", notifs:"Notifications", notifs_empty:"No notifications.", notifs_clear:"Mark all as read",
+    n_now:"now", n_min:"{n} min ago", tickets:"Tickets and passes", tk_base_3:"3-Day Base Ticket",
+    tk_day:"Day {i} of {n}", tk_valid:"Valid {a} to {b}",
+    tk_hopper_no:"No Park Hopper · one park per day", tk_hopper_yes:"Park Hopper · multiple parks per day",
+    tk_ll:"Lightning Lane Multi Pass", tk_ll_left:"{n} of {t} selections left today",
+    tk_adult:"Adult", tk_child:"Child (3-9)",
+    tk_note:"Your base ticket doesn't allow park hopping today, so the whole plan stays in Magic Kingdom. Lightning Lane selections are spent on the longest lines.",
+    ll_tag:"Lightning Lane",
+    prompt6:"What does my ticket include?", prompt6s:"days, parks and Lightning Lane",
+    prompt7:"Where should we have lunch?", prompt7s:"accessible options near your route",
+    prompt8:"Tomás wants roller coasters", prompt8s:"which ones he can ride by height",
+    prompt9:"What time should we head out?", prompt9s:"to reach the exit without rushing",
+    prompt10:"Show me my route on the map", prompt10s:"the 6 stops and the step-free path" },
+
+  pt:{ flag:"🇧🇷", name:"Português",
+    demo:"Dados de demonstração", rain:"Chuva 60% · 15:00", busy:"Movimento alto",
+    your_day:"Seu dia", my_plan:"Meu plano", stops_exit:"paradas · saída 18:00",
+    wait_times:"Tempos de espera", live_rides:"ao vivo · 32 atrações",
+    now:"Agora", updated:"atualizado há 2 min", no_stairs:"♿ Rota sem escadas",
+    park:"Parque", park_sub:"Magic Kingdom · esperas ao vivo · ThemeParks.wiki",
+    f_all:"Tudo", f_route:"Minha rota", f_access:"Acessíveis", f_open:"Abertas",
+    l_route:"Minha rota", l_short:"Espera curta", l_long:"Fila longa", l_closed:"Fechada",
+    all_rides:"Todas as atrações", tap_hint:"Toque numa atração no mapa para ver os detalhes.",
+    in_plan:"No seu plano", wc_yes:"♿ Acesso para cadeira de rodas",
+    wc_no:"♿ Sem acesso para cadeira de rodas · fora do seu plano",
+    ask_add:"Pedir ao assistente para adicionar", closed_now:"Fechado agora", min_wait:"min de espera",
+    profile:"Perfil", profile_sub:"Seu grupo, suas restrições e seu idioma",
+    party:"Seu grupo", access_req:"Acessibilidade · obrigatório", prefs:"Preferências",
+    a11y_note:"Isto não se negocia. O otimizador não vê atrações que não cumpram.",
+    language:"Idioma", lang_note:"O assistente responde no idioma que você escolher.",
+    back:"Voltar", more:"Mais", more_sub:"Medição e fonte de dados",
+    eval_row:"Painel de avaliação", eval_row_sub:"ParkMind vs. baseline LLM-only",
+    reset_row:"Reiniciar demonstração", reset_row_sub:"Voltar ao estado inicial",
+    data_src:"Fonte de dados",
+    mode_note:"Em mock a UI lê um fixture que serializa os contratos do domínio. Em live o mesmo adaptador aponta para o backend.",
+    eval:"Avaliação", eval_sub:"Mesmo cenário, mesmas ferramentas",
+    m1:"o quanto o plano reflete o grupo", m2:"distância Jaccard vs. plano genérico",
+    m3:"Violações de restrições", m4:"Replanejamentos aceitos",
+    eval_note:"A coluna cinza é o baseline LLM-only com as mesmas ferramentas. Números ilustrativos.",
+    plan_valid:"Plano válido · 11 regras verificadas", plan_updated:"Plano atualizado · 11 regras verificadas",
+    plan_note:"Cada parada passou pela porta de restrições antes de ser proposta. Acessibilidade falha fechado.",
+    assistant:"Assistente", listening:"ouvindo", thinking:"pensando",
+    composer:"Mensagem para o ParkMind",
+    hi_morning:"Bom dia", hi_afternoon:"Boa tarde", hi_evening:"Boa noite",
+    welcome_desc:"Eu planejo seu dia, acompanho as filas e o clima, e proponho mudanças quando algo muda. Nada é aplicado sem a sua aprovação.",
+    try_topics:"Comece com um destes temas", need_more:"Precisa de mais informação?",
+    anything_else:"Posso ajudar em mais alguma coisa?",
+    sess_title:"A sessão vai encerrar", sess_sub:"Você pode abrir outra quando quiser", dismiss:"Entendi",
+    proposed:"Mudança proposta", keep:"Manter", apply:"Aplicar mudanças",
+    nothing_until:"Nada muda no seu dia até você tocar em Aplicar.", a11y_ok:"♿ Acessibilidade verificada",
+    t_home:"Início", t_park:"Parque", t_plan:"Meu plano", t_ai:"Assistente", t_more:"Mais",
+    change_title:"Há uma mudança proposta", change_body:"A chuva das 15:00 afeta 2 paradas ao ar livre.",
+    review:"Revisar", kept_title:"Você manteve seu plano", kept_body:"Jungle Cruise continua no seu dia. Eu aviso se fechar mesmo.",
+    applied:"Mudanças aplicadas. Seu plano ficou com {n} paradas.", kept_toast:"Você manteve seu plano. Nada mudou.",
+    reset_toast:"Demonstração reiniciada.",
+    walk_total:"{km} km · {min} min caminhando no total", walk_leg:"{m} m · {min} min caminhando",
+    park_closing:"O parque fecha em 90 minutos", park_closing_b:"Ainda dá tempo para mais 2 paradas do seu plano.",
+    ride_closing:"Big Thunder Mountain fecha mais cedo hoje", ride_closing_b:"Última entrada às 16:50. Sua parada é às 16:00.",
+    prompt1:"Estamos com minha mãe, ela usa cadeira de rodas", prompt1s:"salvar as restrições do grupo",
+    prompt2:"E a chuva das 15h?", prompt2s:"afeta 2 paradas ao ar livre",
+    prompt3:"Quanto vamos caminhar hoje?", prompt3s:"distância total da sua rota",
+    prompt4:"Procure algo coberto por perto", prompt4s:"alternativas a menos de 300 m",
+    prompt5:"Qual fila está mais curta agora?", prompt5s:"esperas ao vivo do parque",
+    tag_new:"Nova", tag_moved:"Movida", notifs:"Notificações", notifs_empty:"Nenhuma notificação.", notifs_clear:"Marcar todas como lidas",
+    n_now:"agora", n_min:"há {n} min", tickets:"Ingressos e passes", tk_base_3:"Ingresso de 3 dias · Base",
+    tk_day:"Dia {i} de {n}", tk_valid:"Válido de {a} a {b}",
+    tk_hopper_no:"Sem Park Hopper · um parque por dia", tk_hopper_yes:"Park Hopper · vários parques por dia",
+    tk_ll:"Lightning Lane Multi Pass", tk_ll_left:"{n} de {t} reservas disponíveis hoje",
+    tk_adult:"Adulto", tk_child:"Criança (3-9)",
+    tk_note:"Seu ingresso base não permite trocar de parque hoje, então todo o plano fica no Magic Kingdom. As reservas de Lightning Lane são usadas nas filas mais longas.",
+    ll_tag:"Lightning Lane",
+    prompt6:"O que o meu ingresso inclui?", prompt6s:"dias, parques e Lightning Lane",
+    prompt7:"Onde almoçar?", prompt7s:"opções acessíveis perto da sua rota",
+    prompt8:"Tomás quer montanhas-russas", prompt8s:"quais ele pode andar pela altura",
+    prompt9:"A que horas devemos sair?", prompt9s:"para chegar à saída sem correr",
+    prompt10:"Mostre minha rota no mapa", prompt10s:"as 6 paradas e o caminho sem escadas" },
+
+  fr:{ flag:"🇫🇷", name:"Français",
+    demo:"Données de démonstration", rain:"Pluie 60% · 15:00", busy:"Forte affluence",
+    your_day:"Votre journée", my_plan:"Mon plan", stops_exit:"arrêts · départ 18:00",
+    wait_times:"Temps d'attente", live_rides:"en direct · 32 attractions",
+    now:"Maintenant", updated:"mis à jour il y a 2 min", no_stairs:"♿ Itinéraire sans escaliers",
+    park:"Parc", park_sub:"Magic Kingdom · attentes en direct · ThemeParks.wiki",
+    f_all:"Tout", f_route:"Mon itinéraire", f_access:"Accessibles", f_open:"Ouvertes",
+    l_route:"Mon itinéraire", l_short:"Attente courte", l_long:"File longue", l_closed:"Fermée",
+    all_rides:"Toutes les attractions", tap_hint:"Touchez une attraction sur la carte pour voir le détail.",
+    in_plan:"Dans votre plan", wc_yes:"♿ Accès en fauteuil roulant",
+    wc_no:"♿ Pas d'accès en fauteuil roulant · exclue de votre plan",
+    ask_add:"Demander à l'assistant de l'ajouter", closed_now:"Fermé maintenant", min_wait:"min d'attente",
+    profile:"Profil", profile_sub:"Votre groupe, vos contraintes, votre langue",
+    party:"Votre groupe", access_req:"Accessibilité · obligatoire", prefs:"Préférences",
+    a11y_note:"Cela ne se négocie pas. L'optimiseur ne voit pas les attractions qui n'y répondent pas.",
+    language:"Langue", lang_note:"L'assistant répond dans la langue que vous choisissez.",
+    back:"Retour", more:"Plus", more_sub:"Mesure et source des données",
+    eval_row:"Panneau d'évaluation", eval_row_sub:"ParkMind vs. référence LLM seul",
+    reset_row:"Réinitialiser la démo", reset_row_sub:"Revenir à l'état initial",
+    data_src:"Source des données",
+    mode_note:"En mock l'interface lit un fixture qui sérialise les contrats du domaine. En live le même adaptateur pointe vers le backend.",
+    eval:"Évaluation", eval_sub:"Même scénario, mêmes outils",
+    m1:"à quel point le plan reflète le groupe", m2:"distance de Jaccard vs. plan générique",
+    m3:"Violations de contraintes", m4:"Replanifications acceptées",
+    eval_note:"La colonne grise est la référence LLM seul avec les mêmes outils. Chiffres illustratifs.",
+    plan_valid:"Plan valide · 11 règles vérifiées", plan_updated:"Plan mis à jour · 11 règles vérifiées",
+    plan_note:"Chaque arrêt a passé la porte de contraintes avant d'être proposé. L'accessibilité échoue en mode fermé.",
+    assistant:"Assistant", listening:"à l'écoute", thinking:"réflexion",
+    composer:"Message à ParkMind",
+    hi_morning:"Bonjour", hi_afternoon:"Bon après-midi", hi_evening:"Bonsoir",
+    welcome_desc:"Je planifie votre journée, je surveille les files et la météo, et je propose des changements quand les choses bougent. Rien n'est appliqué sans votre accord.",
+    try_topics:"Commencez par l'un de ces sujets", need_more:"Besoin de plus d'informations ?",
+    anything_else:"Puis-je vous aider avec autre chose ?",
+    sess_title:"La session va se terminer", sess_sub:"Vous pouvez en ouvrir une autre quand vous voulez", dismiss:"Compris",
+    proposed:"Changement proposé", keep:"Garder", apply:"Appliquer",
+    nothing_until:"Rien ne change dans votre journée tant que vous n'appuyez pas sur Appliquer.", a11y_ok:"♿ Accessibilité vérifiée",
+    t_home:"Accueil", t_park:"Parc", t_plan:"Mon plan", t_ai:"Assistant", t_more:"Plus",
+    change_title:"Un changement est proposé", change_body:"La pluie de 15h affecte 2 arrêts en plein air.",
+    review:"Revoir", kept_title:"Vous avez gardé votre plan", kept_body:"Jungle Cruise reste dans votre journée. Je vous préviens si elle ferme vraiment.",
+    applied:"Changements appliqués. Votre plan compte {n} arrêts.", kept_toast:"Vous avez gardé votre plan. Rien n'a changé.",
+    reset_toast:"Démo réinitialisée.",
+    walk_total:"{km} km · {min} min de marche au total", walk_leg:"{m} m · {min} min de marche",
+    park_closing:"Le parc ferme dans 90 minutes", park_closing_b:"Il reste du temps pour 2 arrêts de votre plan.",
+    ride_closing:"Big Thunder Mountain ferme tôt aujourd'hui", ride_closing_b:"Dernière entrée à 16:50. Votre arrêt est à 16:00.",
+    prompt1:"Nous sommes avec ma mère, elle est en fauteuil roulant", prompt1s:"enregistrer les contraintes du groupe",
+    prompt2:"Et la pluie de 15h ?", prompt2s:"elle affecte 2 arrêts en plein air",
+    prompt3:"Combien allons-nous marcher aujourd'hui ?", prompt3s:"distance totale de votre itinéraire",
+    prompt4:"Trouve quelque chose à l'intérieur tout près", prompt4s:"alternatives à moins de 300 m",
+    prompt5:"Quelle file est la plus courte maintenant ?", prompt5s:"attentes en direct dans le parc",
+    tag_new:"Nouveau", tag_moved:"Déplacé", notifs:"Notifications", notifs_empty:"Aucune notification.", notifs_clear:"Tout marquer comme lu",
+    n_now:"maintenant", n_min:"il y a {n} min", tickets:"Billets et pass", tk_base_3:"Billet 3 jours · Base",
+    tk_day:"Jour {i} sur {n}", tk_valid:"Valable du {a} au {b}",
+    tk_hopper_no:"Sans Park Hopper · un parc par jour", tk_hopper_yes:"Park Hopper · plusieurs parcs par jour",
+    tk_ll:"Lightning Lane Multi Pass", tk_ll_left:"{n} réservations sur {t} restantes aujourd'hui",
+    tk_adult:"Adulte", tk_child:"Enfant (3-9)",
+    tk_note:"Votre billet de base ne permet pas de changer de parc aujourd'hui, donc tout le plan reste à Magic Kingdom. Les réservations Lightning Lane sont utilisées sur les files les plus longues.",
+    ll_tag:"Lightning Lane",
+    prompt6:"Que comprend mon billet ?", prompt6s:"jours, parcs et Lightning Lane",
+    prompt7:"Où déjeuner ?", prompt7s:"options accessibles près de votre itinéraire",
+    prompt8:"Tomás veut des montagnes russes", prompt8s:"lesquelles selon sa taille",
+    prompt9:"À quelle heure partir ?", prompt9s:"pour rejoindre la sortie sans courir",
+    prompt10:"Montre mon itinéraire sur la carte", prompt10s:"les 6 arrêts et le chemin sans escaliers" }
+};
+
+let LANG = (() => { try { return localStorage.getItem("pm_lang") || "es"; } catch { return "es"; } })();
+const t = (k, vars) => {
+  let s = (I18N[LANG] && I18N[LANG][k]) || I18N.es[k] || k;
+  if (vars) for (const [a,b] of Object.entries(vars)) s = s.replace(`{${a}}`, b);
+  return s;
+};
+
+/* =========================================================================
+   FIXTURE — serializa los contratos del dominio. Las coordenadas vienen de
+   entity.location en ThemeParks.wiki (aquí aproximadas; en live, exactas).
+   ========================================================================= */
+const FIXTURE = {
+  guest_profile: { guest_id:"g_mk_001", display_name:"Andrea", party_size:3 },
+  party: [
+    { name:"Andrea", role:"organizer", note:{es:"Tú",en:"You",pt:"Você",fr:"Vous"} },
+    { name:"Carmen", role:"adult",     note:{es:"Silla de ruedas",en:"Wheelchair",pt:"Cadeira de rodas",fr:"Fauteuil roulant"} },
+    { name:"Tomás",  role:"child",     note:{es:"8 años · montañas rusas",en:"8 years old · roller coasters",
+                                             pt:"8 anos · montanhas-russas",fr:"8 ans · montagnes russes"} }
+  ],
+  party_constraints: {
+    exit_by:"18:00",
+    accessibility:[
+      { code:"wheelchair_access", mandatory:true,
+        label:{es:"Silla de ruedas",en:"Wheelchair access",pt:"Cadeira de rodas",fr:"Fauteuil roulant"} },
+      { code:"no_stairs", mandatory:true,
+        label:{es:"Sin escaleras",en:"Step-free",pt:"Sem escadas",fr:"Sans escaliers"} }
+    ],
+    preferences:[
+      { code:"thrill", weight:0.9, label:{es:"Montañas rusas",en:"Roller coasters",pt:"Montanhas-russas",fr:"Montagnes russes"} },
+      { code:"shade",  weight:0.5, label:{es:"Evitar sol del mediodía",en:"Avoid midday sun",pt:"Evitar sol do meio-dia",fr:"Éviter le soleil de midi"} },
+      { code:"shows",  weight:0.4, label:{es:"Espectáculos",en:"Shows",pt:"Espetáculos",fr:"Spectacles"} }
+    ]
+  },
+  /* Entitlements — productos reales de Walt Disney World. No son decorativos:
+     cada uno es una restricción que el optimizador tiene que respetar.
+       · base sin Park Hopper → el plan no puede salir de Magic Kingdom hoy
+       · Lightning Lane Multi Pass → 3 reservas disponibles, el planner las
+         gasta en las filas más largas
+       · ticket de niño → aplican restricciones de estatura */
+  tickets: {
+    product:"3-Day Base Ticket",
+    product_key:"tk_base_3",
+    park_hopper:false,
+    valid_from:"2026-10-09", valid_to:"2026-10-11",
+    day_index:1, day_total:3,
+    lightning_lane:{ type:"Multi Pass", selections_total:3, selections_used:1 },
+    holders:[
+      { name:"Andrea", kind:"adult" },
+      { name:"Carmen", kind:"adult" },
+      { name:"Tomás",  kind:"child" }
+    ]
+  },
+  plan: {
+    plan_id:"pl_7f31", park:"Magic Kingdom",
+    park_id:"75ea578a-adc8-4116-a54d-dccb60765ef9",
+    status:"valid", rules_checked:11,
+    events:[
+      { event_id:"e1", start:"10:55", title:"Space Mountain",       meta:{es:"espera 25 min · acceso en silla de ruedas",en:"25 min wait · wheelchair accessible",pt:"espera 25 min · acesso para cadeira de rodas",fr:"25 min d'attente · accès fauteuil"}, kind:"ride", state:"current",  location:{lat:28.4189,lon:-81.5775}, lightning_lane:true },
+      { event_id:"e2", start:"12:10", title:"Be Our Guest",         meta:{es:"almuerzo · bajo techo · 45 min",en:"lunch · indoors · 45 min",pt:"almoço · coberto · 45 min",fr:"déjeuner · en intérieur · 45 min"},            kind:"meal", state:"upcoming", location:{lat:28.4203,lon:-81.5796} },
+      { event_id:"e3", start:"13:20", title:"it's a small world",   meta:{es:"bajo techo · espera 10 min",en:"indoors · 10 min wait",pt:"coberto · espera 10 min",fr:"en intérieur · 10 min d'attente"},                kind:"ride", state:"upcoming", location:{lat:28.4205,lon:-81.5805} },
+      { event_id:"e4", start:"15:10", title:"Jungle Cruise",        meta:{es:"al aire libre · espera 20 min",en:"outdoors · 20 min wait",pt:"ao ar livre · espera 20 min",fr:"en plein air · 20 min d'attente"},             kind:"ride", state:"upcoming", location:{lat:28.4183,lon:-81.5836} },
+      { event_id:"e5", start:"16:00", title:"Big Thunder Mountain", meta:{es:"al aire libre · espera 15 min",en:"outdoors · 15 min wait",pt:"ao ar livre · espera 15 min",fr:"en plein air · 15 min d'attente"},             kind:"ride", state:"upcoming", location:{lat:28.4196,lon:-81.5843}, lightning_lane:true },
+      { event_id:"e6", start:"17:10", title:"Cinderella Castle",    meta:{es:"cierre del día · 20 min",en:"end of the day · 20 min",pt:"encerramento do dia · 20 min",fr:"fin de journée · 20 min"},                   kind:"view", state:"upcoming", location:{lat:28.4192,lon:-81.5812} }
+    ]
+  },
+  proposal: {
+    proposal_id:"pr_a18c",
+    trigger:{es:"Lluvia 60% desde las 15:00 y cierre temporal de Jungle Cruise.",
+             en:"60% chance of rain from 3 PM and a temporary closure at Jungle Cruise.",
+             pt:"60% de chuva a partir das 15:00 e fechamento temporário da Jungle Cruise.",
+             fr:"60% de pluie dès 15h et fermeture temporaire de Jungle Cruise."},
+    explanation:{es:"Jungle Cruise es al aire libre y cierra por clima. Haunted Mansion está bajo techo, tiene acceso en silla de ruedas y queda a 180 m de tu parada anterior. Big Thunder Mountain se corre 40 minutos para no comprometer la salida a las 18:00.",
+                 en:"Jungle Cruise is outdoors and closes in bad weather. Haunted Mansion is indoors, wheelchair accessible and sits 180 m from your previous stop. Big Thunder Mountain moves 40 minutes later so the 6 PM exit still holds.",
+                 pt:"A Jungle Cruise é ao ar livre e fecha por causa do clima. A Haunted Mansion é coberta, tem acesso para cadeira de rodas e fica a 180 m da sua parada anterior. A Big Thunder Mountain atrasa 40 minutos para não comprometer a saída às 18:00.",
+                 fr:"Jungle Cruise est en plein air et ferme à cause de la météo. Haunted Mansion est en intérieur, accessible en fauteuil et se trouve à 180 m de votre arrêt précédent. Big Thunder Mountain est décalée de 40 minutes pour préserver le départ à 18h."},
+    provenance:{es:"Clima: Open-Meteo (pronóstico horario, 14:40). Estado de atracciones: ThemeParks.wiki (14:52). Distancias: haversine sobre coordenadas de ThemeParks.wiki. Decisión: Replanner + ConstraintChecker, 11 reglas.",
+                en:"Weather: Open-Meteo (hourly forecast, 2:40 PM). Attraction status: ThemeParks.wiki (2:52 PM). Distances: haversine over ThemeParks.wiki coordinates. Decision: Replanner + ConstraintChecker, 11 rules.",
+                pt:"Clima: Open-Meteo (previsão horária, 14:40). Status das atrações: ThemeParks.wiki (14:52). Distâncias: haversine sobre coordenadas da ThemeParks.wiki. Decisão: Replanner + ConstraintChecker, 11 regras.",
+                fr:"Météo : Open-Meteo (prévision horaire, 14h40). État des attractions : ThemeParks.wiki (14h52). Distances : haversine sur les coordonnées ThemeParks.wiki. Décision : Replanner + ConstraintChecker, 11 règles."},
+    diff:{
+      removed:[{ ref:"e4", start:"15:10", title:"Jungle Cruise",
+        meta:{es:"al aire libre · cerrado por clima",en:"outdoors · closed for weather",pt:"ao ar livre · fechado por causa do clima",fr:"en plein air · fermé pour météo"} }],
+      added:  [{ ref:"e7", start:"15:10", title:"Haunted Mansion", kind:"ride", location:{lat:28.4205,lon:-81.5833},
+        meta:{es:"bajo techo · espera 15 min · acceso silla de ruedas",en:"indoors · 15 min wait · wheelchair accessible",
+              pt:"coberto · espera 15 min · acesso para cadeira de rodas",fr:"en intérieur · 15 min d'attente · accès fauteuil"} }],
+      moved:  [{ ref:"e5", from:"16:00", to:"16:40", title:"Big Thunder Mountain",
+        meta:{es:"movido para mantener la salida a las 18:00",en:"moved to protect the 6 PM exit",
+              pt:"movida para manter a saída às 18:00",fr:"décalée pour préserver le départ à 18h"} }]
+    },
+    metrics:{ unchanged:"4/6", walk_delta:"+12", affinity:"92%",
+      unchanged_label:{es:"paradas sin cambio",en:"stops unchanged",pt:"paradas sem mudança",fr:"arrêts inchangés"},
+      walk_label:{es:"min caminando",en:"min walking",pt:"min caminhando",fr:"min de marche"},
+      affinity_label:{es:"afinidad con tus gustos",en:"match with your tastes",pt:"afinidade com seus gostos",fr:"affinité avec vos goûts"} },
+    accessibility_verified:true,
+    accessibility_note:{es:"Ruta sin escaleras y acceso en silla de ruedas confirmados en las 6 paradas.",
+                        en:"Step-free route and wheelchair access confirmed across all 6 stops.",
+                        pt:"Rota sem escadas e acesso para cadeira de rodas confirmados nas 6 paradas.",
+                        fr:"Itinéraire sans escaliers et accès fauteuil confirmés sur les 6 arrêts."}
+  },
+  rides:[
+    { name:"Space Mountain",            zone:"Tomorrowland",   wait:25,   access:true,  loc:{lat:28.4189,lon:-81.5775} },
+    { name:"TRON Lightcycle Run",       zone:"Tomorrowland",   wait:85,   access:true,  loc:{lat:28.4196,lon:-81.5773} },
+    { name:"Buzz Lightyear",            zone:"Tomorrowland",   wait:30,   access:true,  loc:{lat:28.4186,lon:-81.5782} },
+    { name:"Tomorrowland Speedway",     zone:"Tomorrowland",   wait:40,   access:false, loc:{lat:28.4197,lon:-81.5780} },
+    { name:"Haunted Mansion",           zone:"Liberty Square", wait:15,   access:true,  loc:{lat:28.4205,lon:-81.5833} },
+    { name:"Liberty Square Riverboat",  zone:"Liberty Square", wait:20,   access:true,  loc:{lat:28.4202,lon:-81.5840} },
+    { name:"Jungle Cruise",             zone:"Adventureland",  wait:null, access:true,  loc:{lat:28.4183,lon:-81.5836}, closed:true },
+    { name:"Pirates of the Caribbean",  zone:"Adventureland",  wait:20,   access:true,  loc:{lat:28.4181,lon:-81.5839} },
+    { name:"Magic Carpets",             zone:"Adventureland",  wait:10,   access:true,  loc:{lat:28.4180,lon:-81.5832} },
+    { name:"Big Thunder Mountain",      zone:"Frontierland",   wait:15,   access:true,  loc:{lat:28.4196,lon:-81.5843} },
+    { name:"Tiana's Bayou Adventure",   zone:"Frontierland",   wait:75,   access:false, loc:{lat:28.4192,lon:-81.5847} },
+    { name:"Seven Dwarfs Mine Train",   zone:"Fantasyland",    wait:70,   access:false, loc:{lat:28.4201,lon:-81.5790} },
+    { name:"it's a small world",        zone:"Fantasyland",    wait:10,   access:true,  loc:{lat:28.4205,lon:-81.5805} },
+    { name:"Dumbo the Flying Elephant", zone:"Fantasyland",    wait:5,    access:true,  loc:{lat:28.4199,lon:-81.5793} },
+    { name:"Peter Pan's Flight",        zone:"Fantasyland",    wait:55,   access:false, loc:{lat:28.4203,lon:-81.5803} },
+    { name:"Mad Tea Party",             zone:"Fantasyland",    wait:10,   access:true,  loc:{lat:28.4200,lon:-81.5786} },
+    { name:"Be Our Guest",              zone:"Fantasyland",    wait:0,    access:true,  loc:{lat:28.4203,lon:-81.5796} },
+    { name:"Cinderella Castle",         zone:"Fantasyland",    wait:0,    access:true,  loc:{lat:28.4192,lon:-81.5812} },
+    { name:"Main Street Vehicles",      zone:"Main Street",    wait:5,    access:true,  loc:{lat:28.4172,lon:-81.5812} }
+  ],
+  alerts:[
+    { id:"al_park", kind:"info",   icon:"🕕", mins:12, title_key:"park_closing", body_key:"park_closing_b" },
+    { id:"al_ride", kind:"urgent", icon:"⏳", mins:4,  title_key:"ride_closing", body_key:"ride_closing_b" }
+  ]
+};
+
+/* ====================== ADAPTER (mock | live) ====================== */
+const BASE = "/api";
+const Adapter = {
+  mode:"mock",
+  async getPlan(){ return this.mode === "live" ? (await fetch(`${BASE}/plan`)).json() : structuredClone(FIXTURE.plan); },
+  async getProposal(){ return this.mode === "live" ? (await fetch(`${BASE}/proposal`)).json() : structuredClone(FIXTURE.proposal); },
+  async decide(id, decision){
+    if (this.mode === "live") return (await fetch(`${BASE}/proposal/${id}/${decision}`, {method:"POST"})).json();
+    return { ok:true, proposal_id:id, decision };
+  },
+  async sendMessage(text){
+    if (this.mode === "live") return (await fetch(`${BASE}/assistant`, {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ message:text, thread_id:STATE.threadId, lang:LANG })
+    })).json();
+    return mockReply(text);
+  }
+};
+
+/* ====================== GEOGRAFÍA DEL PARQUE ======================
+   Esquema propio en coordenadas reales. Ninguna ilustración del operador. */
+const HUB = { lat:28.4190, lon:-81.5812 };
+const ZONES = [
+  { name:"Main Street, U.S.A.", fill:"#F7E9D8", ink:"#6B4F2C", poly:[[28.4162,-81.5818],[28.4162,-81.5806],[28.4184,-81.5806],[28.4184,-81.5818]] },
+  { name:"Tomorrowland",  fill:"#DDEBF8", ink:"#2C5375", poly:[[28.4183,-81.5795],[28.4182,-81.5766],[28.4200,-81.5763],[28.4204,-81.5783],[28.4194,-81.5796]] },
+  { name:"Fantasyland",   fill:"#F3E4F4", ink:"#6B4077", poly:[[28.4196,-81.5800],[28.4199,-81.5784],[28.4213,-81.5786],[28.4214,-81.5807],[28.4203,-81.5811]] },
+  { name:"Liberty Square",fill:"#E6EDE3", ink:"#445A3F", poly:[[28.4199,-81.5820],[28.4202,-81.5810],[28.4212,-81.5816],[28.4210,-81.5834],[28.4200,-81.5833]] },
+  { name:"Frontierland",  fill:"#F2E2D2", ink:"#6D4A26", poly:[[28.4188,-81.5832],[28.4199,-81.5833],[28.4202,-81.5854],[28.4188,-81.5858],[28.4182,-81.5843]] },
+  { name:"Adventureland", fill:"#DFEDDC", ink:"#3A5E35", poly:[[28.4174,-81.5826],[28.4186,-81.5825],[28.4189,-81.5841],[28.4177,-81.5847],[28.4170,-81.5837]] }
+];
+const WATER = [[28.4196,-81.5848],[28.4202,-81.5852],[28.4208,-81.5845],[28.4206,-81.5837],[28.4198,-81.5840]];
+
+/* Red de senderos: Main Street, el anillo del hub, los radios y el bucle
+   perimetral que conecta las tierras entre sí. */
+const WALKWAYS = (() => {
+  const paths = [
+    [[28.4163,-81.5812],[28.4186,-81.5812]],                 // Main Street
+    [[28.4190,-81.5812],[28.4192,-81.5783]],                 // → Tomorrowland
+    [[28.4190,-81.5812],[28.4204,-81.5798]],                 // → Fantasyland
+    [[28.4190,-81.5812],[28.4203,-81.5824]],                 // → Liberty Square
+    [[28.4190,-81.5812],[28.4192,-81.5840]],                 // → Frontierland
+    [[28.4190,-81.5812],[28.4182,-81.5833]],                 // → Adventureland
+    // bucle perimetral
+    [[28.4192,-81.5783],[28.4199,-81.5778]],
+    [[28.4199,-81.5778],[28.4205,-81.5789]],
+    [[28.4205,-81.5789],[28.4207,-81.5802]],
+    [[28.4207,-81.5802],[28.4206,-81.5818]],
+    [[28.4206,-81.5818],[28.4205,-81.5831]],
+    [[28.4205,-81.5831],[28.4199,-81.5840]],
+    [[28.4199,-81.5840],[28.4192,-81.5845]],
+    [[28.4192,-81.5845],[28.4185,-81.5842]],
+    [[28.4185,-81.5842],[28.4180,-81.5835]],
+    [[28.4180,-81.5835],[28.4178,-81.5825]],
+    [[28.4178,-81.5825],[28.4180,-81.5815]],
+    // ramales internos
+    [[28.4199,-81.5778],[28.4196,-81.5773]],
+    [[28.4205,-81.5789],[28.4201,-81.5791]],
+    [[28.4207,-81.5802],[28.4203,-81.5797]],
+    [[28.4205,-81.5831],[28.4202,-81.5841]],
+    [[28.4192,-81.5845],[28.4193,-81.5848]],
+    [[28.4180,-81.5835],[28.4181,-81.5839]],
+    [[28.4186,-81.5812],[28.4180,-81.5815]],
+    [[28.4186,-81.5812],[28.4186,-81.5802]],
+    [[28.4186,-81.5802],[28.4186,-81.5785]]
+  ];
+  // anillo alrededor del hub
+  const ring = [];
+  for (let i = 0; i < 12; i++){
+    const a = (i/12) * Math.PI * 2, b = ((i+1)/12) * Math.PI * 2, r = 0.00042;
+    ring.push([[HUB.lat + r*Math.sin(a), HUB.lon + r*Math.cos(a)*1.14],
+               [HUB.lat + r*Math.sin(b), HUB.lon + r*Math.cos(b)*1.14]]);
+  }
+  return paths.concat(ring);
+})();
+
+const WALK_M_PER_MIN = 72;
+function haversine(a,b){
+  if (!a || !b) return null;
+  const R = 6371000, rad = d => d*Math.PI/180;
+  const dLat = rad(b.lat-a.lat), dLon = rad(b.lon-a.lon);
+  const h = Math.sin(dLat/2)**2 + Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLon/2)**2;
+  return Math.round(2*R*Math.asin(Math.sqrt(h)));
+}
+const walkMin = m => m == null ? null : Math.max(1, Math.round(m/WALK_M_PER_MIN));
+
+function project(points,w,h,pad){
+  const lats = points.map(p=>p.lat), lons = points.map(p=>p.lon);
+  const latC = (Math.min(...lats)+Math.max(...lats))/2, kx = Math.cos(latC*Math.PI/180);
+  const xs = lons.map(l=>l*kx), ys = lats.map(l=>-l);
+  const x0=Math.min(...xs), x1=Math.max(...xs), y0=Math.min(...ys), y1=Math.max(...ys);
+  const s = Math.min((w-2*pad)/((x1-x0)||1), (h-2*pad)/((y1-y0)||1));
+  return p => ({
+    x: pad + (p.lon*kx - x0)*s + (w-2*pad-(x1-x0)*s)/2,
+    y: pad + (-p.lat  - y0)*s + (h-2*pad-(y1-y0)*s)/2
+  });
+}
+
+/* ====================== STATE ====================== */
+const STATE = {
+  threadId:"th_demo_001",
+  plan: structuredClone(FIXTURE.plan),
+  proposal: structuredClone(FIXTURE.proposal),
+  proposalState:"pending",
+  screen:"home", dismissedAlerts:new Set(), readNotifs:new Set()
+};
+/* ---- gestión de diálogos: inert al cerrar, foco atrapado, foco devuelto ---- */
+let lastFocus = null;
+function dlgOpen(sel){
+  lastFocus = document.activeElement;
+  const n = document.querySelector(sel);
+  n.removeAttribute("inert");
+  n.classList.add("on");
+  setTimeout(() => {
+    const f = n.querySelector("input,button,[tabindex]:not([tabindex='-1'])");
+    if (f) f.focus();
+  }, 320);
+}
+function dlgClose(sel){
+  const n = document.querySelector(sel);
+  n.classList.remove("on");
+  if (n.contains(document.activeElement)) document.activeElement.blur();
+  n.setAttribute("inert","");
+  if (lastFocus && lastFocus.isConnected) lastFocus.focus();
+  lastFocus = null;
+}
+document.addEventListener("keydown", e => {
+  if (e.key !== "Tab") return;
+  const dlg = document.querySelector(".sheet.on,.psheet.on,.nsheet.on,.langsheet.on");
+  if (!dlg) return;
+  const f = [...dlg.querySelectorAll("input,button,[tabindex]:not([tabindex='-1'])")]
+            .filter(x => x.offsetParent !== null);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length-1];
+  if (e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+});
+
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const el = (tag,c,h) => { const n=document.createElement(tag); if(c)n.className=c; if(h!==undefined)n.innerHTML=h; return n; };
+/* El contenido del dominio viaja localizado: en live el backend devuelve ya
+   el idioma del usuario, así que aquí el fixture guarda las cuatro versiones
+   y loc() resuelve la que toca. Ningún texto visible queda sin traducir. */
+const loc = v => (v == null) ? "" : (typeof v === "string" ? v : (v[LANG] || v.es));
+const esc = s => String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+/* ====================== i18n apply ====================== */
+function applyLang(){
+  document.documentElement.lang = LANG;
+  $$("[data-i18n]").forEach(n => { const k = n.dataset.i18n; if (I18N[LANG][k]) n.textContent = I18N[LANG][k]; });
+  $("#chatInput").placeholder = t("composer");
+  $("#assistStatus").textContent = t("listening");
+  $("#greeting").innerHTML = `${greetWord()},<br>${FIXTURE.guest_profile.display_name}`;
+  $("#homeSub").textContent = `Magic Kingdom · ${t("stops_exit").split("·")[0].trim() ? "" : ""}`.trim() ||
+    `Magic Kingdom · ${FIXTURE.guest_profile.party_size}`;
+  $("#homeSub").textContent = `Magic Kingdom · ${t("party")} ${FIXTURE.guest_profile.party_size}`;
+  $("#profSub").textContent = `${t("party")} · ${FIXTURE.guest_profile.party_size}`;
+  renderPlan(); renderAlert(); renderRides(); renderBigMap(); renderProfile(); renderLangGrid();
+  if (!$("#chat").children.length || $("#chat").querySelector(".welcome")) seedChat();
+}
+function greetWord(){
+  const h = new Date().getHours();
+  return h < 12 ? t("hi_morning") : h < 19 ? t("hi_afternoon") : t("hi_evening");
+}
+
+/* ====================== NAV ====================== */
+function go(screen){
+  if (screen === "assistant"){ openSheet(); return; }
+  STATE.screen = screen;
+  $$(".screen").forEach(s => s.classList.toggle("on", s.id === "s-"+screen));
+  $$(".tab").forEach(tb => tb.classList.toggle("on",
+    tb.dataset.go === screen || ((screen === "eval" || screen === "profile") && tb.dataset.go === "more")));
+  const sc = $("#s-"+screen); if (sc) sc.scrollTop = 0;
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-go]"); if (b) go(b.dataset.go); });
+
+/* ====================== PLAN ====================== */
+/* El diff se aplica en una sola función, usada tanto para previsualizar las
+   métricas como para aplicar de verdad. Así lo que anuncia el sheet y lo que
+   queda en el plan no pueden divergir. */
+function applyDiff(events, p){
+  const rm = p.diff.removed.map(x => x.ref);
+  const out = events.filter(e => !rm.includes(e.event_id)).map(e => ({...e}));
+  p.diff.added.forEach(a => out.push({ event_id:a.ref, start:a.start, title:a.title,
+    meta:a.meta, kind:a.kind, state:"upcoming", location:a.location, changed:"tag_new" }));
+  p.diff.moved.forEach(mv => { const e = out.find(x => x.event_id === mv.ref);
+    if (e){ e.start = mv.to; e.meta = mv.meta; e.changed = "tag_moved"; } });
+  out.sort((a,b) => a.start.localeCompare(b.start));
+  return out;
+}
+function totalWalk(events){
+  return events.reduce((sum,ev,i) =>
+    i ? sum + (haversine(events[i-1].location, ev.location) || 0) : 0, 0);
+}
+
+function renderPlan(){
+  const wrap = $("#timeline"); wrap.innerHTML = "";
+  STATE.plan.events.forEach((ev,i) => {
+    const prev = STATE.plan.events[i-1];
+    const dist = prev ? haversine(prev.location, ev.location) : null;
+    const leg = dist != null ? `<div class="leg">↓ ${t("walk_leg",{m:dist,min:walkMin(dist)})}</div>` : "";
+    const cls = ["stop", ev.state==="current"?"current":(ev.state==="done"?"done":""), ev.changed?"changed":""].join(" ");
+    const stop = el("div", cls);
+    const llt = ev.lightning_lane ? `<span class="lltag">⚡ ${t("ll_tag")}</span>` : "";
+    stop.innerHTML = `<div class="t">${ev.start}</div>
+      <div class="rail"><div class="dot"></div><div class="line"></div></div>
+      <div class="body">${leg}${ev.changed?`<span class="tagnew">${t(ev.changed)}</span>`:""}${llt}
+        <div class="b">${esc(ev.title)}</div><div class="m">${esc(loc(ev.meta))}</div></div>`;
+    wrap.appendChild(stop);
+  });
+  const legs = STATE.plan.events.reduce((s,ev,i) => i ? s + (haversine(STATE.plan.events[i-1].location, ev.location)||0) : 0, 0);
+  $("#walkTotal").textContent = t("walk_total",{ km:(legs/1000).toFixed(2), min:walkMin(legs) });
+  $("#planCount").textContent = STATE.plan.events.length;
+  $("#tileStops").textContent = STATE.plan.events.length;
+  const first = STATE.plan.events.find(e=>e.state==="current") || STATE.plan.events[0];
+  $("#nowTime").textContent = first.start;
+  $("#nowName").textContent = first.title;
+  $("#nowMeta").textContent = loc(first.meta);
+  $("#planStatus").textContent = STATE.proposalState === "applied" ? t("plan_updated") : t("plan_valid");
+  renderMap();
+}
+
+/* ====================== ALERTAS ====================== */
+/* Las notificaciones del parque viven en la campana, no en el feed.
+   El cambio propuesto aparece en las dos partes: es la acción principal. */
+function notifications(){
+  const list = FIXTURE.alerts
+    .filter(a => !STATE.dismissedAlerts.has(a.id))
+    .map(a => ({ id:a.id, kind:a.kind, icon:a.icon, mins:a.mins,
+                 title:t(a.title_key), body:t(a.body_key), action:null }));
+  if (STATE.proposalState === "pending")
+    list.unshift({ id:"n_proposal", kind:"change", icon:"🌧️", mins:0,
+                   title:t("change_title"), body:t("change_body"), action:"review" });
+  return list;
+}
+function unreadCount(){ return notifications().filter(n => !STATE.readNotifs.has(n.id)).length; }
+
+function renderBell(){
+  const n = unreadCount(), badge = $("#notifBadge");
+  badge.textContent = n > 9 ? "9+" : n;
+  badge.classList.toggle("hide", n === 0);
+  $("#openNotifs").classList.toggle("has", n > 0);
+}
+
+function renderNotifs(){
+  const box = $("#notifList"); if (!box) return;
+  const items = notifications();
+  box.innerHTML = "";
+  if (!items.length){ box.innerHTML = `<p class="nempty">${t("notifs_empty")}</p>`; renderBell(); return; }
+  items.forEach(it => {
+    const read = STATE.readNotifs.has(it.id);
+    const node = el("div", `notif ${it.kind}${read ? " read" : ""}`);
+    node.innerHTML = `<div class="ic">${it.icon}</div>
+      <div style="flex:1"><b>${esc(it.title)}</b><p>${esc(it.body)}</p>
+        <span class="when">${it.mins ? t("n_min",{n:it.mins}) : t("n_now")}</span></div>
+      ${it.action === "review" ? `<button class="act">${t("review")}</button>`
+                               : `<button class="dis" aria-label="Descartar">✕</button>`}`;
+    const act = node.querySelector(".act");
+    if (act) act.onclick = () => { STATE.readNotifs.add(it.id); closeNotifs(); openProposal(); renderBell(); };
+    const dis = node.querySelector(".dis");
+    if (dis) dis.onclick = () => { STATE.dismissedAlerts.add(it.id); renderNotifs(); };
+    node.addEventListener("click", e => {
+      if (e.target.closest("button")) return;
+      STATE.readNotifs.add(it.id); renderNotifs();
+    });
+    box.appendChild(node);
+  });
+  renderBell();
+}
+
+function openNotifs(){ $("#scrim").classList.add("on"); dlgOpen("#nsheet"); renderNotifs(); }
+function closeNotifs(){ if(!$("#nsheet").classList.contains("on")) return; dlgClose("#nsheet");
+  if(!$("#sheet").classList.contains("on") && !$("#psheet").classList.contains("on")) $("#scrim").classList.remove("on"); }
+
+function renderAlert(){
+  renderNotifs();
+  const box = $("#homeAlert"); box.innerHTML = "";
+  if (STATE.proposalState === "pending"){
+    const a = el("div","alert");
+    a.innerHTML = `<div class="ic">🌧️</div><div><b>${t("change_title")}</b><p>${t("change_body")}</p></div>
+      <button class="cta">${t("review")}</button>`;
+    a.querySelector(".cta").onclick = openProposal; box.appendChild(a);
+    $("#openAssistant").classList.add("ping");
+  } else if (STATE.proposalState === "kept"){
+    const a = el("div","alert kept");
+    a.innerHTML = `<div class="ic">🌧️</div><div><b>${t("kept_title")}</b><p>${t("kept_body")}</p></div>
+      <button class="cta">${t("review")}</button>`;
+    a.querySelector(".cta").onclick = openProposal; box.appendChild(a);
+    $("#openAssistant").classList.remove("ping");
+  } else $("#openAssistant").classList.remove("ping");
+}
+
+/* ====================== MAPA ====================== */
+function allPoints(){
+  const pts = [];
+  ZONES.forEach(z => z.poly.forEach(([lat,lon]) => pts.push({lat,lon})));
+  WATER.forEach(([lat,lon]) => pts.push({lat,lon}));
+  FIXTURE.rides.forEach(r => r.loc && pts.push(r.loc));
+  return pts;
+}
+function here(){
+  const cur = STATE.plan.events.find(e=>e.state==="current") || STATE.plan.events[0];
+  return cur ? cur.location : HUB;
+}
+function mapBase(pt, opts={}){
+  /* Orden de capas: relleno de tierras → agua → senderos → etiquetas → castillo.
+     Las etiquetas van al final porque antes quedaban tapadas por los senderos. */
+  const zones = ZONES.map(z => {
+    const d = z.poly.map(([lat,lon],i)=>{const p=pt({lat,lon});return `${i?"L":"M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`;}).join(" ")+" Z";
+    return `<path d="${d}" fill="${z.fill}" stroke="#fff" stroke-width="2"/>`;
+  }).join("");
+
+  const labels = !opts.labels ? "" : ZONES.map(z => {
+    const c = z.poly.reduce((a,[lat,lon])=>({lat:a.lat+lat/z.poly.length,lon:a.lon+lon/z.poly.length}),{lat:0,lon:0});
+    const cp = pt(c);
+    /* Halo del mismo color de la tierra: la etiqueta se lee sobre el sendero
+       sin tener que pintarle una caja encima. */
+    return `<text x="${cp.x}" y="${cp.y}" text-anchor="middle" font-size="9.5"
+      font-weight="800" fill="${z.ink}" stroke="${z.fill}" stroke-width="3.2"
+      paint-order="stroke" stroke-linejoin="round"
+      style="pointer-events:none">${z.name}</text>`;
+  }).join("");
+  const water = `<path d="${WATER.map(([lat,lon],i)=>{const p=pt({lat,lon});return `${i?"L":"M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`;}).join(" ")} Z"
+    fill="#CFE6F2" stroke="#B9DAEA" stroke-width="1.5"/>`;
+  const paths = WALKWAYS.map(([a,b])=>{
+    const p1=pt({lat:a[0],lon:a[1]}), p2=pt({lat:b[0],lon:b[1]});
+    return `<line x1="${p1.x.toFixed(1)}" y1="${p1.y.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${p2.y.toFixed(1)}"
+      stroke="#fff" stroke-width="${opts.thin?2.5:3.4}" stroke-linecap="round" opacity=".85"/>`;
+  }).join("");
+  const hub = pt(HUB);
+  const castle = `<g style="pointer-events:none">
+    <circle cx="${hub.x}" cy="${hub.y}" r="12" fill="#fff" stroke="#E7E3F4" stroke-width="2"/>
+    <text x="${hub.x}" y="${hub.y+4}" text-anchor="middle" font-size="11">🏰</text></g>`;
+  return zones + water + paths + labels + castle;
+}
+function renderMap(){
+  const svg = $("#planMap"); if (!svg) return;
+  const stops = STATE.plan.events.filter(e=>e.location); if (!stops.length) return;
+  const W=350,H=210, pt=project(allPoints(),W,H,12);
+  const route = stops.map((s,i)=>{const p=pt(s.location);return `${i?"L":"M"}${p.x} ${p.y}`;}).join(" ");
+  const marks = stops.map((s,i)=>{
+    const p=pt(s.location), fill = s.changed?"#12938C":(s.state==="current"?"#FFB627":"#4A2FA8");
+    return `<g><circle cx="${p.x}" cy="${p.y}" r="9.5" fill="${fill}" stroke="#fff" stroke-width="2"/>
+      <text x="${p.x}" y="${p.y+3.4}" text-anchor="middle" font-size="9.5" font-weight="800" fill="#fff">${i+1}</text></g>`;
+  }).join("");
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.innerHTML = `<rect width="${W}" height="${H}" fill="#EEF4E8"/>${mapBase(pt,{labels:false,thin:true})}
+    <path d="${route}" fill="none" stroke="#4A2FA8" stroke-width="2.5" stroke-dasharray="6 5" stroke-linecap="round" opacity=".8"/>${marks}`;
+}
+
+const MAP = { W:360, H:430, zoom:1, cx:.5, cy:.5, filter:"all", selected:null };
+function viewBox(){
+  const {W,H,zoom,cx,cy}=MAP, w=W/zoom, h=H/zoom;
+  return `${cx*W-w/2} ${cy*H-h/2} ${w} ${h}`;
+}
+function renderBigMap(){
+  const svg = $("#bigMap"); if (!svg) return;
+  const {W,H}=MAP, pt=project(allPoints(),W,H,16);
+  const stops = STATE.plan.events.filter(e=>e.location);
+  const inPlan = new Set(stops.map(s=>s.title));
+  const visible = FIXTURE.rides.filter(r => {
+    if (!r.loc) return false;
+    if (MAP.filter==="plan")   return inPlan.has(r.name);
+    if (MAP.filter==="access") return r.access;
+    if (MAP.filter==="open")   return !r.closed;
+    return true;
+  });
+  const route = stops.map((s,i)=>{const p=pt(s.location);return `${i?"L":"M"}${p.x} ${p.y}`;}).join(" ");
+  const pins = visible.map(r => {
+    const p=pt(r.loc), idx=stops.findIndex(s=>s.title===r.name), sel=MAP.selected===r.name;
+    let fill="#9B95B5", label="";
+    if (r.closed) fill="#E0218A";
+    else if (idx>=0){ fill="#4A2FA8"; label=String(idx+1); }
+    else if (!r.access) fill="#C9C2E2";
+    else if (r.wait>=60) fill="#FFB627";
+    else fill="#12938C";
+    const rad = idx>=0 ? 10 : 6.5;
+    const aria = `${r.name}, ${r.zone}, ${r.closed ? t("closed_now") : r.wait + " " + t("min_wait")}`;
+    return `<g class="pin" data-ride="${esc(r.name)}" tabindex="0" role="button"
+      aria-label="${esc(aria)}" style="cursor:pointer">
+      ${sel?`<circle cx="${p.x}" cy="${p.y}" r="${rad+7}" fill="${fill}" opacity=".22"/>`:""}
+      <circle cx="${p.x}" cy="${p.y}" r="${rad}" fill="${fill}" stroke="#fff" stroke-width="2.4"/>
+      ${label?`<text x="${p.x}" y="${p.y+3.4}" text-anchor="middle" font-size="9.5" font-weight="800" fill="#fff" style="pointer-events:none">${label}</text>`:""}
+      ${r.closed?`<text x="${p.x}" y="${p.y+3}" text-anchor="middle" font-size="8.5" font-weight="800" fill="#fff" style="pointer-events:none">✕</text>`:""}
+    </g>`;
+  }).join("");
+  const me = pt(here());
+  svg.setAttribute("viewBox", viewBox());
+  svg.innerHTML = `<rect x="-500" y="-500" width="1500" height="1600" fill="#EEF4E8"/>
+    ${mapBase(pt,{labels:true})}
+    <path d="${route}" fill="none" stroke="#4A2FA8" stroke-width="3" stroke-dasharray="7 6" stroke-linecap="round" opacity=".75"/>
+    ${pins}
+    <g style="pointer-events:none"><circle cx="${me.x}" cy="${me.y}" r="15" fill="#4A2FA8" opacity=".15"/>
+      <circle cx="${me.x}" cy="${me.y}" r="5" fill="#4A2FA8" stroke="#fff" stroke-width="2.4"/></g>`;
+  svg.querySelectorAll(".pin").forEach(g => {
+    const pick = () => { MAP.selected = g.dataset.ride; renderBigMap();
+      setTimeout(() => { const c = $("#rcClose"); if (c) c.focus(); }, 0); };
+    g.onclick = pick;
+    g.onkeydown = e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); pick(); } };
+  });
+  renderRideCard();
+}
+function renderRideCard(){
+  const box = $("#rideCard"); if (!box) return;
+  const r = FIXTURE.rides.find(x => x.name === MAP.selected);
+  if (!r){ box.innerHTML = `<p class="hint">${t("tap_hint")}</p>`; return; }
+  const d = haversine(here(), r.loc);
+  const inPlan = STATE.plan.events.some(e => e.title === r.name);
+  box.innerHTML = `<div class="rc-head"><div><b>${esc(r.name)}</b><small>${esc(r.zone)}</small></div>
+      <button class="xsmall" id="rcClose" aria-label="Cerrar">✕</button></div>
+    <div class="rc-stats">
+      <span class="rc-stat">${r.closed ? t("closed_now") : r.wait + " " + t("min_wait")}</span>
+      <span class="rc-stat">${d} m · ${walkMin(d)} min</span>
+      ${inPlan?`<span class="rc-stat on">${t("in_plan")}</span>`:""}
+    </div>
+    ${r.access?`<div class="a11y">${t("wc_yes")}</div>`:`<div class="a11y no">${t("wc_no")}</div>`}
+    ${(!inPlan && r.access && !r.closed)?`<button class="rc-add" id="rcAdd">${t("ask_add")}</button>`:""}`;
+  const c=$("#rcClose"); if(c) c.onclick = () => { MAP.selected=null; renderBigMap(); };
+  const a=$("#rcAdd"); if(a) a.onclick = () => { openSheet(); send(`${t("ask_add")}: ${r.name}`); };
+}
+function visibleRides(){
+  const inPlan = new Set(STATE.plan.events.map(e => e.title));
+  return FIXTURE.rides.filter(r => {
+    if (MAP.filter === "plan")   return inPlan.has(r.name);
+    if (MAP.filter === "access") return r.access;
+    if (MAP.filter === "open")   return !r.closed;
+    return true;
+  });
+}
+function renderRides(){
+  const wrap = $("#rides"); if (!wrap) return; wrap.innerHTML = "";
+  visibleRides().forEach(r => {
+    let cls="wait low", txt=`${r.wait}<small>min</small>`;
+    if (r.closed){ cls="wait closed"; txt=t("closed_now"); }
+    else if (r.wait>=60) cls="wait high";
+    else if (r.wait>=20) cls="wait mid";
+    const d = haversine(here(), r.loc);
+    const row = el("button","ride");
+    row.type = "button";
+    row.setAttribute("aria-label",
+      `${r.name}, ${r.zone}, ${r.closed ? t("closed_now") : r.wait + " " + t("min_wait")}, ${d} m`);
+    row.innerHTML = `<div><b>${esc(r.name)}</b><small>${esc(r.zone)}${d!=null?` · ${d} m`:""}${r.access?"":" · "+t("wc_no").replace("♿ ","")}</small></div>
+      <div class="${cls}">${txt}</div>`;
+    if (!r.access) row.style.opacity = ".5";
+    row.onclick = () => { MAP.selected = r.name; renderBigMap(); $("#s-park").scrollTo({top:0,behavior:"smooth"}); };
+    wrap.appendChild(row);
+  });
+}
+
+/* ====================== PERFIL ====================== */
+function renderTicket(){
+  const box = $("#profTicket"); if (!box) return;
+  const k = FIXTURE.tickets, ll = k.lightning_lane;
+  const left = ll.selections_total - ll.selections_used;
+  const fmt = iso => new Date(iso+"T12:00:00").toLocaleDateString(LANG, {day:"numeric", month:"short"});
+  box.innerHTML = `
+    <div class="ticket">
+      <div class="tk-top">
+        <div><b>${t(k.product_key)}</b><small>${t("tk_valid",{a:fmt(k.valid_from), b:fmt(k.valid_to)})}</small></div>
+        <span class="tk-day">${t("tk_day",{i:k.day_index, n:k.day_total})}</span>
+      </div>
+      <div class="tk-perf">
+        <span class="tag ${k.park_hopper ? "hard" : "plain"}">${k.park_hopper ? t("tk_hopper_yes") : t("tk_hopper_no")}</span>
+      </div>
+      <div class="tk-ll">
+        <div><b>⚡ ${t("tk_ll")}</b><small>${t("tk_ll_left",{n:left, t:ll.selections_total})}</small></div>
+        <div class="tk-dots">${Array.from({length:ll.selections_total},(_,i)=>
+          `<i class="${i < ll.selections_used ? "used":""}"></i>`).join("")}</div>
+      </div>
+      <div class="tk-holders">${k.holders.map(h =>
+        `<span class="tag plain">${esc(h.name)} · ${h.kind==="child"?t("tk_child"):t("tk_adult")}</span>`).join("")}</div>
+    </div>`;
+}
+
+function renderProfile(){
+  renderTicket();
+  const p = $("#profParty"); if (!p) return; p.innerHTML = "";
+  FIXTURE.party.forEach(m => {
+    const row = el("div","row");
+    row.innerHTML = `<span>${esc(m.name)}<small>${esc(loc(m.note))}</small></span>`;
+    p.appendChild(row);
+  });
+  $("#profA11y").innerHTML = FIXTURE.party_constraints.accessibility
+    .map(a => `<span class="tag hard">♿ ${esc(loc(a.label))}</span>`).join("")
+    + `<span class="tag plain">${t("stops_exit").split("·").pop().trim()}</span>`;
+  $("#profPrefs").innerHTML = FIXTURE.party_constraints.preferences
+    .map(x => `<span class="tag soft">${esc(loc(x.label))}</span>`).join("");
+}
+function renderLangGrid(){
+  ["#langQuick"].forEach(sel => {
+    const g = $(sel); if (!g) return; g.innerHTML = "";
+    Object.entries(I18N).forEach(([code,v]) => {
+      const b = el("button", "lang" + (code===LANG?" on":""), `<span class="fl">${v.flag}</span>${v.name}`);
+      b.onclick = () => {
+        LANG = code;
+        try { localStorage.setItem("pm_lang", code); } catch {}
+        applyLang(); closeLang(); toast(v.name);
+      };
+      g.appendChild(b);
+    });
+  });
+  $("#langCode").textContent = LANG.toUpperCase();
+}
+function openLang(){ $("#scrim").classList.add("on"); dlgOpen("#langsheet"); }
+function closeLang(){ if(!$("#langsheet").classList.contains("on")) return; dlgClose("#langsheet");
+  if(!$("#sheet").classList.contains("on") && !$("#psheet").classList.contains("on")
+     && !$("#nsheet").classList.contains("on")) $("#scrim").classList.remove("on"); }
+
+/* ====================== PROPUESTA ====================== */
+function openProposal(){
+  const p = STATE.proposal;
+  $("#pWhy").textContent = loc(p.trigger) + " " + loc(p.explanation);
+  const d = $("#pDiff"); d.innerHTML = "";
+  p.diff.removed.forEach(x => d.appendChild(el("div","drow rm",
+    `<div class="s">−</div><div><div class="b">${x.start} · ${esc(x.title)}</div><div class="m">${esc(loc(x.meta))}</div></div>`)));
+  p.diff.added.forEach(x => d.appendChild(el("div","drow add",
+    `<div class="s">+</div><div><div class="b">${x.start} · ${esc(x.title)}</div><div class="m">${esc(loc(x.meta))}</div></div>`)));
+  p.diff.moved.forEach(x => d.appendChild(el("div","drow mv",
+    `<div class="s">↻</div><div><div class="b">${x.from} → ${x.to} · ${esc(x.title)}</div><div class="m">${esc(loc(x.meta))}</div></div>`)));
+  const m = p.metrics;
+  const before = totalWalk(STATE.plan.events);
+  const after  = totalWalk(applyDiff(STATE.plan.events, p));
+  const dMin   = Math.round((after - before) / WALK_M_PER_MIN);
+  const touched = p.diff.removed.length + p.diff.moved.length;
+  const total   = STATE.plan.events.length;
+  $("#pStats").innerHTML =
+    `<div class="stat"><b>${Math.max(total-touched,0)}/${total}</b><small>${loc(m.unchanged_label)}</small></div>
+     <div class="stat"><b>${dMin >= 0 ? "+" : ""}${dMin}</b><small>${loc(m.walk_label)}</small></div>
+     <div class="stat"><b>${m.affinity}</b><small>${loc(m.affinity_label)}</small></div>`;
+  $("#pA11y").textContent = loc(p.accessibility_note);
+  $("#pProv").textContent = loc(p.provenance);
+  $("#scrim").classList.add("on"); dlgOpen("#psheet");
+}
+function closeProposal(){ if(!$("#psheet").classList.contains("on")) return; dlgClose("#psheet"); if(!$("#sheet").classList.contains("on")) $("#scrim").classList.remove("on"); }
+
+async function applyProposal(){
+  const p = STATE.proposal;
+  await Adapter.decide(p.proposal_id, "approve");
+  const evs = applyDiff(STATE.plan.events, p);
+  STATE.plan.events = evs; STATE.proposalState = "applied";
+  closeProposal(); renderPlan(); renderAlert(); renderBigMap(); go("plan");
+  toast(t("applied",{n:evs.length}));
+}
+async function keepPlan(){
+  await Adapter.decide(STATE.proposal.proposal_id, "reject");
+  STATE.proposalState = "kept"; closeProposal(); renderAlert(); toast(t("kept_toast"));
+}
+
+/* ====================== ASISTENTE ====================== */
+let sessTimer;
+function openSheet(){
+  $("#scrim").classList.add("on"); dlgOpen("#sheet");
+  $$(".tab").forEach(tb => tb.classList.toggle("on", tb.dataset.go === "assistant"));
+  if (!$("#chat").children.length) seedChat();
+  armSessionTimer();
+  setTimeout(() => $("#chatInput").focus(), 340);
+}
+function closeSheet(){
+  if(!$("#sheet").classList.contains("on")) return;
+  dlgClose("#sheet");
+  if(!$("#psheet").classList.contains("on")) $("#scrim").classList.remove("on");
+  $$(".tab").forEach(tb => tb.classList.toggle("on", tb.dataset.go === STATE.screen));
+  clearTimeout(sessTimer); $("#sessbar").classList.remove("on");
+}
+/* Aviso de cierre de sesión: en producción lo marca el servidor por
+   inactividad; aquí son 75 s desde la última interacción. */
+function armSessionTimer(){
+  clearTimeout(sessTimer); $("#sessbar").classList.remove("on"); $("#sessbar").setAttribute("inert","");
+  sessTimer = setTimeout(() => {
+    if ($("#sheet").classList.contains("on")){ const b=$("#sessbar"); b.removeAttribute("inert"); b.classList.add("on"); }
+  }, 75000);
+}
+
+function bubbleMe(txt){ $("#chat").appendChild(el("div","msg me", esc(txt))); scrollChat(); }
+function bubbleBot(html){
+  const w = el("div","bot-wrap");
+  w.innerHTML = `<div class="bot-av">✦</div><div class="bot"><div class="tag">PARK<i>MIND</i></div>${html}</div>`;
+  $("#chat").appendChild(w); scrollChat(); return w;
+}
+function metaLine(txt){ $("#chat").appendChild(el("div","meta", esc(txt))); scrollChat(); }
+function scrollChat(){ const c=$("#chat"); c.scrollTop = c.scrollHeight; }
+function typing(){
+  const w = el("div","bot-wrap");
+  w.innerHTML = `<div class="bot-av">✦</div><div class="bot"><div class="typing"><i></i><i></i><i></i></div></div>`;
+  $("#chat").appendChild(w); scrollChat(); return w;
+}
+
+function seedChat(){
+  const c = $("#chat"); c.innerHTML = "";
+  const w = el("div","welcome");
+  w.innerHTML = `<div class="em">💬</div>
+    <h4>${greetWord()} ${esc(FIXTURE.guest_profile.display_name)}</h4>
+    <p>${t("welcome_desc")}</p>`;
+  c.appendChild(w);
+  renderSuggestions([1,2,10,6,5,7,8,4,9,3].map(i =>
+    ({ title:t("prompt"+i), sub:t("prompt"+i+"s") })), t("try_topics"));
+}
+
+function renderSuggestions(items, label){
+  const lab  = el("div","suggest-label", `<span>✨</span> ${label || t("need_more")}`);
+  const wrap = el("div","carousel");
+  const car  = el("div","suggest");
+
+  items.forEach(it => {
+    const c = el("button","scard", `<b>${esc(it.title)}</b><span>${esc(it.sub)}</span>`);
+    c.addEventListener("click", () => {
+      if (car.dataset.dragged === "1") return;   // fue un arrastre, no un toque
+      lab.remove(); wrap.remove(); send(it.title);
+    });
+    car.appendChild(c);
+  });
+
+  wrap.appendChild(car);
+  $("#chat").appendChild(lab); $("#chat").appendChild(wrap); scrollChat();
+
+  /* En táctil el navegador ya desplaza nativamente, así que el arrastre
+     propio es solo para mouse. Y nada de setPointerCapture: capturar el
+     puntero en el contenedor impide que el click llegue a la tarjeta. */
+  let drag = null;
+  car.addEventListener("pointerdown", e => {
+    if (e.pointerType !== "mouse") return;
+    drag = { x:e.clientX, left:car.scrollLeft, moved:false };
+    car.dataset.dragged = "0";
+    car.classList.add("grabbing");
+  });
+
+  const onMove = e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    if (Math.abs(dx) > 5){ drag.moved = true; car.dataset.dragged = "1"; }
+    car.scrollLeft = drag.left - dx;
+    if (drag.moved) e.preventDefault();
+  };
+  const onUp = () => {
+    if (!drag) return;
+    car.classList.remove("grabbing");
+    const wasDrag = drag.moved;
+    drag = null;
+    // el click llega justo después; se limpia en el siguiente tick
+    if (wasDrag) setTimeout(() => { car.dataset.dragged = "0"; }, 0);
+    else car.dataset.dragged = "0";
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+}
+
+function mockReply(text){
+  const s = text.toLowerCase();
+  const has = (...w) => w.some(x => s.includes(x));
+
+  if (has("silla","wheelchair","cadeira","fauteuil","mamá","mom","mãe","mère"))
+    return { text:{es:"Listo. Guardé esto para tu grupo:",en:"Got it. Saved this for your party:",
+                   pt:"Pronto. Salvei isto para o seu grupo:",fr:"C'est noté. Enregistré pour votre groupe :"}[LANG],
+      constraints:[
+        {kind:"hard",label:"♿ "+loc(FIXTURE.party_constraints.accessibility[0].label)},
+        {kind:"hard",label:loc(FIXTURE.party_constraints.accessibility[1].label)},
+        {kind:"plain",label:"18:00"},
+        {kind:"soft",label:loc(FIXTURE.party_constraints.preferences[0].label)}],
+      follow:{es:"Con eso armé el día. Empieza por Tomorrowland para evitar la fila de mediodía.",
+              en:"With that I built the day. Start in Tomorrowland to beat the midday line.",
+              pt:"Com isso montei o dia. Comece pela Tomorrowland para fugir da fila do meio-dia.",
+              fr:"Avec ça j'ai construit la journée. Commencez par Tomorrowland pour éviter la file de midi."}[LANG],
+      plan_preview:true, followups:true };
+
+  if (has("lluvia","rain","chuva","pluie","15","3 pm","clima","weather","météo"))
+    return { text:{es:"Hay 60% de lluvia desde las 15:00 y Jungle Cruise reportó cierre temporal. Preparé un cambio: entra Haunted Mansion, bajo techo y con acceso en silla de ruedas. No lo aplico hasta que lo revises.",
+                   en:"There's a 60% chance of rain from 3 PM and Jungle Cruise reported a temporary closure. I prepared a change: Haunted Mansion comes in — indoors and wheelchair accessible. I won't apply it until you review it.",
+                   pt:"Há 60% de chuva a partir das 15:00 e a Jungle Cruise reportou fechamento temporário. Preparei uma mudança: entra a Haunted Mansion, coberta e com acesso para cadeira de rodas. Não aplico até você revisar.",
+                   fr:"Il y a 60% de pluie dès 15h et Jungle Cruise a signalé une fermeture temporaire. J'ai préparé un changement : Haunted Mansion entre, en intérieur et accessible en fauteuil. Je n'applique rien avant votre revue."}[LANG],
+      open_proposal:true };
+
+  if (has("caminar","walk","caminhar","marche","distancia","distance")){
+    const legs = STATE.plan.events.reduce((a,ev,i)=> i ? a + (haversine(STATE.plan.events[i-1].location, ev.location)||0) : 0, 0);
+    return { text:{es:`Tu ruta de hoy son ${(legs/1000).toFixed(2)} km, unos ${walkMin(legs)} minutos caminando repartidos en el día. Todo el trayecto es sin escaleras.`,
+                   en:`Today's route is ${(legs/1000).toFixed(2)} km, about ${walkMin(legs)} minutes of walking spread across the day. The whole route is step-free.`,
+                   pt:`Sua rota de hoje são ${(legs/1000).toFixed(2)} km, cerca de ${walkMin(legs)} minutos caminhando ao longo do dia. Todo o trajeto é sem escadas.`,
+                   fr:`Votre itinéraire fait ${(legs/1000).toFixed(2)} km, environ ${walkMin(legs)} minutes de marche réparties dans la journée. Tout le parcours est sans escaliers.`}[LANG],
+      followups:true };
+  }
+
+  if (has("fila","line","wait","espera","attente","corta","short","curta","courte")){
+    const open = FIXTURE.rides.filter(r => !r.closed && r.access).sort((a,b)=>a.wait-b.wait).slice(0,3);
+    return { text:{es:"Ahora mismo, las más cortas con acceso en silla de ruedas:",
+                   en:"Right now, the shortest ones with wheelchair access:",
+                   pt:"Agora, as mais curtas com acesso para cadeira de rodas:",
+                   fr:"En ce moment, les plus courtes avec accès fauteuil :"}[LANG],
+      constraints: open.map(r => ({kind:"plain", label:`${r.name} · ${r.wait} min`})), followups:true };
+  }
+
+  if (has("ticket","entrada","billet","ingresso","pass","hopper","lightning")){
+    const k = FIXTURE.tickets, ll = k.lightning_lane, left = ll.selections_total - ll.selections_used;
+    return { text:{es:`Tienes un ${t(k.product_key)}, día ${k.day_index} de ${k.day_total}, sin Park Hopper — así que hoy nos quedamos en Magic Kingdom. Te quedan ${left} reservas de Lightning Lane; las guardé para Space Mountain y Big Thunder Mountain, que son las filas más largas de tu ruta.`,
+                   en:`You have a ${t(k.product_key)}, day ${k.day_index} of ${k.day_total}, without Park Hopper — so today we stay in Magic Kingdom. You have ${left} Lightning Lane selections left; I saved them for Space Mountain and Big Thunder Mountain, the longest lines on your route.`,
+                   pt:`Você tem um ${t(k.product_key)}, dia ${k.day_index} de ${k.day_total}, sem Park Hopper — então hoje ficamos no Magic Kingdom. Restam ${left} reservas de Lightning Lane; guardei para Space Mountain e Big Thunder Mountain, as filas mais longas da sua rota.`,
+                   fr:`Vous avez un ${t(k.product_key)}, jour ${k.day_index} sur ${k.day_total}, sans Park Hopper — donc aujourd'hui on reste à Magic Kingdom. Il vous reste ${left} réservations Lightning Lane ; je les ai gardées pour Space Mountain et Big Thunder Mountain, les plus longues files de votre itinéraire.`}[LANG],
+      constraints:[
+        {kind:"plain", label:(k.park_hopper ? t("tk_hopper_yes") : t("tk_hopper_no"))},
+        {kind:"soft",  label:"⚡ "+t("tk_ll_left",{n:left, t:ll.selections_total})}],
+      followups:true };
+  }
+
+  if (has("techo","indoor","coberto","intérieur","interior")){
+    return { text:{es:"Bajo techo y a menos de 300 m de donde estás: Be Our Guest, Haunted Mansion y it's a small world. Las tres tienen acceso en silla de ruedas.",
+                   en:"Indoors and under 300 m from you: Be Our Guest, Haunted Mansion and it's a small world. All three are wheelchair accessible.",
+                   pt:"Cobertas e a menos de 300 m de você: Be Our Guest, Haunted Mansion e it's a small world. As três têm acesso para cadeira de rodas.",
+                   fr:"En intérieur et à moins de 300 m : Be Our Guest, Haunted Mansion et it's a small world. Les trois sont accessibles en fauteuil."}[LANG],
+      followups:true };
+  }
+
+  return { text:{es:"Lo anoté. Puedo ajustar el plan con eso, pero cualquier cambio te lo propongo primero — nunca lo aplico solo.",
+                 en:"Noted. I can adjust the plan with that, but any change gets proposed to you first — I never apply it on my own.",
+                 pt:"Anotei. Posso ajustar o plano com isso, mas qualquer mudança eu proponho primeiro — nunca aplico sozinho.",
+                 fr:"C'est noté. Je peux ajuster le plan, mais tout changement vous est proposé d'abord — je ne l'applique jamais seul."}[LANG],
+    followups:true };
+}
+
+async function send(text){
+  if (!text || !text.trim()) return;
+  const w = $("#chat").querySelector(".welcome"); if (w) w.remove();
+  armSessionTimer();
+  bubbleMe(text);
+  $("#chatInput").value = "";
+  $("#assistStatus").textContent = t("thinking");
+  const ty = typing();
+
+  const r = await Adapter.sendMessage(text);
+  await new Promise(res => setTimeout(res, 800));
+  ty.remove();
+  $("#assistStatus").textContent = t("listening");
+
+  let html = `<p>${esc(r.text)}</p>`;
+  if (r.constraints) html += `<div class="constraints">` +
+    r.constraints.map(c => `<span class="cst ${c.kind}">${esc(c.label)}</span>`).join("") + `</div>`;
+  bubbleBot(html);
+
+  if (r.follow){
+    await new Promise(res => setTimeout(res, 480));
+    let h = `<p>${esc(r.follow)}</p>`;
+    if (r.plan_preview){
+      h += `<div class="propcard"><b>${STATE.plan.events.length} ${t("stops_exit").split("·")[0].trim()}</b>` +
+        STATE.plan.events.slice(0,3).map(e =>
+          `<div class="propline"><span class="t">${e.start}</span><span>${esc(e.title)}</span></div>`).join("") +
+        `<button class="go" id="goPlanBtn">${t("my_plan")}</button></div>`;
+    }
+    bubbleBot(h);
+    const g = $("#goPlanBtn"); if (g) g.onclick = () => { closeSheet(); go("plan"); };
+  }
+
+  if (r.open_proposal){
+    await new Promise(res => setTimeout(res, 450));
+    metaLine(t("proposed"));
+    openProposal();
+    return;
+  }
+
+  if (r.followups){
+    await new Promise(res => setTimeout(res, 550));
+    renderSuggestions([2,5,7,9,4,8,3,6].map(i =>
+      ({ title:t("prompt"+i), sub:t("prompt"+i+"s") })), t("anything_else"));
+  }
+}
+
+/* ====================== MISC ====================== */
+let toastT;
+function toast(msg){
+  const el2 = $("#toast"); el2.textContent = msg; el2.classList.add("on");
+  clearTimeout(toastT); toastT = setTimeout(() => el2.classList.remove("on"), 3000);
+}
+function reset(){
+  STATE.plan = structuredClone(FIXTURE.plan);
+  STATE.proposal = structuredClone(FIXTURE.proposal);
+  STATE.proposalState = "pending"; STATE.dismissedAlerts = new Set(); STATE.readNotifs = new Set();
+  MAP.selected = null; MAP.zoom = 1; MAP.cx = MAP.cy = .5;
+  $("#chat").innerHTML = "";
+  closeSheet(); closeProposal(); closeNotifs(); closeLang();
+  applyLang(); go("home"); toast(t("reset_toast"));
+}
+
+$("#closeSheet").onclick = closeSheet;
+$("#scrim").onclick = () => {
+  if ($("#psheet").classList.contains("on")) closeProposal();
+  else if ($("#langsheet").classList.contains("on")) closeLang();
+  else if ($("#nsheet").classList.contains("on")) closeNotifs();
+  else closeSheet();
+};
+$("#openNotifs").onclick = openNotifs;
+$("#openLang").onclick = openLang;
+$("#closeNotifs").onclick = closeNotifs;
+$("#clearNotifs").onclick = () => { notifications().forEach(n => STATE.readNotifs.add(n.id)); renderNotifs(); };
+$("#sendBtn").onclick = () => send($("#chatInput").value);
+$("#chatInput").addEventListener("keydown", e => { if (e.key === "Enter") send($("#chatInput").value); });
+$("#chatInput").addEventListener("input", armSessionTimer);
+$("#sessDismiss").onclick = () => { $("#sessbar").classList.remove("on"); armSessionTimer(); };
+$("#btnApply").onclick = applyProposal;
+$("#btnKeep").onclick  = keepPlan;
+$("#resetBtn").onclick = reset;
+$("#rowReset").onclick = reset;
+$("#openProfile").onclick = () => go("profile");
+$("#openAssistant").onclick = openSheet;
+$("#modeMock").onclick = function(){ Adapter.mode="mock"; this.classList.add("on"); $("#modeLive").classList.remove("on"); };
+$("#modeLive").onclick = function(){
+  this.classList.add("on"); $("#modeMock").classList.remove("on");
+  toast("Sin conexión con /api — volviendo a modo Mock.");
+  setTimeout(() => $("#modeMock").click(), 2200);
+};
+document.addEventListener("keydown", e => { if (e.key === "Escape"){ closeProposal(); closeLang(); closeNotifs(); closeSheet(); } });
+
+/* mapa: pan, zoom, pinch */
+(function wireMap(){
+  const svg = $("#bigMap"); if (!svg) return;
+  const pointers = new Map(); let drag=null, pinch=null;
+  const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
+  function apply(){
+    MAP.zoom = clamp(MAP.zoom,1,6);
+    const m = .5/MAP.zoom;
+    MAP.cx = clamp(MAP.cx,m,1-m); MAP.cy = clamp(MAP.cy,m,1-m);
+    svg.setAttribute("viewBox", viewBox());
+  }
+  svg.addEventListener("pointerdown", e => {
+    svg.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if (pointers.size===1) drag={x:e.clientX,y:e.clientY,cx:MAP.cx,cy:MAP.cy};
+    if (pointers.size===2){ const [a,b]=[...pointers.values()];
+      pinch={d:Math.hypot(a.x-b.x,a.y-b.y),zoom:MAP.zoom}; drag=null; }
+  });
+  svg.addEventListener("pointermove", e => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if (pinch && pointers.size===2){ const [a,b]=[...pointers.values()];
+      MAP.zoom = pinch.zoom * (Math.hypot(a.x-b.x,a.y-b.y)/pinch.d); apply(); return; }
+    if (drag){ const r = svg.getBoundingClientRect();
+      MAP.cx = drag.cx - (e.clientX-drag.x)/(r.width*MAP.zoom);
+      MAP.cy = drag.cy - (e.clientY-drag.y)/(r.height*MAP.zoom); apply(); }
+  });
+  const end = e => { pointers.delete(e.pointerId); if(pointers.size<2) pinch=null; if(!pointers.size) drag=null; };
+  svg.addEventListener("pointerup", end); svg.addEventListener("pointercancel", end);
+  svg.addEventListener("wheel", e => { e.preventDefault(); MAP.zoom *= e.deltaY<0?1.12:.89; apply(); }, {passive:false});
+
+  $("#zIn").onclick  = () => { MAP.zoom *= 1.4; apply(); };
+  $("#zOut").onclick = () => { MAP.zoom *= .72; apply(); };
+  $("#zReset").onclick = () => { MAP.zoom = 1; MAP.cx = MAP.cy = .5; apply(); };
+  $("#zMe").onclick = () => {           // zoom a donde estás
+    const pt = project(allPoints(), MAP.W, MAP.H, 16), p = pt(here());
+    MAP.zoom = 3; MAP.cx = p.x/MAP.W; MAP.cy = p.y/MAP.H; apply();
+  };
+  $$(".mf").forEach(b => b.onclick = () => {
+    $$(".mf").forEach(x => { const on = x===b; x.classList.toggle("on", on); x.setAttribute("aria-pressed", on); });
+    MAP.filter = b.dataset.filter; MAP.selected = null; renderBigMap(); renderRides();
+  });
+})();
+
+/* reloj */
+(function clock(){
+  const tick = () => {
+    const d = new Date();
+    $("#clock").textContent = `${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}`;
+  };
+  tick(); setInterval(tick, 20000);
+})();
+
+applyLang();
+</script>
+</body>
+</html>

@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ParkMind · Architecture (interactive)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --dusk:#241A54;--twilight:#4A2FA8;--flamingo:#E0218A;--lagoon:#12938C;--marigold:#FFB627;
+  --ink:#241A54;--muted:#6F6893;--faint:#9B95B5;--wash:#F4F2FB;--line:#E7E3F4;--page:#E9E6F3;
+  --card:#FFFFFF;--bound:#B9B2D8;--red:#D64545;--slate:#6F6893;--shadow:0 1px 2px rgba(36,26,84,.08),0 4px 14px rgba(36,26,84,.06);
+}
+:root[data-theme=dark]{
+  --ink:#E8E4F6;--muted:#B0A9D2;--faint:#8A83AE;--wash:#1F1940;--line:#352C66;--page:#17122F;
+  --card:#241D4A;--bound:#4B4290;--shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]){
+    --ink:#E8E4F6;--muted:#B0A9D2;--faint:#8A83AE;--wash:#1F1940;--line:#352C66;--page:#17122F;
+    --card:#241D4A;--bound:#4B4290;--shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3);
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--page);color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+body{padding-bottom:64px}body:has(#dock.open){padding-bottom:230px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding:16px 24px 8px}
+h1{font-size:20px;margin:0;font-weight:800;letter-spacing:-.2px}
+h1 small{font-weight:600;color:var(--muted);font-size:13px;margin-left:8px}
+.spacer{flex:1}
+.btn{font:600 12px 'Plus Jakarta Sans',sans-serif;color:var(--ink);background:var(--card);border:1px solid var(--line);
+  border-radius:999px;padding:6px 12px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--twilight)}
+.btn.primary{background:var(--twilight);color:#fff;border-color:var(--twilight)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;padding:0 24px 10px}
+.chip{font:600 12px 'Plus Jakarta Sans',sans-serif;border:1.5px solid var(--c);color:var(--c);background:var(--card);
+  border-radius:999px;padding:5px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--c);display:inline-block}
+.chip.off{opacity:.4;background:transparent;text-decoration:line-through}
+.legend{display:flex;flex-wrap:wrap;gap:14px;padding:0 24px 10px;font-size:11.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:10px;border-radius:3px;border:1.5px solid var(--lagoon);background:var(--card)}
+.sw.partial{border-color:var(--marigold)}.sw.target{border:1.5px dashed var(--marigold);background:rgba(255,182,39,.12)}
+.sw.external{border-color:var(--faint)}.sw.actor{border-color:var(--twilight)}
+.stage{margin:0 16px;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:auto}
+svg{display:block;min-width:1180px;width:100%;height:auto}
+svg text{font-family:'Plus Jakarta Sans',system-ui,sans-serif;fill:var(--ink)}
+.bound rect{fill:none;stroke:var(--bound);stroke-width:1.5;stroke-dasharray:7 5;rx:14}
+.bound text{font-size:11px;font-weight:800;letter-spacing:.8px;fill:var(--muted);text-transform:uppercase}
+.bound.fill rect{fill:var(--wash);fill-opacity:.55}
+.node{cursor:pointer}
+.node rect.card{fill:var(--card);stroke-width:1.6;rx:10;filter:drop-shadow(0 1px 2px rgba(36,26,84,.12))}
+.node .t{font-size:12px;font-weight:800}.node .s{font-size:10px;fill:var(--muted);font-weight:500}
+.node.implemented rect.card{stroke:var(--lagoon)}
+.node.partial rect.card{stroke:var(--marigold)}
+.node.target rect.card{stroke:var(--marigold);stroke-dasharray:6 4;fill:rgba(255,182,39,.10)}
+.node.external rect.card{stroke:var(--faint)}
+.node.actor rect.card{stroke:var(--twilight);stroke-width:2}
+.node .stripe{fill:var(--lagoon)}
+.node.partial .stripe,.node.target .stripe{fill:var(--marigold)}
+.node.external .stripe{fill:var(--faint)}.node.actor .stripe{fill:var(--twilight)}
+.node .ib{fill:var(--lagoon);stroke:var(--card);stroke-width:2;pointer-events:none}
+.node.partial .ib,.node.target .ib{fill:var(--marigold)}
+.node.external .ib{fill:var(--faint)}.node.actor .ib{fill:var(--twilight)}
+.node .ic{fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.node.partial .ic,.node.target .ic{stroke:#241A54}
+.chip.ov:not(.on){opacity:.75}
+.chip.ov.on{background:var(--c);color:#fff}.chip.ov.on i{background:#fff}
+.show-guards .node:not(.hasguard){opacity:.4}
+.show-guards .node.hasguard rect.card,.show-guards .node.hasguard path.card{stroke:#2B7BE0;stroke-width:3;filter:drop-shadow(0 0 6px rgba(43,123,224,.45))}
+#dock .guards h3{color:#2B7BE0}
+.node .tag{font-size:8.5px;font-weight:800;fill:#fff}
+.node .tagbg{fill:var(--red)}
+.node:hover rect.card,.node.sel rect.card{stroke-width:2.8}
+.node.dim{opacity:.28}
+.edge path.line{fill:none;stroke:var(--c);stroke-width:2;stroke-linejoin:round}
+.edge.dashed path.line{stroke-dasharray:6 5}
+.edge.dotted path.line{stroke-dasharray:2 5;stroke-linecap:round}
+.edge.flow path.line{stroke-dasharray:7 6;animation:march 1.1s linear infinite}
+.edge.dashed.flow path.line{stroke-dasharray:3 6}
+.edge polygon{fill:var(--c)}
+.edge text{font-size:10px;font-weight:700;fill:var(--c);paint-order:stroke;stroke:var(--card);stroke-width:4px;stroke-linejoin:round}
+.edge circle.dot{fill:var(--c);stroke:var(--card);stroke-width:1.5}
+.edge.hide{display:none}
+.edge.dim{opacity:.12}
+.edge.hot path.line{stroke-width:3.2}
+.paused .edge.flow path.line{animation-play-state:paused}
+@keyframes march{to{stroke-dashoffset:-26}}
+@media (prefers-reduced-motion:reduce){.edge.flow path.line{animation:none}}
+.rule{margin:10px 24px;font-size:12px;color:var(--muted)}
+.rule b{color:var(--ink)}
+#dock{position:fixed;left:0;right:0;bottom:0;height:auto;max-height:218px;background:var(--card);border-top:2px solid var(--twilight);
+  box-shadow:0 -6px 24px rgba(36,26,84,.14);padding:12px 24px;overflow:auto;z-index:5}#dock.open{height:218px}
+#dock h2{margin:0 0 2px;font-size:15px;font-weight:800}
+#dock .badge{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;padding:2px 8px;border-radius:999px;margin-left:8px;color:#fff;background:var(--lagoon)}
+#dock .badge.partial,#dock .badge.target{background:var(--marigold);color:#241A54}
+#dock .badge.external{background:var(--faint)}#dock .badge.actor{background:var(--twilight)}
+#dock .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px 22px;margin-top:8px}
+#dock h3{font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin:6px 0 4px}
+#dock ul{margin:0;padding-left:16px;font-size:12px;line-height:1.5}
+#dock code{font:500 11px ui-monospace,Menlo,monospace;background:var(--wash);padding:1px 5px;border-radius:5px}
+#dock .hint{font-size:12.5px;color:var(--muted)}
+.conn{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;margin:2px 4px 2px 0;border:1.5px solid var(--c);color:var(--c)}
+</style>
+</head>
+<body>
+<header>
+  <h1>ParkMind <small>Architecture · interactive</small></h1>
+  <span class="spacer"></span>
+  <button class="btn" id="pause">Pause flows</button>
+  <button class="btn" id="theme">Theme</button>
+  <a class="btn primary" href="agent-graph.html">Agent graph →</a>
+</header>
+<div class="chips" id="chips"></div>
+<div class="legend">
+  <span><i class="sw"></i>Implemented</span><span><i class="sw partial"></i>Partial</span>
+  <span><i class="sw target"></i>Target / stub</span><span><i class="sw external"></i>External</span>
+  <span><i class="sw actor"></i>Actor / client</span>
+  <span>Hover a component to isolate its flows · click for details · chips toggle flows</span>
+</div>
+<div class="stage" id="stage"><svg id="svg" viewBox="0 0 1400 1100" role="img" aria-label="ParkMind architecture"></svg></div>
+<p class="rule"><b>Dependency rule</b> (import-linter + architecture tests): <code>core/contracts</code> → <code>services/{planning, personalization, ports}</code> → <code>use_cases</code> → <code>graph / agents / tools / ui</code>. The agent orchestrates, the planning engine decides, the guest model personalizes. The LLM never activates a plan.</p>
+<div id="dock"><p class="hint">Click any component to see its files, responsibilities, status and connections.</p></div>
+
+<script>
+const NS='http://www.w3.org/2000/svg';
+const FLOWS=[
+ {id:'f1',name:'1 · Conversation',color:'#E0218A',desc:'Guest ↔ elicitation graph ↔ LLM extractor'},
+ {id:'f2',name:'2 · Human approval',color:'#E6A100',desc:'interrupt() and resume: only a human activates a plan'},
+ {id:'f3',name:'3 · Plan building',color:'#4A2FA8',desc:'Graph → use cases → deterministic engine → persistence'},
+ {id:'f4',name:'4 · Live data',color:'#12938C',desc:'ThemeParks.wiki + Open-Meteo → snapshots'},
+ {id:'f5',name:'5 · Privacy [C19]',color:'#D64545',desc:'Accessibility flags: staged, then committed only on consent'},
+ {id:'f6',name:'6 · Reference data',color:'#6F6893',desc:'Routing table and safety notices injected into the engine'}
+];
+const BOUNDS=[
+ {x:20,y:150,w:230,h:500,label:'Clients',fill:1},
+ {x:290,y:150,w:350,h:500,label:'Agent layer · LangGraph',fill:1},
+ {x:680,y:150,w:280,h:500,label:'Application layer · use cases',fill:1},
+ {x:1000,y:150,w:330,h:500,label:'Deterministic core',fill:1},
+ {x:290,y:690,w:1040,h:270,label:'Ports & adapters',fill:1},
+ {x:20,y:690,w:230,h:270,label:'Data store',fill:1},
+ {x:440,y:15,w:620,h:120,label:'External · LLM & observability'},
+ {x:690,y:985,w:370,h:100,label:'External · park & weather data'},
+ {x:20,y:985,w:650,h:100,label:'Safety & control'},
+ {x:1080,y:985,w:300,h:100,label:'Offline'}
+];
+const NODES=[
+/* ---------- clients ---------- */
+ {id:'guest',x:40,y:190,w:170,h:56,title:'Guest / group',lines:['Party planning a park day','Approves or rejects plans'],status:'actor',
+  dock:{summary:'The human in the loop. Only a person can confirm hard constraints, give consent for accessibility data and approve a plan.',
+   does:['Describes the party in natural language','Confirms hard constraints and gives consent [C19]','Approves or rejects the proposed plan'],
+   notes:['Consent and retention come from the human resume value, never from the LLM','Unknown retention defaults to <code>session_only</code>']}},
+ {id:'studio',x:40,y:270,w:170,h:56,title:'LangGraph server',lines:['langgraph.json · agent.py','Studio / SDK runs'],status:'implemented',
+  dock:{summary:'How the graph is served today: the compiled elicitation graph (with the planning stage as its subgraph) is the entry point.',
+   files:['langgraph.json','agent.py'],
+   notes:['The replanning graph is commented out in both files until §36 lands','Graph build needs no DB or network: connections are opened per node']}},
+ {id:'api',x:40,y:345,w:170,h:56,title:'FastAPI',lines:['P0-35 · target','HTTP channel for the UI'],status:'target',tag:'P0-35',
+  dock:{summary:'Planned HTTP channel. Not implemented yet.',notes:['Will front the same compiled graph','Must carry resume values: answers, confirmation, approval']}},
+ {id:'ui',x:40,y:420,w:170,h:56,title:'Streamlit UI',lines:['ui/app.py · TODO stub','Replaced by the prototype'],status:'target',
+  dock:{summary:'A TODO stub. The product UI direction is the HTML prototype.',files:['ui/app.py']}},
+ {id:'proto',x:40,y:495,w:170,h:56,title:'UI prototype',lines:['docs/prototype/*.html','Design reference, no backend'],status:'partial',
+  dock:{summary:'Interactive HTML prototype that defines the visual language and screens. Not connected to the graph yet.',files:['docs/prototype/parkmind-prototype.html']}},
+/* ---------- agent layer ---------- */
+ {id:'elicitG',x:305,y:200,w:150,h:64,title:'Elicitation graph',lines:['P0-29 · StateGraph','elicit · ask_missing ·','confirm · validate'],status:'implemented',
+  dock:{summary:'Turns conversation into confirmed, validated hard constraints. Interrupts for missing info and for confirmation.',
+   files:['src/parkmind/graph/elicitation_graph.py','src/parkmind/graph/state.py'],
+   does:['<code>elicit</code> proposes constraints; <code>constraints_valid</code> stays False','<code>ask_missing</code> interrupts with {kind:"missing_information"}','<code>confirm_hard_constraints</code> interrupts with {kind:"hard_constraint_confirmation"}','<code>validate_constraints</code> is the only writer of <code>constraints_valid=True</code>'],
+   notes:['Nothing before an <code>interrupt()</code> has a side effect: LangGraph re-runs the node from the top','State holds only <code>accessibility_ref</code> (guest ids) [C19]']}},
+ {id:'elicitA',x:480,y:200,w:145,h:64,title:'Elicit agent',lines:['GuestInfoExtractor port','AnthropicExtractor'],status:'implemented',
+  dock:{summary:'The only LLM call in the main path. Extracts party, constraints and preferences from the conversation.',
+   files:['src/parkmind/agents/elicit_agent.py','src/parkmind/agents/elicit_prompt.py','src/parkmind/agents/elicit_schema.py'],
+   does:['Structured extraction behind a port','Stages accessibility flags in AccessibilityIntake; they never enter graph state','Resolves must-do / avoid names to node_ids via AttractionNameResolver (fail-closed)'],
+   notes:['Model set by <code>ELICIT_MODEL</code> (Claude Haiku 4.5)','Output is validated against the closed <code>ElicitationExtraction</code> schema; on failure it retries with the errors as a repair hint (<code>max_attempts</code>) and never raises','The prompt is versioned (<code>ELICIT_PROMPT_VERSION</code>)']}},
+ {id:'planG',x:305,y:292,w:320,h:70,title:'Planning stage · subgraph',lines:['P0-30 · compiled as the elicitation graph\'s `downstream`','load_context → resolve_group → build_plan → check_plan','valid → explain → propose_plan → interrupt_approval'],status:'implemented',
+  dock:{summary:'Builds, checks, explains and proposes a plan, then pauses for a human decision. Shares ParkMindState and the parent checkpointer.',
+   files:['src/parkmind/graph/initial_planning_graph.py','src/parkmind/graph/state_helpers.py'],
+   does:['Every node starts with <code>ensure_confirmed()</code>','<code>check_plan</code> routes: valid → explain; invalid → no_valid_plan → END','All nodes but <code>no_valid_plan</code> and <code>interrupt_approval</code> are wrapped by <code>_guarded</code>: <code>PlanningUnavailableError</code> becomes a plain message and END','<code>interrupt_approval</code> pauses with {kind:"plan_approval"}; resume is APPROVED or REJECTED (EDITED = P0-32)'],
+   notes:['<code>propose_plan</code> re-asserts <code>check_result.valid</code> (CheckNotPassedError)','<code>explain</code> raises for an invalid result']}},
+ {id:'replanG',x:305,y:410,w:320,h:54,title:'Replanning graph §36',lines:['build_replanning_graph() · NotImplementedError','EVENT → POLICY → REPLAN → CHECK → DIFF → PROPOSE'],status:'target',tag:'§36',
+  dock:{summary:'Target state machine for events (closures, weather, delays). Stub today; commented out in agent.py and langgraph.json.',
+   files:['src/parkmind/graph/replanning_graph.py'],notes:['Will reuse load_context and check_plan','<code>diff_plans</code> already exists but is not wired into any graph']}},
+ {id:'ckpt',x:305,y:486,w:150,h:64,title:'Checkpointer',lines:['MemorySaver','allow-listed serde','durable store: not wired'],status:'partial',
+  dock:{summary:'In-memory checkpointing with an allow-listed serializer.',files:['src/parkmind/graph/checkpointing.py'],
+   notes:['<code>AccessibilityRequirements</code> is excluded from serialization [C19]','<code>langgraph-checkpoint-postgres</code> is a declared dependency, not wired yet; in-flight threads live in memory']}},
+ {id:'tools',x:480,y:486,w:145,h:64,title:'Tools · MCP · legacy',lines:['tools/*, mcp_server','concierge, plan_synthesis,','preference_resolver'],status:'target',
+  dock:{summary:'Stubs and placeholders. The graph calls use cases in-process; no MCP server is involved and the graph runs with it stopped.',
+   does:['<code>data.*</code>, <code>knowledge.*</code> and <code>planner.*</code> tools: documented stubs, to be registered by <code>mcp_server</code>','<code>concierge_agent</code>: stub','<code>plan_synthesis_agent</code> and <code>preference_resolver_agent</code>: earlier placeholders, not wired into any graph; the planning use cases and GroupPreferenceResolver replace them'],
+   files:['src/parkmind/tools/','src/parkmind/agents/concierge_agent.py','src/parkmind/agents/plan_synthesis_agent.py','src/parkmind/agents/preference_resolver_agent.py']}},
+/* ---------- external llm / obs ---------- */
+ {id:'anthropic',x:470,y:50,w:170,h:60,title:'Anthropic',lines:['Claude Haiku 4.5','structured extraction'],status:'external',
+  dock:{summary:'LLM provider used by AnthropicExtractor.',notes:['Used only for extraction, never to build, edit or activate a plan']}},
+ {id:'nvidia',x:660,y:50,w:170,h:60,title:'NVIDIA NIM',lines:['ChatNVIDIA via core/llm.py','E2E harness only'],status:'external',
+  dock:{summary:'LLM used by the E2E runner, which injects it as the extractor. It is not part of the runtime path.',files:['src/parkmind/core/llm.py','scripts/e2e/harness.py'],notes:['<code>get_llm()</code> has no caller inside <code>src/</code>','Same <code>GuestInfoExtractor</code> port as the Anthropic adapter']}},
+ {id:'langfuse',x:850,y:50,w:170,h:60,title:'Langfuse',lines:['declared in pyproject','not wired yet'],status:'target',
+  dock:{summary:'Observability is declared as a dependency but unused.'}},
+/* ---------- application layer ---------- */
+ {id:'uc_elicit',x:695,y:202,w:250,h:60,title:'Intake use cases',lines:['AccessibilityIntake','ResolveAttractionNames'],status:'implemented',
+  dock:{summary:'Elicitation-side use cases.',files:['services/use_cases/accessibility_intake.py','services/use_cases/resolve_attraction_names.py'],
+   does:['Stage accessibility flags, then <code>commit(consent, retention_policy)</code> to the SessionStore only after the human confirms','<code>discard()</code> when the human rejects the constraint','Resolve spoken attraction names to catalog node_ids, fail-closed'],
+   notes:['Staged flags live in the intake use case, not in graph state [C19]']}},
+ {id:'uc_plan',x:695,y:282,w:250,h:90,title:'Planning use cases',lines:['LoadContext · BuildPlan','CheckPlan · ExplainPlan','ProposePlan · ResolveProposal','PlanningDeps (DepsFactory)'],status:'implemented',
+  dock:{summary:'One use case per planning step, so the graph stays orchestration only.',
+   files:['services/use_cases/load_context.py','services/use_cases/build_plan.py','services/use_cases/check_plan.py','services/use_cases/explain_plan.py','services/use_cases/propose_plan.py','services/use_cases/resolve_proposal.py','services/use_cases/planning_deps.py'],
+   does:['<b>LoadContext</b> (§43): fresh snapshot → latest valid stored snapshot → ContextUnavailableError','<b>BuildPlan</b>: <code>resolve_group</code> then <code>build</code> (score, optimize, resolve loop)','<b>CheckPlan</b>: runs ConstraintChecker with requirements re-read per node by thread_id','<b>ExplainPlan</b>: deterministic template, never an LLM','<b>ProposePlan</b>: saves plan + PENDING proposal in one transaction and supersedes older open proposals','<b>ResolveProposal</b>: sole call site of <code>PlanRepository.activate</code>'],
+   notes:['Ports come from a <code>DepsFactory</code>; Postgres, notice corpus and snapshot collector by default']}},
+ {id:'uc_replan',x:695,y:410,w:250,h:54,title:'Replan use cases',lines:['MonitorEvents · Replan','stubs'],status:'target',
+  dock:{summary:'Event monitoring and replanning use cases. Stubs.',files:['services/use_cases/monitor_events.py','services/use_cases/replan.py']}},
+ {id:'uc_data',x:695,y:490,w:250,h:130,title:'Data use cases',lines:['SnapshotCollector','IdResolver / id_mapping','Forecast wiring','Renormalize snapshots','Latest snapshot'],status:'implemented',
+  dock:{summary:'Fetches and stores live park and weather context.',
+   files:['services/use_cases/collect_snapshot.py','services/use_cases/id_resolution.py','services/use_cases/forecast.py','services/use_cases/renormalize_snapshots.py','services/use_cases/latest_snapshot.py'],
+   does:['Snapshot = raw payload + normalized <code>LiveContext</code> with <code>NORMALIZER_VERSION</code>, so it can be re-normalized','ThemeParks <code>/live</code> + <code>/schedule</code> and Open-Meteo hourly','Maps provider ids to catalog node_ids'],
+   notes:['If the live provider is unavailable and the DB has data, LoadContext degrades to the latest stored snapshot (§43)']}},
+/* ---------- deterministic core ---------- */
+ {id:'core_pers',x:1015,y:190,w:300,h:100,title:'Personalization',lines:['GroupPreferenceResolver','hard constraints = union, never average','PreferenceScorer · GuestProfileService','BehaviorLog stub · PreferenceLearner out of scope'],status:'implemented',
+  dock:{summary:'The guest model personalizes: it ranks, it never overrides a hard constraint.',
+   files:['services/personalization/group_preference_resolver.py','services/personalization/preference_scorer.py','services/personalization/guest_profile_service.py','services/personalization/behavior_log.py','services/personalization/preference_learner.py'],
+   does:['<b>GroupPreferenceResolver</b>: per-guest profiles + hard constraints into a GroupObjective with fairness config','<b>PreferenceScorer</b>: per-guest utility and fairness for the optimizer','<b>GuestProfileService</b>: stored profiles with validated, versioned updates','<b>BehaviorLog</b> and <b>PreferenceLearner</b>: stubs; the learner is outside the month-1 scope'],
+   notes:['Must not import clients, use_cases, graph, agents, tools, api, ui, langgraph or any DB driver (import-linter)']}},
+ {id:'core_build',x:1015,y:305,w:300,h:110,title:'Planning · build',lines:['ParkGraph + GreedyInsertionOptimizer','ForecastService (waits)','PlannerResolveLoop · repair_moves §21','The LLM never edits the plan'],status:'implemented',
+  dock:{summary:'Deterministic plan construction.',
+   files:['services/planning/park_graph.py','services/planning/optimizer.py','services/planning/forecast_service.py','services/planning/resolve_loop.py','services/planning/repair_moves.py'],
+   notes:['The optimizer charges forecast waits per stop and takes the scorer\'s satisfaction','Walking times come from the RoutingClient; safety notices reach the checker, not the optimizer']}},
+ {id:'core_check',x:1015,y:430,w:300,h:70,title:'ConstraintChecker',lines:['11 RuleIds: hours · height · shows · must-do','avoid · walking · lunch · departure · access.','ride restriction · data freshness'],status:'implemented',
+  dock:{summary:'The authority on whether a plan is valid. Fail-closed.',files:['services/planning/constraint_checker.py'],
+   does:['RuleId: OPENING_HOURS, HEIGHT, SHOW_ARRIVAL, MUST_DO, AVOID, WALKING_BUDGET, LUNCH_WINDOW, DEPARTURE, ACCESSIBILITY, RIDE_RESTRICTION, DATA_FRESHNESS'],
+   notes:['Fail-closed: missing data (unknown height, no safety notice, incomplete snapshot) rejects the candidate instead of assuming it is safe']}},
+ {id:'core_diff',x:1015,y:515,w:300,h:76,title:'Diff · events · accessibility',lines:['diff_plans (implemented, not wired)','event_detector · replanner (stubs)','check_accessibility / party_accessibility'],status:'partial',
+  dock:{summary:'Pieces the replanning flow will reuse, plus the accessibility matching used by the checker.',files:['services/planning/plan_diff.py','services/planning/event_detector.py','services/planning/replanner.py','services/use_cases/check_accessibility.py','services/use_cases/party_accessibility.py'],
+   does:['<b>diff_plans</b>: what changed between two plans (added, removed, moved)','<b>event_detector</b> and <b>replanner</b>: stubs for §36','<b>check_accessibility</b>: matches a guest\'s derived flags against the park\'s ride notices; per-party results are derived on demand and kept out of graph state [C19]']}},
+ {id:'core_ctr',x:1015,y:603,w:300,h:40,title:'core/contracts',lines:['Pydantic models §33'],status:'implemented',
+  dock:{summary:'Shared Pydantic contracts. Imports nothing from the other layers.',files:['src/parkmind/core/contracts/models.py','src/parkmind/core/contracts/enums.py','src/parkmind/core/contracts/base.py']}},
+/* ---------- ports & adapters ---------- */
+ {id:'p_pg',x:305,y:725,w:180,h:95,title:'PostgreSQL repos',lines:['attraction · plan · proposal','snapshot · profile · guest','id_mapping · event','execution_state · behavior_log','provenance'],status:'implemented',
+  dock:{summary:'Postgres 16 adapters behind the repository ports.',files:['services/clients/postgres/*.py','services/ports/*_repository.py'],
+   does:['Alembic migrations via <code>migrate.py</code>; reference data via <code>seed.py</code>','<code>PlanRepository.activate</code> has exactly one call site: ResolveProposalUseCase'],
+   notes:['<code>codec.py</code> serializes contracts to JSON columns']}},
+ {id:'p_sess',x:495,y:725,w:190,h:95,title:'SessionStore',lines:['SESSION_MEMORY (process-wide)','session_only by default','persisted only on opt-in','keyed by thread_id'],status:'implemented',tag:'C19',
+  dock:{summary:'Where accessibility requirements live. State only carries guest ids.',files:['services/use_cases/session_memory.py','services/clients/postgres/session_store.py','services/ports/session_store.py'],
+   does:['Requirements are re-read per node by <code>thread_id</code>','Written only by <code>AccessibilityIntake.commit()</code> after human confirmation and consent'],
+   notes:['Default retention is <code>session_only</code>; <code>persisted</code> needs the human to choose it','If staged flags are lost (e.g. restart) the confirm node re-extracts and asks again']}},
+ {id:'p_tp',x:700,y:725,w:170,h:95,title:'ThemeParksClient',lines:['/live + /schedule','httpx + retry','normalize → LiveContext'],status:'implemented',
+  dock:{summary:'Adapter for ThemeParks.wiki.',files:['services/clients/themeparks_client.py','services/clients/themeparks_normalize.py','services/clients/themeparks_errors.py','services/clients/_retry.py']}},
+ {id:'p_om',x:880,y:725,w:170,h:95,title:'OpenMeteoClient',lines:['hourly forecast','httpx + retry','normalize → weather'],status:'implemented',
+  dock:{summary:'Adapter for Open-Meteo.',files:['services/clients/open_meteo_client.py','services/clients/open_meteo_normalize.py','services/clients/open_meteo_errors.py']}},
+ {id:'p_route',x:1060,y:725,w:125,h:95,title:'RoutingClient',lines:['curated table','+ Haversine','walk times'],status:'implemented',
+  dock:{summary:'Walking times between attractions, injected into the optimizer.',files:['services/clients/routing_client.py','services/clients/routing_reference_data.py']}},
+ {id:'p_know',x:1195,y:725,w:125,h:95,title:'KnowledgeStore',lines:['in-memory notices','pgvector = target'],status:'partial',
+  dock:{summary:'Versioned safety notices for the 50 curated Magic Kingdom entities, injected into the checker. An entity with no notice fails closed.',files:['services/clients/knowledge/in_memory.py','services/clients/knowledge/safety_notices.py']}},
+ {id:'note',x:305,y:880,w:1015,h:70,title:'Cross-cutting invariants',status:'actor',
+  lines:['The agent orchestrates · the planning engine decides · the guest model personalizes. The LLM never activates a plan.','propose is reachable only through check(valid) · a hard constraint reaches the checker only after a human confirms it.','Nothing before interrupt() has a side effect (nodes re-run on resume) · accessibility data is never checkpointed [C19].'],
+  dock:{summary:'The rules the whole structure exists to protect.',
+   does:['Layering enforced by import-linter: contracts → services/{planning, personalization, ports} → use_cases → graph / agents / tools / ui','graph and tools import use_cases and core.contracts only','use_cases may import ports, planning, personalization and clients, never graph, agents, tools, api or ui'],
+   files:['.importlinter']}},
+/* ---------- safety & evaluation ---------- */
+ {id:'safety',x:40,y:1012,w:610,h:62,title:'Safety & control layer',status:'implemented',
+  lines:['Human gates: confirm constraints · consent + retention · approve or reject the plan (interrupt)','Deterministic gates: closed extraction schema · ConstraintChecker (11 rules) · fail-closed notices','Containment: _guarded nodes · allow-listed checkpoints · accessibility never checkpointed [C19]'],
+  dock:{summary:'The controls that keep the LLM a proposer. They are structural: each one lives in a specific component. Toggle the chip above to highlight where.',
+   does:['<b>Human gates</b>: <code>confirm_hard_constraints</code>, consent + <code>retention_policy</code>, <code>interrupt_approval</code>','<b>Deterministic gates</b>: schema validation with repair retry, ConstraintChecker, safety notices','<b>Containment</b>: <code>_guarded</code> planning nodes, serializer allow-list, SessionStore retention'],
+   notes:['Each highlighted component lists its own controls in its detail panel','These are control-flow and data guarantees; there is no separate content-filtering service in the pipeline']}},
+ {id:'evalx',x:1095,y:1015,w:270,h:58,title:'Evaluation · offline',lines:['metrics/extraction implemented','baselines · replay · personas = stubs'],status:'partial',
+  dock:{summary:'Offline evaluation framework. Only the extraction metrics exist today; the rest is scaffolding.',
+   files:['services/evaluation/metrics/extraction.py','services/evaluation/metrics/*.py','services/evaluation/baselines/*.py','services/evaluation/historical_replay.py','services/evaluation/persona_generator.py','docs/evaluation/README.md'],
+   does:['<b>Implemented</b>: hard / soft classification accuracy of the elicit extraction','<b>Planned headline metrics</b>: Preference Alignment Score and Personalization Lift (Jaccard distance between plans of opposite profiles)','<b>Baselines</b>: popular-first, static planner, LLM-only','<b>Sanity metrics</b>: constraint violation rate, wait and walking minutes'],
+   notes:['Not part of the runtime graph; exercised by tests']}},
+/* ---------- data store ---------- */
+ {id:'db',x:45,y:720,w:170,h:190,title:'PostgreSQL 16',lines:['+ Alembic','plans · proposals','snapshots · profiles','guests · id mappings','events · provenance','behavior log'],status:'implemented',db:1,
+  dock:{summary:'The system of record. Plans are only marked active on the human-approval path.',files:['services/clients/postgres/migrate.py','services/clients/postgres/seed.py']}},
+/* ---------- external data ---------- */
+ {id:'tp_ext',x:705,y:1015,w:150,h:55,title:'ThemeParks.wiki',lines:['live queues + schedule'],status:'external',
+  dock:{summary:'Public park data: live queues, status and schedules. Snapshots are stored, so planning can fall back to the latest one.'}},
+ {id:'om_ext',x:880,y:1015,w:150,h:55,title:'Open-Meteo',lines:['hourly forecast'],status:'external',
+  dock:{summary:'Public hourly weather forecast.'}}
+];
+const EDGES=[
+/* F1 conversation */
+ {flow:'f1',from:'guest',to:'studio',bi:1,pts:[[125,246],[125,270]]},
+ {flow:'f1',from:'studio',to:'elicitG',bi:1,pts:[[210,298],[262,298],[262,232],[305,232]]},
+ {flow:'f1',from:'elicitG',to:'elicitA',bi:1,pts:[[455,232],[480,232]]},
+ {flow:'f1',from:'elicitA',to:'anthropic',bi:1,pts:[[555,200],[555,110]],label:'extract',lx:563,ly:160,anchor:'start'},
+ {flow:'f1',from:'elicitA',to:'uc_elicit',pts:[[625,232],[695,232]],label:'intake',lx:660,ly:222},
+ {flow:'f1',from:'elicitA',to:'nvidia',style:'dashed',pts:[[595,200],[595,125],[745,125],[745,110]],label:'e2e only',lx:670,ly:120},
+ {flow:'f1',from:'api',to:'elicitG',bi:1,style:'dashed',pts:[[210,373],[276,373],[276,250],[305,250]]},
+ {flow:'f1',from:'ui',to:'elicitG',bi:1,style:'dashed',pts:[[210,448],[284,448],[284,260],[305,260]]},
+/* F2 human approval */
+ {flow:'f2',from:'planG',to:'guest',bi:1,pts:[[305,327],[232,327],[232,215],[210,215]],label:'plan approval',lx:176,ly:262,anchor:'end'},
+/* F3 plan building */
+ {flow:'f3',from:'planG',to:'uc_plan',pts:[[625,327],[695,327]],label:'calls',lx:660,ly:319},
+ {flow:'f3',from:'uc_plan',to:'core_pers',pts:[[945,300],[980,300],[980,240],[1015,240]],label:'resolve',lx:962,ly:232,hide:1},
+ {flow:'f3',from:'uc_plan',to:'core_build',pts:[[945,327],[1015,327]],label:'build',lx:980,ly:319,hide:1},
+ {flow:'f3',from:'uc_plan',to:'core_check',pts:[[945,355],[980,355],[980,465],[1015,465]],label:'check',lx:962,ly:459,hide:1},
+ {flow:'f3',from:'uc_plan',to:'p_pg',pts:[[695,285],[673,285],[673,696],[445,696],[445,725]],label:'persist plan · proposal',lx:560,ly:690},
+ {flow:'f3',from:'p_pg',to:'db',bi:1,pts:[[305,775],[215,775]],label:'SQL',lx:260,ly:768},
+ {flow:'f3',from:'replanG',to:'uc_replan',style:'dashed',pts:[[625,437],[695,437]]},
+ {flow:'f3',from:'uc_replan',to:'core_diff',style:'dashed',pts:[[945,437],[970,437],[970,545],[1015,545]]},
+/* F4 live data */
+ {flow:'f4',from:'tp_ext',to:'p_tp',pts:[[785,1015],[785,820]],label:'/live · /schedule',lx:793,ly:905,anchor:'start'},
+ {flow:'f4',from:'p_tp',to:'uc_data',pts:[[785,725],[785,620]],label:'LiveContext',lx:793,ly:675,anchor:'start'},
+ {flow:'f4',from:'om_ext',to:'p_om',pts:[[930,1015],[930,820]],label:'hourly forecast',lx:938,ly:905,anchor:'start'},
+ {flow:'f4',from:'p_om',to:'uc_data',pts:[[930,725],[930,620]],label:'weather',lx:938,ly:675,anchor:'start'},
+ {flow:'f4',from:'uc_data',to:'p_pg',pts:[[695,590],[660,590],[660,712],[470,712],[470,725]],label:'store snapshots',lx:565,ly:708},
+/* F5 privacy */
+ {flow:'f5',from:'uc_elicit',to:'p_sess',pts:[[695,215],[647,215],[647,725]],label:'commit on consent [C19]',lx:641,ly:604,anchor:'end'},
+ {flow:'f5',from:'p_sess',to:'db',pts:[[590,820],[590,858],[215,858]],label:'persisted only on opt-in',lx:400,ly:852},
+/* F6 reference data */
+ {flow:'f6',from:'p_route',to:'core_build',style:'dotted',pts:[[1122,725],[1122,700],[1324,700],[1324,360],[1315,360]],label:'route',lx:1332,ly:540,anchor:'start',hide:1},
+ {flow:'f6',from:'p_know',to:'core_check',style:'dotted',pts:[[1257,725],[1257,710],[1337,710],[1337,465],[1315,465]],label:'notices',lx:1342,ly:600,anchor:'start',hide:1}
+];
+
+const el=(n,a={},p=svg,t)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);if(t!=null)e.textContent=t;p.appendChild(e);return e};
+const svg=document.getElementById('svg');
+const byId=o=>Object.fromEntries(o.map(x=>[x.id,x]));
+const NODE=byId(NODES),FLOW=byId(FLOWS);
+const GUARDS={
+ elicitG:['A hard constraint is staged until a person confirms it (interrupt: echo + consent + retention)','<code>ensure_confirmed()</code> blocks anything unconfirmed','<code>validate_constraints</code> is the only writer of <code>constraints_valid</code>'],
+ elicitA:['Output must match the closed <code>ElicitationExtraction</code> schema','Invalid output triggers a retry with a repair hint and never raises','The prompt records only closed flags: no medical inference','LLM <code>timeout=180</code> · <code>max_tokens=8192</code>'],
+ planG:['Every node except <code>no_valid_plan</code> and <code>interrupt_approval</code> is <code>_guarded</code>: a <code>PlanningUnavailableError</code> becomes a plain-language message','<code>propose_plan</code> is reachable only through check(valid)','The approval value is validated; a malformed one re-asks','<code>EDITED</code> is rejected until P0-32'],
+ ckpt:['Allow-listed serializer for checkpoints','<code>AccessibilityRequirements</code> is excluded from serialization [C19]'],
+ uc_elicit:['Accessibility is staged, then committed only with consent','<code>retention_policy</code> defaults to <code>session_only</code>','Attraction names are resolved to ids before reaching the checker'],
+ uc_plan:['<code>ResolveProposal</code> is the only caller of <code>activate</code>','<code>ProposePlan</code> re-asserts <code>check_result.valid</code>','<code>ExplainPlan</code> is deterministic: no LLM in the explanation'],
+ core_build:['The optimizer builds the plan; the LLM never edits it'],
+ core_check:['11 rules, fail-closed: missing data rejects instead of assuming safe','Runs on every candidate plan before it can be proposed'],
+ p_sess:['<code>session_only</code> by default: nothing persists without opt-in','Keyed by <code>thread_id</code>'],
+ p_know:['An attraction with no safety notice fails closed in the checker'],
+ note:['Layering enforced by import-linter: graph, agents and tools cannot reach adapters directly'],
+ safety:['This node summarizes the controls above; toggle the chip to see where each one lives']
+};
+NODES.forEach(n=>{if(GUARDS[n.id]){n.guards=GUARDS[n.id]}});
+const ICONS={
+ users:'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.8c2.2.6 3.5 2.3 3.5 5.2',
+ server:'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
+ plug:'M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4',
+ monitor:'M3 4h18v12H3zM8 20h8M12 16v4',
+ layout:'M3 4h18v16H3zM3 10h18M10 10v10',
+ network:'M5 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM19 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM12 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM5 7v3a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V7M12 13v4',
+ sparkles:'M11 3l1.8 4.7L17.5 9.5l-4.7 1.8L11 16l-1.8-4.7L4.5 9.5l4.7-1.8zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z',
+ ask:'M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12zM9.6 9.6a2.4 2.4 0 0 1 4.7.6c0 1.6-2.3 1.9-2.3 3.4M12 16.6h.01',
+ layers:'M12 3l9 5-9 5-9-5zM3 12.5l9 5 9-5M3 16.5l9 5 9-5',
+ bolt:'M13 2L4 14h7l-1 8 9-12h-7z',
+ save:'M5 3h11l3 3v15H5zM8 3v5h7V3M8 21v-7h8v7',
+ wrench:'M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z',
+ chip:'M7 7h10v10H7zM10 10h4v4h-4zM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4',
+ eye:'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+ usercheck:'M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM3 21c0-3.9 3.1-7 7-7 1.7 0 3.2.5 4.4 1.4M16 19l2 2 4-4',
+ database:'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
+ route:'M6 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM8 18h5.5a3.5 3.5 0 0 0 0-7h-3a3.5 3.5 0 0 1 0-7H16',
+ scale:'M12 3v18M7 21h10M5 7h14M5 7l-3 7a3 3 0 0 0 6 0zM19 7l-3 7a3 3 0 0 0 6 0z',
+ diff:'M7 3v12M7 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM17 21V9M17 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+ cube:'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5',
+ lock:'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
+ clock:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
+ cloud:'M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 9.6 4.2 4.2 0 0 0 7 18z',
+ book:'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5M9 7h6',
+ shield:'M12 3l8 3v5.5c0 4.6-3.2 8-8 9.5-4.8-1.5-8-4.9-8-9.5V6zM8.5 12l2.5 2.5 4.5-5',
+ flask:'M9 3h6M10 3v6L4 19a2 2 0 0 0 1.8 3h12.4A2 2 0 0 0 20 19l-6-10V3M7.5 15h9',
+ globe:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18'
+};
+const ICON_OF={guest:'users',studio:'server',api:'plug',ui:'monitor',proto:'layout',elicitG:'ask',elicitA:'sparkles',planG:'network',replanG:'bolt',ckpt:'save',tools:'wrench',
+ anthropic:'chip',nvidia:'chip',langfuse:'eye',uc_elicit:'usercheck',uc_plan:'layers',uc_replan:'bolt',uc_data:'database',core_pers:'users',core_build:'route',core_check:'scale',
+ core_diff:'diff',core_ctr:'cube',p_pg:'database',p_sess:'lock',p_tp:'clock',p_om:'cloud',p_route:'route',p_know:'book',note:'shield',safety:'shield',evalx:'flask',db:'database',tp_ext:'globe',om_ext:'cloud'};
+const icon=(parent,name,cx,cy,size)=>{
+  const k=size/24;
+  const g=el('g',{class:'ic',transform:`translate(${cx-12*k} ${cy-12*k}) scale(${k})`},parent);
+  ICONS[name].split(/(?=M)/).forEach(d=>el('path',{d},g));
+};
+
+function pathD(pts,r=9){
+  let d=`M${pts[0][0]},${pts[0][1]}`;
+  for(let i=1;i<pts.length-1;i++){
+    const [x0,y0]=pts[i-1],[x1,y1]=pts[i],[x2,y2]=pts[i+1];
+    const l1=Math.hypot(x1-x0,y1-y0),l2=Math.hypot(x2-x1,y2-y1),rr=Math.min(r,l1/2,l2/2);
+    d+=` L${x1-(x1-x0)/l1*rr},${y1-(y1-y0)/l1*rr} Q${x1},${y1} ${x1+(x2-x1)/l2*rr},${y1+(y2-y1)/l2*rr}`;
+  }
+  const l=pts[pts.length-1];return d+` L${l[0]},${l[1]}`;
+}
+function arrow(from,to,s=6){
+  const a=Math.atan2(to[1]-from[1],to[0]-from[0]);
+  const p=(g)=>[to[0]-s*1.6*Math.cos(a+g),to[1]-s*1.6*Math.sin(a+g)];
+  const b=p(-.45),c=p(.45);return `${to[0]},${to[1]} ${b[0]},${b[1]} ${c[0]},${c[1]}`;
+}
+const plen=pts=>pts.slice(1).reduce((s,p,i)=>s+Math.hypot(p[0]-pts[i][0],p[1]-pts[i][1]),0);
+
+/* boundaries */
+const gB=el('g');
+BOUNDS.forEach(b=>{
+  const g=el('g',{class:'bound'+(b.fill?' fill':'')},gB);
+  el('rect',{x:b.x,y:b.y,width:b.w,height:b.h},g);
+  el('text',{x:b.x+14,y:b.y+19},g,b.label);
+});
+
+/* edges */
+const gE=el('g');
+EDGES.forEach((e,i)=>{
+  e.id=e.id||'e'+i;
+  const f=FLOW[e.flow];
+  const g=el('g',{class:'edge flow'+(e.style?' '+e.style:''),style:`--c:${f.color}`,'data-flow':e.flow,'data-id':e.id},gE);
+  el('path',{class:'line',id:'p_'+e.id,d:pathD(e.pts)},g);
+  const n=e.pts.length;
+  el('polygon',{points:arrow(e.pts[n-2],e.pts[n-1])},g);
+  if(e.bi)el('polygon',{points:arrow(e.pts[1],e.pts[0])},g);
+  const dur=Math.max(2.2,plen(e.pts)/85);
+  const dots=(rev)=>{
+    const c=el('circle',{class:'dot',r:3.6},g);
+    const a=el('animateMotion',{dur:dur+'s',repeatCount:'indefinite',begin:(-Math.random()*dur).toFixed(2)+'s',...(rev?{keyPoints:'1;0',keyTimes:'0;1',calcMode:'linear'}:{})},c);
+    el('mpath',{href:'#p_'+e.id},a);
+  };
+  dots(false);if(e.bi)dots(true);
+  if(e.label&&!e.hide)el('text',{x:e.lx,y:e.ly,'text-anchor':e.anchor||'middle'},g,e.label);
+  e.el=g;
+});
+
+/* nodes */
+const gN=el('g');
+NODES.forEach(n=>{
+  const g=el('g',{class:'node '+n.status,tabindex:0,'data-id':n.id,role:'button','aria-label':n.title},gN);
+  if(n.db){
+    const {x,y,w,h}=n,ry=16;
+    el('path',{class:'card',d:`M${x},${y+ry} a${w/2},${ry} 0 0 1 ${w},0 v${h-2*ry} a${w/2},${ry} 0 0 1 ${-w},0 z`,
+      style:'fill:var(--card);stroke:var(--lagoon);stroke-width:1.8'},g);
+    el('path',{d:`M${x},${y+ry} a${w/2},${ry} 0 0 0 ${w},0`,style:'fill:none;stroke:var(--lagoon);stroke-width:1.8'},g);
+  }else{
+    el('rect',{class:'card',x:n.x,y:n.y,width:n.w,height:n.h},g);
+    el('rect',{class:'stripe',x:n.x,y:n.y+8,width:5,height:n.h-16,rx:2.5},g);
+  }
+  const tx=n.db?n.x+n.w/2:n.x+15,anc=n.db?'middle':'start',ty=n.db?n.y+50:n.y+19;
+  el('text',{class:'t',x:tx,y:ty,'text-anchor':anc},g,n.title);
+  (n.lines||[]).forEach((l,i)=>el('text',{class:'s',x:tx,y:ty+15+i*12.5,'text-anchor':anc},g,l));
+  const ox=ICON_OF[n.id]?30:6;
+  if(n.tag){
+    const w=n.tag.length*5.6+12;
+    el('rect',{class:'tagbg',x:n.x+n.w-w-ox,y:n.y-7,width:w,height:14,rx:7},g);
+    el('text',{class:'tag',x:n.x+n.w-w/2-ox,y:n.y+3,'text-anchor':'middle'},g,n.tag);
+  }
+  if(ICON_OF[n.id]){
+    const bx=n.x+n.w-17;
+    el('circle',{class:'ib',cx:bx,cy:n.y-1,r:12},g);
+    icon(g,ICON_OF[n.id],bx,n.y-1,14);
+  }
+  if(n.guards)g.classList.add('hasguard');
+  n.el=g;
+  g.addEventListener('mouseenter',()=>isolate(n.id));
+  g.addEventListener('mouseleave',()=>isolate(null));
+  g.addEventListener('focus',()=>isolate(n.id));g.addEventListener('blur',()=>isolate(null));
+  g.addEventListener('click',ev=>{ev.stopPropagation();select(n.id)});
+  g.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();select(n.id)}});
+});
+
+/* flows chips */
+const chips=document.getElementById('chips');
+FLOWS.forEach(f=>{
+  const b=document.createElement('button');b.className='chip';b.style.setProperty('--c',f.color);
+  b.innerHTML=`<i></i>${f.name}`;b.title=f.desc||'';
+  b.onclick=()=>{b.classList.toggle('off');const off=b.classList.contains('off');
+    EDGES.filter(e=>e.flow===f.id).forEach(e=>e.el.classList.toggle('hide',off))};
+  chips.appendChild(b);
+});
+
+const gb=document.createElement('button');gb.className='chip ov';gb.style.setProperty('--c','#2B7BE0');
+gb.innerHTML='<i></i>7 · Safety &amp; control';gb.title='Highlight the components that enforce a safety control';
+gb.onclick=()=>{gb.classList.toggle('on');svg.classList.toggle('show-guards',gb.classList.contains('on'))};
+chips.appendChild(gb);
+
+/* hover isolate */
+function isolate(id){
+  const hot=new Set([id]);
+  EDGES.forEach(e=>{const on=id&&(e.from===id||e.to===id);if(on){hot.add(e.from);hot.add(e.to)}
+    e.el.classList.toggle('dim',!!id&&!on);e.el.classList.toggle('hot',!!on)});
+  NODES.forEach(n=>n.el.classList.toggle('dim',!!id&&!hot.has(n.id)));
+}
+
+/* dock */
+const dock=document.getElementById('dock');
+let selected=null;
+function select(id){
+  if(selected)NODE[selected].el.classList.remove('sel');
+  selected=id;dock.classList.toggle('open',!!id);if(!id){dock.innerHTML='<p class="hint">Click any component to see its files, responsibilities, status and connections.</p>';return}
+  const n=NODE[id];n.el.classList.add('sel');
+  const d=n.dock||{};const li=a=>(a||[]).map(x=>`<li>${x}</li>`).join('');
+  const conns=[];
+  EDGES.forEach(e=>{const f=FLOW[e.flow];const mk=(dir,o)=>conns.push(`<span class="conn" style="--c:${f.color}">${dir} ${NODE[o].title}${e.label?' · '+e.label:''}</span>`);
+    if(e.from===id)mk(e.bi?'⇄':'→',e.to);else if(e.to===id)mk(e.bi?'⇄':'←',e.from)});
+  const label={implemented:'Implemented',partial:'Partial',target:'Target / stub',external:'External',actor:'Actor'}[n.status];
+  dock.innerHTML=`<h2>${n.title}<span class="badge ${n.status}">${label}</span></h2>
+   <div class="hint">${d.summary||''}</div>
+   <div class="cols">
+    ${d.files?`<div><h3>Files</h3><ul>${li(d.files.map(f=>`<code>${f}</code>`))}</ul></div>`:''}
+    ${d.does?`<div><h3>Responsibilities</h3><ul>${li(d.does)}</ul></div>`:''}
+    ${d.notes?`<div><h3>Notes &amp; invariants</h3><ul>${li(d.notes)}</ul></div>`:''}
+    ${n.guards?`<div class="guards"><h3>Safety controls</h3><ul>${li(n.guards)}</ul></div>`:''}
+    <div><h3>Connections</h3>${conns.join('')||'<span class="hint">none</span>'}</div>
+   </div>`;
+}
+svg.addEventListener('click',()=>select(null));
+
+/* controls */
+const pauseBtn=document.getElementById('pause');let paused=false;
+function setPaused(p){paused=p;p?svg.pauseAnimations():svg.unpauseAnimations();document.body.classList.toggle('paused',p);pauseBtn.textContent=p?'Resume flows':'Pause flows'}
+pauseBtn.onclick=()=>setPaused(!paused);
+if(matchMedia('(prefers-reduced-motion:reduce)').matches)setPaused(true);
+const root=document.documentElement;
+const saved=localStorage.getItem('pm-theme');if(saved)root.dataset.theme=saved;
+document.getElementById('theme').onclick=()=>{
+  const dark=root.dataset.theme?root.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;
+  root.dataset.theme=dark?'light':'dark';localStorage.setItem('pm-theme',root.dataset.theme)};
+</script>
+</body>
+</html>
