@@ -161,10 +161,13 @@ between the intake and `load_context` (a test enforces this).
 from parkmind.services.clients.postgres import connect
 from parkmind.services.use_cases.session_memory import session_store
 
+
 def handle_request(thread_id: str, guest_id: str) -> None:
     with connect() as conn:  # per request
-        store = session_store(conn)
-        requirements = store.get(thread_id, guest_id)  # session_id == LangGraph thread_id
+        store = PostgresSessionStore(conn, SESSION_MEMORY)
+        requirements = store.get(
+            thread_id, guest_id
+        )  # session_id == LangGraph thread_id
         ...
 ```
 

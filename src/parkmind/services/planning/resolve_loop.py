@@ -81,6 +81,7 @@ class PlannerResolveLoop:
         provenance: Provenance | None = None,
         group_objective: GroupObjective | None = None,
         context_reloader: Callable[[], LiveContext] | None = None,
+        start_location_node_id: str | None = None,
         forecast_service: ForecastService | None = None,
         scores: PreferenceScores | None = None,
     ) -> PlannerResolveResult:
@@ -108,6 +109,7 @@ class PlannerResolveLoop:
                 restaurant_node_ids=restaurant_node_ids,
                 provenance=provenance,
                 group_objective=group_objective,
+                start_location_node_id=start_location_node_id,
                 forecast_service=forecast_service,
                 now=now,
                 scores=scores,
@@ -122,6 +124,7 @@ class PlannerResolveLoop:
                 park=park,
                 live_context=current_context,
                 now=now,
+                start_location_node_id=start_location_node_id,
             )
 
             # 3. If clean check, return success

@@ -24,5 +24,7 @@ graph = build_initial_planning_graph()
 # replanning_graph = build_replanning_graph()
 
 if __name__ == "__main__":
-    print("initial planning graph compiled; build_replanning_graph() is still a stub — "
-          "see src/parkmind/graph/")
+    print(
+        "TODO: build_initial_planning_graph() and build_replanning_graph() "
+        "are still stubs — see src/parkmind/graph/"
+    )
