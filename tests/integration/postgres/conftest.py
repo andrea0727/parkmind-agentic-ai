@@ -28,7 +28,9 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 _DB_PREFIX = "parkmind_test_"
 
 
-def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
     """Mark everything under tests/integration/postgres as `db`."""
     here = Path(__file__).parent
     for item in items:
@@ -37,7 +39,9 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
 
 def _url_for(base_url: str, database: str) -> str:
-    return make_url(base_url).set(database=database).render_as_string(hide_password=False)
+    return (
+        make_url(base_url).set(database=database).render_as_string(hide_password=False)
+    )
 
 
 @pytest.fixture(scope="session")
@@ -73,7 +77,9 @@ def _drop_database(server: str, name: str) -> None:
     assert name.startswith(_DB_PREFIX), "refusing to drop a non-test database"
     with psycopg.connect(_url_for(server, "postgres"), autocommit=True) as admin:
         admin.execute(
-            sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name))
+            sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
+                sql.Identifier(name)
+            )
         )
 
 

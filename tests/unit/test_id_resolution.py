@@ -47,7 +47,11 @@ class InMemoryIdMappingRepository:
         key = (provider, provider_id, str(entity_kind))
         row = self.rows.get(key)
         if row is None:
-            self.rows[key] = {"internal_id": internal_id, "first": seen_at, "last": seen_at}
+            self.rows[key] = {
+                "internal_id": internal_id,
+                "first": seen_at,
+                "last": seen_at,
+            }
             return
         if row["internal_id"] != internal_id:
             raise IdMappingConflictError("provider id already mapped elsewhere")
@@ -58,7 +62,9 @@ class InMemoryIdMappingRepository:
         return None if row is None else str(row["internal_id"])
 
     def provider_ids_for(self, internal_id: str) -> list[tuple[str, str, str]]:
-        return sorted(k for k, row in self.rows.items() if row["internal_id"] == internal_id)
+        return sorted(
+            k for k, row in self.rows.items() if row["internal_id"] == internal_id
+        )
 
 
 def _fixture(name: str) -> dict:
@@ -83,7 +89,9 @@ def test_same_attraction_keeps_its_internal_id_across_snapshots() -> None:
             entity["queue"]["STANDBY"]["waitTime"] = 85
 
     one = resolver.resolve_live(THEMEPARKS, parse_live(first), seen_at=T0)
-    two = resolver.resolve_live(THEMEPARKS, parse_live(later), seen_at=T0 + timedelta(hours=2))
+    two = resolver.resolve_live(
+        THEMEPARKS, parse_live(later), seen_at=T0 + timedelta(hours=2)
+    )
 
     assert set(one.entities) == set(two.entities)
     assert two.entities[SPACE_MOUNTAIN].standby_wait_minutes == 85
@@ -95,20 +103,29 @@ def test_themeparks_is_the_anchor_its_uuid_becomes_the_internal_id() -> None:
 
     catalog = resolver.resolve_catalog(
         THEMEPARKS,
-        parse_catalog(_fixture("children_magic_kingdom.json"), MAGIC_KINGDOM_ATTRACTION_METADATA),
+        parse_catalog(
+            _fixture("children_magic_kingdom.json"), MAGIC_KINGDOM_ATTRACTION_METADATA
+        ),
         seen_at=T0,
     )
 
     assert SPACE_MOUNTAIN in {a.node_id for a in catalog.attractions}
-    assert repo.resolve(THEMEPARKS.value, SPACE_MOUNTAIN, EntityKind.ATTRACTION) == SPACE_MOUNTAIN
+    assert (
+        repo.resolve(THEMEPARKS.value, SPACE_MOUNTAIN, EntityKind.ATTRACTION)
+        == SPACE_MOUNTAIN
+    )
     assert catalog.kinds[SPACE_MOUNTAIN] is EntityKind.ATTRACTION
 
 
-def test_a_curated_remap_keeps_the_old_internal_id_when_the_provider_id_changes() -> None:
+def test_a_curated_remap_keeps_the_old_internal_id_when_the_provider_id_changes() -> (
+    None
+):
     """Stability comes from the mapping table, not the id format."""
     resolver, repo = _resolver()
     reissued = "11111111-2222-3333-4444-555555555555"
-    repo.record(THEMEPARKS.value, reissued, EntityKind.ATTRACTION, SPACE_MOUNTAIN, seen_at=T0)
+    repo.record(
+        THEMEPARKS.value, reissued, EntityKind.ATTRACTION, SPACE_MOUNTAIN, seen_at=T0
+    )
     payload = _fixture("live_magic_kingdom.json")
     for entity in payload["liveData"]:
         if entity["id"] == SPACE_MOUNTAIN:
@@ -123,8 +140,16 @@ def test_a_curated_remap_keeps_the_old_internal_id_when_the_provider_id_changes(
 
 def test_trace_lists_every_provider_id_of_an_internal_id() -> None:
     resolver, repo = _resolver()
-    resolver.resolve_live(THEMEPARKS, parse_live(_fixture("live_magic_kingdom.json")), seen_at=T0)
-    repo.record(DataSource.QUEUE_TIMES.value, "qt-284", EntityKind.ATTRACTION, SPACE_MOUNTAIN, seen_at=T0)
+    resolver.resolve_live(
+        THEMEPARKS, parse_live(_fixture("live_magic_kingdom.json")), seen_at=T0
+    )
+    repo.record(
+        DataSource.QUEUE_TIMES.value,
+        "qt-284",
+        EntityKind.ATTRACTION,
+        SPACE_MOUNTAIN,
+        seen_at=T0,
+    )
 
     assert resolver.trace(SPACE_MOUNTAIN) == [
         ("queue_times", "qt-284", "attraction"),
@@ -140,20 +165,29 @@ def test_conflicting_remap_is_reported_and_excluded_rest_resolves() -> None:
         """Another writer maps Space Mountain elsewhere between resolve and record."""
 
         def record(self, provider, provider_id, entity_kind, internal_id, *, seen_at):  # type: ignore[no-untyped-def]
-            if provider_id == SPACE_MOUNTAIN and (provider, provider_id, str(entity_kind)) not in self.rows:
+            if (
+                provider_id == SPACE_MOUNTAIN
+                and (provider, provider_id, str(entity_kind)) not in self.rows
+            ):
                 self.rows[(provider, provider_id, str(entity_kind))] = {
                     "internal_id": "someone-else",
                     "first": seen_at,
                     "last": seen_at,
                 }
-            super().record(provider, provider_id, entity_kind, internal_id, seen_at=seen_at)
+            super().record(
+                provider, provider_id, entity_kind, internal_id, seen_at=seen_at
+            )
 
     resolver = IdResolver(RacingRepo())
 
-    live = resolver.resolve_live(THEMEPARKS, parse_live(_fixture("live_magic_kingdom.json")), seen_at=T0)
+    live = resolver.resolve_live(
+        THEMEPARKS, parse_live(_fixture("live_magic_kingdom.json")), seen_at=T0
+    )
 
     assert SPACE_MOUNTAIN not in live.entities
-    assert [(i.kind, i.provider_id) for i in live.issues] == [(IssueKind.CONFLICT, SPACE_MOUNTAIN)]
+    assert [(i.kind, i.provider_id) for i in live.issues] == [
+        (IssueKind.CONFLICT, SPACE_MOUNTAIN)
+    ]
     assert BIG_THUNDER in live.entities
 
 
@@ -172,9 +206,13 @@ def test_unmapped_non_anchor_provider_id_is_reported_not_minted() -> None:
 def test_two_provider_ids_on_one_internal_id_are_both_excluded() -> None:
     resolver, repo = _resolver()
     # A bad curated mapping points Big Thunder's id at Space Mountain.
-    repo.record(THEMEPARKS.value, BIG_THUNDER, EntityKind.ATTRACTION, SPACE_MOUNTAIN, seen_at=T0)
+    repo.record(
+        THEMEPARKS.value, BIG_THUNDER, EntityKind.ATTRACTION, SPACE_MOUNTAIN, seen_at=T0
+    )
 
-    live = resolver.resolve_live(THEMEPARKS, parse_live(_fixture("live_magic_kingdom.json")), seen_at=T0)
+    live = resolver.resolve_live(
+        THEMEPARKS, parse_live(_fixture("live_magic_kingdom.json")), seen_at=T0
+    )
 
     assert SPACE_MOUNTAIN not in live.entities
     assert {(i.kind, i.provider_id) for i in live.issues} == {
@@ -187,7 +225,9 @@ def test_normalizer_issues_are_carried_through_resolution() -> None:
     resolver, _ = _resolver()
 
     live = resolver.resolve_live(
-        THEMEPARKS, parse_live(_fixture("live_magic_kingdom_duplicate_id.json")), seen_at=T0
+        THEMEPARKS,
+        parse_live(_fixture("live_magic_kingdom_duplicate_id.json")),
+        seen_at=T0,
     )
 
     assert (IssueKind.DUPLICATE_PROVIDER_ID, SPACE_MOUNTAIN) in {
@@ -199,7 +239,12 @@ def test_seen_at_must_be_timezone_aware() -> None:
     resolver, _ = _resolver()
 
     with pytest.raises(ValueError, match="timezone-aware"):
-        resolver.resolve(THEMEPARKS, SPACE_MOUNTAIN, EntityKind.ATTRACTION, seen_at=datetime(2026, 9, 16))  # noqa: DTZ001 -- naive on purpose
+        resolver.resolve(
+            THEMEPARKS,
+            SPACE_MOUNTAIN,
+            EntityKind.ATTRACTION,
+            seen_at=datetime(2026, 9, 16),  # noqa: DTZ001
+        )
 
 
 def test_catalog_kinds_are_required() -> None:

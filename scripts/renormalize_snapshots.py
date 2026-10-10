@@ -40,9 +40,18 @@ from parkmind.services.use_cases.renormalize_snapshots import (
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     selection = parser.add_mutually_exclusive_group()
-    selection.add_argument("--all", action="store_true", help="every snapshot, not only outdated ones")
-    selection.add_argument("--snapshot-id", action="append", default=[], help="a specific snapshot (repeatable)")
-    parser.add_argument("--dry-run", action="store_true", help="list the snapshots, change nothing")
+    selection.add_argument(
+        "--all", action="store_true", help="every snapshot, not only outdated ones"
+    )
+    selection.add_argument(
+        "--snapshot-id",
+        action="append",
+        default=[],
+        help="a specific snapshot (repeatable)",
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="list the snapshots, change nothing"
+    )
     parser.add_argument("--database-url", default=None, help="defaults to DATABASE_URL")
     args = parser.parse_args(argv)
 
@@ -56,11 +65,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             else:
                 ids = stale_snapshot_ids(snapshots)
             if args.dry_run:
-                print(f"{len(ids)} snapshot(s) selected (normalizer version {NORMALIZER_VERSION}):")
+                print(
+                    f"{len(ids)} snapshot(s) selected (normalizer version {NORMALIZER_VERSION}):"
+                )
                 for snapshot_id in ids:
                     print(f"  {snapshot_id}")
                 return 0
-            report = renormalize_snapshots(snapshots, PostgresIdMappingRepository(conn), ids)
+            report = renormalize_snapshots(
+                snapshots, PostgresIdMappingRepository(conn), ids
+            )
     except DATABASE_PROBLEMS as exc:
         print(describe_database_problem(exc), file=sys.stderr)
         return 1

@@ -23,7 +23,9 @@ def test_a_unique_partial_name_resolves() -> None:
     assert resolution.node_ids(["Splash", "haunted"]) == ["id-splash", "id-haunted"]
 
 
-def test_a_partial_name_shared_by_several_attractions_is_ambiguous_not_guessed() -> None:
+def test_a_partial_name_shared_by_several_attractions_is_ambiguous_not_guessed() -> (
+    None
+):
     resolution = make_names().resolve(["Mountain"])
 
     assert not resolution.complete
@@ -54,7 +56,10 @@ def test_an_unknown_name_is_reported() -> None:
     ("official", "spoken"),
     [
         ("Peter Pan's Flight", ["Peter Pan", "peter pan flight", "Peter Pan’s Flight"]),
-        ('"it\'s a small world"', ["small world", "it's a small world", "it’s a small world"]),
+        (
+            '"it\'s a small world"',
+            ["small world", "it's a small world", "it’s a small world"],
+        ),
         (
             "Buzz Lightyear’s Space Ranger Spin",
             ["Buzz Lightyear", "buzz lightyear's space ranger spin"],
@@ -85,7 +90,10 @@ def test_normalizing_does_not_merge_different_attractions() -> None:
     resolution = make_names(catalog).resolve(["Peter Pan"])
 
     assert resolution.resolved == {}
-    assert resolution.ambiguous["Peter Pan"] == ("Peter Pan Mini Golf", "Peter Pan's Flight")
+    assert resolution.ambiguous["Peter Pan"] == (
+        "Peter Pan Mini Golf",
+        "Peter Pan's Flight",
+    )
 
 
 def test_a_spelling_variant_does_not_hide_an_ambiguous_name() -> None:

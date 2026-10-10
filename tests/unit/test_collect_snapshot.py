@@ -27,10 +27,17 @@ from parkmind.services.use_cases.collect_snapshot import (
 from parkmind.services.use_cases.snapshot_normalization import ACCESSIBILITY_GAP
 
 
-def _collector(provider: Provider) -> tuple[SnapshotCollector, InMemorySnapshotRepository]:
+def _collector(
+    provider: Provider,
+) -> tuple[SnapshotCollector, InMemorySnapshotRepository]:
     snapshots = InMemorySnapshotRepository()
     return (
-        SnapshotCollector(provider.parks(), provider.weather(), snapshots, InMemoryIdMappingRepository()),
+        SnapshotCollector(
+            provider.parks(),
+            provider.weather(),
+            snapshots,
+            InMemoryIdMappingRepository(),
+        ),
         snapshots,
     )
 
@@ -43,7 +50,10 @@ def test_snapshot_id_floors_now_to_the_window_in_park_time() -> None:
     # 15:04 UTC is 11:04 in New York: same window.
     utc = datetime(2026, 9, 27, 15, 4, tzinfo=UTC)
     assert snapshot_id_for(PARK_ID, utc) == f"snap_{PARK_ID}_20260927T1100"
-    assert snapshot_id_for(PARK_ID, NOW + timedelta(minutes=3)) == f"snap_{PARK_ID}_20260927T1105"
+    assert (
+        snapshot_id_for(PARK_ID, NOW + timedelta(minutes=3))
+        == f"snap_{PARK_ID}_20260927T1105"
+    )
 
 
 def test_snapshot_id_rejects_naive_now_and_bad_intervals() -> None:
@@ -93,10 +103,16 @@ def test_live_context_keeps_standby_waits_statuses_and_showtimes() -> None:
 
     assert context is not None
     live = {e["id"]: e for e in capture("themeparks_live.json")["liveData"]}
-    with_standby = {i for i, e in live.items() if ((e.get("queue") or {}).get("STANDBY") or {}).get("waitTime") is not None}
+    with_standby = {
+        i
+        for i, e in live.items()
+        if ((e.get("queue") or {}).get("STANDBY") or {}).get("waitTime") is not None
+    }
     assert set(context.waits) == with_standby - {PARK_ID}
     assert PARK_ID not in context.statuses
-    assert all(t.tzinfo is PARK_TZ for times in context.showtimes.values() for t in times)
+    assert all(
+        t.tzinfo is PARK_TZ for times in context.showtimes.values() for t in times
+    )
 
 
 def test_coverage_is_honest_for_a_park_wide_snapshot() -> None:
@@ -104,9 +120,13 @@ def test_coverage_is_honest_for_a_park_wide_snapshot() -> None:
 
     coverage = collector.collect(now=NOW).live_context.coverage  # type: ignore[union-attr]
 
-    assert coverage.required_attractions_covered is True  # all 35 curated rides have a status
+    assert (
+        coverage.required_attractions_covered is True
+    )  # all 35 curated rides have a status
     assert coverage.weather_covered is True  # 24 hourly readings span 09:00-18:00
-    assert coverage.accessibility_checks_complete is False  # the collector knows no party
+    assert (
+        coverage.accessibility_checks_complete is False
+    )  # the collector knows no party
     assert ACCESSIBILITY_GAP in coverage.coverage_gaps
     # 2026-09-27 was a party night: the 6 operating scheduled shows all have
     # showtimes; Happily Ever After, Starlight and the Philharmonic are CLOSED, so
@@ -121,13 +141,20 @@ def test_a_curated_attraction_missing_from_live_data_is_a_coverage_gap() -> None
     curated["ghost-ride"] = next(iter(curated.values()))
     provider = Provider()
     collector = SnapshotCollector(
-        provider.parks(), provider.weather(), InMemorySnapshotRepository(), InMemoryIdMappingRepository(), curated=curated
+        provider.parks(),
+        provider.weather(),
+        InMemorySnapshotRepository(),
+        InMemoryIdMappingRepository(),
+        curated=curated,
     )
 
     coverage = collector.collect(now=NOW).live_context.coverage  # type: ignore[union-attr]
 
     assert coverage.required_attractions_covered is False
-    assert any("1 curated attraction(s) without a status" in gap for gap in coverage.coverage_gaps)
+    assert any(
+        "1 curated attraction(s) without a status" in gap
+        for gap in coverage.coverage_gaps
+    )
 
 
 # --------------------------------------------------------------------- degrade
@@ -170,7 +197,11 @@ HAPPILY_EVER_AFTER = "22b78ed9-a692-47cb-b6a4-6d1224ff67e3"  # CLOSED, no showti
 def _coverage_with_live(live: dict, **collector_kwargs):  # type: ignore[no-untyped-def]
     provider = Provider(live=live)
     collector = SnapshotCollector(
-        provider.parks(), provider.weather(), InMemorySnapshotRepository(), InMemoryIdMappingRepository(), **collector_kwargs
+        provider.parks(),
+        provider.weather(),
+        InMemorySnapshotRepository(),
+        InMemoryIdMappingRepository(),
+        **collector_kwargs,
     )
     return collector.collect(now=NOW).live_context.coverage  # type: ignore[union-attr]
 
@@ -184,7 +215,9 @@ def test_an_operating_show_without_showtimes_is_a_coverage_gap() -> None:
     coverage = _coverage_with_live(live)
 
     assert coverage.required_shows_covered is False
-    assert any("1 operating show(s) without showtimes" in gap for gap in coverage.coverage_gaps)
+    assert any(
+        "1 operating show(s) without showtimes" in gap for gap in coverage.coverage_gaps
+    )
 
 
 def test_a_closed_show_needs_no_showtimes() -> None:
@@ -210,7 +243,9 @@ def test_a_curated_show_missing_from_live_is_a_coverage_gap() -> None:
 
 
 def test_no_curated_scheduled_shows_is_reported_as_vacuous() -> None:
-    coverage = _coverage_with_live(capture("themeparks_live.json"), scheduled_shows=frozenset())
+    coverage = _coverage_with_live(
+        capture("themeparks_live.json"), scheduled_shows=frozenset()
+    )
 
     assert coverage.required_shows_covered is True
     assert any("show coverage is vacuous" in gap for gap in coverage.coverage_gaps)

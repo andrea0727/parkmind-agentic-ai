@@ -16,7 +16,11 @@ from parkmind.services.clients.postgres.snapshot_repository import (
 
 RAW = {
     "liveData": [
-        {"id": "e39b831b", "status": "OPERATING", "queue": {"STANDBY": {"waitTime": 25}}},
+        {
+            "id": "e39b831b",
+            "status": "OPERATING",
+            "queue": {"STANDBY": {"waitTime": 25}},
+        },
         {"id": "888fb4a4", "status": "DOWN", "queue": None},
     ],
     "name": "Magic Kingdom — Walt Disney World®",
@@ -24,21 +28,38 @@ RAW = {
 }
 
 
-def test_snapshot_round_trips_with_raw_payload_and_sources(conn: psycopg.Connection) -> None:
+def test_snapshot_round_trips_with_raw_payload_and_sources(
+    conn: psycopg.Connection,
+) -> None:
     repo = PostgresSnapshotRepository(conn)
     snapshot = factories.live_context(snapshot_id="snap_1")
 
-    stored = repo.save(snapshot, RAW, [DataSource.THEMEPARKS_WIKI, DataSource.OPEN_METEO], normalizer_version=1)
+    stored = repo.save(
+        snapshot,
+        RAW,
+        [DataSource.THEMEPARKS_WIKI, DataSource.OPEN_METEO],
+        normalizer_version=1,
+    )
 
     assert stored is True
     assert repo.get("snap_1") == snapshot
     assert repo.get_raw_payload("snap_1") == RAW
-    assert repo.get_data_sources("snap_1") == [DataSource.THEMEPARKS_WIKI, DataSource.OPEN_METEO]
+    assert repo.get_data_sources("snap_1") == [
+        DataSource.THEMEPARKS_WIKI,
+        DataSource.OPEN_METEO,
+    ]
 
 
-def test_snapshot_keeps_its_retrieval_time_timezone_aware(conn: psycopg.Connection) -> None:
+def test_snapshot_keeps_its_retrieval_time_timezone_aware(
+    conn: psycopg.Connection,
+) -> None:
     repo = PostgresSnapshotRepository(conn)
-    repo.save(factories.live_context(), RAW, [DataSource.THEMEPARKS_WIKI], normalizer_version=1)
+    repo.save(
+        factories.live_context(),
+        RAW,
+        [DataSource.THEMEPARKS_WIKI],
+        normalizer_version=1,
+    )
 
     stored = repo.get("snap_1")
 
@@ -52,10 +73,18 @@ def test_saving_the_same_snapshot_twice_leaves_the_first_row_untouched(
 ) -> None:
     repo = PostgresSnapshotRepository(conn)
     first = factories.live_context(snapshot_id="snap_1")
-    second = factories.live_context(snapshot_id="snap_1", retrieved_at=factories.NOW + timedelta(hours=1))
+    second = factories.live_context(
+        snapshot_id="snap_1", retrieved_at=factories.NOW + timedelta(hours=1)
+    )
 
-    assert repo.save(first, RAW, [DataSource.THEMEPARKS_WIKI], normalizer_version=1) is True
-    assert repo.save(second, {"different": True}, [DataSource.CACHE], normalizer_version=1) is False
+    assert (
+        repo.save(first, RAW, [DataSource.THEMEPARKS_WIKI], normalizer_version=1)
+        is True
+    )
+    assert (
+        repo.save(second, {"different": True}, [DataSource.CACHE], normalizer_version=1)
+        is False
+    )
 
     assert repo.get("snap_1") == first
     assert repo.get_raw_payload("snap_1") == RAW
@@ -74,7 +103,9 @@ def test_latest_snapshot_is_the_most_recently_retrieved_not_the_last_inserted(
     older = factories.live_context(snapshot_id="snap_old")
 
     repo.save(newer, RAW, [DataSource.THEMEPARKS_WIKI], normalizer_version=1)
-    repo.save(older, RAW, [DataSource.THEMEPARKS_WIKI], normalizer_version=1)  # inserted last, retrieved first
+    repo.save(
+        older, RAW, [DataSource.THEMEPARKS_WIKI], normalizer_version=1
+    )  # inserted last, retrieved first
 
     latest = repo.get_latest()
     assert latest is not None and latest.snapshot_id == "snap_new"
@@ -89,7 +120,9 @@ def test_unknown_or_missing_snapshots_are_none(conn: psycopg.Connection) -> None
     assert repo.get_data_sources("nope") is None
 
 
-def test_a_snapshot_may_be_collected_from_no_source_at_all(conn: psycopg.Connection) -> None:
+def test_a_snapshot_may_be_collected_from_no_source_at_all(
+    conn: psycopg.Connection,
+) -> None:
     repo = PostgresSnapshotRepository(conn)
 
     repo.save(factories.live_context(), RAW, [], normalizer_version=1)
@@ -206,12 +239,16 @@ def test_latest_valid_snapshot_skips_a_row_that_no_longer_validates(
     repo = PostgresSnapshotRepository(conn)
     for sid, minutes in (("older", 20), ("newest", 1)):
         repo.save(
-            factories.live_context(snapshot_id=sid, retrieved_at=factories.NOW - timedelta(minutes=minutes)),
+            factories.live_context(
+                snapshot_id=sid, retrieved_at=factories.NOW - timedelta(minutes=minutes)
+            ),
             RAW,
             [],
             normalizer_version=1,
         )
-    conn.execute("UPDATE snapshots SET live_context = '{\"broken\": true}'::jsonb WHERE snapshot_id = 'newest'")
+    conn.execute(
+        "UPDATE snapshots SET live_context = '{\"broken\": true}'::jsonb WHERE snapshot_id = 'newest'"
+    )
 
     latest = latest_valid_snapshot(repo, now=factories.NOW)
 

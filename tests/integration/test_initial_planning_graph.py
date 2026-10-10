@@ -67,4 +67,3 @@ def test_graph_produces_approved_plan():
 
     Implement once database repositories and schema are ready.
     """
-

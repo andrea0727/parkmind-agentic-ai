@@ -27,7 +27,9 @@ class PostgresExecutionStateRepository(PostgresRepositoryBase):
 
     def get(self, plan_id: str) -> PlanExecutionState | None:
         with self._tx() as cur:
-            cur.execute("SELECT payload FROM execution_states WHERE plan_id = %s", (plan_id,))
+            cur.execute(
+                "SELECT payload FROM execution_states WHERE plan_id = %s", (plan_id,)
+            )
             row = cur.fetchone()
         if row is None:
             return None

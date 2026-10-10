@@ -55,7 +55,9 @@ class CollectResult:
     degraded: list[str] = field(default_factory=list)
 
 
-def snapshot_id_for(park_id: str, now: datetime, interval: timedelta = DEFAULT_INTERVAL) -> str:
+def snapshot_id_for(
+    park_id: str, now: datetime, interval: timedelta = DEFAULT_INTERVAL
+) -> str:
     """The idempotency key: park + ``now`` floored to the interval, in park time."""
     _require_aware(now)
     if interval <= timedelta(0) or interval > timedelta(days=1):

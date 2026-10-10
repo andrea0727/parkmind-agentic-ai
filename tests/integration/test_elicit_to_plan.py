@@ -42,7 +42,12 @@ from parkmind.services.planning.park_graph import ParkGraph
 
 DAY = datetime.now(PARK_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
 NOW = DAY.replace(hour=9, minute=5)
-PARK = Park(park_id="mk", name="Magic Kingdom", opening_time=DAY.replace(hour=9), closing_time=DAY.replace(hour=22))
+PARK = Park(
+    park_id="mk",
+    name="Magic Kingdom",
+    opening_time=DAY.replace(hour=9),
+    closing_time=DAY.replace(hour=22),
+)
 COMPLETE = scenario("wiki_example_complete")
 RIDES = (StopKind.ATTRACTION, StopKind.SHOW)
 
@@ -58,7 +63,9 @@ def _live_context(attractions: list[Attraction]) -> LiveContext:
         retrieved_at=DAY.replace(hour=9),
         waits={
             a.node_id: WaitEstimate(
-                attraction_id=a.node_id, wait_minutes=15.0, status=AttractionStatus.OPERATING
+                attraction_id=a.node_id,
+                wait_minutes=15.0,
+                status=AttractionStatus.OPERATING,
             )
             for a in attractions
         },
@@ -73,7 +80,9 @@ def _live_context(attractions: list[Attraction]) -> LiveContext:
     )
 
 
-def _confirmed(extraction: dict[str, Any]) -> tuple[PartyConstraints, list[Any], list[AccessibilityRequirements]]:
+def _confirmed(
+    extraction: dict[str, Any],
+) -> tuple[PartyConstraints, list[Any], list[AccessibilityRequirements]]:
     """What the guests said, confirmed with consent, as the planner receives it."""
     intake, store = make_intake()
     graph = build_elicitation_graph(
@@ -81,15 +90,22 @@ def _confirmed(extraction: dict[str, Any]) -> tuple[PartyConstraints, list[Any],
     )
     config: Any = {"configurable": {"thread_id": "t1"}}
     result = graph.invoke(
-        {"thread_id": "t1", "messages": [HumanMessage(content=m) for m in COMPLETE["messages"]]},
+        {
+            "thread_id": "t1",
+            "messages": [HumanMessage(content=m) for m in COMPLETE["messages"]],
+        },
         config=config,
     )
     assert result["__interrupt__"][0].value["kind"] == "hard_constraint_confirmation"
-    result = graph.invoke(Command(resume={"confirmed": True, "consent": True}), config=config)
+    result = graph.invoke(
+        Command(resume={"confirmed": True, "consent": True}), config=config
+    )
     assert "__interrupt__" not in result
     state = graph.get_state(config).values
     constraints = state["constraints"]
-    accessibility = [r for g in constraints.guests if (r := store.get("t1", g.guest_id))]
+    accessibility = [
+        r for g in constraints.guests if (r := store.get("t1", g.guest_id))
+    ]
     return constraints, state["guest_profiles"], accessibility
 
 
@@ -113,7 +129,9 @@ def _plan_and_check(extraction: dict[str, Any]):
         live_context=live,
         knowledge=InMemoryKnowledgeStore({}, corpus_version="t"),
     )
-    park_graph = ParkGraph.from_sources(routing=_FlatRouting(), park=PARK, attractions=attractions)
+    park_graph = ParkGraph.from_sources(
+        routing=_FlatRouting(), park=PARK, attractions=attractions
+    )
     plan: Plan = GreedyInsertionOptimizer(park_graph=park_graph).build_plan(
         constraints=constraints,
         context=live,
@@ -127,7 +145,13 @@ def _plan_and_check(extraction: dict[str, Any]):
         scores=scores,
     )
     check = ConstraintChecker().check(
-        plan, constraints, accessibility, {a.node_id: a for a in attractions}, PARK, live, NOW
+        plan,
+        constraints,
+        accessibility,
+        {a.node_id: a for a in attractions},
+        PARK,
+        live,
+        NOW,
     )
     return constraints, plan, check
 
@@ -136,7 +160,9 @@ def _ride_ids(plan: Plan) -> set[str]:
     return {s.node_id for s in plan.stops if s.kind in RIDES}
 
 
-def test_the_baseline_plan_includes_the_family_rides_the_avoid_test_will_exclude() -> None:
+def test_the_baseline_plan_includes_the_family_rides_the_avoid_test_will_exclude() -> (
+    None
+):
     _, plan, _ = _plan_and_check({**COMPLETE["extraction"], "avoid": []})
 
     assert {"id-teacups", "id-carousel"} <= _ride_ids(plan)

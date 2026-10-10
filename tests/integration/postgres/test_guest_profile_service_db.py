@@ -45,7 +45,10 @@ def test_update_merges_onto_the_latest_stored_profile(conn: psycopg.Connection) 
         "g1",
         ProfileUpdate(
             queue_tolerance=PreferenceUpdate(
-                value=0.9, source=PreferenceSource.LEARNED, confidence=0.7, updated_at=NOW
+                value=0.9,
+                source=PreferenceSource.LEARNED,
+                confidence=0.7,
+                updated_at=NOW,
             )
         ),
     )
@@ -71,7 +74,9 @@ def test_a_noop_update_does_not_persist_a_new_version(
     assert service.get_version("g1", 2) is None
 
 
-def test_stated_value_survives_a_learned_update_round_trip(conn: psycopg.Connection) -> None:
+def test_stated_value_survives_a_learned_update_round_trip(
+    conn: psycopg.Connection,
+) -> None:
     service = _service(conn)
     service.create(
         factories.guest_profile(
@@ -83,7 +88,10 @@ def test_stated_value_survives_a_learned_update_round_trip(conn: psycopg.Connect
         "g1",
         ProfileUpdate(
             queue_tolerance=PreferenceUpdate(
-                value=0.9, source=PreferenceSource.LEARNED, confidence=0.6, updated_at=NOW
+                value=0.9,
+                source=PreferenceSource.LEARNED,
+                confidence=0.6,
+                updated_at=NOW,
             )
         ),
     )
@@ -93,7 +101,9 @@ def test_stated_value_survives_a_learned_update_round_trip(conn: psycopg.Connect
     assert service.get("g1").queue_tolerance.stated_value == 0.4
 
 
-def test_updating_a_guest_with_no_stored_profile_is_refused(conn: psycopg.Connection) -> None:
+def test_updating_a_guest_with_no_stored_profile_is_refused(
+    conn: psycopg.Connection,
+) -> None:
     PostgresGuestRepository(conn).save(factories.guest(guest_id="g1"))
     service = GuestProfileService(PostgresProfileRepository(conn))
 
@@ -102,7 +112,10 @@ def test_updating_a_guest_with_no_stored_profile_is_refused(conn: psycopg.Connec
             "g1",
             ProfileUpdate(
                 queue_tolerance=PreferenceUpdate(
-                    value=0.9, source=PreferenceSource.LEARNED, confidence=0.6, updated_at=NOW
+                    value=0.9,
+                    source=PreferenceSource.LEARNED,
+                    confidence=0.6,
+                    updated_at=NOW,
                 )
             ),
         )

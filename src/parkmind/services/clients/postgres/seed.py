@@ -117,13 +117,24 @@ _ATTRACTION_NAMES = {
     SEVEN_DWARFS: "Seven Dwarfs Mine Train",
 }
 
-_MAXIMIZER_STOPS = [(TRON, 9, 5), (SPACE_MOUNTAIN, 10, 15), (BIG_THUNDER, 11, 20), (SEVEN_DWARFS, 12, 30)]
-_FAMILY_STOPS = [(SMALL_WORLD, 10, 10), (JUNGLE_CRUISE, 11, 0), (HAUNTED_MANSION, 12, 0)]
+_MAXIMIZER_STOPS = [
+    (TRON, 9, 5),
+    (SPACE_MOUNTAIN, 10, 15),
+    (BIG_THUNDER, 11, 20),
+    (SEVEN_DWARFS, 12, 30),
+]
+_FAMILY_STOPS = [
+    (SMALL_WORLD, 10, 10),
+    (JUNGLE_CRUISE, 11, 0),
+    (HAUNTED_MANSION, 12, 0),
+]
 
 
 def _catalog() -> list[Attraction]:
     return [
-        Attraction(node_id=node_id, name=name, **MAGIC_KINGDOM_ATTRACTION_METADATA[node_id])
+        Attraction(
+            node_id=node_id, name=name, **MAGIC_KINGDOM_ATTRACTION_METADATA[node_id]
+        )
         for node_id, name in _ATTRACTION_NAMES.items()
     ]
 
@@ -215,7 +226,9 @@ def _live_context(as_of: datetime) -> tuple[LiveContext, dict[str, Any]]:
     waits = {
         node_id: WaitEstimate(
             attraction_id=node_id,
-            wait_minutes=float(MAGIC_KINGDOM_ATTRACTION_METADATA[node_id]["typical_wait_minutes"]),
+            wait_minutes=float(
+                MAGIC_KINGDOM_ATTRACTION_METADATA[node_id]["typical_wait_minutes"]
+            ),
             status=AttractionStatus.OPERATING,
         )
         for node_id in _ATTRACTION_NAMES
@@ -335,7 +348,9 @@ def seed_dev_scenario(
         proposals.resolve(ACTIVE_PROPOSAL_ID, ApprovalStatus.APPROVED, at=as_of)
     plans.activate(THREAD_ID, ACTIVE_PLAN_ID, at=as_of)
 
-    candidate = _plan(CANDIDATE_PLAN_ID, _FAMILY_STOPS, [RELAXED_ADULT, RELAXED_CHILD], as_of)
+    candidate = _plan(
+        CANDIDATE_PLAN_ID, _FAMILY_STOPS, [RELAXED_ADULT, RELAXED_CHILD], as_of
+    )
     plans.save(THREAD_ID, candidate)
     proposals.save(
         THREAD_ID,
