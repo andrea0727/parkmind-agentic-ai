@@ -26,6 +26,7 @@ from parkmind.tools.contracts import ToolErrorCode, ToolResult
 from parkmind.tools.data_tools import data_tools
 from parkmind.tools.errors import ToolFailure, invalid_arguments, to_tool_failure
 from parkmind.tools.knowledge_tools import knowledge_tools
+from parkmind.tools.planner_tools import planner_tools
 from parkmind.tools.spec import (
     LOADER_NAMESPACES,
     NAMESPACES,
@@ -109,7 +110,7 @@ class ToolRegistry:
 
 # Each namespace registers its group here as it lands (P0-25 data, P0-26
 # knowledge, P0-27 planner).
-DEFAULT_GROUPS: tuple[ToolGroup, ...] = (data_tools, knowledge_tools)
+DEFAULT_GROUPS: tuple[ToolGroup, ...] = (data_tools, knowledge_tools, planner_tools)
 
 
 def build_registry(

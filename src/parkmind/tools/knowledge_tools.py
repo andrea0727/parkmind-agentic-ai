@@ -16,8 +16,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from parkmind.core.contracts import AccessibilityCheck, RideRestriction
-from parkmind.services.ports import KnowledgeHit
-from parkmind.services.use_cases.knowledge_queries import KnowledgeQueries
+from parkmind.services.use_cases.knowledge_queries import KnowledgeHit, KnowledgeQueries
 from parkmind.tools.contracts import ToolProvenance, ToolResult
 from parkmind.tools.spec import ToolContext, ToolSpec
 
