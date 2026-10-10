@@ -15,7 +15,7 @@ from parkmind.core.contracts import (
     PlanExecutionState,
     Provenance,
 )
-from parkmind.core.contracts.models import Plan, Stop
+from parkmind.core.contracts.models import Plan, Stop, StopKind
 from parkmind.services.planning.replanner import Replanner
 
 DAY = datetime(2026, 10, 8, tzinfo=PARK_TZ)
@@ -26,7 +26,7 @@ def _stop(node_id: str, hour: int) -> Stop:
     t0 = DAY.replace(hour=hour, minute=0)
     return Stop(
         node_id=node_id,
-        kind="ATTRACTION",
+        kind=StopKind.ATTRACTION,
         arrival_time=t0,
         departure_time=t0 + timedelta(minutes=30),
         expected_wait_minutes=10.0,
