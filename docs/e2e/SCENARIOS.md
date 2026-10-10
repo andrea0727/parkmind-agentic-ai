@@ -32,7 +32,7 @@ Status legend: **OK** = behaved as expected, **OK (partial)** = expected outcome
 
 ## Batch 2 - critical cases (executed)
 
-Runner: `/tmp/edge_extra.py` (scratch, outside the repo), real Postgres + ThemeParks + Open-Meteo + NVIDIA LLM. Outage cases patch `ThemeParksClient` or `settings.DATABASE_URL` at runtime. "Ask" below means a `missing_information` interrupt.
+Runner: `scripts/e2e/capture.py` (see `scripts/e2e/README.md`), real Postgres + ThemeParks + Open-Meteo + NVIDIA LLM. Outage cases patch `ThemeParksClient` or `settings.DATABASE_URL` at runtime. "Ask" below means a `missing_information` interrupt.
 
 | # | Scenario | Setup / input | Expected | Observed | Status |
 |---|----------|---------------|----------|----------|--------|

@@ -1,0 +1,42 @@
+{
+  "id": "mensaje_sin_sentido",
+  "messages": [
+    "asdf qwerty banana"
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": null,
+  "now": "20:56",
+  "steps": [],
+  "llm_calls": 1,
+  "extracted": {
+    "party_size": null,
+    "must_do": [],
+    "avoid": [],
+    "departure_time": null,
+    "lunch_window": null,
+    "heights": [],
+    "n_guests": 0
+  },
+  "stages_elicit": [],
+  "interrupt1": {
+    "kind": "missing_information",
+    "payload": {
+      "kind": "missing_information",
+      "missing": [
+        "guests",
+        "departure_time"
+      ],
+      "question": "Who is in your party (how many people, and are they adults or children)? What time do you plan to leave the park?"
+    }
+  },
+  "facts1": {
+    "last_ai": "Who is in your party (how many people, and are they adults or children)? What time do you plan to leave the park?"
+  },
+  "seconds": 4.6
+}

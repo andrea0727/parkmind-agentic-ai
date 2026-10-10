@@ -1,0 +1,60 @@
+{
+  "id": "grupo_de_30",
+  "messages": [
+    "We are a group of 30 people, 20 adults and 10 kids. We want Dumbo. Adults are 170 cm. We leave at 10 PM."
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": null,
+  "now": "20:57",
+  "steps": [],
+  "llm_calls": 2,
+  "extracted": {
+    "party_size": 30,
+    "must_do": [
+      "Dumbo"
+    ],
+    "avoid": [],
+    "departure_time": "22:00",
+    "lunch_window": null,
+    "heights": [
+      170,
+      170,
+      170,
+      170,
+      170,
+      170,
+      170,
+      170,
+      170,
+      170,
+      170,
+      170,
+      170,
+      170,
+      170,
+      170
+    ],
+    "n_guests": 16
+  },
+  "stages_elicit": [],
+  "interrupt1": {
+    "kind": "missing_information",
+    "payload": {
+      "kind": "missing_information",
+      "missing": [
+        "unreadable_response"
+      ],
+      "question": "I couldn't understand that. Could you describe your party and plans again?"
+    }
+  },
+  "facts1": {
+    "last_ai": "I couldn't understand that. Could you describe your party and plans again?"
+  },
+  "seconds": 60.6
+}

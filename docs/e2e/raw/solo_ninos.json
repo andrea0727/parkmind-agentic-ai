@@ -1,0 +1,104 @@
+{
+  "id": "solo_ninos",
+  "messages": [
+    "We are 2 children aged 8 and 10, no adults. Heights 130 and 140 cm. We want Dumbo. We leave at 10 PM."
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": null,
+  "now": "20:59",
+  "steps": [],
+  "llm_calls": 1,
+  "extracted": {
+    "party_size": 2,
+    "must_do": [
+      "Dumbo"
+    ],
+    "avoid": [],
+    "departure_time": "22:00",
+    "lunch_window": null,
+    "heights": [
+      130,
+      140
+    ],
+    "n_guests": 2
+  },
+  "stages_elicit": [],
+  "interrupt1": {
+    "kind": "hard_constraint_confirmation",
+    "payload": {
+      "kind": "hard_constraint_confirmation",
+      "pending": [
+        "must_do: Dumbo the Flying Elephant",
+        "departure_time: 22:00",
+        "height:g1: 130",
+        "height:g2: 140"
+      ],
+      "echo": [
+        "'Dumbo the Flying Elephant' is a must-do: the plan has to include it.",
+        "You leave the park at 22:00: the plan must end by then.",
+        "Guest 1 is 130 cm tall (about 4'3\"): rides with a higher minimum will be skipped.",
+        "Guest 2 is 140 cm tall (about 4'7\"): rides with a higher minimum will be skipped."
+      ],
+      "accessibility_guests": []
+    }
+  },
+  "facts1": {},
+  "stages": [
+    "load_context",
+    "resolve_group",
+    "build_plan",
+    "check",
+    "explain",
+    "propose"
+  ],
+  "interrupt2": {
+    "kind": "plan_approval",
+    "payload": {
+      "kind": "plan_approval",
+      "proposal": "<Proposal>"
+    }
+  },
+  "facts2": {
+    "check_valid": true,
+    "violations": [],
+    "n_stops": 20,
+    "stops_head": [
+      {
+        "kind": "ATTRACTION",
+        "node_id": "890fa430-89c0-4a3f-96c9-11597888005e",
+        "arrival": "08:05"
+      },
+      {
+        "kind": "ATTRACTION",
+        "node_id": "ffcfeaa2-1416-4920-a1ed-543c1a1695c4",
+        "arrival": "08:29"
+      },
+      {
+        "kind": "ATTRACTION",
+        "node_id": "d9d12438-d999-4482-894b-8955fdb20ccf",
+        "arrival": "08:44"
+      },
+      {
+        "kind": "ATTRACTION",
+        "node_id": "f163ddcd-43e1-488d-8276-2381c1db0a39",
+        "arrival": "09:01"
+      }
+    ],
+    "first_arrival": "08:05",
+    "last_arrival": "16:47",
+    "explanation": "20 stops, 185 min of waiting and 82 min of walking in total.\n08:05 Dumbo the Flying Elephant (5 min wait, 5 min walk)\n08:29 Tomorrowland Transit Authority PeopleMover (0 min wait, 4 min walk)\n08:44 Astro Orbiter (0 min wait, 0 min walk)\n09:01 Tomorrowland Speedway (5 min wait, 2 min walk)\n09:24 The Barnstormer (5 min wait, 3 min walk)\n09:47 Under the Sea - Journey of The Little Mermaid (5 min wait, 3 min walk)\n10:11 \"it's a small world\" (5 min wait, 4 min walk)\n10:36 The Magic Carpets of Aladdin (5 min wait, 5 min walk)\n10:57 Swiss Family Treehouse (5 min wait, 1 min walk)\n11:20 Pirates of the Caribbean (5 min wait, 4 min walk)\n11:43 Jungle Cruise (10 min wait, 3 min walk)\n12:13 Tiana's Bayou Adventure (10 min wait, 5 min walk)\n12:45 Prince Charming Regal Carrousel (10 min wait, 7 min walk)\n13:12 Mad Tea Party (10 min wait, 2 min walk)\n13:42 Space Mountain (10 min wait, 5 min walk)\n14:12 The Many Adventures of Winnie the Pooh (15 min wait, 5 min walk)\n14:47 Haunted Mansion (15 min wait, 6 min walk)\n15:20 Peter Pan's Flight (20 min wait, 3 min walk)\n16:01 Big Thunder Mountain Railroad (20 min wait, 6 min walk)\n16:47 Buzz Lightyear\u2019s Space Ranger Spin (25 min wait, 11 min walk)"
+  },
+  "stages_after_approval": [
+    "resolve_proposal"
+  ],
+  "approval": "APPROVED",
+  "plan_active": true,
+  "interrupt3": null,
+  "seconds": 11.9
+}

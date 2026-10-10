@@ -1,0 +1,80 @@
+{
+  "id": "sin_alturas_con_mustdo",
+  "messages": [
+    "We are 2 adults and 2 kids. We definitely want Space Mountain. We leave at 10 PM."
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": null,
+  "now": "20:47",
+  "steps": [],
+  "llm_calls": 1,
+  "extracted": {
+    "party_size": 4,
+    "must_do": [
+      "Space Mountain"
+    ],
+    "avoid": [],
+    "departure_time": "22:00",
+    "lunch_window": null,
+    "heights": [
+      null,
+      null,
+      null,
+      null
+    ],
+    "n_guests": 4
+  },
+  "stages_elicit": [],
+  "interrupt1": {
+    "kind": "hard_constraint_confirmation",
+    "payload": {
+      "kind": "hard_constraint_confirmation",
+      "pending": [
+        "must_do: Space Mountain",
+        "departure_time: 22:00"
+      ],
+      "echo": [
+        "'Space Mountain' is a must-do: the plan has to include it.",
+        "You leave the park at 22:00: the plan must end by then."
+      ],
+      "accessibility_guests": []
+    }
+  },
+  "facts1": {},
+  "stages": [
+    "load_context",
+    "resolve_group",
+    "build_plan",
+    "check"
+  ],
+  "interrupt2": null,
+  "facts2": {
+    "check_valid": false,
+    "violations": [
+      {
+        "rule": "HEIGHT",
+        "message": "Guest g1 height unknown for height-restricted stop b2260923-9315-40fd-9c6b-44dd811dbe64; failing closed"
+      },
+      {
+        "rule": "HEIGHT",
+        "message": "Guest g2 height unknown for height-restricted stop b2260923-9315-40fd-9c6b-44dd811dbe64; failing closed"
+      },
+      {
+        "rule": "HEIGHT",
+        "message": "Guest g3 height unknown for height-restricted stop b2260923-9315-40fd-9c6b-44dd811dbe64; failing closed"
+      },
+      {
+        "rule": "HEIGHT",
+        "message": "Guest g4 height unknown for height-restricted stop b2260923-9315-40fd-9c6b-44dd811dbe64; failing closed"
+      }
+    ],
+    "last_ai": "I couldn't build a plan that meets every requirement, so nothing was proposed.\n- Guest g1 height unknown for height-restricted stop b2260923-9315-40fd-9c6b-44dd811dbe64; failing closed\n- Guest g2 height unknown for height-restricted stop b2260923-9315-40fd-9c6b-44dd811dbe64; failing closed\n- Guest g3 height unknown for height-restricted stop b2260923-9315-40fd-9c6b-44dd811dbe64; failing closed\n- Guest g4 height unknown for height-restricted stop b2260923-9315-40fd-9c6b-44dd811dbe64; failing closed\nYou can relax a constraint (for example the must-dos or the departure time) and I'll try again."
+  },
+  "seconds": 19.6
+}
