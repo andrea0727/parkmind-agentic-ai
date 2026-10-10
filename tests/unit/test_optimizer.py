@@ -47,7 +47,10 @@ from parkmind.services.personalization.preference_scorer import (
     per_guest_satisfaction,
 )
 from parkmind.services.planning.forecast_service import ForecastService
-from parkmind.services.planning.optimizer import GreedyInsertionOptimizer
+from parkmind.services.planning.optimizer import (
+    MEAL_VENUE_TBD,
+    GreedyInsertionOptimizer,
+)
 from parkmind.services.planning.park_graph import ParkGraph
 from parkmind.services.ports import WaitForecast
 
@@ -405,6 +408,41 @@ class TestLunchWindow:
         meal_stops = [s for s in plan.stops if s.kind == StopKind.MEAL]
         assert len(meal_stops) == 1
         assert meal_stops[0].node_id == RESTAURANT_1
+
+    def test_meal_without_a_restaurant_is_eaten_where_the_party_is(self) -> None:
+        """No restaurant chosen: no walk to a placeholder, and routing never sees it."""
+
+        class _StrictRouting:
+            known = frozenset({A1, A2, A3})
+
+            def walk_minutes(self, origin: str, destination: str) -> float:
+                if origin == destination:
+                    return 0.0
+                if origin not in self.known or destination not in self.known:
+                    raise AssertionError(f"routing asked about {origin!r} -> {destination!r}")
+                return 5.0
+
+        graph = ParkGraph.from_sources(
+            routing=_StrictRouting(), park=_park(), attractions=_catalog()
+        )
+        lunch = TimeWindow(start=DAY.replace(hour=12), end=DAY.replace(hour=13, minute=30))
+        statuses = {a: AttractionStatus.OPERATING for a in (A1, A2, A3)}
+        context = _live_context(waits={A1: 10.0, A2: 5.0, A3: 5.0}, statuses=statuses)
+
+        plan = GreedyInsertionOptimizer(park_graph=graph).build_plan(
+            constraints=_constraints(lunch_window=lunch),
+            context=context,
+            utilities={A1: 3.0, A2: 2.0, A3: 1.0},
+            park=_park(),
+            catalog=_catalog(),
+        )
+
+        meals = [s for s in plan.stops if s.kind == StopKind.MEAL]
+        assert [m.node_id for m in meals] == [MEAL_VENUE_TBD]
+        assert meals[0].walking_minutes == 0.0
+        assert lunch.start <= meals[0].arrival_time <= lunch.end
+        after = plan.stops[plan.stops.index(meals[0]) + 1 :]
+        assert all(s.node_id != MEAL_VENUE_TBD for s in after)
 
 
 class TestRestFrequency:

@@ -71,6 +71,7 @@ class ParkMindState(TypedDict, total=False):
 
     # Checking & Proposal
     check_result: CheckResult | None
+    explanation: str | None  # written only for a plan that passed check_result
     diff: PlanDiff | None
     proposal: Proposal | None
 

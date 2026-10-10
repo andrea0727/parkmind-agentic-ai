@@ -1,0 +1,101 @@
+{
+  "id": "grupo_de_1",
+  "messages": [
+    "Just me, one adult, 170 cm. I want Space Mountain. I leave at 10 PM."
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": null,
+  "now": "20:58",
+  "steps": [],
+  "llm_calls": 1,
+  "extracted": {
+    "party_size": 1,
+    "must_do": [
+      "Space Mountain"
+    ],
+    "avoid": [],
+    "departure_time": "22:00",
+    "lunch_window": null,
+    "heights": [
+      170
+    ],
+    "n_guests": 1
+  },
+  "stages_elicit": [],
+  "interrupt1": {
+    "kind": "hard_constraint_confirmation",
+    "payload": {
+      "kind": "hard_constraint_confirmation",
+      "pending": [
+        "must_do: Space Mountain",
+        "departure_time: 22:00",
+        "height:g1: 170"
+      ],
+      "echo": [
+        "'Space Mountain' is a must-do: the plan has to include it.",
+        "You leave the park at 22:00: the plan must end by then.",
+        "Guest 1 is 170 cm tall (about 5'7\"): rides with a higher minimum will be skipped."
+      ],
+      "accessibility_guests": []
+    }
+  },
+  "facts1": {},
+  "stages": [
+    "load_context",
+    "resolve_group",
+    "build_plan",
+    "check",
+    "explain",
+    "propose"
+  ],
+  "interrupt2": {
+    "kind": "plan_approval",
+    "payload": {
+      "kind": "plan_approval",
+      "proposal": "<Proposal>"
+    }
+  },
+  "facts2": {
+    "check_valid": true,
+    "violations": [],
+    "n_stops": 20,
+    "stops_head": [
+      {
+        "kind": "ATTRACTION",
+        "node_id": "b2260923-9315-40fd-9c6b-44dd811dbe64",
+        "arrival": "08:05"
+      },
+      {
+        "kind": "ATTRACTION",
+        "node_id": "ffcfeaa2-1416-4920-a1ed-543c1a1695c4",
+        "arrival": "08:32"
+      },
+      {
+        "kind": "ATTRACTION",
+        "node_id": "d9d12438-d999-4482-894b-8955fdb20ccf",
+        "arrival": "08:47"
+      },
+      {
+        "kind": "ATTRACTION",
+        "node_id": "f163ddcd-43e1-488d-8276-2381c1db0a39",
+        "arrival": "09:04"
+      }
+    ],
+    "first_arrival": "08:05",
+    "last_arrival": "16:36",
+    "explanation": "20 stops, 185 min of waiting and 72 min of walking in total.\n08:05 Space Mountain (10 min wait, 5 min walk)\n08:32 Tomorrowland Transit Authority PeopleMover (0 min wait, 2 min walk)\n08:47 Astro Orbiter (0 min wait, 0 min walk)\n09:04 Tomorrowland Speedway (5 min wait, 2 min walk)\n09:27 The Barnstormer (5 min wait, 3 min walk)\n09:49 Dumbo the Flying Elephant (5 min wait, 1 min walk)\n10:10 Under the Sea - Journey of The Little Mermaid (5 min wait, 2 min walk)\n10:34 \"it's a small world\" (5 min wait, 4 min walk)\n10:59 The Magic Carpets of Aladdin (5 min wait, 5 min walk)\n11:20 Swiss Family Treehouse (5 min wait, 1 min walk)\n11:44 Pirates of the Caribbean (5 min wait, 4 min walk)\n12:07 Jungle Cruise (10 min wait, 3 min walk)\n12:37 Tiana's Bayou Adventure (10 min wait, 5 min walk)\n13:08 Prince Charming Regal Carrousel (10 min wait, 7 min walk)\n13:36 Mad Tea Party (10 min wait, 2 min walk)\n14:01 The Many Adventures of Winnie the Pooh (15 min wait, 0 min walk)\n14:37 Haunted Mansion (15 min wait, 6 min walk)\n15:09 Peter Pan's Flight (20 min wait, 3 min walk)\n15:51 Big Thunder Mountain Railroad (20 min wait, 6 min walk)\n16:36 Buzz Lightyear\u2019s Space Ranger Spin (25 min wait, 11 min walk)"
+  },
+  "stages_after_approval": [
+    "resolve_proposal"
+  ],
+  "approval": "APPROVED",
+  "plan_active": true,
+  "interrupt3": null,
+  "seconds": 5.1
+}

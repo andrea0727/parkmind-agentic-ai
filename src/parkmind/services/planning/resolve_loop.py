@@ -29,8 +29,10 @@ from parkmind.core.contracts import (
     RuleId,
     StopKind,
 )
+from parkmind.services.personalization.preference_scorer import PreferenceScores
 from parkmind.services.planning.constraint_checker import ConstraintChecker
 from parkmind.services.planning.errors import ContextReloadError
+from parkmind.services.planning.forecast_service import ForecastService
 from parkmind.services.planning.optimizer import GreedyInsertionOptimizer
 from parkmind.services.planning.repair_moves import RepairAction, get_repair_move
 
@@ -80,6 +82,8 @@ class PlannerResolveLoop:
         group_objective: GroupObjective | None = None,
         context_reloader: Callable[[], LiveContext] | None = None,
         start_location_node_id: str | None = None,
+        forecast_service: ForecastService | None = None,
+        scores: PreferenceScores | None = None,
     ) -> PlannerResolveResult:
         """
         Run the repair loop up to max_attempts.
@@ -106,6 +110,9 @@ class PlannerResolveLoop:
                 provenance=provenance,
                 group_objective=group_objective,
                 start_location_node_id=start_location_node_id,
+                forecast_service=forecast_service,
+                now=now,
+                scores=scores,
             )
 
             # 2. Check candidate plan

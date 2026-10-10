@@ -1,0 +1,94 @@
+{
+  "id": "salida_ya_pasada",
+  "messages": [
+    "We are 2 adults, both 170 cm. We want Haunted Mansion. We leave at 9 AM."
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": null,
+  "now": "20:56",
+  "steps": [],
+  "llm_calls": 1,
+  "extracted": {
+    "party_size": 2,
+    "must_do": [
+      "Haunted Mansion"
+    ],
+    "avoid": [],
+    "departure_time": "09:00",
+    "lunch_window": null,
+    "heights": [
+      170,
+      170
+    ],
+    "n_guests": 2
+  },
+  "stages_elicit": [],
+  "interrupt1": {
+    "kind": "hard_constraint_confirmation",
+    "payload": {
+      "kind": "hard_constraint_confirmation",
+      "pending": [
+        "must_do: Haunted Mansion",
+        "departure_time: 09:00",
+        "height:g1: 170",
+        "height:g2: 170"
+      ],
+      "echo": [
+        "'Haunted Mansion' is a must-do: the plan has to include it.",
+        "You leave the park at 09:00: the plan must end by then.",
+        "Guest 1 is 170 cm tall (about 5'7\"): rides with a higher minimum will be skipped.",
+        "Guest 2 is 170 cm tall (about 5'7\"): rides with a higher minimum will be skipped."
+      ],
+      "accessibility_guests": []
+    }
+  },
+  "facts1": {},
+  "stages": [
+    "load_context",
+    "resolve_group",
+    "build_plan",
+    "check",
+    "explain",
+    "propose"
+  ],
+  "interrupt2": {
+    "kind": "plan_approval",
+    "payload": {
+      "kind": "plan_approval",
+      "proposal": "<Proposal>"
+    }
+  },
+  "facts2": {
+    "check_valid": true,
+    "violations": [],
+    "n_stops": 2,
+    "stops_head": [
+      {
+        "kind": "ATTRACTION",
+        "node_id": "2551a77d-023f-4ab1-9a19-8afec0190f39",
+        "arrival": "08:05"
+      },
+      {
+        "kind": "ATTRACTION",
+        "node_id": "f5aad2d4-a419-4384-bd9a-42f86385c750",
+        "arrival": "08:37"
+      }
+    ],
+    "first_arrival": "08:05",
+    "last_arrival": "08:37",
+    "explanation": "2 stops, 20 min of waiting and 7 min of walking in total.\n08:05 Haunted Mansion (15 min wait, 5 min walk)\n08:37 \"it's a small world\" (5 min wait, 2 min walk)"
+  },
+  "stages_after_approval": [
+    "resolve_proposal"
+  ],
+  "approval": "APPROVED",
+  "plan_active": true,
+  "interrupt3": null,
+  "seconds": 9.3
+}
