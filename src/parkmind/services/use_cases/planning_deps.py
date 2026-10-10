@@ -163,13 +163,17 @@ def load_park(deps: PlanningDeps, now: datetime) -> Park:
 
     Read from the store, else fetched from the provider and stored for the next call.
     """
-    today = now.astimezone(PARK_TZ).date()
-    park = deps.attractions.get_schedule(deps.park_id, today)
+    return load_schedule(deps, now.astimezone(PARK_TZ).date())
+
+
+def load_schedule(deps: PlanningDeps, on_date: date) -> Park:
+    """The operating window on ``on_date`` (park calendar): store first, then the provider."""
+    park = deps.attractions.get_schedule(deps.park_id, on_date)
     if park is not None:
         return park
     if deps.park_data is None:
-        raise ContextUnavailableError(f"no schedule for park {deps.park_id!r} on {today}")
-    park = deps.park_data.get_schedule(today)
+        raise ContextUnavailableError(f"no schedule for park {deps.park_id!r} on {on_date}")
+    park = deps.park_data.get_schedule(on_date)
     deps.attractions.save_schedule(park)
     return park
 
