@@ -136,3 +136,32 @@ def test_build_registry_collects_every_group_for_one_context() -> None:
 
     assert registry.names() == ["data.a", "knowledge.b"]
     assert seen == [context, context]
+
+
+def test_every_tool_publishes_input_and_output_schema() -> None:
+    """P0-24: "Tools expose typed input/output contracts" -- every default tool."""
+    registry = build_registry()
+
+    assert len(registry) > 0
+    for tool in registry:
+        request_schema = tool.request_model.model_json_schema()
+        result_schema = tool.result_model.model_json_schema()
+        assert request_schema["type"] == "object", tool.qualified_name
+        assert set(result_schema["properties"]) == {"data", "provenance"}, (
+            tool.qualified_name
+        )
+        assert tool.description.strip(), tool.qualified_name
+
+
+def test_the_default_registry_publishes_the_seven_data_tools() -> None:
+    names = build_registry().names()
+
+    assert [n for n in names if n.startswith("data.")] == [
+        "data.get_live_waits",
+        "data.get_attraction_status",
+        "data.get_schedule",
+        "data.get_showtimes",
+        "data.get_weather",
+        "data.get_walking_time",
+        "data.get_attraction_info",
+    ]

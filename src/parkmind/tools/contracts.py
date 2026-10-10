@@ -33,7 +33,8 @@ class ToolProvenance(ParkMindBaseModel):
     """Who produced the data: ``ThemeParks.wiki``, ``Open-Meteo``, ``park_safety_notice``..."""
     snapshot_id: str | None = None
     retrieved_at: datetime | None = None
-    age_seconds: float | None = Field(default=None, ge=0)
+    age_seconds: float | None = None
+    """Age at the call's ``now``; negative for a snapshot dated after ``now`` (then ``stale``)."""
     stale: bool | None = None
     """``True`` when the snapshot is older than the freshness window rule 11 uses."""
     strategy: str | None = None
