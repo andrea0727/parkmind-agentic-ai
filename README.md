@@ -115,9 +115,10 @@ and `agent.py` both add it to the import path, so
 cp .env.example .env          # fill in ANTHROPIC_API_KEY at minimum
 poetry install
 
-# 2. start Postgres, then create the schema (Alembic owns it) and, optionally,
-#    load the reproducible development scenario
-docker compose up -d
+# 2. start Postgres (built with pgvector from database/Dockerfile), then create
+#    the schema (Alembic owns it) and, optionally, load the reproducible
+#    development scenario
+docker compose up -d --build
 poetry run alembic -c database/alembic.ini upgrade head
 poetry run python scripts/seed_db.py
 
@@ -142,6 +143,11 @@ poetry run streamlit run ui/app.py
 - **Reset:** `docker compose down -v && docker compose up -d`, then migrate
   again. A volume created before P0-12 still holds the old `init.sql` tables and
   must be reset this way before the first `upgrade head`.
+- **pgvector (P0-26):** the compose image is `postgres:16` plus the
+  `postgresql-16-pgvector` package (`database/Dockerfile`; CI installs the same
+  package into its service container). Migration `0003` enables the extension.
+  A container started from the old plain image stops it with a message:
+  rebuild once with `docker compose up -d --build` (your data volume is kept).
 - **Tests:** the repository tests are marked `db` and use throwaway
   `parkmind_test_*` databases on the same server, never your `parkmind` one.
   Without a reachable Postgres they are skipped locally and **fail** when `CI`

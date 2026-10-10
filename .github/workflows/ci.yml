@@ -7,6 +7,9 @@ name: CI
 # P0-12: the repository tests (marked `db`) run against a real Postgres, the
 # `services: postgres:` container below. CI is set by GitHub Actions, so an
 # unreachable database FAILS those tests instead of skipping them.
+#
+# P0-26: that Postgres gets pgvector installed by the first step; the
+# embedding model is never downloaded here (tests use a deterministic embedder).
 
 on:
   pull_request:
@@ -38,6 +41,18 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install pgvector into the Postgres service (P0-26)
+        # There is no pgvector image outside Docker Hub, but the official image
+        # carries the PGDG apt source: install the same package
+        # database/Dockerfile installs for docker compose. No restart is needed
+        # before `CREATE EXTENSION vector` (migration 0003).
+        run: |
+          docker exec ${{ job.services.postgres.id }} sh -c \
+            'apt-get -o Acquire::Retries=5 update \
+             && apt-get -o Acquire::Retries=5 install -y --no-install-recommends "postgresql-$PG_MAJOR-pgvector"'
+          docker exec ${{ job.services.postgres.id }} psql -U parkmind -d parkmind -tAc \
+            "SELECT 'pgvector available: ' || default_version FROM pg_available_extensions WHERE name = 'vector'"
 
       - uses: actions/setup-python@v5
         with:

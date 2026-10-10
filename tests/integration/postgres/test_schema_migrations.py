@@ -30,6 +30,11 @@ MVP_TABLES = {
     "accessibility_requirements",
 }
 
+# P0-26 (migration 0003): the knowledge store's embeddings, on pgvector.
+KNOWLEDGE_TABLES = {"knowledge_chunks"}
+
+SCHEMA_TABLES = MVP_TABLES | KNOWLEDGE_TABLES | {"alembic_version"}
+
 # Owned by langgraph-checkpoint-postgres (PostgresSaver.setup()), never by our
 # migrations: accessibility data must not have a place in checkpoint storage.
 CHECKPOINT_TABLES = {
@@ -56,7 +61,7 @@ def test_fresh_database_migrates_to_complete_mvp_schema(
     migrate.upgrade(empty_database_url)
 
     tables = _tables(empty_database_url)
-    assert tables == MVP_TABLES | {"alembic_version"}
+    assert tables == SCHEMA_TABLES
     assert not tables & CHECKPOINT_TABLES
 
 
@@ -103,7 +108,7 @@ def test_upgrade_is_idempotent_when_rerun(empty_database_url: str) -> None:
     migrate.upgrade(empty_database_url)
     migrate.upgrade(empty_database_url)
 
-    assert _tables(empty_database_url) == MVP_TABLES | {"alembic_version"}
+    assert _tables(empty_database_url) == SCHEMA_TABLES
 
 
 def test_downgrade_then_upgrade_is_clean(empty_database_url: str) -> None:
@@ -114,7 +119,85 @@ def test_downgrade_then_upgrade_is_clean(empty_database_url: str) -> None:
 
     migrate.upgrade(empty_database_url)
 
+    assert _tables(empty_database_url) == SCHEMA_TABLES
+
+
+# -- pgvector (P0-26 Done-when: "Compose and CI run a pgvector-enabled Postgres image")
+
+_DIMENSION = 384
+
+
+def _vector(*weights: float) -> str:
+    """A pgvector literal: ``weights`` first, zero-padded to the column's dimension."""
+    values = list(weights) + [0.0] * (_DIMENSION - len(weights))
+    return "[" + ",".join(str(v) for v in values) + "]"
+
+
+_INSERT_CHUNK = (
+    "INSERT INTO knowledge_chunks (corpus_version, embedder_id, chunk_id, kind, "
+    "attraction_id, title, body, source_url, reviewed_on, embedding) "
+    "VALUES ('v1', 'test-embedder', %s, %s, %s, 't', 'b', 'https://example.org', "
+    "'2026-10-10', %s::vector)"
+)
+
+
+def _extension_version(url: str) -> str | None:
+    with psycopg.connect(url) as conn:
+        row = conn.execute(
+            "SELECT extversion FROM pg_extension WHERE extname = 'vector'"
+        ).fetchone()
+    return None if row is None else row[0]
+
+
+def test_vector_extension_installed(empty_database_url: str) -> None:
+    """The server can install pgvector and the migration enables it (HNSW needs >= 0.5)."""
+    migrate.upgrade(empty_database_url)
+
+    version = _extension_version(empty_database_url)
+
+    assert version is not None
+    major, minor = (int(part) for part in version.split(".")[:2])
+    assert (major, minor) >= (0, 5)
+
+
+def test_downgrade_removes_the_vector_extension(empty_database_url: str) -> None:
+    migrate.upgrade(empty_database_url)
+    migrate.downgrade(empty_database_url, "0002")
+
+    assert _extension_version(empty_database_url) is None
     assert _tables(empty_database_url) == MVP_TABLES | {"alembic_version"}
+
+
+def test_knowledge_chunks_rank_by_cosine_distance(conn: psycopg.Connection) -> None:
+    conn.execute(_INSERT_CHUNK, ("near", "policy", None, _vector(1.0, 0.1)))
+    conn.execute(_INSERT_CHUNK, ("far", "policy", None, _vector(0.0, 1.0)))
+    conn.execute(_INSERT_CHUNK, ("middle", "faq", None, _vector(1.0, 1.0)))
+
+    rows = conn.execute(
+        "SELECT chunk_id FROM knowledge_chunks ORDER BY embedding <=> %s::vector",
+        (_vector(1.0, 0.0),),
+    ).fetchall()
+
+    assert [row["chunk_id"] for row in rows] == ["near", "middle", "far"]
+
+
+def test_knowledge_chunks_reject_a_vector_of_the_wrong_dimension(
+    conn: psycopg.Connection,
+) -> None:
+    with pytest.raises(errors.DataException):
+        conn.execute(_INSERT_CHUNK, ("short", "policy", None, "[1.0,0.0,0.0]"))
+
+
+def test_attraction_profile_chunk_requires_an_attraction(
+    conn: psycopg.Connection,
+) -> None:
+    with pytest.raises(errors.CheckViolation):
+        conn.execute(_INSERT_CHUNK, ("p", "attraction_profile", None, _vector(1.0)))
+
+
+def test_chunk_kind_is_a_closed_set(conn: psycopg.Connection) -> None:
+    with pytest.raises(errors.CheckViolation):
+        conn.execute(_INSERT_CHUNK, ("x", "blog_post", None, _vector(1.0)))
 
 
 def _accessibility_payload(**overrides: object) -> str:
