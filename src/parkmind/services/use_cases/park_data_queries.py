@@ -29,8 +29,8 @@ from parkmind.core.contracts import (
     WeatherHour,
 )
 from parkmind.services.ports import WalkEstimate, WalkEstimator
+from parkmind.services.use_cases.current_snapshot import ContextSource, current_snapshot
 from parkmind.services.use_cases.latest_snapshot import DEFAULT_MAX_AGE
-from parkmind.services.use_cases.load_context import ContextSource, current_snapshot
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
     PlanningDeps,

@@ -23,15 +23,10 @@ SessionStore (``party_accessibility``).
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Literal
 
 from parkmind.core.contracts import AccessibilityCheck, LiveContext
-from parkmind.services.clients.themeparks_errors import ThemeParksClientError
-from parkmind.services.ports import RepositoryError
-from parkmind.services.use_cases.latest_snapshot import (
-    DEFAULT_MAX_AGE,
-    latest_valid_snapshot,
-)
+from parkmind.services.use_cases.current_snapshot import ContextSource, current_snapshot
+from parkmind.services.use_cases.latest_snapshot import DEFAULT_MAX_AGE
 from parkmind.services.use_cases.party_accessibility import (
     party_checks,
     with_checks,
@@ -56,7 +51,6 @@ __all__ = [
     "current_snapshot",
 ]
 
-ContextSource = Literal["live", "snapshot"]
 
 
 @dataclass(frozen=True)
@@ -100,32 +94,6 @@ class LoadContextUseCase:
 
     def _base_context(self, deps: PlanningDeps, now: datetime) -> tuple[LiveContext, ContextSource]:
         return current_snapshot(deps, now, max_age=self._max_age)
-
-
-def current_snapshot(
-    deps: PlanningDeps, now: datetime, *, max_age: timedelta = DEFAULT_MAX_AGE
-) -> tuple[LiveContext, ContextSource]:
-    """The park data to answer from at ``now`` (section 43 chain, one place).
-
-    A fresh collection when a collector is configured and the provider answers,
-    else the latest valid stored snapshot -- returned even when it is older than
-    ``max_age``: rule 11 (and the data tools' ``stale`` flag) judge its age, the
-    loader does not hide it. ``ContextUnavailableError`` when there is neither.
-    Shared by LOAD CONTEXT and the ``data.*`` tools (P0-25), so both read the
-    same snapshot the same way.
-    """
-    if deps.collector is not None:
-        try:
-            result = deps.collector.collect(now=now)
-            live = result.live_context or deps.snapshots.get(result.snapshot_id)
-            if live is not None:
-                return live, "live"
-        except (ThemeParksClientError, RepositoryError):
-            pass  # fall back to the stored snapshot (section 43)
-    latest = latest_valid_snapshot(deps.snapshots, now=now, max_age=max_age)
-    if latest is None:
-        raise ContextUnavailableError("no live data and no valid stored snapshot")
-    return latest.live_context, "snapshot"
 
 
 def _with_accessibility(
