@@ -50,7 +50,7 @@ from .plan_repository import PlanRepository
 from .profile_repository import ProfileRepository
 from .proposal_repository import ProposalRepository
 from .provenance_repository import ProvenanceRepository, ProvenanceSubjectKind
-from .routing import RoutingPort
+from .routing import RoutingPort, WalkBasis, WalkEstimate, WalkEstimator
 from .session_store import SessionStore
 from .snapshot_repository import RawPayload, SnapshotMeta, SnapshotRepository
 from .weather import WeatherPort
@@ -98,5 +98,8 @@ __all__ = [
     "SnapshotRepository",
     "StoredDataError",
     "WaitForecast",
+    "WalkBasis",
+    "WalkEstimate",
+    "WalkEstimator",
     "WeatherPort",
 ]

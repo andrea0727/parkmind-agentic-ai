@@ -26,6 +26,8 @@ from parkmind.services.ports import (
     RoutingError,
     RoutingNotFoundError,
     RoutingPort,
+    WalkEstimate,
+    WalkEstimator,
 )
 
 
@@ -295,3 +297,45 @@ def test_park_graph_with_alternative_routing_port():
     _accepts_port(fake_routing)  # type-check
     graph = ParkGraph.from_sources(routing=fake_routing, park=_park(), attractions=())
     assert graph.walk_minutes("nodeA", "nodeB") == 42.0
+
+
+# -- WalkEstimator (P0-25: get_walking_time marks a route estimated or unknown) --
+
+
+def test_routing_client_is_a_walk_estimator() -> None:
+    assert isinstance(RoutingClient(), WalkEstimator)
+
+
+def test_estimate_walk_names_its_basis() -> None:
+    client = RoutingClient(custom_matrix={(SPACE_MTN_ID, TRON_ID): 2.5})
+
+    assert client.estimate_walk(SPACE_MTN_ID, SPACE_MTN_ID) == WalkEstimate(
+        0.0, "identity"
+    )
+    assert client.estimate_walk(SPACE_MTN_ID, TRON_ID) == WalkEstimate(2.5, "curated")
+    assert client.estimate_walk(TRON_ID, SPACE_MTN_ID) == WalkEstimate(2.5, "curated")
+    estimated = client.estimate_walk(HUB_ID, BIG_THUNDER_ID)
+    assert estimated.basis == "estimated"
+    assert estimated.minutes == client.walk_minutes(HUB_ID, BIG_THUNDER_ID)
+
+
+def test_estimate_walk_never_falls_back_to_a_default() -> None:
+    """Even a client with the fallback enabled answers 'unknown', not 10 minutes."""
+    client = RoutingClient(fallback_enabled=True)
+
+    assert (
+        client.walk_minutes(HUB_ID, "no-such-node") == DEFAULT_FALLBACK_WALKING_MINUTES
+    )
+    assert client.estimate_walk(HUB_ID, "no-such-node") == WalkEstimate(None, "unknown")
+
+
+def test_estimate_walk_rejects_blank_node_ids() -> None:
+    with pytest.raises(InvalidRouteError):
+        RoutingClient().estimate_walk(" ", HUB_ID)
+
+
+def test_walk_estimate_has_minutes_exactly_when_the_basis_is_known() -> None:
+    with pytest.raises(ValueError):
+        WalkEstimate(None, "estimated")
+    with pytest.raises(ValueError):
+        WalkEstimate(3.0, "unknown")
