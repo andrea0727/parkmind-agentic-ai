@@ -110,3 +110,33 @@ def test_retrieval_failure_leaves_guest_state_intact(
         "SELECT count(*) AS n FROM guests WHERE guest_id = 'g1'"
     ).fetchone()
     assert row is not None and row["n"] == 1
+
+
+def test_knowledge_tools_answer_from_the_index_over_mcp(
+    indexed: PgvectorKnowledgeSearch,
+) -> None:
+    """The whole path: MCP call -> KnowledgeQueries -> pgvector, no degradation."""
+    from mcp_support import Deps, call_tool
+
+    registry = Deps(collect_at=None, knowledge_search=indexed).registry()
+
+    search = call_tool(
+        registry,
+        "knowledge.search_policies",
+        {"query": "requisito mínimo de estatura", "k": 3},
+    ).structured_content
+    similar = call_tool(
+        registry,
+        "knowledge.find_similar_attractions",
+        {"attraction_id": BIG_THUNDER, "k": 3, "less_intense": True},
+    ).structured_content
+
+    assert search["provenance"]["strategy"] == "semantic:hashing-v1@384"
+    assert search["provenance"]["degraded"] is None
+    assert "estatura" in search["data"]["passages"][0]["text"]
+    assert similar["provenance"]["strategy"] == "semantic:hashing-v1@384"
+    assert similar["data"]["attractions"]
+    assert {a["intensity"] for a in similar["data"]["attractions"]} <= {
+        "low",
+        "moderate",
+    }

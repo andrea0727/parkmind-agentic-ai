@@ -93,6 +93,7 @@ class Deps:
         routing: Any = None,
         schedules: dict[date, Park] | None = None,
         sessions: FakeSessionStore | None = None,
+        knowledge_search: Any = None,
     ) -> None:
         self.snapshots = InMemorySnapshotRepository()
         self.id_mappings = InMemoryIdMappingRepository()
@@ -119,6 +120,7 @@ class Deps:
             plans=self.plans,  # type: ignore[arg-type]
             proposals=self.proposals,  # type: ignore[arg-type]
             collector=self._collector() if live_collector else None,
+            knowledge_search=knowledge_search,
         )
 
     def _collector(self) -> SnapshotCollector:
