@@ -1,0 +1,21 @@
+{
+  "id": "proveedor_caido_db_vacia",
+  "messages": [
+    "We are 2 adults. Adults are 170 cm. We want Dumbo. We leave at 10 PM."
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": "<lambda>",
+  "now": "20:42",
+  "steps": [],
+  "exception": {
+    "type": "CatalogUnavailableError",
+    "message": "no attraction catalog for park '75ea578a-adc8-4116-a54d-dccb60765ef9'"
+  },
+  "seconds": 17.5
+}

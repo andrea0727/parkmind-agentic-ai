@@ -15,7 +15,13 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
 
-from parkmind.core.contracts import ApprovalStatus, RejectionReason
+from parkmind.core.contracts import (
+    ApprovalStatus,
+    CheckResult,
+    ConstraintViolation,
+    RejectionReason,
+    RuleId,
+)
 from parkmind.graph import initial_planning_graph as ipg
 from parkmind.graph.state import ParkMindState
 
@@ -25,12 +31,30 @@ def _state_with_candidate() -> ParkMindState:
         "thread_id": "thread_1",
         "messages": [],
         "candidate_plan": factories.plan(),
+        "check_result": CheckResult(valid=True),
+        "explanation": "Fits the party's limits.",
     }
 
 
 def test_propose_plan_requires_candidate():
     with pytest.raises(ValueError, match="No candidate plan"):
         ipg._propose_plan({"thread_id": "t", "messages": []})
+
+
+def test_propose_plan_refuses_a_candidate_that_has_not_passed_the_checker():
+    unchecked = {**_state_with_candidate(), "check_result": None}
+    failed = {
+        **_state_with_candidate(),
+        "check_result": CheckResult(
+            valid=False,
+            violations=[ConstraintViolation(rule=RuleId.MUST_DO, message="missing")],
+        ),
+    }
+
+    with pytest.raises(ipg.CheckNotPassedError):
+        ipg._propose_plan(unchecked)
+    with pytest.raises(ipg.CheckNotPassedError):
+        ipg._propose_plan(failed)
 
 
 def test_propose_plan_persists_and_sets_pending(monkeypatch):
@@ -48,6 +72,7 @@ def test_propose_plan_persists_and_sets_pending(monkeypatch):
 
     assert saved["thread_id"] == "thread_1"
     assert saved["plan"] == state["candidate_plan"]
+    assert saved["kwargs"]["explanation"] == "Fits the party's limits."
     assert state["proposal"].candidate_plan_id == state["candidate_plan"].plan_id
     assert state["approval"] == "PENDING"
 

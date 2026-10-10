@@ -1,0 +1,21 @@
+{
+  "id": "db_caida",
+  "messages": [
+    "We are 2 adults. Adults are 170 cm. We want Dumbo. We leave at 10 PM."
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": "<lambda>",
+  "now": "20:57",
+  "steps": [],
+  "exception": {
+    "type": "OperationalError",
+    "message": "connection failed: connection to server at \"127.0.0.1\", port 5999 failed: could not receive data from server: Connection refused\nMultiple connection attempts failed. All failures were:\n- host: 'localhost', port: '5999', hostaddr: '::1': connection failed: connection to server at \"::1\", port 5999 failed: could not receive data from server: Connection refused\n- host: 'localhost', port: '5999', hostaddr: '127.0.0.1': connection failed: connection to server at \"127.0.0.1\", port 5999 failed: could no"
+  },
+  "seconds": 6.8
+}

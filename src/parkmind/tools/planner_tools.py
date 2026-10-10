@@ -8,7 +8,9 @@ def resolve_group_preferences(guest_profiles: list[dict]) -> dict:
     raise NotImplementedError
 
 
-def build_plan(constraints: dict, guest_profiles: list[dict], live_context: dict) -> dict:
+def build_plan(
+    constraints: dict, guest_profiles: list[dict], live_context: dict
+) -> dict:
     raise NotImplementedError
 
 
@@ -16,5 +18,7 @@ def check_plan(plan: dict, constraints: dict) -> dict:
     raise NotImplementedError
 
 
-def replan(current_plan: dict, event: dict, remaining_constraints: dict, context: dict) -> dict:
+def replan(
+    current_plan: dict, event: dict, remaining_constraints: dict, context: dict
+) -> dict:
     raise NotImplementedError

@@ -41,7 +41,9 @@ class ForecastStrategy(Protocol):
         """Strategy name recorded in provenance."""
         ...
 
-    def forecast(self, attraction_id: str, at: datetime, *, now: datetime) -> WaitForecast | None:
+    def forecast(
+        self, attraction_id: str, at: datetime, *, now: datetime
+    ) -> WaitForecast | None:
         """The expected wait at ``at``, or ``None`` if this strategy has no reading.
 
         ``now`` is the caller's clock: a strategy never reads the system clock,

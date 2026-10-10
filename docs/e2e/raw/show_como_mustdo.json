@@ -1,0 +1,47 @@
+{
+  "id": "show_como_mustdo",
+  "messages": [
+    "We are 2 adults. Adults are 170 cm. We definitely want to see the Festival of Fantasy Parade and Happily Ever After fireworks. We leave at 11 PM."
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": null,
+  "now": "21:01",
+  "steps": [],
+  "llm_calls": 1,
+  "extracted": {
+    "party_size": 2,
+    "must_do": [
+      "Festival of Fantasy Parade",
+      "Happily Ever After fireworks"
+    ],
+    "avoid": [],
+    "departure_time": "23:00",
+    "lunch_window": null,
+    "heights": [
+      170,
+      170
+    ],
+    "n_guests": 2
+  },
+  "stages_elicit": [],
+  "interrupt1": {
+    "kind": "missing_information",
+    "payload": {
+      "kind": "missing_information",
+      "missing": [
+        "unknown_attraction:Happily Ever After fireworks"
+      ],
+      "question": "I couldn't find 'Happily Ever After fireworks' among this park's attractions. Which attraction do you mean?"
+    }
+  },
+  "facts1": {
+    "last_ai": "I couldn't find 'Happily Ever After fireworks' among this park's attractions. Which attraction do you mean?"
+  },
+  "seconds": 8.9
+}

@@ -36,7 +36,9 @@ def _accepts_port(strategy: ForecastStrategy) -> ForecastStrategy:
     return strategy
 
 
-def _api(points: dict | None = None, *, retrieved_at: datetime = RETRIEVED) -> ApiForecastStrategy:
+def _api(
+    points: dict | None = None, *, retrieved_at: datetime = RETRIEVED
+) -> ApiForecastStrategy:
     hours = [datetime(2026, 9, 27, h, 0, tzinfo=PARK_TZ) for h in range(9, 18)]
     default = {"a1": [(start, 10.0 + start.hour) for start in hours]}
     return ApiForecastStrategy(
@@ -49,11 +51,17 @@ def _api(points: dict | None = None, *, retrieved_at: datetime = RETRIEVED) -> A
 
 def _profile(medians: dict | None = None) -> HistoricalProfileStrategy:
     return HistoricalProfileStrategy(
-        WaitProfile(medians={("a1", 14): 42.0} if medians is None else medians, built_at=NOW)
+        WaitProfile(
+            medians={("a1", 14): 42.0} if medians is None else medians, built_at=NOW
+        )
     )
 
 
-def _cached(*, retrieved_at: datetime = RETRIEVED, status: AttractionStatus = AttractionStatus.OPERATING):
+def _cached(
+    *,
+    retrieved_at: datetime = RETRIEVED,
+    status: AttractionStatus = AttractionStatus.OPERATING,
+):
     waits = {"a1": WaitEstimate(attraction_id="a1", wait_minutes=25.0, status=status)}
     return CachedSnapshotStrategy(
         live_context(snapshot_id="snap-cache", retrieved_at=retrieved_at, waits=waits),
@@ -69,26 +77,34 @@ class _Fake:
         self.result = result
         self.calls = 0
 
-    def forecast(self, attraction_id: str, at: datetime, *, now: datetime) -> WaitForecast | None:
+    def forecast(
+        self, attraction_id: str, at: datetime, *, now: datetime
+    ) -> WaitForecast | None:
         self.calls += 1
         if isinstance(self.result, Exception):
             raise self.result
         if self.result is None:
             return None
-        return WaitForecast(attraction_id, at, self.result, self.name, DataSource.CACHE, None, now)
+        return WaitForecast(
+            attraction_id, at, self.result, self.name, DataSource.CACHE, None, now
+        )
 
 
 # --- the port ----------------------------------------------------------------------
 
 
 def test_forecast_port_is_exported_from_ports() -> None:
-    assert {"ForecastStrategy", "WaitForecast", "ForecastSourceError"} <= set(ports.__all__)
+    assert {"ForecastStrategy", "WaitForecast", "ForecastSourceError"} <= set(
+        ports.__all__
+    )
     assert ports.ForecastStrategy.__module__ == "parkmind.services.ports.forecast"
     assert ForecastSourceError.__module__ == "parkmind.services.ports.errors"
 
 
 def test_wait_forecast_is_immutable() -> None:
-    forecast = WaitForecast("a1", AT_14, 20.0, API_FORECAST, DataSource.THEMEPARKS_WIKI, "s", NOW)
+    forecast = WaitForecast(
+        "a1", AT_14, 20.0, API_FORECAST, DataSource.THEMEPARKS_WIKI, "s", NOW
+    )
 
     with pytest.raises(dataclasses.FrozenInstanceError):
         forecast.wait_minutes = 5.0  # type: ignore[misc]
@@ -105,20 +121,33 @@ def test_forecast_service_satisfies_port_and_returns_wait_forecast() -> None:
 
     assert service.strategy_names == (API_FORECAST, HISTORICAL_PROFILE, CACHED_SNAPSHOT)
     assert isinstance(forecast, WaitForecast)
-    assert (forecast.attraction_id, forecast.at, forecast.wait_minutes) == ("a1", AT_14, 24.0)
+    assert (forecast.attraction_id, forecast.at, forecast.wait_minutes) == (
+        "a1",
+        AT_14,
+        24.0,
+    )
 
 
 def test_strategies_are_tried_in_order() -> None:
-    first, second, third = _Fake("first", None), _Fake("second", 7.0), _Fake("third", 9.0)
+    first, second, third = (
+        _Fake("first", None),
+        _Fake("second", 7.0),
+        _Fake("third", 9.0),
+    )
 
-    forecast = ForecastService([first, second, third]).forecast_wait("a1", AT_14, now=NOW)
+    forecast = ForecastService([first, second, third]).forecast_wait(
+        "a1", AT_14, now=NOW
+    )
 
     assert forecast is not None and forecast.strategy == "second"
     assert (first.calls, second.calls, third.calls) == (1, 1, 0)
 
 
 def test_a_failed_source_falls_through_to_the_next_strategy() -> None:
-    broken, backup = _Fake("broken", ForecastSourceError("payload drift")), _Fake("backup", 5.0)
+    broken, backup = (
+        _Fake("broken", ForecastSourceError("payload drift")),
+        _Fake("backup", 5.0),
+    )
 
     forecast = ForecastService([broken, backup]).forecast_wait("a1", AT_14, now=NOW)
 
@@ -140,9 +169,21 @@ def test_each_forecast_records_strategy_source_and_snapshot() -> None:
     historical = _profile().forecast("a1", AT_14, now=NOW)
     cached = _cached().forecast("a1", AT_14, now=NOW)
 
-    assert api == WaitForecast("a1", AT_14, 24.0, API_FORECAST, DataSource.THEMEPARKS_WIKI, "snap-api", RETRIEVED)
-    assert historical == WaitForecast("a1", AT_14, 42.0, HISTORICAL_PROFILE, DataSource.HISTORICAL, None, NOW)
-    assert cached == WaitForecast("a1", AT_14, 25.0, CACHED_SNAPSHOT, DataSource.CACHE, "snap-cache", RETRIEVED)
+    assert api == WaitForecast(
+        "a1",
+        AT_14,
+        24.0,
+        API_FORECAST,
+        DataSource.THEMEPARKS_WIKI,
+        "snap-api",
+        RETRIEVED,
+    )
+    assert historical == WaitForecast(
+        "a1", AT_14, 42.0, HISTORICAL_PROFILE, DataSource.HISTORICAL, None, NOW
+    )
+    assert cached == WaitForecast(
+        "a1", AT_14, 25.0, CACHED_SNAPSHOT, DataSource.CACHE, "snap-cache", RETRIEVED
+    )
 
 
 def test_forecast_strategy_label_feeds_provenance() -> None:
@@ -166,9 +207,14 @@ def test_forecast_strategy_label_feeds_provenance() -> None:
 def test_forecast_strategy_label_adds_labels_for_waits_no_strategy_produced() -> None:
     readings = [f for f in (_api().forecast("a1", AT_14, now=NOW),) if f is not None]
 
-    assert forecast_strategy_label(readings, also=[TYPICAL_WAIT]) == "api_forecast+typical_wait"
+    assert (
+        forecast_strategy_label(readings, also=[TYPICAL_WAIT])
+        == "api_forecast+typical_wait"
+    )
     assert forecast_strategy_label([], also=[TYPICAL_WAIT]) == "typical_wait"
-    assert forecast_strategy_label(readings, also=[]) == forecast_strategy_label(readings)
+    assert forecast_strategy_label(readings, also=[]) == forecast_strategy_label(
+        readings
+    )
 
 
 # --- Done-when: a stale reading is never a current forecast -----------------------
@@ -177,15 +223,21 @@ def test_forecast_strategy_label_adds_labels_for_waits_no_strategy_produced() ->
 def test_stale_snapshot_wait_is_never_a_current_forecast() -> None:
     stale_now = RETRIEVED + MAX_AGE + timedelta(seconds=1)
 
-    assert _cached().forecast("a1", AT_14, now=RETRIEVED + MAX_AGE) is not None  # edge: still fresh
+    assert (
+        _cached().forecast("a1", AT_14, now=RETRIEVED + MAX_AGE) is not None
+    )  # edge: still fresh
     assert _cached().forecast("a1", AT_14, now=stale_now) is None
-    assert ForecastService([_cached()]).forecast_wait("a1", AT_14, now=stale_now) is None
+    assert (
+        ForecastService([_cached()]).forecast_wait("a1", AT_14, now=stale_now) is None
+    )
 
 
 def test_stale_snapshot_api_forecast_is_not_used() -> None:
     stale_now = RETRIEVED + timedelta(hours=2)
 
-    forecast = ForecastService([_api(), _profile()]).forecast_wait("a1", AT_14, now=stale_now)
+    forecast = ForecastService([_api(), _profile()]).forecast_wait(
+        "a1", AT_14, now=stale_now
+    )
 
     assert forecast is not None and forecast.strategy == HISTORICAL_PROFILE
 
@@ -203,10 +255,26 @@ def test_future_dated_snapshot_is_not_fresh() -> None:
 def test_api_forecast_uses_the_hour_containing_at() -> None:
     api = _api()
 
-    assert api.forecast("a1", datetime(2026, 9, 27, 9, 0, tzinfo=PARK_TZ), now=NOW).wait_minutes == 19.0  # type: ignore[union-attr]
-    assert api.forecast("a1", datetime(2026, 9, 27, 17, 59, tzinfo=PARK_TZ), now=NOW).wait_minutes == 27.0  # type: ignore[union-attr]
-    assert api.forecast("a1", datetime(2026, 9, 27, 18, 0, tzinfo=PARK_TZ), now=NOW) is None
-    assert api.forecast("a1", datetime(2026, 9, 27, 8, 59, tzinfo=PARK_TZ), now=NOW) is None
+    assert (
+        api.forecast(
+            "a1", datetime(2026, 9, 27, 9, 0, tzinfo=PARK_TZ), now=NOW
+        ).wait_minutes
+        == 19.0
+    )  # type: ignore[union-attr]
+    assert (
+        api.forecast(
+            "a1", datetime(2026, 9, 27, 17, 59, tzinfo=PARK_TZ), now=NOW
+        ).wait_minutes
+        == 27.0
+    )  # type: ignore[union-attr]
+    assert (
+        api.forecast("a1", datetime(2026, 9, 27, 18, 0, tzinfo=PARK_TZ), now=NOW)
+        is None
+    )
+    assert (
+        api.forecast("a1", datetime(2026, 9, 27, 8, 59, tzinfo=PARK_TZ), now=NOW)
+        is None
+    )
     assert api.forecast("other", AT_14, now=NOW) is None
 
 
@@ -220,8 +288,16 @@ def test_a_gap_in_the_api_forecast_is_no_reading() -> None:
         }
     )
 
-    assert api.forecast("a1", datetime(2026, 9, 27, 9, 59, tzinfo=PARK_TZ), now=NOW).wait_minutes == 10.0  # type: ignore[union-attr]
-    assert api.forecast("a1", datetime(2026, 9, 27, 10, 30, tzinfo=PARK_TZ), now=NOW) is None
+    assert (
+        api.forecast(
+            "a1", datetime(2026, 9, 27, 9, 59, tzinfo=PARK_TZ), now=NOW
+        ).wait_minutes
+        == 10.0
+    )  # type: ignore[union-attr]
+    assert (
+        api.forecast("a1", datetime(2026, 9, 27, 10, 30, tzinfo=PARK_TZ), now=NOW)
+        is None
+    )
 
 
 def test_api_forecast_hour_without_a_reading_falls_through() -> None:
@@ -252,10 +328,17 @@ def test_forecast_requires_aware_now_and_at(field: str) -> None:
     kwargs[field] = kwargs[field].replace(tzinfo=None)
 
     with pytest.raises(ValueError, match=f"{field} must be timezone-aware"):
-        ForecastService([_cached()]).forecast_wait("a1", kwargs["at"], now=kwargs["now"])
+        ForecastService([_cached()]).forecast_wait(
+            "a1", kwargs["at"], now=kwargs["now"]
+        )
 
 
-_CLOCK_CALLS = {("datetime", "now"), ("datetime", "utcnow"), ("date", "today"), ("time", "time")}
+_CLOCK_CALLS = {
+    ("datetime", "now"),
+    ("datetime", "utcnow"),
+    ("date", "today"),
+    ("time", "time"),
+}
 
 
 def _clock_calls(source: str) -> set[tuple[str, str]]:

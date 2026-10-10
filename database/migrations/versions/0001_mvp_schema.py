@@ -239,9 +239,11 @@ def _refuse_leftover_tables() -> None:
     found = [
         name
         for name in names
-        if op.get_bind().execute(
+        if op.get_bind()
+        .execute(
             sa.text("SELECT to_regclass(:name) IS NOT NULL"), {"name": f"public.{name}"}
-        ).scalar()
+        )
+        .scalar()
     ]
     if found:
         raise CommandError(

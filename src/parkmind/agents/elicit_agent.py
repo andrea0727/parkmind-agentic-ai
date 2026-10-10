@@ -118,7 +118,9 @@ class AnthropicExtractor:
     def extract(
         self, human_messages: Sequence[str], repair_hint: str | None = None
     ) -> Mapping[str, Any]:
-        listing = "\n".join(f"{i}. {text}" for i, text in enumerate(human_messages, start=1))
+        listing = "\n".join(
+            f"{i}. {text}" for i, text in enumerate(human_messages, start=1)
+        )
         content = f"Guest messages, oldest first:\n{listing}"
         if repair_hint:
             content += (
@@ -203,7 +205,9 @@ def unresolved_names(resolution: NameResolution) -> list[str]:
     ]
 
 
-def conflicting_names(extraction: ElicitationExtraction, resolution: NameResolution) -> list[str]:
+def conflicting_names(
+    extraction: ElicitationExtraction, resolution: NameResolution
+) -> list[str]:
     """Missing-information keys for attractions that are both must-do and avoid.
 
     Compared by resolved ``node_id`` (two spoken names can be one attraction).
@@ -222,7 +226,9 @@ def conflicting_names(extraction: ElicitationExtraction, resolution: NameResolut
     return [f"{_CONFLICTING_ATTRACTION}{name}" for name in official]
 
 
-def _question_for(missing: Sequence[str], resolution: NameResolution | None = None) -> str:
+def _question_for(
+    missing: Sequence[str], resolution: NameResolution | None = None
+) -> str:
     questions: list[str] = []
     for key in missing:
         if key.startswith("guest_role:"):
@@ -235,7 +241,9 @@ def _question_for(missing: Sequence[str], resolution: NameResolution | None = No
         elif key.startswith(_AMBIGUOUS_ATTRACTION):
             name = key.removeprefix(_AMBIGUOUS_ATTRACTION)
             options = resolution.ambiguous[name] if resolution is not None else ()
-            questions.append(f"'{name}' could be {', '.join(options)}. Which one do you mean?")
+            questions.append(
+                f"'{name}' could be {', '.join(options)}. Which one do you mean?"
+            )
         elif key.startswith(_CONFLICTING_ATTRACTION):
             name = key.removeprefix(_CONFLICTING_ATTRACTION)
             questions.append(
@@ -243,7 +251,9 @@ def _question_for(missing: Sequence[str], resolution: NameResolution | None = No
                 "Do you want it in the plan, or kept out of it?"
             )
         else:
-            questions.append(_MISSING_QUESTIONS.get(key, f"Could you tell me about {key}?"))
+            questions.append(
+                _MISSING_QUESTIONS.get(key, f"Could you tell me about {key}?")
+            )
     return " ".join(questions)
 
 
@@ -271,7 +281,9 @@ def build_party_constraints(
         guests=guests,
         must_do=resolution.node_ids(extraction.must_do),
         avoid=resolution.node_ids(extraction.avoid),
-        lunch_window=TimeWindow(start=_at(today, window.start), end=_at(today, window.end))
+        lunch_window=TimeWindow(
+            start=_at(today, window.start), end=_at(today, window.end)
+        )
         if window
         else None,
         departure_time=_at(today, extraction.departure_time),
@@ -294,11 +306,16 @@ def _tolerance(value: float | None, now: datetime) -> PreferenceValue:
     if value is not None:
         return _stated(value, now)
     return PreferenceValue(
-        value=_DEFAULT_TOLERANCE, source=PreferenceSource.DEFAULT, confidence=0.0, updated_at=now
+        value=_DEFAULT_TOLERANCE,
+        source=PreferenceSource.DEFAULT,
+        confidence=0.0,
+        updated_at=now,
     )
 
 
-def build_guest_profiles(extraction: ElicitationExtraction, *, now: datetime) -> list[GuestProfile]:
+def build_guest_profiles(
+    extraction: ElicitationExtraction, *, now: datetime
+) -> list[GuestProfile]:
     """Soft preferences only. Accessibility never appears here."""
     profiles: list[GuestProfile] = []
     for index, guest in enumerate(extraction.guests, start=1):
@@ -322,7 +339,9 @@ def build_guest_profiles(extraction: ElicitationExtraction, *, now: datetime) ->
     return profiles
 
 
-def pending_confirmations(extraction: ElicitationExtraction, resolution: NameResolution) -> list[str]:
+def pending_confirmations(
+    extraction: ElicitationExtraction, resolution: NameResolution
+) -> list[str]:
     """Every hard item the human must confirm before the checker may use it.
 
     must_do/avoid entries carry the attraction's official name, so the human
@@ -348,7 +367,8 @@ def pending_confirmations(extraction: ElicitationExtraction, resolution: NameRes
         if guest.height_cm is not None
     )
     pending.extend(
-        f"accessibility:g{ref}" for ref in sorted({a.guest_ref for a in extraction.accessibility})
+        f"accessibility:g{ref}"
+        for ref in sorted({a.guest_ref for a in extraction.accessibility})
     )
     return pending
 
@@ -394,7 +414,13 @@ def _staged(extraction: ElicitationExtraction) -> list[StagedAccessibility]:
     for entry in extraction.accessibility:
         slot = merged.setdefault(
             entry.guest_ref,
-            {"mobility": [], "restrictions": [], "limit": None, "rest": None, "heat": False},
+            {
+                "mobility": [],
+                "restrictions": [],
+                "limit": None,
+                "rest": None,
+                "heat": False,
+            },
         )
         slot["mobility"].extend(entry.mobility_requirements)
         slot["restrictions"].extend(entry.ride_restrictions)
@@ -450,7 +476,9 @@ def make_elicit_node(
         if outcome.extraction is None:
             missing = ["unreadable_response"]
         else:
-            resolution = names.resolve([*outcome.extraction.must_do, *outcome.extraction.avoid])
+            resolution = names.resolve(
+                [*outcome.extraction.must_do, *outcome.extraction.avoid]
+            )
             missing = (
                 missing_information(outcome.extraction)
                 + unresolved_names(resolution)
@@ -478,7 +506,9 @@ def make_elicit_node(
             ),
             "guest_profiles": build_guest_profiles(extraction, now=now()),
             "constraints_valid": False,
-            "pending_hard_constraint_confirmation": pending_confirmations(extraction, resolution),
+            "pending_hard_constraint_confirmation": pending_confirmations(
+                extraction, resolution
+            ),
         }
 
     return elicit

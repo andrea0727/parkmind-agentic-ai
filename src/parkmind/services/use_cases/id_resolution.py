@@ -70,7 +70,9 @@ class IdResolver:
                 )
             internal_id = provider_id
         try:
-            self._repo.record(provider.value, provider_id, kind, internal_id, seen_at=seen_at)
+            self._repo.record(
+                provider.value, provider_id, kind, internal_id, seen_at=seen_at
+            )
         except IdMappingConflictError:
             # A concurrent writer mapped this provider id elsewhere between the
             # resolve and the record.

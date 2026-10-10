@@ -1,0 +1,105 @@
+{
+  "id": "sin_alturas_sin_mustdo",
+  "messages": [
+    "We are 2 adults and 2 kids. We want to ride Dumbo and Haunted Mansion. We leave at 10 PM."
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": null,
+  "now": "20:47",
+  "steps": [],
+  "llm_calls": 1,
+  "extracted": {
+    "party_size": 4,
+    "must_do": [
+      "Dumbo",
+      "Haunted Mansion"
+    ],
+    "avoid": [],
+    "departure_time": "22:00",
+    "lunch_window": null,
+    "heights": [
+      null,
+      null,
+      null,
+      null
+    ],
+    "n_guests": 4
+  },
+  "stages_elicit": [],
+  "interrupt1": {
+    "kind": "hard_constraint_confirmation",
+    "payload": {
+      "kind": "hard_constraint_confirmation",
+      "pending": [
+        "must_do: Dumbo the Flying Elephant",
+        "must_do: Haunted Mansion",
+        "departure_time: 22:00"
+      ],
+      "echo": [
+        "'Dumbo the Flying Elephant' is a must-do: the plan has to include it.",
+        "'Haunted Mansion' is a must-do: the plan has to include it.",
+        "You leave the park at 22:00: the plan must end by then."
+      ],
+      "accessibility_guests": []
+    }
+  },
+  "facts1": {},
+  "stages": [
+    "load_context",
+    "resolve_group",
+    "build_plan",
+    "check",
+    "explain",
+    "propose"
+  ],
+  "interrupt2": {
+    "kind": "plan_approval",
+    "payload": {
+      "kind": "plan_approval",
+      "proposal": "<Proposal>"
+    }
+  },
+  "facts2": {
+    "check_valid": true,
+    "violations": [],
+    "n_stops": 15,
+    "stops_head": [
+      {
+        "kind": "ATTRACTION",
+        "node_id": "890fa430-89c0-4a3f-96c9-11597888005e",
+        "arrival": "08:05"
+      },
+      {
+        "kind": "ATTRACTION",
+        "node_id": "2551a77d-023f-4ab1-9a19-8afec0190f39",
+        "arrival": "08:31"
+      },
+      {
+        "kind": "ATTRACTION",
+        "node_id": "f5aad2d4-a419-4384-bd9a-42f86385c750",
+        "arrival": "09:03"
+      },
+      {
+        "kind": "ATTRACTION",
+        "node_id": "ffcfeaa2-1416-4920-a1ed-543c1a1695c4",
+        "arrival": "09:30"
+      }
+    ],
+    "first_arrival": "08:05",
+    "last_arrival": "13:47",
+    "explanation": "15 stops, 115 min of waiting and 58 min of walking in total.\n08:05 Dumbo the Flying Elephant (5 min wait, 5 min walk)\n08:31 Haunted Mansion (15 min wait, 7 min walk)\n09:03 \"it's a small world\" (5 min wait, 2 min walk)\n09:30 Tomorrowland Transit Authority PeopleMover (0 min wait, 6 min walk)\n09:45 Astro Orbiter (0 min wait, 0 min walk)\n10:04 Mad Tea Party (5 min wait, 3 min walk)\n10:26 Prince Charming Regal Carrousel (5 min wait, 2 min walk)\n10:49 Under the Sea - Journey of The Little Mermaid (5 min wait, 3 min walk)\n11:11 The Many Adventures of Winnie the Pooh (10 min wait, 2 min walk)\n11:43 Swiss Family Treehouse (5 min wait, 7 min walk)\n12:04 Jungle Cruise (5 min wait, 1 min walk)\n12:25 The Magic Carpets of Aladdin (5 min wait, 1 min walk)\n12:47 Pirates of the Caribbean (5 min wait, 2 min walk)\n13:17 Buzz Lightyear\u2019s Space Ranger Spin (10 min wait, 10 min walk)\n13:47 Peter Pan's Flight (35 min wait, 5 min walk)"
+  },
+  "stages_after_approval": [
+    "resolve_proposal"
+  ],
+  "approval": "APPROVED",
+  "plan_active": true,
+  "interrupt3": null,
+  "seconds": 12.8
+}

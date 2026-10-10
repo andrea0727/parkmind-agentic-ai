@@ -75,7 +75,10 @@ def collect_once(
         with connect(database_url) as conn:
             result = collector_factory(conn).collect(now=now)
     except ThemeParksClientError as exc:
-        print(f"park data unavailable, no snapshot stored: {type(exc).__name__}: {exc}", file=sys.stderr)
+        print(
+            f"park data unavailable, no snapshot stored: {type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
         return 2
     except DATABASE_PROBLEMS as exc:
         print(describe_database_problem(exc), file=sys.stderr)
@@ -136,10 +139,25 @@ def main(
     weather: OpenMeteoClient | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--loop", action="store_true", help="keep collecting until interrupted")
-    parser.add_argument("--latest", action="store_true", help="show the latest valid snapshot and its age, collect nothing")
-    parser.add_argument("--interval", type=int, default=300, help="seconds between runs with --loop (default 300)")
-    parser.add_argument("--park-id", default=MAGIC_KINGDOM, help="ThemeParks entity id (default Magic Kingdom)")
+    parser.add_argument(
+        "--loop", action="store_true", help="keep collecting until interrupted"
+    )
+    parser.add_argument(
+        "--latest",
+        action="store_true",
+        help="show the latest valid snapshot and its age, collect nothing",
+    )
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=300,
+        help="seconds between runs with --loop (default 300)",
+    )
+    parser.add_argument(
+        "--park-id",
+        default=MAGIC_KINGDOM,
+        help="ThemeParks entity id (default Magic Kingdom)",
+    )
     parser.add_argument("--database-url", default=None, help="defaults to DATABASE_URL")
     args = parser.parse_args(argv)
     if args.interval < 60:
@@ -148,7 +166,9 @@ def main(
     if args.latest:
         return show_latest(args.database_url, datetime.now(PARK_TZ))
 
-    factory = CollectorFactory(parks or ThemeParksClient(args.park_id), weather or OpenMeteoClient())
+    factory = CollectorFactory(
+        parks or ThemeParksClient(args.park_id), weather or OpenMeteoClient()
+    )
     if not args.loop:
         return collect_once(factory, args.database_url, datetime.now(PARK_TZ))
 

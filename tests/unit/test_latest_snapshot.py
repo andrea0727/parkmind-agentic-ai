@@ -20,7 +20,10 @@ def _repo(*ages_minutes: int) -> InMemorySnapshotRepository:
     repo = InMemorySnapshotRepository()
     for minutes in ages_minutes:
         repo.save(
-            factories.live_context(snapshot_id=f"snap_{minutes}", retrieved_at=NOW - timedelta(minutes=minutes)),
+            factories.live_context(
+                snapshot_id=f"snap_{minutes}",
+                retrieved_at=NOW - timedelta(minutes=minutes),
+            ),
             {},
             [],
             normalizer_version=1,
@@ -49,7 +52,9 @@ def test_age_is_measured_from_now_not_from_the_snapshot_day() -> None:
 def test_stale_latest_is_returned_with_fresh_false() -> None:
     latest = latest_valid_snapshot(_repo(31), now=NOW)
 
-    assert latest is not None and latest.fresh is False  # §43: caller decides; rule 11 fails it
+    assert (
+        latest is not None and latest.fresh is False
+    )  # §43: caller decides; rule 11 fails it
 
 
 def test_max_age_is_configurable() -> None:
@@ -73,7 +78,15 @@ def test_an_invalid_newer_row_is_skipped_and_named() -> None:
 
     repo = CorruptNewest()
     for minutes in (1, 20):
-        repo.save(factories.live_context(snapshot_id=f"snap_{minutes}", retrieved_at=NOW - timedelta(minutes=minutes)), {}, [], normalizer_version=1)
+        repo.save(
+            factories.live_context(
+                snapshot_id=f"snap_{minutes}",
+                retrieved_at=NOW - timedelta(minutes=minutes),
+            ),
+            {},
+            [],
+            normalizer_version=1,
+        )
 
     latest = latest_valid_snapshot(repo, now=NOW)
 

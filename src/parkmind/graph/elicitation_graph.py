@@ -117,7 +117,9 @@ def _make_confirm_node(
         payload: dict[str, Any] = {
             "kind": "hard_constraint_confirmation",
             "pending": pending,
-            "echo": [echo_for(e) for e in pending if not e.startswith(_ACCESSIBILITY_PREFIX)],
+            "echo": [
+                echo_for(e) for e in pending if not e.startswith(_ACCESSIBILITY_PREFIX)
+            ],
             "accessibility_guests": accessibility_ids,
         }
 
@@ -163,7 +165,9 @@ def _make_confirm_node(
             }
         return {
             "pending_hard_constraint_confirmation": [],
-            "accessibility_ref": sorted(set(state.get("accessibility_ref") or []) | set(committed)),
+            "accessibility_ref": sorted(
+                set(state.get("accessibility_ref") or []) | set(committed)
+            ),
         }
 
     return confirm_hard_constraints
@@ -178,7 +182,9 @@ def _validate_constraints(state: ParkMindState) -> dict[str, Any]:
     guest_ids = {g.guest_id for g in constraints.guests}
     unknown = set(state.get("accessibility_ref") or []) - guest_ids
     if unknown:
-        raise ValueError(f"accessibility_ref names guests outside the party: {sorted(unknown)}")
+        raise ValueError(
+            f"accessibility_ref names guests outside the party: {sorted(unknown)}"
+        )
     if constraints.party_size != len(constraints.guests):
         raise ValueError("party_size does not match the number of guests")
     return {"constraints_valid": True}
@@ -216,7 +222,9 @@ def build_elicitation_graph(
     intake = intake or AccessibilityIntakeUseCase()
     graph = StateGraph(ParkMindState)
 
-    graph.add_node("elicit", make_elicit_node(extractor or AnthropicExtractor(), intake, names))
+    graph.add_node(
+        "elicit", make_elicit_node(extractor or AnthropicExtractor(), intake, names)
+    )
     graph.add_node("ask_missing", _ask_missing)
     graph.add_node("confirm_hard_constraints", _make_confirm_node(intake))
     graph.add_node("validate_constraints", _validate_constraints)

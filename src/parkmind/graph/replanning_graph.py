@@ -6,7 +6,6 @@ EVENT -> EVENT POLICY -> LOAD CONTEXT -> REPLAN -> CHECK PLAN -> PLAN DIFF
 """
 
 
-
 def build_replanning_graph():
     raise NotImplementedError
 

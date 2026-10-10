@@ -17,7 +17,9 @@ every caller, including ones that never pass `sleep=` explicitly.
 import ast
 from pathlib import Path
 
-CLIENTS_DIR = Path(__file__).resolve().parents[2] / "src" / "parkmind" / "services" / "clients"
+CLIENTS_DIR = (
+    Path(__file__).resolve().parents[2] / "src" / "parkmind" / "services" / "clients"
+)
 
 
 def _calls_time_sleep(source: str) -> bool:

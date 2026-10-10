@@ -21,9 +21,9 @@ from parkmind.core.contracts import (
     MobilityRequirement,
     RideRestriction,
 )
-from parkmind.services.clients.postgres import PostgresSessionStore, connect
+from parkmind.services.clients.postgres import connect
 from parkmind.services.ports import ConsentRequiredError, SessionStore
-from parkmind.services.use_cases.session_memory import SESSION_MEMORY
+from parkmind.services.use_cases.session_memory import session_store
 
 RetentionPolicy = Literal["session_only", "persisted"]
 DEFAULT_RETENTION: RetentionPolicy = "session_only"
@@ -52,15 +52,17 @@ class StagedAccessibility:
     def describe(self) -> str:
         parts: list[str] = []
         if self.daily_walking_limit_minutes is not None:
-            parts.append(f"a {self.daily_walking_limit_minutes}-minute daily walking limit")
+            parts.append(
+                f"a {self.daily_walking_limit_minutes}-minute daily walking limit"
+            )
         if self.rest_frequency_minutes is not None:
             parts.append(f"a rest break every {self.rest_frequency_minutes} minutes")
-        parts.extend(m.value.replace("_", " ").lower() for m in self.mobility_requirements)
+        parts.extend(
+            m.value.replace("_", " ").lower() for m in self.mobility_requirements
+        )
         if self.heat_sensitivity:
             parts.append("heat sensitivity")
-        parts.extend(
-            r.value.replace("_", " ").lower() for r in self.ride_restrictions
-        )
+        parts.extend(r.value.replace("_", " ").lower() for r in self.ride_restrictions)
         return ", ".join(parts)
 
 
@@ -68,7 +70,7 @@ class StagedAccessibility:
 def _default_store() -> Iterator[SessionStore]:
     conn = connect()
     try:
-        yield PostgresSessionStore(conn, SESSION_MEMORY)
+        yield session_store(conn)
     finally:
         conn.close()
 
@@ -78,7 +80,9 @@ class AccessibilityIntakeUseCase:
 
     def __init__(
         self,
-        store_factory: Callable[[], AbstractContextManager[SessionStore]] = _default_store,
+        store_factory: Callable[
+            [], AbstractContextManager[SessionStore]
+        ] = _default_store,
     ) -> None:
         self._store_factory = store_factory
         self._lock = threading.Lock()
@@ -103,7 +107,9 @@ class AccessibilityIntakeUseCase:
         with self._lock:
             return {
                 guest_id: staged.describe()
-                for guest_id, staged in sorted(self._pending.get(session_id, {}).items())
+                for guest_id, staged in sorted(
+                    self._pending.get(session_id, {}).items()
+                )
             }
 
     def discard(self, session_id: str) -> None:

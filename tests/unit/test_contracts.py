@@ -329,7 +329,9 @@ class TestStop:
 
     def test_invalid_stop_departure_before_arrival(self, aware_datetime):
         """Invalid: departure before arrival."""
-        with pytest.raises(ValueError, match="departure_time must be after arrival_time"):
+        with pytest.raises(
+            ValueError, match="departure_time must be after arrival_time"
+        ):
             Stop(
                 node_id="space_mountain",
                 kind=StopKind.ATTRACTION,

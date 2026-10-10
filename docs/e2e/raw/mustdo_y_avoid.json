@@ -1,0 +1,48 @@
+{
+  "id": "mustdo_y_avoid",
+  "messages": [
+    "We are 2 adults. We must ride Space Mountain but we absolutely want to avoid Space Mountain. Both are 170 cm. We leave at 10 PM."
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": null,
+  "now": "20:56",
+  "steps": [],
+  "llm_calls": 1,
+  "extracted": {
+    "party_size": 2,
+    "must_do": [
+      "Space Mountain"
+    ],
+    "avoid": [
+      "Space Mountain"
+    ],
+    "departure_time": "22:00",
+    "lunch_window": null,
+    "heights": [
+      170,
+      170
+    ],
+    "n_guests": 2
+  },
+  "stages_elicit": [],
+  "interrupt1": {
+    "kind": "missing_information",
+    "payload": {
+      "kind": "missing_information",
+      "missing": [
+        "conflicting_attraction:Space Mountain"
+      ],
+      "question": "'Space Mountain' is on both your must-do and your avoid list. Do you want it in the plan, or kept out of it?"
+    }
+  },
+  "facts1": {
+    "last_ai": "'Space Mountain' is on both your must-do and your avoid list. Do you want it in the plan, or kept out of it?"
+  },
+  "seconds": 7.6
+}

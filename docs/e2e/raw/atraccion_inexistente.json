@@ -1,0 +1,46 @@
+{
+  "id": "atraccion_inexistente",
+  "messages": [
+    "We are 2 adults. We want to ride Pirates of Atlantis. We leave at 10 PM."
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": null,
+  "now": "20:55",
+  "steps": [],
+  "llm_calls": 1,
+  "extracted": {
+    "party_size": 2,
+    "must_do": [
+      "Pirates of Atlantis"
+    ],
+    "avoid": [],
+    "departure_time": "22:00",
+    "lunch_window": null,
+    "heights": [
+      null,
+      null
+    ],
+    "n_guests": 2
+  },
+  "stages_elicit": [],
+  "interrupt1": {
+    "kind": "missing_information",
+    "payload": {
+      "kind": "missing_information",
+      "missing": [
+        "unknown_attraction:Pirates of Atlantis"
+      ],
+      "question": "I couldn't find 'Pirates of Atlantis' among this park's attractions. Which attraction do you mean?"
+    }
+  },
+  "facts1": {
+    "last_ai": "I couldn't find 'Pirates of Atlantis' among this park's attractions. Which attraction do you mean?"
+  },
+  "seconds": 9.9
+}

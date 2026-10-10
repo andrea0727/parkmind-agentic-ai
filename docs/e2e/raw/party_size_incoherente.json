@@ -1,0 +1,51 @@
+{
+  "id": "party_size_incoherente",
+  "messages": [
+    "There are five of us, but I only know about me (adult, 170 cm) and my wife (adult, 165 cm). Dumbo. Leave at 10 PM."
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": null,
+  "now": "20:58",
+  "steps": [],
+  "llm_calls": 1,
+  "extracted": {
+    "party_size": 5,
+    "must_do": [
+      "Dumbo"
+    ],
+    "avoid": [],
+    "departure_time": "22:00",
+    "lunch_window": null,
+    "heights": [
+      170,
+      165,
+      null,
+      null,
+      null
+    ],
+    "n_guests": 5
+  },
+  "stages_elicit": [],
+  "interrupt1": {
+    "kind": "missing_information",
+    "payload": {
+      "kind": "missing_information",
+      "missing": [
+        "guest_role:g3",
+        "guest_role:g4",
+        "guest_role:g5"
+      ],
+      "question": "Is g3 an adult or a child? Is g4 an adult or a child? Is g5 an adult or a child?"
+    }
+  },
+  "facts1": {
+    "last_ai": "Is g3 an adult or a child? Is g4 an adult or a child? Is g5 an adult or a child?"
+  },
+  "seconds": 27.1
+}

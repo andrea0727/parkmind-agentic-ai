@@ -48,7 +48,9 @@ def _tables(url: str) -> set[str]:
     return {row[0] for row in rows}
 
 
-def test_fresh_database_migrates_to_complete_mvp_schema(empty_database_url: str) -> None:
+def test_fresh_database_migrates_to_complete_mvp_schema(
+    empty_database_url: str,
+) -> None:
     assert _tables(empty_database_url) == set()
 
     migrate.upgrade(empty_database_url)
@@ -58,12 +60,16 @@ def test_fresh_database_migrates_to_complete_mvp_schema(empty_database_url: str)
     assert not tables & CHECKPOINT_TABLES
 
 
-def test_upgrade_refuses_a_database_with_leftover_v1_tables(empty_database_url: str) -> None:
+def test_upgrade_refuses_a_database_with_leftover_v1_tables(
+    empty_database_url: str,
+) -> None:
     """Every existing dev volume holds the v1 init.sql tables. The upgrade must
     stop with an actionable message instead of a raw DuplicateTable traceback,
     and must leave the database exactly as it found it."""
     with psycopg.connect(empty_database_url, autocommit=True) as conn:
-        conn.execute("CREATE TABLE guests (guest_id TEXT PRIMARY KEY, profile JSONB NOT NULL)")
+        conn.execute(
+            "CREATE TABLE guests (guest_id TEXT PRIMARY KEY, profile JSONB NOT NULL)"
+        )
         conn.execute("CREATE TABLE behavior_signals (id SERIAL PRIMARY KEY)")
 
     with pytest.raises(CommandError, match=r"docker compose down -v") as excinfo:
@@ -73,7 +79,9 @@ def test_upgrade_refuses_a_database_with_leftover_v1_tables(empty_database_url: 
     assert _tables(empty_database_url) == {"guests", "behavior_signals"}
 
 
-def test_existing_snapshots_default_to_normalizer_version_1(empty_database_url: str) -> None:
+def test_existing_snapshots_default_to_normalizer_version_1(
+    empty_database_url: str,
+) -> None:
     """0002 adds snapshots.normalizer_version; rows written before it were version 1."""
     migrate.upgrade(empty_database_url, "0001")
     with psycopg.connect(empty_database_url, autocommit=True) as conn:
@@ -157,7 +165,12 @@ def test_accessibility_table_rejects_session_only_and_unconsented_rows(
     with pytest.raises(errors.CheckViolation):
         conn.execute(
             _INSERT,
-            ("g1", retention_policy, consent, _accessibility_payload(**payload_overrides)),
+            (
+                "g1",
+                retention_policy,
+                consent,
+                _accessibility_payload(**payload_overrides),
+            ),
         )
 
 
@@ -168,7 +181,9 @@ def test_accessibility_table_accepts_a_consented_persisted_row(
 
     conn.execute(_INSERT, ("g1", "persisted", True, _accessibility_payload()))
 
-    count = conn.execute("SELECT count(*) AS n FROM accessibility_requirements").fetchone()
+    count = conn.execute(
+        "SELECT count(*) AS n FROM accessibility_requirements"
+    ).fetchone()
     assert count is not None and count["n"] == 1
 
 
@@ -180,5 +195,7 @@ def test_deleting_a_guest_deletes_their_persisted_accessibility_record(
 
     conn.execute("DELETE FROM guests WHERE guest_id = 'g1'")
 
-    count = conn.execute("SELECT count(*) AS n FROM accessibility_requirements").fetchone()
+    count = conn.execute(
+        "SELECT count(*) AS n FROM accessibility_requirements"
+    ).fetchone()
     assert count is not None and count["n"] == 0

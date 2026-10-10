@@ -166,7 +166,9 @@ class GuestProfileService:
             walking_tolerance=(
                 current.walking_tolerance
                 if update.walking_tolerance is None
-                else _merge_preference(current.walking_tolerance, update.walking_tolerance)
+                else _merge_preference(
+                    current.walking_tolerance, update.walking_tolerance
+                )
             ),
             sensitivities=sensitivities,
             thematic_affinity=thematic_affinity,
@@ -181,7 +183,9 @@ class GuestProfileService:
                 else update.avoided_categories
             ),
             planning_style=(
-                current.planning_style if update.planning_style is None else update.planning_style
+                current.planning_style
+                if update.planning_style is None
+                else update.planning_style
             ),
             profile_version=current.profile_version + 1,
         )

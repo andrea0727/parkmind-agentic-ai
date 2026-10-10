@@ -80,6 +80,7 @@ def _revalidated(model: _ModelT, **changes: object) -> _ModelT:
     """
     return type(model).model_validate({**model.model_dump(), **changes})
 
+
 # ---------------------------------------------------------------------------
 # Defaults — tunable but intentionally not persisted preferences
 # ---------------------------------------------------------------------------
@@ -89,6 +90,8 @@ _DEFAULT_REST_DURATION_MIN = 20.0
 _DEFAULT_SHOW_DURATION_MIN = 25.0
 _LUNCH_WINDOW_EARLY_BUFFER_MIN = 15.0
 _PARK_ENTRANCE_NODE = "__park_entrance__"
+MEAL_VENUE_TBD = "__restaurant__"
+"""MEAL stop with no restaurant chosen: eaten where the party is, so no walk and no move."""
 
 
 class GreedyInsertionOptimizer:
@@ -268,13 +271,16 @@ class GreedyInsertionOptimizer:
         # differently on a second call, and a failing source is asked (and logged) once.
         wait_readings: dict[tuple[str, datetime], tuple[float, _WaitSource] | None] = {}
 
-        def read_wait(node_id: str, arrival: datetime) -> tuple[float, _WaitSource] | None:
+        def read_wait(
+            node_id: str, arrival: datetime
+        ) -> tuple[float, _WaitSource] | None:
             key = (node_id, arrival)
             if key not in wait_readings:
                 wait_readings[key] = self._wait_at(
                     node_id, arrival, context, catalog_index, forecast_service, now
                 )
             return wait_readings[key]
+
         cursor_time = start_time
         cursor_node = _PARK_ENTRANCE_NODE
         active_minutes_since_rest = 0.0
@@ -331,7 +337,7 @@ class GreedyInsertionOptimizer:
             if meal_anchor is not None and not meal_inserted:
                 lunch_win = constraints.lunch_window
                 assert lunch_win is not None
-                walk_to_meal = self._walk_time(cursor_node, meal_anchor.node_id)
+                walk_to_meal = self._walk_to_meal(cursor_node, meal_anchor)
                 earliest_meal_arrival = cursor_time + timedelta(minutes=walk_to_meal)
                 if earliest_meal_arrival >= lunch_win.start - timedelta(
                     minutes=_LUNCH_WINDOW_EARLY_BUFFER_MIN
@@ -355,7 +361,7 @@ class GreedyInsertionOptimizer:
                             )
                             stops.append(meal_stop)
                             cursor_time = meal_departure
-                            cursor_node = meal_anchor.node_id
+                            cursor_node = self._after_meal(cursor_node, meal_anchor)
                             active_minutes_since_rest = 0.0
                     meal_inserted = True
                     continue
@@ -439,7 +445,7 @@ class GreedyInsertionOptimizer:
                         and meal_anchor is not None
                         and cursor_time < lunch_win.start
                     ):
-                        walk_to_meal = self._walk_time(cid, meal_anchor.node_id)
+                        walk_to_meal = self._walk_to_meal(cid, meal_anchor)
                         if (
                             cand_departure + timedelta(minutes=walk_to_meal)
                             > lunch_win.end
@@ -463,7 +469,9 @@ class GreedyInsertionOptimizer:
             # 4. If a candidate was chosen, insert it
             if chosen_id is not None:
                 walk_min = self._walk_time(cursor_node, chosen_id)
-                reading = read_wait(chosen_id, cursor_time + timedelta(minutes=walk_min))
+                reading = read_wait(
+                    chosen_id, cursor_time + timedelta(minutes=walk_min)
+                )
                 if reading is None:  # unreachable: the candidate read this same key
                     visited.add(chosen_id)
                     continue
@@ -561,7 +569,7 @@ class GreedyInsertionOptimizer:
             if meal_anchor is not None and not meal_inserted:
                 lunch_win = constraints.lunch_window
                 assert lunch_win is not None
-                walk_to_meal = self._walk_time(cursor_node, meal_anchor.node_id)
+                walk_to_meal = self._walk_to_meal(cursor_node, meal_anchor)
                 actual_arrival = max(
                     cursor_time + timedelta(minutes=walk_to_meal),
                     lunch_win.start,
@@ -581,7 +589,7 @@ class GreedyInsertionOptimizer:
                         )
                         stops.append(meal_stop)
                         cursor_time = meal_departure
-                        cursor_node = meal_anchor.node_id
+                        cursor_node = self._after_meal(cursor_node, meal_anchor)
                         active_minutes_since_rest = 0.0
                 meal_inserted = True
                 continue
@@ -650,7 +658,9 @@ class GreedyInsertionOptimizer:
         )
         if scores is not None:
             # Needs the assembled plan (which stops serve whom), so it comes last.
-            plan = _revalidated(plan, per_guest_satisfaction=scorer_satisfaction(plan, scores))
+            plan = _revalidated(
+                plan, per_guest_satisfaction=scorer_satisfaction(plan, scores)
+            )
         return plan
 
     # ------------------------------------------------------------------
@@ -750,6 +760,15 @@ class GreedyInsertionOptimizer:
         valid = [t for t in sorted(times) if start <= t < end]
         return valid[0] if valid else None
 
+    def _walk_to_meal(self, origin: str, meal_anchor: Stop) -> float:
+        if meal_anchor.node_id == MEAL_VENUE_TBD:
+            return 0.0
+        return self._walk_time(origin, meal_anchor.node_id)
+
+    @staticmethod
+    def _after_meal(cursor_node: str, meal_anchor: Stop) -> str:
+        return cursor_node if meal_anchor.node_id == MEAL_VENUE_TBD else meal_anchor.node_id
+
     def _create_meal_anchor(
         self,
         window: TimeWindow,
@@ -757,7 +776,7 @@ class GreedyInsertionOptimizer:
         guest_ids: list[str],
     ) -> Stop:
         """Build a MEAL stop placeholder inside the lunch window."""
-        node = restaurant_node_ids[0] if restaurant_node_ids else "__restaurant__"
+        node = restaurant_node_ids[0] if restaurant_node_ids else MEAL_VENUE_TBD
         arrival = window.start
         departure = arrival + timedelta(minutes=self._meal_dur)
         departure = min(departure, window.end)
@@ -884,7 +903,10 @@ class GreedyInsertionOptimizer:
 
     @staticmethod
     def _with_wait_sources(
-        provenance: Provenance, forecasts: list[WaitForecast], *, typical_wait_used: bool
+        provenance: Provenance,
+        forecasts: list[WaitForecast],
+        *,
+        typical_wait_used: bool,
     ) -> Provenance:
         """Record where the charged waits came from (section 40).
 
@@ -896,7 +918,9 @@ class GreedyInsertionOptimizer:
         curated reference data, not a provider, so it adds none.
         """
         also = [TYPICAL_WAIT] if typical_wait_used else []
-        data_sources = set(provenance.data_sources) | set(forecast_data_sources(forecasts))
+        data_sources = set(provenance.data_sources) | set(
+            forecast_data_sources(forecasts)
+        )
         return _revalidated(
             provenance,
             forecast_strategy=forecast_strategy_label(forecasts, also=also),

@@ -1,0 +1,141 @@
+{
+  "id": "evitar_casi_todo",
+  "messages": [
+    "We are 2 adults. Adults are 170 cm. We want Dumbo. Avoid Space Mountain, TRON, Big Thunder, Haunted Mansion, Pirates, Jungle Cruise, Buzz Lightyear, Peter Pan, Tiana's Bayou, Seven Dwarfs, Winnie the Pooh, Mad Tea Party. We leave at 10 PM."
+  ],
+  "confirm_payload": {
+    "confirmed": true,
+    "consent": true
+  },
+  "approval_payload": {
+    "decision": "APPROVED"
+  },
+  "setup": null,
+  "now": "21:02",
+  "steps": [],
+  "llm_calls": 1,
+  "extracted": {
+    "party_size": 2,
+    "must_do": [
+      "Dumbo"
+    ],
+    "avoid": [
+      "Space Mountain",
+      "TRON",
+      "Big Thunder",
+      "Haunted Mansion",
+      "Pirates",
+      "Jungle Cruise",
+      "Buzz Lightyear",
+      "Peter Pan",
+      "Tiana's Bayou",
+      "Seven Dwarfs",
+      "Winnie the Pooh",
+      "Mad Tea Party"
+    ],
+    "departure_time": "22:00",
+    "lunch_window": null,
+    "heights": [
+      170,
+      170
+    ],
+    "n_guests": 2
+  },
+  "stages_elicit": [],
+  "interrupt1": {
+    "kind": "hard_constraint_confirmation",
+    "payload": {
+      "kind": "hard_constraint_confirmation",
+      "pending": [
+        "must_do: Dumbo the Flying Elephant",
+        "avoid: Space Mountain",
+        "avoid: TRON Lightcycle / Run",
+        "avoid: Big Thunder Mountain Railroad",
+        "avoid: Haunted Mansion",
+        "avoid: Pirates of the Caribbean",
+        "avoid: Jungle Cruise",
+        "avoid: Buzz Lightyear\u2019s Space Ranger Spin",
+        "avoid: Peter Pan's Flight",
+        "avoid: Tiana's Bayou Adventure",
+        "avoid: Seven Dwarfs Mine Train",
+        "avoid: The Many Adventures of Winnie the Pooh",
+        "avoid: Mad Tea Party",
+        "departure_time: 22:00",
+        "height:g1: 170",
+        "height:g2: 170"
+      ],
+      "echo": [
+        "'Dumbo the Flying Elephant' is a must-do: the plan has to include it.",
+        "'Space Mountain' is off-limits: the plan must never include it.",
+        "'TRON Lightcycle / Run' is off-limits: the plan must never include it.",
+        "'Big Thunder Mountain Railroad' is off-limits: the plan must never include it.",
+        "'Haunted Mansion' is off-limits: the plan must never include it.",
+        "'Pirates of the Caribbean' is off-limits: the plan must never include it.",
+        "'Jungle Cruise' is off-limits: the plan must never include it.",
+        "'Buzz Lightyear\u2019s Space Ranger Spin' is off-limits: the plan must never include it.",
+        "'Peter Pan's Flight' is off-limits: the plan must never include it.",
+        "'Tiana's Bayou Adventure' is off-limits: the plan must never include it.",
+        "'Seven Dwarfs Mine Train' is off-limits: the plan must never include it.",
+        "'The Many Adventures of Winnie the Pooh' is off-limits: the plan must never include it.",
+        "'Mad Tea Party' is off-limits: the plan must never include it.",
+        "You leave the park at 22:00: the plan must end by then.",
+        "Guest 1 is 170 cm tall (about 5'7\"): rides with a higher minimum will be skipped.",
+        "Guest 2 is 170 cm tall (about 5'7\"): rides with a higher minimum will be skipped."
+      ],
+      "accessibility_guests": []
+    }
+  },
+  "facts1": {},
+  "stages": [
+    "load_context",
+    "resolve_group",
+    "build_plan",
+    "check",
+    "explain",
+    "propose"
+  ],
+  "interrupt2": {
+    "kind": "plan_approval",
+    "payload": {
+      "kind": "plan_approval",
+      "proposal": "<Proposal>"
+    }
+  },
+  "facts2": {
+    "check_valid": true,
+    "violations": [],
+    "n_stops": 10,
+    "stops_head": [
+      {
+        "kind": "ATTRACTION",
+        "node_id": "890fa430-89c0-4a3f-96c9-11597888005e",
+        "arrival": "08:05"
+      },
+      {
+        "kind": "ATTRACTION",
+        "node_id": "ffcfeaa2-1416-4920-a1ed-543c1a1695c4",
+        "arrival": "08:29"
+      },
+      {
+        "kind": "ATTRACTION",
+        "node_id": "d9d12438-d999-4482-894b-8955fdb20ccf",
+        "arrival": "08:44"
+      },
+      {
+        "kind": "ATTRACTION",
+        "node_id": "f163ddcd-43e1-488d-8276-2381c1db0a39",
+        "arrival": "09:01"
+      }
+    ],
+    "first_arrival": "08:05",
+    "last_arrival": "11:22",
+    "explanation": "10 stops, 45 min of waiting and 33 min of walking in total.\n08:05 Dumbo the Flying Elephant (5 min wait, 5 min walk)\n08:29 Tomorrowland Transit Authority PeopleMover (0 min wait, 4 min walk)\n08:44 Astro Orbiter (0 min wait, 0 min walk)\n09:01 Tomorrowland Speedway (5 min wait, 2 min walk)\n09:24 The Barnstormer (5 min wait, 3 min walk)\n09:47 Under the Sea - Journey of The Little Mermaid (5 min wait, 3 min walk)\n10:11 \"it's a small world\" (5 min wait, 4 min walk)\n10:36 The Magic Carpets of Aladdin (5 min wait, 5 min walk)\n10:57 Swiss Family Treehouse (5 min wait, 1 min walk)\n11:22 Prince Charming Regal Carrousel (10 min wait, 5 min walk)"
+  },
+  "stages_after_approval": [
+    "resolve_proposal"
+  ],
+  "approval": "APPROVED",
+  "plan_active": true,
+  "interrupt3": null,
+  "seconds": 15.9
+}

@@ -61,7 +61,9 @@ class PostgresSnapshotRepository(PostgresRepositoryBase):
             )
             return cur.fetchone() is not None
 
-    def replace_normalized(self, snapshot: LiveContext, *, normalizer_version: int) -> bool:
+    def replace_normalized(
+        self, snapshot: LiveContext, *, normalizer_version: int
+    ) -> bool:
         _require_version(normalizer_version)
         with self._tx() as cur:
             cur.execute(

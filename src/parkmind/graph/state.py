@@ -52,7 +52,9 @@ class ParkMindState(TypedDict, total=False):
     pending_hard_constraint_confirmation: list[str] | None
 
     guest_profiles: list[GuestProfile]
-    accessibility_ref: list[str]  # guest ids only; never AccessibilityRequirements [C19]
+    accessibility_ref: list[
+        str
+    ]  # guest ids only; never AccessibilityRequirements [C19]
     group_objective: GroupObjective | None
 
     # Live Context & Execution
@@ -69,6 +71,7 @@ class ParkMindState(TypedDict, total=False):
 
     # Checking & Proposal
     check_result: CheckResult | None
+    explanation: str | None  # written only for a plan that passed check_result
     diff: PlanDiff | None
     proposal: Proposal | None
 
