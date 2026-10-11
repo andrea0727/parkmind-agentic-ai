@@ -53,6 +53,12 @@ needed); the default is `pgvector`.
   tests with the real model, cached between runs.
 - **Isolation:** each retrieval query runs in its own savepoint, so a failure
   cannot undo guest state written on the same connection.
+- **Privacy:** `knowledge.check_accessibility` takes derived flags, as §30
+  defines its input, never `AccessibilityRequirements` (C19 keeps those out of
+  state, checkpoints and traces). An external client such as the LLM-only
+  baseline (§44) can then check eligibility without a session. LOAD CONTEXT over
+  MCP sends the flags without the guest's id, and its transport errors never
+  quote a request.
 - **Measured** on the 2026-09-27 capture: ~57 ms per query, 13 s to index the
   134-passage corpus.
 

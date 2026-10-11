@@ -33,6 +33,7 @@ from parkmind.services.ports import (
     SnapshotRef,
 )
 from parkmind.services.use_cases import load_context as load_context_module
+from parkmind.services.use_cases.check_accessibility import guest_flags
 from parkmind.services.use_cases.load_context import LoadContextUseCase, LoadedContext
 from parkmind.services.use_cases.planner_queries import PlannerQueries
 from parkmind.services.use_cases.planning_deps import (
@@ -133,6 +134,63 @@ def test_the_tool_trace_carries_no_accessibility_values() -> None:
     text = json.dumps([call.model_dump(mode="json") for call in trace])
     for value in ("WHEELCHAIR", "EXPECTANT", "TRANSFER", "g2"):
         assert value not in text, value
+
+
+def _sent_flags(deps: Deps) -> list[str]:
+    requirement = deps.sessions.get("s1", "g2")
+    assert requirement is not None
+    return sorted(f.value for f in guest_flags(requirement))
+
+
+def test_accessibility_checks_over_mcp_do_not_say_whose_flags_they_are(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deps = _party(Deps())
+    registry = deps.registry()
+    seen: list[tuple[str, dict[str, Any]]] = []
+    call = registry.call
+
+    def recording(name: str, arguments: Any) -> Any:
+        seen.append((name, dict(arguments)))
+        return call(name, arguments)
+
+    monkeypatch.setattr(registry, "call", recording)
+
+    loaded = _through(deps, McpContextData(create_server(registry)))
+
+    checks = [args for name, args in seen if name == "knowledge.check_accessibility"]
+    assert checks
+    for args in checks:  # as the server received them, defaults filled in by the SDK
+        assert args["guest_id"] == "guest"  # the tool's default label, not the guest
+        assert sorted(RideRestriction(f).value for f in args["flags"]) == _sent_flags(
+            deps
+        )
+    assert {c.guest_id for c in loaded.live_context.accessibility_results} == {"g2"}
+
+
+def test_load_context_logs_never_carry_flags_or_guest_ids(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Neither a read nor a transport error whose text quotes the request (C19)."""
+    caplog.set_level(logging.DEBUG)
+    deps = _party(Deps())
+    request = McpContextData._request
+
+    async def quoting_failure(
+        self: McpContextData, client: Any, tool: str, arguments: dict[str, Any]
+    ) -> Any:
+        if tool == "knowledge.check_accessibility":
+            raise RuntimeError(f"rejected {tool} {arguments} for g2")
+        return await request(self, client, tool, arguments)
+
+    assert _through(deps, _mcp(deps)).transport == "mcp"
+    monkeypatch.setattr(McpContextData, "_request", quoting_failure)
+    assert _through(deps, _mcp(deps)).transport == "in_process_fallback"
+
+    logged = "\n".join(r.getMessage() for r in caplog.records)
+    assert "knowledge.check_accessibility: RuntimeError" in logged
+    for value in [*_sent_flags(deps), "WHEELCHAIR", "'g2'", " g2"]:
+        assert value not in logged, value
 
 
 def test_one_mcp_session_serves_the_whole_load_context(

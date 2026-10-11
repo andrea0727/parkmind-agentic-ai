@@ -16,6 +16,12 @@ A tool that answers ``UNAVAILABLE`` or ``NOT_FOUND`` (no snapshot, no schedule,
 the server's database down) raises ``ContextDataUnavailableError``. LOAD CONTEXT
 answers both in-process; only a missing schedule stays a coverage gap.
 
+What crosses the wire is section 30's input and nothing more: an accessibility
+check sends the attraction ids and the guest's derived flags, never which guest
+they belong to (the results are labelled here). Failure messages name the tool
+and the exception type only: an SDK or HTTP error's text is never repeated, so
+a request it might quote cannot reach a log.
+
 ``server`` is anything ``mcp.Client`` connects to: the streamable-HTTP URL of
 ``scripts/run_mcp_server.py --http`` in the demo, an in-process ``MCPServer`` in
 tests.
@@ -79,7 +85,7 @@ class McpContextData:
         except Exception as exc:
             _close_quietly(stack)
             raise ContextTransportError(
-                f"no MCP session: {type(exc).__name__}: {exc}"
+                f"no MCP session: {type(exc).__name__}"
             ) from exc
         self._local.open = (portal, client)
         try:
@@ -148,12 +154,14 @@ class McpContextData:
                     attraction_ids[start : start + _ACCESSIBILITY_BATCH]
                 ),
                 "flags": sorted(f.value for f in flags),
-                "guest_id": guest_id,
             }
             data, _ = self._call("knowledge.check_accessibility", arguments)
             checks += self._parse(
                 lambda d=data: [
-                    AccessibilityCheck.model_validate(c) for c in d["checks"]
+                    AccessibilityCheck.model_validate(c).model_copy(
+                        update={"guest_id": guest_id}
+                    )
+                    for c in d["checks"]
                 ]
             )
         return checks
@@ -175,7 +183,7 @@ class McpContextData:
         except (
             Exception
         ) as exc:  # the SDK and httpx raise many types; all mean "transport"
-            raise ContextTransportError(f"{tool}: {type(exc).__name__}: {exc}") from exc
+            raise ContextTransportError(f"{tool}: {type(exc).__name__}") from exc
         content = result.structured_content
         if result.is_error:
             error = (

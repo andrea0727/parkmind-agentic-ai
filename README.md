@@ -295,11 +295,15 @@ it with `--http`); if the server is unreachable, the in-process adapter of the
 same port answers and `LoadedContext.transport` says `in_process_fallback`. The
 default, `in_process`, reads the snapshot directly.
 
-**Privacy (C19).** Planner tools take a `session_id` and `guest_ids`; the
-requirements are read from the SessionStore server-side and never travel in a
-request or a response (violations of the accessibility rules are reported
-without their values). A server in another process sees only `persisted`
-records, so a party with `session_only` requirements fails closed there.
+**Privacy (C19).** No tool takes `AccessibilityRequirements`. Planner tools take
+a `session_id` and `guest_ids`; the requirements are read from the SessionStore
+server-side and never travel in a request or a response (violations of the
+accessibility rules are reported without their values). A server in another
+process sees only `persisted` records, so a party with `session_only`
+requirements fails closed there. `knowledge.check_accessibility` takes derived
+flags, as §30 defines it, so external clients such as the LLM-only baseline can
+check eligibility without a session; LOAD CONTEXT sends the flags without saying
+whose they are, and its transport errors never quote a request.
 
 ### Using Poetry
 

@@ -17,8 +17,11 @@ Each ``ToolSpec`` becomes one MCP tool:
 
 Arguments of the wrong JSON type are rejected by the SDK before the registry
 sees them (``is_error=True``, SDK wording). That message repeats the offending
-value to the caller who sent it; tool inputs carry ids and constraints, never
-accessibility requirements (planner tools take a session reference, C19).
+value to the caller who sent it, and the server logs field names only. No tool
+takes ``AccessibilityRequirements``: ``knowledge.check_accessibility`` takes
+derived flags (``RideRestriction`` values, section 30's input) with an optional
+opaque label, and the planner tools take a session reference whose requirements
+are read server-side [C19].
 """
 
 import inspect
