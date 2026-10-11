@@ -10,13 +10,24 @@ is passed by reference -- ``session_id`` plus ``guest_ids`` -- and read from the
 SessionStore server-side [C19]; no requirement value is accepted or returned.
 They have no effect on guest, plan or proposal state, so they are read-only; the
 LOAD CONTEXT allowlist still excludes them by namespace (section 8.1).
+
+Inputs are capped well above a real party and day (``MAX_GUESTS``,
+``MAX_STOPS``, ``MAX_FORECASTS``), so one request cannot ask for unbounded work.
 """
 
 from collections.abc import Callable
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from parkmind.core.contracts import (
     CheckResult,
@@ -31,6 +42,13 @@ from parkmind.tools.spec import ToolContext, ToolSpec
 
 PLANNER_SOURCE = "parkmind_planner"
 FORECAST_SOURCE = "parkmind_forecast"
+
+MAX_GUESTS = 20
+"""Guests per party, ``guest_ids`` and ``profiles`` per request."""
+MAX_STOPS = 60
+"""Stops in a plan sent to ``check_plan`` (a park day is far fewer)."""
+MAX_FORECASTS = 500
+"""Forecasts per ``forecast_waits`` request: attractions x arrival times."""
 
 Id = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)
@@ -48,7 +66,7 @@ class _PartyRequest(_Request):
             "are read from it server-side, never sent."
         )
     )
-    guest_ids: list[Id] = Field(
+    guest_ids: Annotated[list[Id], Field(max_length=MAX_GUESTS)] = Field(
         default_factory=list,
         description="Guests whose accessibility requirements are on file in that session.",
     )
@@ -58,20 +76,37 @@ class _PartyRequest(_Request):
         description="Planning time with its offset; omit for the server's clock (set it to replay a day).",
     )
 
+    @field_validator("constraints")
+    @classmethod
+    def _party_size(cls, constraints: PartyConstraints) -> PartyConstraints:
+        if len(constraints.guests) > MAX_GUESTS:
+            raise ValueError(f"at most {MAX_GUESTS} guests")
+        return constraints
+
 
 # -- requests -------------------------------------------------------------------------
 
 
+Profiles = Annotated[list[GuestProfile], Field(max_length=MAX_GUESTS)]
+
+
 class BuildPlanRequest(_PartyRequest):
-    profiles: list[GuestProfile] = Field(default_factory=list)
+    profiles: Profiles = Field(default_factory=list)
 
 
 class CheckPlanRequest(_PartyRequest):
     plan: Plan
 
+    @field_validator("plan")
+    @classmethod
+    def _plan_size(cls, plan: Plan) -> Plan:
+        if len(plan.stops) > MAX_STOPS:
+            raise ValueError(f"at most {MAX_STOPS} stops")
+        return plan
+
 
 class ScorePreferencesRequest(_PartyRequest):
-    profiles: list[GuestProfile] = Field(default_factory=list)
+    profiles: Profiles = Field(default_factory=list)
     top: int = Field(
         default=10, ge=1, le=60, description="How many attractions to list."
     )
@@ -83,6 +118,17 @@ class ForecastWaitsRequest(_Request):
         default_factory=list,
         description="Arrival times to forecast (with offset); omit for now.",
     )
+    now: AwareDatetime | None = Field(
+        default=None,
+        description="Forecast as of this time, with its offset; omit for the server's clock "
+        "(set it to replay a day).",
+    )
+
+    @model_validator(mode="after")
+    def _bounded(self) -> "ForecastWaitsRequest":
+        if len(self.attraction_ids) * max(len(self.at), 1) > MAX_FORECASTS:
+            raise ValueError(f"at most {MAX_FORECASTS} forecasts (attractions x times)")
+        return self
 
 
 # -- responses ------------------------------------------------------------------------
@@ -237,7 +283,7 @@ def planner_tools(ctx: ToolContext) -> list[ToolSpec]:
         )
 
     def forecast_waits(request: ForecastWaitsRequest) -> ToolResult[ForecastWaitsData]:
-        now = ctx.clock()
+        now = request.now or ctx.clock()
         answer = queries.forecast_waits(
             request.attraction_ids, request.at or [now], now
         )

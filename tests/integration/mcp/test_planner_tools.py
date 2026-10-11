@@ -5,7 +5,7 @@ plan or a proposal, and accessibility crosses the boundary by reference only.
 """
 
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import factories
@@ -19,6 +19,7 @@ from parkmind.core.contracts import (
     RuleId,
 )
 from parkmind.services.use_cases.planner_queries import PlannerQueries
+from parkmind.tools.planner_tools import MAX_FORECASTS, MAX_GUESTS, MAX_STOPS
 from parkmind.tools.registry import build_registry
 
 PLANNER_TOOLS = {
@@ -297,3 +298,66 @@ def test_no_tool_writes_plans_or_proposals() -> None:
     assert len(names) == 14
     assert not set(plans.calls) & WRITES, plans.calls
     assert not set(proposals.calls) & WRITES, proposals.calls
+
+
+def _rejected(result: Any) -> list[str]:
+    """The fields an INVALID_ARGUMENT answer names."""
+    assert result.is_error is True
+    error = result.structured_content["error"]
+    assert error["code"] == "INVALID_ARGUMENT"
+    return error["details"]["fields"]
+
+
+def test_planner_inputs_are_capped() -> None:
+    registry = Deps(collect_at=None).registry()
+    many_guests = [f"g{i}" for i in range(MAX_GUESTS + 1)]
+    crowd = _constraints(
+        party_size=MAX_GUESTS + 1,
+        guests=[factories.guest(guest_id=g) for g in many_guests],
+    )
+    plan = _ok(call_tool(Deps().registry(), "planner.build_plan", _args()))["data"][
+        "plan"
+    ]
+    long_plan = {**plan, "stops": plan["stops"][:1] * (MAX_STOPS + 1)}
+
+    assert _rejected(
+        call_tool(registry, "planner.build_plan", _args(guest_ids=many_guests))
+    ) == ["guest_ids"]
+    assert _rejected(
+        call_tool(
+            registry,
+            "planner.score_preferences",
+            _args(constraints=crowd.model_dump(mode="json")),
+        )
+    ) == ["constraints"]
+    assert _rejected(
+        call_tool(registry, "planner.check_plan", _args(plan=long_plan))
+    ) == ["plan"]
+
+
+def test_forecast_waits_caps_attractions_times_arrivals() -> None:
+    times = [(NOW + timedelta(minutes=10 * i)).isoformat() for i in range(48)]
+    ids = [f"attraction-{i}" for i in range(MAX_FORECASTS // 48 + 1)]
+
+    result = call_tool(
+        Deps(collect_at=None).registry(),
+        "planner.forecast_waits",
+        {"attraction_ids": ids, "at": times},
+    )
+
+    assert _rejected(result) == ["(request)"]
+
+
+def test_forecast_waits_honors_the_callers_now() -> None:
+    """Like the other planner tools: set ``now`` to replay a day."""
+    payload = _ok(
+        call_tool(
+            Deps().registry(clock=lambda: NOW + timedelta(days=30)),
+            "planner.forecast_waits",
+            {"attraction_ids": [SPACE_MOUNTAIN], "now": NOW.isoformat()},
+        )
+    )
+
+    (forecast,) = payload["data"]["forecasts"]  # a month later there is no snapshot
+    assert datetime.fromisoformat(forecast["at"]) == NOW
+    assert forecast["strategy"] == "api_forecast"
