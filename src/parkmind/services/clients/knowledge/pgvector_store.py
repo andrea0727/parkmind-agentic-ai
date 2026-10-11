@@ -12,12 +12,12 @@ failure rolls back only that savepoint, never the caller's open transaction,
 so it cannot corrupt guest state written on the same connection (P0-26
 Done-when). Every failure surfaces as ``KnowledgeUnavailableError``.
 
-Query plan (``EXPLAIN ANALYZE``, the 134-passage corpus, pgvector 0.8.7): the
-rows of this corpus and embedder are read by a sequential scan -- or through the
-primary key when one is forced -- and sorted exactly, in under a millisecond. The
-HNSW index of migration 0003 is not used: ties are broken by ``chunk_id`` so the
-ranking is deterministic, an order an HNSW scan cannot serve, and at this size
-the exact plan is the faster one anyway.
+Search is exact nearest-neighbour, by design (ADR 0002). Measured with
+``EXPLAIN ANALYZE`` on the 134-passage corpus (pgvector 0.8.7): the rows of this
+corpus and embedder are read by a sequential scan and sorted exactly in under a
+millisecond; ties are broken by ``chunk_id``, so the same question always ranks
+the same way. An approximate HNSW index would not be used at this size and
+cannot serve that tie-break.
 """
 
 from collections.abc import Sequence

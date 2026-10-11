@@ -150,14 +150,10 @@ def _extension_version(url: str) -> str | None:
 
 
 def test_vector_extension_installed(empty_database_url: str) -> None:
-    """The server can install pgvector and the migration enables it (HNSW needs >= 0.5)."""
+    """The server can install pgvector and the migration enables it."""
     migrate.upgrade(empty_database_url)
 
-    version = _extension_version(empty_database_url)
-
-    assert version is not None
-    major, minor = (int(part) for part in version.split(".")[:2])
-    assert (major, minor) >= (0, 5)
+    assert _extension_version(empty_database_url) is not None
 
 
 def test_downgrade_keeps_the_vector_extension_other_objects_use(

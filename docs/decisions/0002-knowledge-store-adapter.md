@@ -21,7 +21,7 @@ The capability has two parts with different safety needs:
 ## Decision
 
 1. **The demo runs semantic search on pgvector** (migration `0003`,
-   `knowledge_chunks`, HNSW cosine index), behind a `KnowledgeSearch` port that
+   `knowledge_chunks`, exact cosine search), behind a `KnowledgeSearch` port that
    sits next to `KnowledgeStore` in `services/ports/knowledge_store.py`.
 2. **Embeddings are computed locally** with fastembed and
    `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384 dimensions,
@@ -69,6 +69,11 @@ needed); the default is `pgvector`.
   on the demo path.
 - **Hashing embedder in production** — reproducible and dependency-free, but
   lexical: "similar to Pirates" would match only shared words.
+- **An HNSW index** — approximate search pays off at thousands of vectors, not
+  134: `EXPLAIN ANALYZE` shows Postgres scanning and sorting exactly in under a
+  millisecond, and an HNSW scan cannot serve the `chunk_id` tie-break that keeps
+  rankings deterministic. A later migration adds one, with the query change it
+  needs, if the corpus grows that large.
 
 ## Open questions (not decided here)
 

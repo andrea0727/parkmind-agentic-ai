@@ -14,6 +14,12 @@ One row = one chunk of one corpus version, embedded by one embedder.
 compared, and re-indexing with a new model leaves the old rows untouched.
 384 is the dimension of the configured multilingual MiniLM model.
 
+Search is exact, so there is no approximate (HNSW) index: at the corpus's size
+an exact scan answers in under a millisecond and keeps the ranking deterministic
+(ties broken by ``chunk_id``, an order an HNSW scan cannot serve). If the corpus
+grows to thousands of passages, a later migration adds one with the query
+change it needs (ADR 0002).
+
 The downgrade drops the table and keeps the ``vector`` extension: other objects
 may use it, and the upgrade's ``CREATE EXTENSION IF NOT EXISTS`` finds it there.
 """
@@ -68,10 +74,6 @@ def upgrade() -> None:
             CHECK (kind <> 'attraction_profile' OR attraction_id IS NOT NULL)
         )
         """
-    )
-    op.execute(
-        "CREATE INDEX knowledge_chunks_embedding_idx "
-        "ON knowledge_chunks USING hnsw (embedding vector_cosine_ops)"
     )
 
 
