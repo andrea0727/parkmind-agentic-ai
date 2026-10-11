@@ -22,6 +22,7 @@ tool names and counts only, never flags or guest ids.
 """
 
 from collections.abc import Callable, Sequence
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import TypeVar
@@ -79,6 +80,9 @@ class InProcessContextData:
         self._deps_factory = deps_factory
         self._clock = clock
         self._knowledge: KnowledgeQueries | None = None
+
+    def session(self) -> AbstractContextManager[None]:
+        return nullcontext()
 
     def catalog(self) -> list[Attraction]:
         return self._data.attraction_info(None).found
@@ -150,6 +154,15 @@ def assemble_from_port(
     requirements: Sequence[AccessibilityRequirements],
 ) -> AssembledContext:
     """The party's base context and accessibility checks, from ``port``'s answers."""
+    with port.session():
+        return _assemble(port, now, requirements)
+
+
+def _assemble(
+    port: ContextDataPort,
+    now: datetime,
+    requirements: Sequence[AccessibilityRequirements],
+) -> AssembledContext:
     trace: list[ToolCall] = []
 
     def traced(tool: str, count: int, **query: object) -> None:

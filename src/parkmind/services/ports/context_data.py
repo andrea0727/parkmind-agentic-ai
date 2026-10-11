@@ -16,6 +16,7 @@ themselves never leave the loader's process [C19].
 """
 
 from collections.abc import Sequence
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Generic, Protocol, TypeVar
@@ -51,6 +52,11 @@ class ContextDataPort(Protocol):
     @property
     def transport(self) -> str:
         """``in_process`` or ``mcp`` -- recorded in the context's tool trace."""
+        ...
+
+    def session(self) -> AbstractContextManager[None]:
+        """One connection for every read made inside (LOAD CONTEXT's assembly); a
+        read outside one opens its own. A no-op in-process."""
         ...
 
     def catalog(self) -> list[Attraction]: ...

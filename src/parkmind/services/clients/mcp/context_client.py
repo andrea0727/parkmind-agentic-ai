@@ -3,9 +3,12 @@
 Each read is one ``data.*`` / ``knowledge.*`` tool call; the structured results
 are validated back into section 33 contracts, so nothing provider- or
 transport-shaped crosses the port. The MCP SDK is async and LOAD CONTEXT is
-not: every call runs on its own event loop in a worker thread (an ``anyio``
+not: the session runs on its own event loop in a worker thread (an ``anyio``
 blocking portal), which works under ``graph.invoke`` and inside a caller that
-already runs a loop.
+already runs a loop. ``session()`` keeps one MCP session open for every read made
+inside it (LOAD CONTEXT's assembly); a read outside one opens its own. Opening a
+session and every call each have a deadline (``timeout_seconds``), so a server
+that accepts the connection and never answers cannot hold LOAD CONTEXT up.
 
 Failures are split in two. A transport that fails -- unreachable server,
 timeout, protocol error, malformed answer -- raises ``ContextTransportError``.
@@ -18,11 +21,16 @@ answers both in-process; only a missing schedule stays a coverage gap.
 tests.
 """
 
-from collections.abc import Sequence
+import logging
+import math
+import threading
+from collections.abc import AsyncIterator, Iterator, Sequence
+from contextlib import ExitStack, asynccontextmanager, contextmanager
 from datetime import date, datetime
 from typing import Any
 
-from anyio.from_thread import start_blocking_portal
+import anyio
+from anyio.from_thread import BlockingPortal, start_blocking_portal
 from mcp import Client
 from pydantic import ValidationError
 
@@ -42,6 +50,8 @@ from parkmind.services.ports import (
     SnapshotRef,
 )
 
+logger = logging.getLogger(__name__)
+
 _DOMAIN_ERRORS = {"UNAVAILABLE", "NOT_FOUND"}
 _ACCESSIBILITY_BATCH = 100
 
@@ -52,6 +62,31 @@ class McpContextData:
     def __init__(self, server: Any, *, timeout_seconds: float = 15.0) -> None:
         self._server = server
         self._timeout = timeout_seconds
+        self._local = threading.local()  # the open session, per calling thread
+
+    @contextmanager
+    def session(self) -> Iterator[None]:
+        """One MCP session for every read made inside; nested sessions reuse it."""
+        if getattr(self._local, "open", None) is not None:
+            yield
+            return
+        stack = ExitStack()
+        try:
+            portal = stack.enter_context(start_blocking_portal())
+            client = stack.enter_context(
+                portal.wrap_async_context_manager(self._connected())
+            )
+        except Exception as exc:
+            _close_quietly(stack)
+            raise ContextTransportError(
+                f"no MCP session: {type(exc).__name__}: {exc}"
+            ) from exc
+        self._local.open = (portal, client)
+        try:
+            yield
+        finally:
+            self._local.open = None
+            _close_quietly(stack)
 
     # -- ContextDataPort ---------------------------------------------------------------
 
@@ -128,11 +163,15 @@ class McpContextData:
     def _call(
         self, tool: str, arguments: dict[str, Any]
     ) -> tuple[dict[str, Any], dict[str, Any]]:
+        opened: tuple[BlockingPortal, Client] | None = getattr(
+            self._local, "open", None
+        )
+        if opened is None:
+            with self.session():
+                return self._call(tool, arguments)
+        portal, client = opened
         try:
-            with start_blocking_portal() as portal:
-                result = portal.call(self._call_async, tool, arguments)
-        except (ContextTransportError, ContextDataUnavailableError):
-            raise
+            result = portal.call(self._request, client, tool, arguments)
         except (
             Exception
         ) as exc:  # the SDK and httpx raise many types; all mean "transport"
@@ -151,8 +190,34 @@ class McpContextData:
             raise ContextTransportError(f"{tool} returned no structured result")
         return content["data"], content.get("provenance") or {}
 
-    async def _call_async(self, tool: str, arguments: dict[str, Any]) -> Any:
-        async with Client(self._server, read_timeout_seconds=self._timeout) as client:
+    @asynccontextmanager
+    async def _connected(self) -> AsyncIterator[Client]:
+        """The session, opened and closed within the deadline (lifted while it is used).
+
+        The scope spans the session's whole life (it cannot close before the
+        client's own task group); a scope that expires swallows its cancellation,
+        so getting past it with ``cancelled_caught`` means the deadline passed.
+        """
+        with anyio.CancelScope(
+            deadline=anyio.current_time() + self._timeout
+        ) as deadline:
+            async with Client(
+                self._server, read_timeout_seconds=self._timeout
+            ) as client:
+                deadline.deadline = math.inf
+                try:
+                    yield client
+                finally:
+                    deadline.deadline = anyio.current_time() + self._timeout
+        if deadline.cancelled_caught:
+            raise TimeoutError(
+                f"the MCP session missed its {self._timeout:g} s deadline"
+            )
+
+    async def _request(
+        self, client: Client, tool: str, arguments: dict[str, Any]
+    ) -> Any:
+        with anyio.fail_after(self._timeout):
             return await client.call_tool(tool, arguments)
 
     @staticmethod
@@ -176,3 +241,11 @@ class McpContextData:
             raise ContextTransportError(
                 "a snapshot-backed result named no snapshot"
             ) from exc
+
+
+def _close_quietly(stack: ExitStack) -> None:
+    """Close the session; the reads are done, so a failure to close is only logged."""
+    try:
+        stack.close()
+    except Exception:
+        logger.warning("closing the MCP session failed", exc_info=True)

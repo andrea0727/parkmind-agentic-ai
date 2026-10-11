@@ -8,17 +8,23 @@ is LOAD CONTEXT reading the snapshot itself. Both run on the 2026-09-27 capture.
 
 import json
 import logging
+import socket
+import threading
+import time
+from collections.abc import Iterator
 from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
 import factories
 import pytest
+from mcp import Client
 from mcp_support import NOW, Deps, capture_park, mk_catalog
 from planning_support import factory_for
 
 from parkmind.config.settings import settings
 from parkmind.core.contracts import MobilityRequirement, RideRestriction
+from parkmind.services.clients.mcp import context_client
 from parkmind.services.clients.mcp.context_client import McpContextData
 from parkmind.services.ports import (
     ContextTransportError,
@@ -129,6 +135,73 @@ def test_the_tool_trace_carries_no_accessibility_values() -> None:
         assert value not in text, value
 
 
+def test_one_mcp_session_serves_the_whole_load_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    opened: list[Any] = []
+
+    class CountingClient(Client):
+        async def __aenter__(self) -> Any:
+            opened.append(self)
+            return await super().__aenter__()
+
+    monkeypatch.setattr(context_client, "Client", CountingClient)
+    deps = _party(Deps())
+
+    loaded = _through(deps, _mcp(deps))
+
+    assert loaded.transport == "mcp"
+    assert len(loaded.live_context.tool_trace) >= 6
+    assert len(opened) == 1
+
+
+def test_a_read_outside_a_session_opens_its_own() -> None:
+    deps = Deps()
+
+    catalog = _mcp(deps).catalog()
+
+    assert {a.node_id for a in catalog} == {a.node_id for a in mk_catalog()}
+
+
+@pytest.fixture
+def silent_server() -> Iterator[str]:
+    """A port that accepts connections and never answers."""
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen()
+    held: list[socket.socket] = []
+    stop = threading.Event()
+
+    def accept() -> None:
+        listener.settimeout(0.2)
+        while not stop.is_set():
+            try:
+                held.append(listener.accept()[0])
+            except OSError:
+                continue
+
+    thread = threading.Thread(target=accept, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{listener.getsockname()[1]}/mcp"
+    stop.set()
+    thread.join()
+    for conn in held:
+        conn.close()
+    listener.close()
+
+
+def test_a_server_that_never_answers_cannot_hold_load_context_up(
+    silent_server: str,
+) -> None:
+    deps = _party(Deps())
+
+    started = time.monotonic()
+    loaded = _through(deps, McpContextData(silent_server, timeout_seconds=1))
+
+    assert loaded.transport == "in_process_fallback"
+    assert time.monotonic() - started < 5
+
+
 def test_server_down_falls_back_in_process() -> None:
     deps = _party(Deps())
 
@@ -233,7 +306,9 @@ def test_a_fallback_that_reads_two_snapshots_ends_with_a_plain_error(
     deps = _party(Deps())
     monkeypatch.setattr(load_context_module, "InProcessContextData", _TwoSnapshots)
 
-    with pytest.raises(ContextUnavailableError, match="changed while it was being read"):
+    with pytest.raises(
+        ContextUnavailableError, match="changed while it was being read"
+    ):
         _through(deps, _BrokenTransport())
 
 
