@@ -7,6 +7,7 @@ running beforehand.
 """
 
 import asyncio
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -258,3 +259,18 @@ def test_every_tool_publishes_its_request_models_limits() -> None:
             assert _limits(schema["properties"][field]) == _limits(
                 model["properties"][field]
             ), f"{spec.qualified_name}.{field}"
+
+
+def test_http_refuses_a_host_other_than_loopback() -> None:
+    """No authentication, so no network: the script exits before binding anything."""
+    run = subprocess.run(
+        [sys.executable, str(SERVER_SCRIPT), "--http", "--host", "0.0.0.0"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert run.returncode == 2
+    assert "not a loopback address" in run.stderr

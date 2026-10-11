@@ -272,6 +272,15 @@ poetry run python scripts/run_mcp_server.py --http
 npx @modelcontextprotocol/inspector poetry run python scripts/run_mcp_server.py
 ```
 
+**Trust model.** The server has no authentication, so it serves only this
+machine: stdio answers the process that launched it, and HTTP binds to loopback
+(any other `--host` is refused; the SDK also checks Host and Origin against DNS
+rebinding). A `session_id` works as a capability: whoever reaches the server and
+knows one gets plans that reflect that session's accessibility requirements, and
+violations name the rule and the stop (P0-27's diagnostics) though never the
+requirement. That is the demo's single-machine boundary; serving it on a network
+needs authentication first (with the API layer, P0-35a).
+
 **Knowledge store (P0-26).** Semantic search runs on pgvector with a local
 multilingual model (fastembed, `paraphrase-multilingual-MiniLM-L12-v2`, ~220 MB,
 English questions against the Spanish corpus quoted from the official park

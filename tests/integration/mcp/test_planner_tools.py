@@ -361,3 +361,27 @@ def test_forecast_waits_honors_the_callers_now() -> None:
     (forecast,) = payload["data"]["forecasts"]  # a month later there is no snapshot
     assert datetime.fromisoformat(forecast["at"]) == NOW
     assert forecast["strategy"] == "api_forecast"
+
+
+def test_an_unknown_session_is_answered_like_a_guest_without_records() -> None:
+    """A structured, fail-closed answer that tells an unknown session from a known one
+    no better than the caller's own ids do; never an error or an internal message."""
+    deps = Deps()
+    _store_requirements(deps)  # session s1 holds g2's requirements
+    registry = deps.registry()
+
+    def rules(session_id: str, guest_id: str) -> set[str]:
+        data = _ok(
+            call_tool(
+                registry,
+                "planner.check_plan",
+                _args(session_id=session_id, guest_ids=[guest_id], plan=plan),
+            )
+        )["data"]
+        assert data["check"]["valid"] is False
+        return {v["rule"] for v in data["check"]["violations"]}
+
+    plan = _ok(call_tool(registry, "planner.build_plan", _args()))["data"]["plan"]
+
+    assert rules("no-such-session", "g2") == rules("s1", "g9")
+    assert RuleId.DATA_FRESHNESS.value in rules("no-such-session", "g2")

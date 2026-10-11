@@ -12,11 +12,17 @@ HTTP is for long-lived clients (the context loader with
 PARKMIND_CONTEXT_TRANSPORT=mcp). The tools read the same Postgres the app uses
 (DATABASE_URL), so start it first: docker compose up -d.
 
+HTTP binds to loopback only: the server has no authentication, and a planner
+tool given a session id answers with plans that reflect that session's
+accessibility requirements. Any other --host is refused. On loopback the MCP SDK
+also checks the Host and Origin headers (DNS-rebinding protection).
+
 On stdio, stdout is the protocol channel: everything this process logs goes to
 stderr.
 """
 
 import argparse
+import ipaddress
 import logging
 import os
 import sys
@@ -29,6 +35,15 @@ os.environ["PARKMIND_CONTEXT_TRANSPORT"] = "in_process"
 from parkmind.tools.mcp_server import create_server
 
 
+def is_loopback(host: str) -> bool:
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -37,6 +52,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args(argv)
+    if args.http and not is_loopback(args.host):
+        parser.error(
+            f"--host {args.host} is not a loopback address; parkmind-mcp has no "
+            "authentication, so it only serves this machine (127.0.0.1, ::1, localhost)"
+        )
 
     logging.basicConfig(level=logging.INFO, stream=sys.stderr)
     server = create_server()
