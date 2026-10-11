@@ -212,3 +212,49 @@ def test_fields_with_a_default_factory_are_optional_over_mcp() -> None:
     assert tool.input_schema["required"] == ["name"]
     assert result.is_error is False
     assert result.structured_content["data"] == {"waits": {}}
+
+
+_LIMITS = frozenset(
+    {
+        "description",
+        "exclusiveMinimum",
+        "maxItems",
+        "maxLength",
+        "maximum",
+        "minItems",
+        "minLength",
+        "minimum",
+        "pattern",
+    }
+)
+
+
+def _limits(schema: Any, path: str = "") -> set[tuple[str, str, str]]:
+    """Every limit or description in a JSON schema, with where it sits."""
+    found: set[tuple[str, str, str]] = set()
+    if isinstance(schema, dict):
+        for key, value in schema.items():
+            if key in _LIMITS and not isinstance(value, dict):
+                found.add((path, key, repr(value)))
+            found |= _limits(value, f"{path}/{key}")
+    elif isinstance(schema, list):
+        for i, item in enumerate(schema):
+            found |= _limits(item, f"{path}[{i}]")
+    return found
+
+
+def test_every_tool_publishes_its_request_models_limits() -> None:
+    """The published inputSchema keeps what the registry enforces (lengths, ranges, sizes)."""
+    from mcp_support import Deps, list_tools
+
+    registry = Deps(collect_at=None).registry()
+    published = {t.name: t.input_schema for t in list_tools(registry)}
+
+    for spec in registry:
+        model = spec.request_model.model_json_schema()
+        schema = published[spec.qualified_name]
+        assert set(schema.get("required", [])) == set(model.get("required", []))
+        for field in spec.request_model.model_fields:
+            assert _limits(schema["properties"][field]) == _limits(
+                model["properties"][field]
+            ), f"{spec.qualified_name}.{field}"

@@ -26,10 +26,12 @@ are read server-side [C19].
 
 import inspect
 import json
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server import MCPServer
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from pydantic import Field
+from pydantic.fields import FieldInfo
 
 from parkmind.tools.errors import ToolFailure
 from parkmind.tools.registry import ToolRegistry, ToolSpec, build_registry
@@ -52,6 +54,36 @@ def _error_result(failure: ToolFailure) -> CallToolResult:
     )
 
 
+_SCHEMA_LIMITS = frozenset(
+    {
+        "exclusiveMinimum",
+        "maxItems",
+        "maxLength",
+        "maximum",
+        "minItems",
+        "minLength",
+        "minimum",
+        "pattern",
+    }
+)
+
+
+def _published_annotation(info: FieldInfo, schema: dict[str, Any]) -> Any:
+    """The field's type, with its description and limits in the published schema.
+
+    Pydantic moves a field's own limits (``Field(le=20)``, ``Annotated[...,
+    Field(max_length=100)]``) out of ``annotation`` into ``metadata``. They are
+    published here as schema text only (``json_schema_extra``), not handed to
+    the SDK to enforce: the registry enforces them, so breaking one is a
+    structured ``INVALID_ARGUMENT`` rather than the SDK's plain-text error.
+    """
+    limits = {k: v for k, v in schema.items() if k in _SCHEMA_LIMITS}
+    if not limits and not info.description:
+        return info.annotation
+    published = Field(description=info.description, json_schema_extra=limits or None)
+    return Annotated[info.annotation, published]
+
+
 def _tool_function(registry: ToolRegistry, spec: ToolSpec) -> Any:
     """A function the SDK can introspect: flat keyword parameters, envelope return type."""
 
@@ -61,11 +93,12 @@ def _tool_function(registry: ToolRegistry, spec: ToolSpec) -> Any:
         except ToolFailure as failure:
             return _error_result(failure)
 
+    properties = spec.request_model.model_json_schema()["properties"]
     parameters = [
         inspect.Parameter(
             name,
             inspect.Parameter.KEYWORD_ONLY,
-            annotation=info.annotation,
+            annotation=_published_annotation(info, properties[name]),
             default=inspect.Parameter.empty
             if info.is_required()
             else info.get_default(call_default_factory=True),
