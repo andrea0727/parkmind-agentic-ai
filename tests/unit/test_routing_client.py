@@ -339,3 +339,60 @@ def test_walk_estimate_has_minutes_exactly_when_the_basis_is_known() -> None:
         WalkEstimate(None, "estimated")
     with pytest.raises(ValueError):
         WalkEstimate(3.0, "unknown")
+
+
+# -- estimate_walk and walk_minutes share rules 1-3 (equivalence) --
+
+_NEAR = {"near-a": (28.4180, -81.5812), "near-b": (28.41801, -81.5812)}  # ~1 m apart
+_EQUIVALENCE_CASES = {
+    "identity": (HUB_ID, HUB_ID, "identity"),
+    "matrix": (SPACE_MTN_ID, TRON_ID, "curated"),
+    "matrix reversed": (TRON_ID, SPACE_MTN_ID, "curated"),
+    "matrix clamped at zero": (HUB_ID, TRON_ID, "curated"),
+    "coordinates": (HUB_ID, BIG_THUNDER_ID, "estimated"),
+    "coordinates, 0.5 minute floor": ("near-a", "near-b", "estimated"),
+    "no route": (HUB_ID, "no-such-node", "unknown"),
+}
+
+
+@pytest.mark.parametrize("fallback_enabled", [False, True])
+@pytest.mark.parametrize(
+    ("origin", "destination", "basis"),
+    list(_EQUIVALENCE_CASES.values()),
+    ids=list(_EQUIVALENCE_CASES),
+)
+def test_estimate_walk_agrees_with_walk_minutes(
+    origin: str, destination: str, basis: str, fallback_enabled: bool
+) -> None:
+    """Same minutes wherever a rule applies; only the missing route differs, by design."""
+    client = RoutingClient(
+        fallback_enabled=fallback_enabled,
+        custom_matrix={(SPACE_MTN_ID, TRON_ID): 2.5, (HUB_ID, TRON_ID): -3.0},
+        custom_coordinates=_NEAR,
+    )
+
+    estimate = client.estimate_walk(origin, destination)
+
+    assert estimate.basis == basis
+    if estimate.minutes is not None:
+        assert client.walk_minutes(origin, destination) == estimate.minutes
+    elif fallback_enabled:
+        assert (
+            client.walk_minutes(origin, destination) == DEFAULT_FALLBACK_WALKING_MINUTES
+        )
+    else:
+        with pytest.raises(RouteNotFoundError):
+            client.walk_minutes(origin, destination)
+    if basis == "estimated" and origin.startswith("near"):
+        assert estimate.minutes == 0.5
+
+
+def test_estimate_walk_agrees_with_walk_minutes_over_the_park() -> None:
+    """Every pair of the first 20 curated nodes, both directions."""
+    client = RoutingClient()
+    nodes = sorted(MAGIC_KINGDOM_NODE_COORDINATES)[:20]
+
+    for origin in nodes:
+        for destination in nodes:
+            estimate = client.estimate_walk(origin, destination)
+            assert estimate.minutes == client.walk_minutes(origin, destination)
