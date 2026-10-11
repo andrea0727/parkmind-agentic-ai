@@ -20,7 +20,8 @@ on:
 jobs:
   ci:
     # Pinned: GitHub moves `ubuntu-latest` to Ubuntu 26 from 2026-10-19; change
-    # the image on purpose, not by surprise.
+    # the image on purpose, not by surprise. Revisit once a run on ubuntu-26.04
+    # is green (and keep embedding-smoke.yml on the same image).
     runs-on: ubuntu-24.04
     services:
       postgres:
