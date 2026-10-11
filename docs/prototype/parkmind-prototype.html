@@ -3,7 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ParkMind · Prototipo</title>
+<title>ParkMind · Prototype</title>
+<!--
+  VISUAL MOCKUP — not the final client.
+  Design and interaction reference for the ParkMind UI. The MVP client is the
+  Streamlit app consuming the P0-35 endpoints (src/parkmind/api/).
+  FIXTURE field names are an ILLUSTRATIVE SHAPE, NOT the domain contract: the
+  real contract comes from P0-35 (§33) and core/contracts.
+  See docs/UI-INTEGRATION.md and the matching ADR in docs/decisions/.
+-->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -217,6 +225,8 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
 .notif .act{flex:0 0 auto;align-self:center;font-size:12.5px;font-weight:800;padding:9px 13px;border-radius:999px;background:var(--dusk);color:#fff}
 .notif .dis{flex:0 0 auto;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.07);font-size:12px;display:grid;place-items:center}
 .nempty{text-align:center;font-size:13.5px;color:var(--faint);font-weight:500;padding:40px 10px}
+.scopetag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.02em;color:#7A5200;
+  background:#FFF4DC;padding:5px 10px;border-radius:999px;margin:0 0 10px}
 .ticket{border:1px solid var(--line);border-radius:18px;overflow:hidden}
 .tk-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:15px 16px;
   background:linear-gradient(140deg,var(--twilight),var(--dusk));color:#fff}
@@ -274,6 +284,29 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
 .cst.hard{background:#E2F4F2;color:#0A6B66;border:1px solid #BFE6E1}
 .cst.soft{background:#FDECF5;color:#A3156A;border:1px solid #F8D3E6}
 .cst.plain{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.confirm{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;margin:0 0 16px 37px;
+  box-shadow:0 2px 14px rgba(36,26,84,.08)}
+.confirm>b{display:block;font-size:16.5px;font-weight:800;letter-spacing:-.02em}
+.confirm>p{margin:5px 0 12px;font-size:13.5px;color:var(--muted);font-weight:500;line-height:1.45}
+.cf-list{list-style:none;margin:0 0 13px;padding:0;display:flex;flex-direction:column;gap:7px}
+.cf-list li{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  background:#E2F4F2;border:1px solid #BFE6E1;border-radius:11px;padding:10px 12px}
+.cf-list span{font-size:13.5px;font-weight:700;color:#0A6B66}
+.cf-list i{font-style:normal;font-size:10.5px;font-weight:800;letter-spacing:.03em;color:#0A6B66;opacity:.8}
+.cf-consent{display:flex;gap:10px;align-items:flex-start;padding:12px;border:1px solid var(--line);
+  border-radius:12px;margin-bottom:11px;cursor:pointer}
+.cf-consent input{width:20px;height:20px;flex:0 0 auto;accent-color:var(--twilight);margin:1px 0 0}
+.cf-consent span{font-size:13px;color:var(--muted);font-weight:500;line-height:1.42}
+.cf-consent span b{display:block;font-size:13.5px;color:var(--ink);font-weight:800;margin-bottom:2px}
+.cf-ret{margin-bottom:13px}
+.cf-ret>b{font-size:13.5px;font-weight:800;display:block;margin-bottom:7px}
+.cf-opts{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.cf-opt{font-size:12.5px;font-weight:700;padding:11px 8px;border-radius:11px;border:1px solid var(--line);color:var(--muted)}
+.cf-opt.on{border-color:var(--twilight);background:#F7F4FE;color:var(--twilight)}
+.cf-actions{display:grid;grid-template-columns:1fr 1.3fr;gap:9px}
+.cf-edit{padding:13px;border-radius:12px;background:var(--wash);color:var(--ink);font-size:14px;font-weight:800}
+.cf-ok{padding:13px;border-radius:12px;background:var(--dusk);color:#fff;font-size:14px;font-weight:800}
+.cf-warn{margin:9px 0 0;font-size:12.5px;font-weight:700;color:#A3156A;text-align:center;min-height:1px}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px 37px}
 .chip{font-size:13.5px;font-weight:700;padding:10px 15px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--muted);position:relative}
 .chip:hover{border-color:var(--twilight);color:var(--twilight)}
@@ -359,8 +392,8 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
 <body>
 
 <div class="stage-head">
-  <h1>ParkMind · prototipo navegable</h1>
-  <p>Magic Kingdom · Walt Disney World</p>
+  <h1>ParkMind · interactive prototype</h1>
+  <p>Aurora Park · fictional park</p>
 </div>
 
 <div class="device">
@@ -374,12 +407,12 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
       <div class="brandbar">
         <div class="wordmark">park<i>mind</i></div>
         <div class="brand-actions">
-          <button class="langbtn" id="openLang" aria-label="Idioma"><span id="langCode">ES</span></button>
-          <button class="bell" id="openNotifs" aria-label="Notificaciones">
+          <button class="langbtn" id="openLang" aria-label="Idioma" data-i18n-aria="a_lang"><span id="langCode">ES</span></button>
+          <button class="bell" id="openNotifs" aria-label="Notificaciones" data-i18n-aria="a_notifs">
             <span class="g">🔔</span><span class="badge" id="notifBadge">0</span>
           </button>
-          <button class="avatar" id="openProfile" aria-label="Perfil">A</button>
-          <button class="spark-btn ping" id="openAssistant" aria-label="Asistente"><span>✦</span></button>
+          <button class="avatar" id="openProfile" aria-label="Perfil" data-i18n-aria="a_profile">A</button>
+          <button class="spark-btn ping" id="openAssistant" aria-label="Asistente" data-i18n-aria="a_assistant"><span>✦</span></button>
         </div>
       </div>
       <h2 class="greet" id="greeting"></h2>
@@ -422,7 +455,7 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
     <section class="screen" id="s-plan">
       <div class="screen-head">
         <h2 data-i18n="my_plan">Mi plan</h2>
-        <p>Magic Kingdom · <span id="planCount">6</span> <span data-i18n="stops_exit">paradas · salida 18:00</span></p>
+        <p>Aurora Park · <span id="planCount">6</span> <span data-i18n="stops_exit">paradas · salida 18:00</span></p>
         <span class="status-chip" id="planStatus"></span>
       </div>
       <svg id="planMap" class="planmap" role="img" aria-label="Ruta del día"></svg>
@@ -435,7 +468,7 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
     <section class="screen" id="s-park">
       <div class="screen-head">
         <h2 data-i18n="park">Parque</h2>
-        <p data-i18n="park_sub">Magic Kingdom · esperas en vivo · ThemeParks.wiki</p>
+        <p data-i18n="park_sub">Aurora Park · esperas en vivo · ThemeParks.wiki</p>
       </div>
       <div class="mapfilters">
         <button class="mf on" data-filter="all" data-i18n="f_all">Todo</button>
@@ -446,10 +479,10 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
       <div class="mapwrap">
         <svg id="bigMap" role="img" aria-label="Mapa del parque"></svg>
         <div class="mapzoom">
-          <button id="zIn" aria-label="+">+</button>
-          <button id="zOut" aria-label="−">−</button>
-          <button id="zMe" aria-label="Mi ubicación">◎</button>
-          <button id="zReset" aria-label="Todo el parque">⤢</button>
+          <button id="zIn" aria-label="+" data-i18n-aria="a_in">+</button>
+          <button id="zOut" aria-label="−" data-i18n-aria="a_out">−</button>
+          <button id="zMe" aria-label="Mi ubicación" data-i18n-aria="a_me">◎</button>
+          <button id="zReset" aria-label="Todo el parque" data-i18n-aria="a_all">⤢</button>
         </div>
         <div class="maplegend">
           <span><i style="background:#4A2FA8"></i><span data-i18n="l_route">Mi ruta</span></span>
@@ -466,7 +499,7 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
     <!-- PERFIL -->
     <section class="screen" id="s-profile">
       <div class="screen-head">
-        <button class="backbtn" data-go="home" aria-label="Volver">‹</button>
+        <button class="backbtn" data-go="home" aria-label="Volver" data-i18n-aria="a_back">‹</button>
         <h2 data-i18n="profile">Perfil</h2>
         <p data-i18n="profile_sub">Tu grupo, tus restricciones y tu idioma</p>
       </div>
@@ -476,6 +509,7 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
       </div>
 
       <h3 class="sect" style="margin-top:4px" data-i18n="tickets">Entradas y passes</h3>
+      <p class="scopetag" data-i18n="tk_future">Idea futura · fuera de alcance</p>
       <div id="profTicket"></div>
       <p class="note" data-i18n="tk_note">Tu ticket base no permite cambiar de parque hoy.</p>
 
@@ -512,7 +546,7 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
     <!-- EVALUACIÓN -->
     <section class="screen" id="s-eval">
       <div class="screen-head">
-        <button class="backbtn" data-go="more" aria-label="Volver">‹</button>
+        <button class="backbtn" data-go="more" aria-label="Volver" data-i18n-aria="a_back">‹</button>
         <h2 data-i18n="eval">Evaluación</h2>
         <p data-i18n="eval_sub">Mismo escenario, mismas herramientas</p>
       </div>
@@ -531,12 +565,12 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
     <div class="grab"></div>
     <div class="sheet-head">
       <div><h3 id="sheetTitle" data-i18n="assistant">Asistente</h3><div class="sub" id="assistStatus"></div></div>
-      <button class="xbtn" id="closeSheet" aria-label="Cerrar">✕</button>
+      <button class="xbtn" id="closeSheet" aria-label="Cerrar" data-i18n-aria="a_close">✕</button>
     </div>
     <div class="chat" id="chat"></div>
     <div class="composer">
-      <input id="chatInput" autocomplete="off" aria-label="Mensaje para ParkMind">
-      <button class="send" id="sendBtn" aria-label="Enviar">↑</button>
+      <input id="chatInput" autocomplete="off" aria-label="Mensaje para ParkMind" data-i18n-aria="composer">
+      <button class="send" id="sendBtn" aria-label="Enviar" data-i18n-aria="a_send">↑</button>
     </div>
   </div>
 
@@ -551,7 +585,7 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
     <div class="grab"></div>
     <div class="sheet-head">
       <h3 id="nTitle" data-i18n="notifs">Notificaciones</h3>
-      <button class="xbtn" id="closeNotifs" aria-label="Cerrar">✕</button>
+      <button class="xbtn" id="closeNotifs" aria-label="Cerrar" data-i18n-aria="a_close">✕</button>
     </div>
     <div class="nbody" id="notifList"></div>
     <div class="nfoot"><button id="clearNotifs" data-i18n="notifs_clear">Marcar todas como leídas</button></div>
@@ -585,7 +619,7 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <nav class="tabs" aria-label="Navegación principal">
+  <nav class="tabs" aria-label="Navegación principal" data-i18n-aria="a_nav">
     <button class="tab on" data-go="home"><span class="g">⌂</span><span data-i18n="t_home">Inicio</span></button>
     <button class="tab" data-go="park"><span class="g">▲</span><span data-i18n="t_park">Parque</span></button>
     <button class="tab" data-go="plan"><span class="g">◷</span><span data-i18n="t_plan">Mi plan</span></button>
@@ -595,8 +629,8 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
 </div>
 
 <div class="stage-foot">
-  <span style="font-size:12px;opacity:.6;font-weight:500">Maqueta de interfaz · datos ilustrativos · no es una implementación productiva</span>
-  <button class="ghost-btn" id="resetBtn">Reiniciar</button>
+  <span style="font-size:12px;opacity:.6;font-weight:500">Interface mockup · illustrative data · not a production implementation</span>
+  <button class="ghost-btn" id="resetBtn">Reset</button>
 </div>
 
 <script>
@@ -610,7 +644,7 @@ const I18N = {
     your_day:"Tu día", my_plan:"Mi plan", stops_exit:"paradas · salida 18:00",
     wait_times:"Tiempos de espera", live_rides:"en vivo · 32 atracciones",
     now:"Ahora", updated:"actualizado hace 2 min", no_stairs:"♿ Ruta sin escaleras",
-    park:"Parque", park_sub:"Magic Kingdom · esperas en vivo · ThemeParks.wiki",
+    park:"Parque", park_sub:"Aurora Park · esperas en vivo · ThemeParks.wiki",
     f_all:"Todo", f_route:"Mi ruta", f_access:"Accesibles", f_open:"Abiertas",
     l_route:"Mi ruta", l_short:"Espera corta", l_long:"Fila larga", l_closed:"Cerrada",
     all_rides:"Todas las atracciones", tap_hint:"Toca una atracción en el mapa para ver su detalle.",
@@ -654,13 +688,21 @@ const I18N = {
     prompt3:"¿Cuánto vamos a caminar hoy?", prompt3s:"distancia total de tu ruta",
     prompt4:"Busca algo bajo techo cerca", prompt4s:"alternativas a menos de 300 m",
     prompt5:"¿Qué fila está más corta ahora?", prompt5s:"esperas en vivo del parque",
-    tag_new:"Nuevo", tag_moved:"Movido", notifs:"Notificaciones", notifs_empty:"No tienes notificaciones.", notifs_clear:"Marcar todas como leídas",
+    a_profile:"Perfil", a_notifs:"Notificaciones", a_lang:"Idioma", a_assistant:"Asistente",
+    a_close:"Cerrar", a_back:"Volver", a_dismiss:"Descartar", a_send:"Enviar", a_nav:"Navegación principal",
+    a_in:"Acercar", a_out:"Alejar", a_me:"Mi ubicación", a_all:"Ver todo el parque",
+    cf_title:"Confirma antes de seguir", cf_sub:"Estas son obligatorias: el optimizador no puede negociarlas. Necesito que las confirmes antes de armar el día.",
+    cf_hard:"Obligatorio", cf_consent:"Consentimiento", cf_consent_b:"Guardar requisitos de accesibilidad y altura para planear tu día.",
+    cf_ret:"Retención", cf_ret_s:"Solo esta sesión", cf_ret_k:"Guardar en mi perfil",
+    cf_ok:"Confirmar", cf_edit:"Corregir", cf_need:"Marca el consentimiento para continuar.",
+    cf_done:"Restricciones confirmadas · retención: {r}", tag_new:"Nuevo", tag_moved:"Movido", notifs:"Notificaciones", notifs_empty:"No tienes notificaciones.", notifs_clear:"Marcar todas como leídas",
     n_now:"ahora", n_min:"hace {n} min", tickets:"Entradas y passes", tk_base_3:"Ticket de 3 días · Base",
     tk_day:"Día {i} de {n}", tk_valid:"Válido del {a} al {b}",
     tk_hopper_no:"Sin Park Hopper · un parque por día", tk_hopper_yes:"Park Hopper · varios parques por día",
     tk_ll:"Lightning Lane Multi Pass", tk_ll_left:"{n} de {t} reservas disponibles hoy",
     tk_adult:"Adulto", tk_child:"Niño (3-9)",
-    tk_note:"Tu ticket base no permite cambiar de parque hoy, así que todo el plan se queda en Magic Kingdom. Las reservas de Lightning Lane se gastan en las filas más largas.",
+    tk_future:"Idea futura · fuera de alcance",
+    tk_note:"Vista ilustrativa de cómo se verían los entitlements del invitado. El MVP no los modela: el optimizador hoy no conoce Park Hopper ni Lightning Lane, y la estatura se valida contra guest.height_cm, no contra el tipo de ticket.",
     ll_tag:"Lightning Lane",
     prompt6:"¿Qué incluye mi ticket?", prompt6s:"días, parques y Lightning Lane",
     prompt7:"¿Dónde almorzamos?", prompt7s:"opciones accesibles cerca de tu ruta",
@@ -673,7 +715,7 @@ const I18N = {
     your_day:"Your day", my_plan:"My plan", stops_exit:"stops · leaving 6:00 PM",
     wait_times:"Wait times", live_rides:"live · 32 attractions",
     now:"Now", updated:"updated 2 min ago", no_stairs:"♿ Step-free route",
-    park:"Park", park_sub:"Magic Kingdom · live waits · ThemeParks.wiki",
+    park:"Park", park_sub:"Aurora Park · live waits · ThemeParks.wiki",
     f_all:"All", f_route:"My route", f_access:"Accessible", f_open:"Open",
     l_route:"My route", l_short:"Short wait", l_long:"Long line", l_closed:"Closed",
     all_rides:"All attractions", tap_hint:"Tap an attraction on the map to see details.",
@@ -717,13 +759,21 @@ const I18N = {
     prompt3:"How much will we walk today?", prompt3s:"total distance of your route",
     prompt4:"Find something indoors nearby", prompt4s:"alternatives under 300 m",
     prompt5:"Which line is shortest right now?", prompt5s:"live waits across the park",
-    tag_new:"New", tag_moved:"Moved", notifs:"Notifications", notifs_empty:"No notifications.", notifs_clear:"Mark all as read",
+    a_profile:"Profile", a_notifs:"Notifications", a_lang:"Language", a_assistant:"Assistant",
+    a_close:"Close", a_back:"Back", a_dismiss:"Dismiss", a_send:"Send", a_nav:"Main navigation",
+    a_in:"Zoom in", a_out:"Zoom out", a_me:"My location", a_all:"View whole park",
+    cf_title:"Confirm before we continue", cf_sub:"These are mandatory: the optimizer cannot negotiate them. I need you to confirm before I build the day.",
+    cf_hard:"Required", cf_consent:"Consent", cf_consent_b:"Store accessibility and height requirements to plan your day.",
+    cf_ret:"Retention", cf_ret_s:"This session only", cf_ret_k:"Save to my profile",
+    cf_ok:"Confirm", cf_edit:"Correct", cf_need:"Tick consent to continue.",
+    cf_done:"Constraints confirmed · retention: {r}", tag_new:"New", tag_moved:"Moved", notifs:"Notifications", notifs_empty:"No notifications.", notifs_clear:"Mark all as read",
     n_now:"now", n_min:"{n} min ago", tickets:"Tickets and passes", tk_base_3:"3-Day Base Ticket",
     tk_day:"Day {i} of {n}", tk_valid:"Valid {a} to {b}",
     tk_hopper_no:"No Park Hopper · one park per day", tk_hopper_yes:"Park Hopper · multiple parks per day",
     tk_ll:"Lightning Lane Multi Pass", tk_ll_left:"{n} of {t} selections left today",
     tk_adult:"Adult", tk_child:"Child (3-9)",
-    tk_note:"Your base ticket doesn't allow park hopping today, so the whole plan stays in Magic Kingdom. Lightning Lane selections are spent on the longest lines.",
+    tk_future:"Future idea · out of scope",
+    tk_note:"Illustrative view of how guest entitlements would look. The MVP does not model them: the optimizer knows nothing about Park Hopper or Lightning Lane, and height is checked against guest.height_cm, not the ticket type.",
     ll_tag:"Lightning Lane",
     prompt6:"What does my ticket include?", prompt6s:"days, parks and Lightning Lane",
     prompt7:"Where should we have lunch?", prompt7s:"accessible options near your route",
@@ -736,7 +786,7 @@ const I18N = {
     your_day:"Seu dia", my_plan:"Meu plano", stops_exit:"paradas · saída 18:00",
     wait_times:"Tempos de espera", live_rides:"ao vivo · 32 atrações",
     now:"Agora", updated:"atualizado há 2 min", no_stairs:"♿ Rota sem escadas",
-    park:"Parque", park_sub:"Magic Kingdom · esperas ao vivo · ThemeParks.wiki",
+    park:"Parque", park_sub:"Aurora Park · esperas ao vivo · ThemeParks.wiki",
     f_all:"Tudo", f_route:"Minha rota", f_access:"Acessíveis", f_open:"Abertas",
     l_route:"Minha rota", l_short:"Espera curta", l_long:"Fila longa", l_closed:"Fechada",
     all_rides:"Todas as atrações", tap_hint:"Toque numa atração no mapa para ver os detalhes.",
@@ -780,13 +830,21 @@ const I18N = {
     prompt3:"Quanto vamos caminhar hoje?", prompt3s:"distância total da sua rota",
     prompt4:"Procure algo coberto por perto", prompt4s:"alternativas a menos de 300 m",
     prompt5:"Qual fila está mais curta agora?", prompt5s:"esperas ao vivo do parque",
-    tag_new:"Nova", tag_moved:"Movida", notifs:"Notificações", notifs_empty:"Nenhuma notificação.", notifs_clear:"Marcar todas como lidas",
+    a_profile:"Perfil", a_notifs:"Notificações", a_lang:"Idioma", a_assistant:"Assistente",
+    a_close:"Fechar", a_back:"Voltar", a_dismiss:"Descartar", a_send:"Enviar", a_nav:"Navegação principal",
+    a_in:"Aproximar", a_out:"Afastar", a_me:"Minha localização", a_all:"Ver todo o parque",
+    cf_title:"Confirme antes de continuar", cf_sub:"Estas são obrigatórias: o otimizador não pode negociá-las. Preciso que você confirme antes de montar o dia.",
+    cf_hard:"Obrigatório", cf_consent:"Consentimento", cf_consent_b:"Guardar requisitos de acessibilidade e altura para planejar seu dia.",
+    cf_ret:"Retenção", cf_ret_s:"Apenas esta sessão", cf_ret_k:"Salvar no meu perfil",
+    cf_ok:"Confirmar", cf_edit:"Corrigir", cf_need:"Marque o consentimento para continuar.",
+    cf_done:"Restrições confirmadas · retenção: {r}", tag_new:"Nova", tag_moved:"Movida", notifs:"Notificações", notifs_empty:"Nenhuma notificação.", notifs_clear:"Marcar todas como lidas",
     n_now:"agora", n_min:"há {n} min", tickets:"Ingressos e passes", tk_base_3:"Ingresso de 3 dias · Base",
     tk_day:"Dia {i} de {n}", tk_valid:"Válido de {a} a {b}",
     tk_hopper_no:"Sem Park Hopper · um parque por dia", tk_hopper_yes:"Park Hopper · vários parques por dia",
     tk_ll:"Lightning Lane Multi Pass", tk_ll_left:"{n} de {t} reservas disponíveis hoje",
     tk_adult:"Adulto", tk_child:"Criança (3-9)",
-    tk_note:"Seu ingresso base não permite trocar de parque hoje, então todo o plano fica no Magic Kingdom. As reservas de Lightning Lane são usadas nas filas mais longas.",
+    tk_future:"Ideia futura · fora de escopo",
+    tk_note:"Visão ilustrativa de como ficariam os entitlements. O MVP não os modela: o otimizador não conhece Park Hopper nem Lightning Lane, e a altura é validada contra guest.height_cm, não contra o tipo de ingresso.",
     ll_tag:"Lightning Lane",
     prompt6:"O que o meu ingresso inclui?", prompt6s:"dias, parques e Lightning Lane",
     prompt7:"Onde almoçar?", prompt7s:"opções acessíveis perto da sua rota",
@@ -799,7 +857,7 @@ const I18N = {
     your_day:"Votre journée", my_plan:"Mon plan", stops_exit:"arrêts · départ 18:00",
     wait_times:"Temps d'attente", live_rides:"en direct · 32 attractions",
     now:"Maintenant", updated:"mis à jour il y a 2 min", no_stairs:"♿ Itinéraire sans escaliers",
-    park:"Parc", park_sub:"Magic Kingdom · attentes en direct · ThemeParks.wiki",
+    park:"Parc", park_sub:"Aurora Park · attentes en direct · ThemeParks.wiki",
     f_all:"Tout", f_route:"Mon itinéraire", f_access:"Accessibles", f_open:"Ouvertes",
     l_route:"Mon itinéraire", l_short:"Attente courte", l_long:"File longue", l_closed:"Fermée",
     all_rides:"Toutes les attractions", tap_hint:"Touchez une attraction sur la carte pour voir le détail.",
@@ -843,13 +901,21 @@ const I18N = {
     prompt3:"Combien allons-nous marcher aujourd'hui ?", prompt3s:"distance totale de votre itinéraire",
     prompt4:"Trouve quelque chose à l'intérieur tout près", prompt4s:"alternatives à moins de 300 m",
     prompt5:"Quelle file est la plus courte maintenant ?", prompt5s:"attentes en direct dans le parc",
-    tag_new:"Nouveau", tag_moved:"Déplacé", notifs:"Notifications", notifs_empty:"Aucune notification.", notifs_clear:"Tout marquer comme lu",
+    a_profile:"Profil", a_notifs:"Notifications", a_lang:"Langue", a_assistant:"Assistant",
+    a_close:"Fermer", a_back:"Retour", a_dismiss:"Rejeter", a_send:"Envoyer", a_nav:"Navigation principale",
+    a_in:"Zoom avant", a_out:"Zoom arrière", a_me:"Ma position", a_all:"Voir tout le parc",
+    cf_title:"Confirmez avant de continuer", cf_sub:"Celles-ci sont obligatoires : l'optimiseur ne peut pas les négocier. J'ai besoin que vous les confirmiez avant de construire la journée.",
+    cf_hard:"Obligatoire", cf_consent:"Consentement", cf_consent_b:"Conserver les exigences d'accessibilité et de taille pour planifier votre journée.",
+    cf_ret:"Conservation", cf_ret_s:"Cette session uniquement", cf_ret_k:"Enregistrer dans mon profil",
+    cf_ok:"Confirmer", cf_edit:"Corriger", cf_need:"Cochez le consentement pour continuer.",
+    cf_done:"Contraintes confirmées · conservation : {r}", tag_new:"Nouveau", tag_moved:"Déplacé", notifs:"Notifications", notifs_empty:"Aucune notification.", notifs_clear:"Tout marquer comme lu",
     n_now:"maintenant", n_min:"il y a {n} min", tickets:"Billets et pass", tk_base_3:"Billet 3 jours · Base",
     tk_day:"Jour {i} sur {n}", tk_valid:"Valable du {a} au {b}",
     tk_hopper_no:"Sans Park Hopper · un parc par jour", tk_hopper_yes:"Park Hopper · plusieurs parcs par jour",
     tk_ll:"Lightning Lane Multi Pass", tk_ll_left:"{n} réservations sur {t} restantes aujourd'hui",
     tk_adult:"Adulte", tk_child:"Enfant (3-9)",
-    tk_note:"Votre billet de base ne permet pas de changer de parc aujourd'hui, donc tout le plan reste à Magic Kingdom. Les réservations Lightning Lane sont utilisées sur les files les plus longues.",
+    tk_future:"Idée future · hors périmètre",
+    tk_note:"Vue illustrative des entitlements. Le MVP ne les modélise pas : l'optimiseur ignore Park Hopper et Lightning Lane, et la taille est vérifiée via guest.height_cm, pas via le type de billet.",
     ll_tag:"Lightning Lane",
     prompt6:"Que comprend mon billet ?", prompt6s:"jours, parcs et Lightning Lane",
     prompt7:"Où déjeuner ?", prompt7s:"options accessibles près de votre itinéraire",
@@ -866,8 +932,14 @@ const t = (k, vars) => {
 };
 
 /* =========================================================================
-   FIXTURE — serializa los contratos del dominio. Las coordenadas vienen de
-   entity.location en ThemeParks.wiki (aquí aproximadas; en live, exactas).
+   FIXTURE — FORMA ILUSTRATIVA, NO EL CONTRATO.
+   Los nombres de campo de aquí NO coinciden con core/contracts: el dominio
+   usa stops/node_id/arrival_time, departure_time, AccessibilityRequirements
+   por invitado, y stops_added/removed/modified/reordered en el diff.
+   El contrato real sale de P0-35 (§33). No construyas el adaptador contra
+   este fixture: constrúyelo contra el contrato y ajusta aquí.
+   Las coordenadas vienen de entity.location en ThemeParks.wiki
+   (aquí aproximadas; en live, exactas).
    ========================================================================= */
 const FIXTURE = {
   guest_profile: { guest_id:"g_mk_001", display_name:"Andrea", party_size:3 },
@@ -891,12 +963,16 @@ const FIXTURE = {
       { code:"shows",  weight:0.4, label:{es:"Espectáculos",en:"Shows",pt:"Espetáculos",fr:"Spectacles"} }
     ]
   },
-  /* Entitlements — productos reales de Walt Disney World. No son decorativos:
-     cada uno es una restricción que el optimizador tiene que respetar.
-       · base sin Park Hopper → el plan no puede salir de Magic Kingdom hoy
-       · Lightning Lane Multi Pass → 3 reservas disponibles, el planner las
-         gasta en las filas más largas
-       · ticket de niño → aplican restricciones de estatura */
+  /* IDEA FUTURA — FUERA DE ALCANCE DEL MVP.
+     Nada de este bloque existe en §33, en el optimizador ni en el backlog.
+     Se dibuja para ilustrar cómo se verían los entitlements SI algún día se
+     modelaran; hoy el optimizador no los conoce y no los respeta.
+     Ojo en particular:
+       · Park Hopper y Lightning Lane no son restricciones del planner.
+       · La estatura NO sale del tipo de ticket: sale de guest.height_cm
+         (regla 2 del ConstraintChecker).
+     Los nombres de producto son de Walt Disney World y se muestran solo como
+     contexto del dominio, no como funcionalidad de ParkMind. */
   tickets: {
     product:"3-Day Base Ticket",
     product_key:"tk_base_3",
@@ -911,7 +987,10 @@ const FIXTURE = {
     ]
   },
   plan: {
-    plan_id:"pl_7f31", park:"Magic Kingdom",
+    /* Aurora Park es el parque ficticio del proyecto. El catálogo, las esperas
+       y las coordenadas se obtienen de ThemeParks.wiki usando el id de abajo,
+       así que los nombres de atracción y la geometría del mapa son reales. */
+    plan_id:"pl_7f31", park:"Aurora Park",
     park_id:"75ea578a-adc8-4116-a54d-dccb60765ef9",
     status:"valid", rules_checked:11,
     events:[
@@ -958,25 +1037,25 @@ const FIXTURE = {
                         fr:"Itinéraire sans escaliers et accès fauteuil confirmés sur les 6 arrêts."}
   },
   rides:[
-    { name:"Space Mountain",            zone:"Tomorrowland",   wait:25,   access:true,  loc:{lat:28.4189,lon:-81.5775} },
-    { name:"TRON Lightcycle Run",       zone:"Tomorrowland",   wait:85,   access:true,  loc:{lat:28.4196,lon:-81.5773} },
-    { name:"Buzz Lightyear",            zone:"Tomorrowland",   wait:30,   access:true,  loc:{lat:28.4186,lon:-81.5782} },
-    { name:"Tomorrowland Speedway",     zone:"Tomorrowland",   wait:40,   access:false, loc:{lat:28.4197,lon:-81.5780} },
-    { name:"Haunted Mansion",           zone:"Liberty Square", wait:15,   access:true,  loc:{lat:28.4205,lon:-81.5833} },
-    { name:"Liberty Square Riverboat",  zone:"Liberty Square", wait:20,   access:true,  loc:{lat:28.4202,lon:-81.5840} },
-    { name:"Jungle Cruise",             zone:"Adventureland",  wait:null, access:true,  loc:{lat:28.4183,lon:-81.5836}, closed:true },
-    { name:"Pirates of the Caribbean",  zone:"Adventureland",  wait:20,   access:true,  loc:{lat:28.4181,lon:-81.5839} },
-    { name:"Magic Carpets",             zone:"Adventureland",  wait:10,   access:true,  loc:{lat:28.4180,lon:-81.5832} },
-    { name:"Big Thunder Mountain",      zone:"Frontierland",   wait:15,   access:true,  loc:{lat:28.4196,lon:-81.5843} },
-    { name:"Tiana's Bayou Adventure",   zone:"Frontierland",   wait:75,   access:false, loc:{lat:28.4192,lon:-81.5847} },
-    { name:"Seven Dwarfs Mine Train",   zone:"Fantasyland",    wait:70,   access:false, loc:{lat:28.4201,lon:-81.5790} },
-    { name:"it's a small world",        zone:"Fantasyland",    wait:10,   access:true,  loc:{lat:28.4205,lon:-81.5805} },
-    { name:"Dumbo the Flying Elephant", zone:"Fantasyland",    wait:5,    access:true,  loc:{lat:28.4199,lon:-81.5793} },
-    { name:"Peter Pan's Flight",        zone:"Fantasyland",    wait:55,   access:false, loc:{lat:28.4203,lon:-81.5803} },
-    { name:"Mad Tea Party",             zone:"Fantasyland",    wait:10,   access:true,  loc:{lat:28.4200,lon:-81.5786} },
-    { name:"Be Our Guest",              zone:"Fantasyland",    wait:0,    access:true,  loc:{lat:28.4203,lon:-81.5796} },
-    { name:"Cinderella Castle",         zone:"Fantasyland",    wait:0,    access:true,  loc:{lat:28.4192,lon:-81.5812} },
-    { name:"Main Street Vehicles",      zone:"Main Street",    wait:5,    access:true,  loc:{lat:28.4172,lon:-81.5812} }
+    { kind:"ride", name:"Space Mountain",            zone:"Tomorrowland",   wait:25,   access:true,  loc:{lat:28.4189,lon:-81.5775} },
+    { kind:"ride", name:"TRON Lightcycle Run",       zone:"Tomorrowland",   wait:85,   access:true,  loc:{lat:28.4196,lon:-81.5773} },
+    { kind:"ride", name:"Buzz Lightyear",            zone:"Tomorrowland",   wait:30,   access:true,  loc:{lat:28.4186,lon:-81.5782} },
+    { kind:"ride", name:"Tomorrowland Speedway",     zone:"Tomorrowland",   wait:40,   access:false, loc:{lat:28.4197,lon:-81.5780} },
+    { kind:"ride", name:"Haunted Mansion",           zone:"Liberty Square", wait:15,   access:true,  loc:{lat:28.4205,lon:-81.5833} },
+    { kind:"ride", name:"Liberty Square Riverboat",  zone:"Liberty Square", wait:20,   access:true,  loc:{lat:28.4202,lon:-81.5840} },
+    { kind:"ride", name:"Jungle Cruise",             zone:"Adventureland",  wait:null, access:true,  loc:{lat:28.4183,lon:-81.5836}, closed:true },
+    { kind:"ride", name:"Pirates of the Caribbean",  zone:"Adventureland",  wait:20,   access:true,  loc:{lat:28.4181,lon:-81.5839} },
+    { kind:"ride", name:"Magic Carpets",             zone:"Adventureland",  wait:10,   access:true,  loc:{lat:28.4180,lon:-81.5832} },
+    { kind:"ride", name:"Big Thunder Mountain",      zone:"Frontierland",   wait:15,   access:true,  loc:{lat:28.4196,lon:-81.5843} },
+    { kind:"ride", name:"Tiana's Bayou Adventure",   zone:"Frontierland",   wait:75,   access:false, loc:{lat:28.4192,lon:-81.5847} },
+    { kind:"ride", name:"Seven Dwarfs Mine Train",   zone:"Fantasyland",    wait:70,   access:false, loc:{lat:28.4201,lon:-81.5790} },
+    { kind:"ride", name:"it's a small world",        zone:"Fantasyland",    wait:10,   access:true,  loc:{lat:28.4205,lon:-81.5805} },
+    { kind:"ride", name:"Dumbo the Flying Elephant", zone:"Fantasyland",    wait:5,    access:true,  loc:{lat:28.4199,lon:-81.5793} },
+    { kind:"ride", name:"Peter Pan's Flight",        zone:"Fantasyland",    wait:55,   access:false, loc:{lat:28.4203,lon:-81.5803} },
+    { kind:"ride", name:"Mad Tea Party",             zone:"Fantasyland",    wait:10,   access:true,  loc:{lat:28.4200,lon:-81.5786} },
+    { kind:"meal", name:"Be Our Guest",              zone:"Fantasyland",    wait:0,    access:true,  loc:{lat:28.4203,lon:-81.5796} },
+    { kind:"view", name:"Cinderella Castle",         zone:"Fantasyland",    wait:0,    access:true,  loc:{lat:28.4192,lon:-81.5812} },
+    { kind:"transport", name:"Main Street Vehicles",      zone:"Main Street",    wait:5,    access:true,  loc:{lat:28.4172,lon:-81.5812} }
   ],
   alerts:[
     { id:"al_park", kind:"info",   icon:"🕕", mins:12, title_key:"park_closing", body_key:"park_closing_b" },
@@ -1087,7 +1166,7 @@ const STATE = {
   plan: structuredClone(FIXTURE.plan),
   proposal: structuredClone(FIXTURE.proposal),
   proposalState:"pending",
-  screen:"home", dismissedAlerts:new Set(), readNotifs:new Set()
+  screen:"home", dismissedAlerts:new Set(), readNotifs:new Set(), consent:null
 };
 /* ---- gestión de diálogos: inert al cerrar, foco atrapado, foco devuelto ---- */
 let lastFocus = null;
@@ -1134,12 +1213,12 @@ const esc = s => String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt
 function applyLang(){
   document.documentElement.lang = LANG;
   $$("[data-i18n]").forEach(n => { const k = n.dataset.i18n; if (I18N[LANG][k]) n.textContent = I18N[LANG][k]; });
+  $$("[data-i18n-aria]").forEach(n => { const k = n.dataset.i18nAria; if (I18N[LANG][k]) n.setAttribute("aria-label", I18N[LANG][k]); });
   $("#chatInput").placeholder = t("composer");
   $("#assistStatus").textContent = t("listening");
   $("#greeting").innerHTML = `${greetWord()},<br>${FIXTURE.guest_profile.display_name}`;
-  $("#homeSub").textContent = `Magic Kingdom · ${t("stops_exit").split("·")[0].trim() ? "" : ""}`.trim() ||
-    `Magic Kingdom · ${FIXTURE.guest_profile.party_size}`;
-  $("#homeSub").textContent = `Magic Kingdom · ${t("party")} ${FIXTURE.guest_profile.party_size}`;
+  $("#homeSub").textContent =
+    `${STATE.plan.park} · ${t("party")} ${FIXTURE.guest_profile.party_size}`;
   $("#profSub").textContent = `${t("party")} · ${FIXTURE.guest_profile.party_size}`;
   renderPlan(); renderAlert(); renderRides(); renderBigMap(); renderProfile(); renderLangGrid();
   if (!$("#chat").children.length || $("#chat").querySelector(".welcome")) seedChat();
@@ -1187,6 +1266,7 @@ function renderPlan(){
     const leg = dist != null ? `<div class="leg">↓ ${t("walk_leg",{m:dist,min:walkMin(dist)})}</div>` : "";
     const cls = ["stop", ev.state==="current"?"current":(ev.state==="done"?"done":""), ev.changed?"changed":""].join(" ");
     const stop = el("div", cls);
+    /* Ilustrativo: el optimizador no asigna Lightning Lane (fuera de alcance). */
     const llt = ev.lightning_lane ? `<span class="lltag">⚡ ${t("ll_tag")}</span>` : "";
     stop.innerHTML = `<div class="t">${ev.start}</div>
       <div class="rail"><div class="dot"></div><div class="line"></div></div>
@@ -1240,7 +1320,7 @@ function renderNotifs(){
       <div style="flex:1"><b>${esc(it.title)}</b><p>${esc(it.body)}</p>
         <span class="when">${it.mins ? t("n_min",{n:it.mins}) : t("n_now")}</span></div>
       ${it.action === "review" ? `<button class="act">${t("review")}</button>`
-                               : `<button class="dis" aria-label="Descartar">✕</button>`}`;
+                               : `<button class="dis" aria-label="${t('a_dismiss')}">✕</button>`}`;
     const act = node.querySelector(".act");
     if (act) act.onclick = () => { STATE.readNotifs.add(it.id); closeNotifs(); openProposal(); renderBell(); };
     const dis = node.querySelector(".dis");
@@ -1393,7 +1473,7 @@ function renderRideCard(){
   const d = haversine(here(), r.loc);
   const inPlan = STATE.plan.events.some(e => e.title === r.name);
   box.innerHTML = `<div class="rc-head"><div><b>${esc(r.name)}</b><small>${esc(r.zone)}</small></div>
-      <button class="xsmall" id="rcClose" aria-label="Cerrar">✕</button></div>
+      <button class="xsmall" id="rcClose" aria-label="${t('a_close')}">✕</button></div>
     <div class="rc-stats">
       <span class="rc-stat">${r.closed ? t("closed_now") : r.wait + " " + t("min_wait")}</span>
       <span class="rc-stat">${d} m · ${walkMin(d)} min</span>
@@ -1641,15 +1721,12 @@ function mockReply(text){
       constraints:[
         {kind:"hard",label:"♿ "+loc(FIXTURE.party_constraints.accessibility[0].label)},
         {kind:"hard",label:loc(FIXTURE.party_constraints.accessibility[1].label)},
-        {kind:"plain",label:"18:00"},
+        {kind:"hard",label:"⏱ "+FIXTURE.party_constraints.exit_by},
         {kind:"soft",label:loc(FIXTURE.party_constraints.preferences[0].label)}],
-      follow:{es:"Con eso armé el día. Empieza por Tomorrowland para evitar la fila de mediodía.",
-              en:"With that I built the day. Start in Tomorrowland to beat the midday line.",
-              pt:"Com isso montei o dia. Comece pela Tomorrowland para fugir da fila do meio-dia.",
-              fr:"Avec ça j'ai construit la journée. Commencez par Tomorrowland pour éviter la file de midi."}[LANG],
-      plan_preview:true, followups:true };
+      confirm:true };   // P0-29: las restricciones duras no entran sin confirmación
 
-  if (has("lluvia","rain","chuva","pluie","15","3 pm","clima","weather","météo"))
+  if (has("lluvia","llover","lloviendo","rain","raining","chuva","chover","pluie","pleuvoir",
+          "clima","tiempo","weather","forecast","météo","previsão","15:00","3 pm","3pm","las 3"))
     return { text:{es:"Hay 60% de lluvia desde las 15:00 y Jungle Cruise reportó cierre temporal. Preparé un cambio: entra Haunted Mansion, bajo techo y con acceso en silla de ruedas. No lo aplico hasta que lo revises.",
                    en:"There's a 60% chance of rain from 3 PM and Jungle Cruise reported a temporary closure. I prepared a change: Haunted Mansion comes in — indoors and wheelchair accessible. I won't apply it until you review it.",
                    pt:"Há 60% de chuva a partir das 15:00 e a Jungle Cruise reportou fechamento temporário. Preparei uma mudança: entra a Haunted Mansion, coberta e com acesso para cadeira de rodas. Não aplico até você revisar.",
@@ -1666,7 +1743,11 @@ function mockReply(text){
   }
 
   if (has("fila","line","wait","espera","attente","corta","short","curta","courte")){
-    const open = FIXTURE.rides.filter(r => !r.closed && r.access).sort((a,b)=>a.wait-b.wait).slice(0,3);
+    /* Solo atracciones de verdad: nada de restaurantes ni miradores, y nada
+       con espera 0, que significa "sin fila publicada", no "fila corta". */
+    const open = FIXTURE.rides
+      .filter(r => r.kind === "ride" && !r.closed && r.access && r.wait > 0)
+      .sort((a,b) => a.wait - b.wait).slice(0,3);
     return { text:{es:"Ahora mismo, las más cortas con acceso en silla de ruedas:",
                    en:"Right now, the shortest ones with wheelchair access:",
                    pt:"Agora, as mais curtas com acesso para cadeira de rodas:",
@@ -1676,10 +1757,10 @@ function mockReply(text){
 
   if (has("ticket","entrada","billet","ingresso","pass","hopper","lightning")){
     const k = FIXTURE.tickets, ll = k.lightning_lane, left = ll.selections_total - ll.selections_used;
-    return { text:{es:`Tienes un ${t(k.product_key)}, día ${k.day_index} de ${k.day_total}, sin Park Hopper — así que hoy nos quedamos en Magic Kingdom. Te quedan ${left} reservas de Lightning Lane; las guardé para Space Mountain y Big Thunder Mountain, que son las filas más largas de tu ruta.`,
-                   en:`You have a ${t(k.product_key)}, day ${k.day_index} of ${k.day_total}, without Park Hopper — so today we stay in Magic Kingdom. You have ${left} Lightning Lane selections left; I saved them for Space Mountain and Big Thunder Mountain, the longest lines on your route.`,
-                   pt:`Você tem um ${t(k.product_key)}, dia ${k.day_index} de ${k.day_total}, sem Park Hopper — então hoje ficamos no Magic Kingdom. Restam ${left} reservas de Lightning Lane; guardei para Space Mountain e Big Thunder Mountain, as filas mais longas da sua rota.`,
-                   fr:`Vous avez un ${t(k.product_key)}, jour ${k.day_index} sur ${k.day_total}, sans Park Hopper — donc aujourd'hui on reste à Magic Kingdom. Il vous reste ${left} réservations Lightning Lane ; je les ai gardées pour Space Mountain et Big Thunder Mountain, les plus longues files de votre itinéraire.`}[LANG],
+    return { text:{es:`Tu entrada es ${t(k.product_key)}, día ${k.day_index} de ${k.day_total}, sin Park Hopper, y te quedan ${left} reservas de Lightning Lane. Ojo: esto es informativo — hoy no tengo en cuenta el tipo de entrada al armar tu plan.`,
+                   en:`Your ticket is a ${t(k.product_key)}, day ${k.day_index} of ${k.day_total}, no Park Hopper, with ${left} Lightning Lane selections left. Heads up: this is informational — I don't factor ticket type into your plan yet.`,
+                   pt:`Seu ingresso é ${t(k.product_key)}, dia ${k.day_index} de ${k.day_total}, sem Park Hopper, e restam ${left} reservas de Lightning Lane. Atenção: isto é informativo — ainda não considero o tipo de ingresso ao montar o plano.`,
+                   fr:`Votre billet est un ${t(k.product_key)}, jour ${k.day_index} sur ${k.day_total}, sans Park Hopper, avec ${left} réservations Lightning Lane. À noter : c'est informatif — je ne tiens pas encore compte du type de billet pour votre plan.`}[LANG],
       constraints:[
         {kind:"plain", label:(k.park_hopper ? t("tk_hopper_yes") : t("tk_hopper_no"))},
         {kind:"soft",  label:"⚡ "+t("tk_ll_left",{n:left, t:ll.selections_total})}],
@@ -1701,6 +1782,75 @@ function mockReply(text){
     followups:true };
 }
 
+/* Respuesta del asistente DESPUÉS de que el invitado confirma. En live esto
+   es la reanudación del grafo tras el interrupt de confirmación. */
+function replyAfterConfirm(){
+  return {
+    text:{es:"Confirmado. Con eso armé el día: empieza por Tomorrowland para evitar la fila de mediodía.",
+          en:"Confirmed. With that I built the day: start in Tomorrowland to beat the midday line.",
+          pt:"Confirmado. Com isso montei o dia: comece pela Tomorrowland para fugir da fila do meio-dia.",
+          fr:"Confirmé. Avec ça j'ai construit la journée : commencez par Tomorrowland pour éviter la file de midi."}[LANG],
+    plan_preview:true, followups:true };
+}
+
+/* Tarjeta de confirmación de restricciones duras (P0-29). Nada se guarda ni
+   se planifica hasta que el invitado confirma: consentimiento explícito para
+   accesibilidad y altura, y elección de retención. */
+function renderConfirmCard(constraints){
+  const card = el("div","confirm");
+  const hard = constraints.filter(c => c.kind === "hard");
+  card.innerHTML = `
+    <b>${t("cf_title")}</b>
+    <p>${t("cf_sub")}</p>
+    <ul class="cf-list">
+      ${hard.map(c => `<li><span>${esc(c.label)}</span><i>${t("cf_hard")}</i></li>`).join("")}
+    </ul>
+    <label class="cf-consent">
+      <input type="checkbox" id="cfConsent">
+      <span><b>${t("cf_consent")}</b>${t("cf_consent_b")}</span>
+    </label>
+    <div class="cf-ret">
+      <b>${t("cf_ret")}</b>
+      <div class="cf-opts">
+        <button class="cf-opt on" data-ret="session">${t("cf_ret_s")}</button>
+        <button class="cf-opt" data-ret="profile">${t("cf_ret_k")}</button>
+      </div>
+    </div>
+    <div class="cf-actions">
+      <button class="cf-edit" id="cfEdit">${t("cf_edit")}</button>
+      <button class="cf-ok" id="cfOk">${t("cf_ok")}</button>
+    </div>
+    <p class="cf-warn" id="cfWarn" role="status" aria-live="polite"></p>`;
+  $("#chat").appendChild(card); scrollChat();
+
+  let retention = "session";
+  card.querySelectorAll(".cf-opt").forEach(b => b.onclick = () => {
+    retention = b.dataset.ret;
+    card.querySelectorAll(".cf-opt").forEach(x => {
+      const on = x === b; x.classList.toggle("on", on); x.setAttribute("aria-pressed", on);
+    });
+  });
+
+  card.querySelector("#cfEdit").onclick = () => {
+    card.remove();
+    $("#chatInput").focus();
+  };
+
+  card.querySelector("#cfOk").onclick = async () => {
+    if (!card.querySelector("#cfConsent").checked){
+      card.querySelector("#cfWarn").textContent = t("cf_need");
+      return;
+    }
+    STATE.consent = { accessibility:true, retention };
+    card.remove();
+    metaLine(t("cf_done", { r: retention === "session" ? t("cf_ret_s") : t("cf_ret_k") }));
+    const ty = typing();
+    await new Promise(res => setTimeout(res, 700));
+    ty.remove();
+    await deliver(replyAfterConfirm());
+  };
+}
+
 async function send(text){
   if (!text || !text.trim()) return;
   const w = $("#chat").querySelector(".welcome"); if (w) w.remove();
@@ -1715,10 +1865,20 @@ async function send(text){
   ty.remove();
   $("#assistStatus").textContent = t("listening");
 
+  await deliver(r);
+}
+
+async function deliver(r){
   let html = `<p>${esc(r.text)}</p>`;
   if (r.constraints) html += `<div class="constraints">` +
     r.constraints.map(c => `<span class="cst ${c.kind}">${esc(c.label)}</span>`).join("") + `</div>`;
   bubbleBot(html);
+
+  if (r.confirm){
+    await new Promise(res => setTimeout(res, 420));
+    renderConfirmCard(r.constraints || []);
+    return;
+  }
 
   if (r.follow){
     await new Promise(res => setTimeout(res, 480));
