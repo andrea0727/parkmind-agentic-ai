@@ -7,6 +7,8 @@ is LOAD CONTEXT reading the snapshot itself. Both run on the 2026-09-27 capture.
 """
 
 import json
+import logging
+from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
@@ -18,15 +20,25 @@ from planning_support import factory_for
 from parkmind.config.settings import settings
 from parkmind.core.contracts import MobilityRequirement, RideRestriction
 from parkmind.services.clients.mcp.context_client import McpContextData
-from parkmind.services.ports import FromSnapshotRef, SnapshotRef
+from parkmind.services.ports import (
+    ContextTransportError,
+    FromSnapshotRef,
+    RepositoryUnavailableError,
+    SnapshotRef,
+)
+from parkmind.services.use_cases import load_context as load_context_module
 from parkmind.services.use_cases.load_context import LoadContextUseCase, LoadedContext
 from parkmind.services.use_cases.planner_queries import PlannerQueries
-from parkmind.services.use_cases.planning_deps import ContextUnavailableError
+from parkmind.services.use_cases.planning_deps import (
+    ContextUnavailableError,
+    PlanningDeps,
+)
 from parkmind.services.use_cases.tool_context import (
     InProcessContextData,
     configured_context_data,
 )
 from parkmind.tools.mcp_server import create_server
+from parkmind.tools.registry import ToolContext, build_registry
 
 SPACE_MOUNTAIN = "b2260923-9315-40fd-9c6b-44dd811dbe64"
 UNREACHABLE = "http://127.0.0.1:9/mcp"  # nothing listens on the discard port
@@ -151,11 +163,78 @@ def test_a_context_stitched_from_two_snapshots_is_refused() -> None:
     assert loaded.live_context.snapshot_id != "snap_other"
 
 
-def test_no_snapshot_is_a_domain_answer_not_a_transport_failure() -> None:
+def test_no_snapshot_anywhere_ends_with_context_unavailable() -> None:
+    """The server has none, so the in-process adapter is asked -- and has none either."""
     empty = Deps(collect_at=None)
 
     with pytest.raises(ContextUnavailableError, match="snapshot"):
         _through(empty, _mcp(empty))
+
+
+class _FailingCatalog:
+    """An AttractionRepository whose store is down."""
+
+    def list_attractions(self, park_id: str) -> list[Any]:
+        raise RepositoryUnavailableError("attractions store down")
+
+
+def _server_over(deps: PlanningDeps) -> Any:
+    return create_server(build_registry(ToolContext(factory_for(deps), lambda: NOW)))
+
+
+def test_a_server_that_cannot_read_its_catalog_is_answered_in_process() -> None:
+    """data.get_attraction_info answers UNAVAILABLE: a fallback, never a raw exception."""
+    deps = _party(Deps())
+    broken = replace(deps.value, attractions=_FailingCatalog())
+
+    loaded = _through(deps, _mcp(deps, _server_over(broken)))  # type: ignore[arg-type]
+
+    assert loaded.transport == "in_process_fallback"
+    assert _catalog_view(loaded) == _catalog_view(_direct(deps))
+
+
+def test_a_server_without_data_is_answered_in_process() -> None:
+    """The in-process adapter is the authority on "no data", not the server."""
+    deps = _party(Deps())
+    server_side = Deps(collect_at=None)  # no snapshot on the server's side
+
+    loaded = _through(deps, _mcp(server_side))
+
+    assert loaded.transport == "in_process_fallback"
+    assert _catalog_view(loaded) == _catalog_view(_direct(deps))
+
+
+class _BrokenTransport:
+    transport = "mcp"
+
+    def __getattr__(self, name: str) -> Any:
+        def fail(*args: Any, **kwargs: Any) -> Any:
+            raise ContextTransportError(f"data.{name}: ConnectError")
+
+        return fail
+
+
+def test_when_the_fallback_fails_too_both_failures_are_logged(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    empty = Deps(collect_at=None)
+
+    with pytest.raises(ContextUnavailableError, match="snapshot"):
+        _through(empty, _BrokenTransport())
+
+    failed = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(failed) == 1
+    assert "ConnectError" in failed[0] and "snapshot" in failed[0]
+
+
+def test_a_fallback_that_reads_two_snapshots_ends_with_a_plain_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deps = _party(Deps())
+    monkeypatch.setattr(load_context_module, "InProcessContextData", _TwoSnapshots)
+
+    with pytest.raises(ContextUnavailableError, match="changed while it was being read"):
+        _through(deps, _BrokenTransport())
 
 
 def test_the_setting_selects_the_transport(monkeypatch: pytest.MonkeyPatch) -> None:

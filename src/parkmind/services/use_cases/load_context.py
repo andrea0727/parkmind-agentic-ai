@@ -22,9 +22,12 @@ SessionStore (``party_accessibility``).
 Transport (P0-24, section 27 [C23]): with ``PARKMIND_CONTEXT_TRANSPORT=mcp`` (or an
 explicit ``context_data`` port) the context is assembled from the ``data.*`` and
 ``knowledge.*`` capabilities through that port (``tool_context``) instead of read
-from the snapshot directly; if the transport fails, the in-process adapter of
-the same port answers, and ``LoadedContext.transport`` says which one did. The
-requirements are read here in both cases: only derived flags cross the port.
+from the snapshot directly. If the transport fails -- or its server answers that it
+cannot read the data -- the in-process adapter of the same port answers, and its
+answer is the definitive one: when the data really is missing, it raises
+``ContextUnavailableError`` itself. ``LoadedContext.transport`` says which adapter
+answered. The requirements are read here in both cases: only derived flags cross
+the port.
 """
 
 import logging
@@ -32,8 +35,16 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from parkmind.core.contracts import AccessibilityCheck, LiveContext
-from parkmind.services.ports import ContextDataPort, ContextTransportError
+from parkmind.core.contracts import (
+    AccessibilityCheck,
+    AccessibilityRequirements,
+    LiveContext,
+)
+from parkmind.services.ports import (
+    ContextDataPort,
+    ContextDataUnavailableError,
+    ContextTransportError,
+)
 from parkmind.services.use_cases.current_snapshot import ContextSource, current_snapshot
 from parkmind.services.use_cases.latest_snapshot import DEFAULT_MAX_AGE
 from parkmind.services.use_cases.party_accessibility import (
@@ -45,6 +56,7 @@ from parkmind.services.use_cases.planning_deps import (
     ContextUnavailableError,
     DepsFactory,
     PlanningDeps,
+    PlanningUnavailableError,
     default_planning_deps,
     load_catalog,
     load_requirements,
@@ -52,6 +64,7 @@ from parkmind.services.use_cases.planning_deps import (
 )
 from parkmind.services.use_cases.snapshot_normalization import ACCESSIBILITY_GAP
 from parkmind.services.use_cases.tool_context import (
+    AssembledContext,
     InProcessContextData,
     assemble_from_port,
     configured_context_data,
@@ -134,11 +147,10 @@ class LoadContextUseCase:
         transport = port.transport
         try:
             assembled = assemble_from_port(port, now, requirements)
-        except ContextTransportError as exc:
+        except (ContextTransportError, ContextDataUnavailableError) as exc:
             logger.warning("LOAD CONTEXT over %s failed, answering in-process: %s", transport, exc)
-            fallback = InProcessContextData(self._deps_factory, clock=lambda: now)
-            assembled = assemble_from_port(fallback, now, requirements)
-            transport = f"{fallback.transport}_fallback"
+            assembled = self._in_process(now, requirements, transport, exc)
+            transport = f"{InProcessContextData.transport}_fallback"
         live_context = _with_accessibility(
             assembled.base, assembled.checks, requirements_missing=missing
         )
@@ -149,6 +161,30 @@ class LoadContextUseCase:
             tuple(accessibility_ref),
             transport,
         )
+
+    def _in_process(
+        self,
+        now: datetime,
+        requirements: Sequence[AccessibilityRequirements],
+        transport: str,
+        transport_failure: Exception,
+    ) -> AssembledContext:
+        """The fallback; when it fails too, both failures are logged together."""
+        fallback = InProcessContextData(self._deps_factory, clock=lambda: now)
+        try:
+            return assemble_from_port(fallback, now, requirements)
+        except (PlanningUnavailableError, ContextTransportError) as exc:
+            logger.error(
+                "LOAD CONTEXT failed over %s (%s) and in-process (%s)",
+                transport,
+                transport_failure,
+                exc,
+            )
+            if isinstance(exc, ContextTransportError):  # the snapshot changed mid-read
+                raise ContextUnavailableError(
+                    "the park data changed while it was being read; try again"
+                ) from exc
+            raise
 
 
 def _with_accessibility(

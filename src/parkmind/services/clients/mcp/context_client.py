@@ -8,10 +8,10 @@ blocking portal), which works under ``graph.invoke`` and inside a caller that
 already runs a loop.
 
 Failures are split in two. A transport that fails -- unreachable server,
-timeout, protocol error, malformed answer -- raises ``ContextTransportError``,
-and LOAD CONTEXT falls back to the in-process adapter. A tool that answers
-``UNAVAILABLE`` or ``NOT_FOUND`` (no snapshot, no schedule) is a domain answer,
-not a broken transport: it raises ``ContextDataUnavailableError``.
+timeout, protocol error, malformed answer -- raises ``ContextTransportError``.
+A tool that answers ``UNAVAILABLE`` or ``NOT_FOUND`` (no snapshot, no schedule,
+the server's database down) raises ``ContextDataUnavailableError``. LOAD CONTEXT
+answers both in-process; only a missing schedule stays a coverage gap.
 
 ``server`` is anything ``mcp.Client`` connects to: the streamable-HTTP URL of
 ``scripts/run_mcp_server.py --http`` in the demo, an in-process ``MCPServer`` in

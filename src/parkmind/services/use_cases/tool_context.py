@@ -12,7 +12,9 @@ adapter as the fallback through the same port.
 
 The assembled context is the snapshot's, restricted to the catalog (all that
 planning reads): every snapshot-backed answer must name the same snapshot, or
-the assembly is refused (``ContextTransportError``). Coverage is judged by the
+the assembly is refused (``ContextTransportError``). A transport's failures
+propagate unchanged -- LOAD CONTEXT answers any of them in-process -- except a
+missing schedule, which is a coverage gap on every path. Coverage is judged by the
 normalizer's own rule (``coverage_report``), not a copy of it. Accessibility is
 asked with each guest's *derived* flags; the requirements stay in this process
 [C19], and the tool trace -- which is checkpointed with the context -- records
@@ -173,14 +175,11 @@ def assemble_from_port(
         gaps.append("no park schedule: weather coverage can't be checked")
         traced("data.get_schedule", 0, service_date=service_date.isoformat())
 
-    try:
-        waits = port.live_waits()
-        statuses = port.attraction_statuses()
-        showtimes = port.showtimes()
-        start, end = _day_window(park, service_date)
-        weather = port.weather(start, end)
-    except ContextDataUnavailableError as exc:
-        raise ContextUnavailableError(str(exc)) from exc
+    waits = port.live_waits()
+    statuses = port.attraction_statuses()
+    showtimes = port.showtimes()
+    start, end = _day_window(park, service_date)
+    weather = port.weather(start, end)
     traced("data.get_live_waits", len(waits.value))
     traced("data.get_attraction_status", len(statuses.value))
     traced("data.get_showtimes", len(showtimes.value))

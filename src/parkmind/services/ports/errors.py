@@ -123,5 +123,7 @@ class ContextTransportError(Exception):
 
 
 class ContextDataUnavailableError(Exception):
-    """A ContextDataPort source answered that it has no such data (no snapshot,
-    no schedule): a domain answer, not a transport failure, so no fallback."""
+    """A ContextDataPort source answered that it cannot give this data (no
+    snapshot, no schedule, its own store down). A missing schedule is a coverage
+    gap; for anything else LOAD CONTEXT asks the in-process adapter, whose
+    answer is the definitive one."""
