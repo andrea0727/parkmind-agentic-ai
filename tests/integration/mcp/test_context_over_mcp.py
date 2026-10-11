@@ -1,0 +1,421 @@
+"""LOAD CONTEXT through parkmind-mcp (P0-24 Done-when: "The context loader can be
+configured to call data.* / knowledge.* through the MCP client, with in-process
+fallback through the same port" [C23]).
+
+The MCP path is a real MCP session to the server in process; the direct path
+is LOAD CONTEXT reading the snapshot itself. Both run on the 2026-09-27 capture.
+"""
+
+import json
+import logging
+import socket
+import threading
+import time
+from collections.abc import Iterator
+from dataclasses import replace
+from datetime import datetime
+from typing import Any
+
+import factories
+import pytest
+from mcp import Client
+from mcp_support import NOW, Deps, capture_park, mk_catalog
+from planning_support import factory_for
+
+from parkmind.config.settings import settings
+from parkmind.core.contracts import MobilityRequirement, RideRestriction
+from parkmind.services.clients.mcp import context_client
+from parkmind.services.clients.mcp.context_client import McpContextData
+from parkmind.services.ports import (
+    ContextTransportError,
+    FromSnapshotRef,
+    RepositoryUnavailableError,
+    SnapshotRef,
+)
+from parkmind.services.use_cases import load_context as load_context_module
+from parkmind.services.use_cases.check_accessibility import guest_flags
+from parkmind.services.use_cases.load_context import LoadContextUseCase, LoadedContext
+from parkmind.services.use_cases.planner_queries import PlannerQueries
+from parkmind.services.use_cases.planning_deps import (
+    ContextUnavailableError,
+    PlanningDeps,
+)
+from parkmind.services.use_cases.tool_context import (
+    InProcessContextData,
+    configured_context_data,
+)
+from parkmind.tools.mcp_server import create_server
+from parkmind.tools.registry import ToolContext, build_registry
+
+SPACE_MOUNTAIN = "b2260923-9315-40fd-9c6b-44dd811dbe64"
+UNREACHABLE = "http://127.0.0.1:9/mcp"  # nothing listens on the discard port
+
+
+def _party(deps: Deps) -> Deps:
+    deps.sessions.put(
+        "s1",
+        factories.accessibility(
+            guest_id="g2",
+            mobility_requirements=[MobilityRequirement.WHEELCHAIR],
+            ride_restrictions=[RideRestriction.NOT_RECOMMENDED_EXPECTANT],
+            consent=True,
+            retention_policy="session_only",
+        ),
+    )
+    return deps
+
+
+def _direct(deps: Deps) -> LoadedContext:
+    return LoadContextUseCase(factory_for(deps.value)).execute("s1", ["g2"], NOW)
+
+
+def _through(deps: Deps, port: Any) -> LoadedContext:
+    return LoadContextUseCase(factory_for(deps.value), context_data=port).execute(
+        "s1", ["g2"], NOW
+    )
+
+
+def _mcp(deps: Deps, server: Any = None) -> McpContextData:
+    return McpContextData(
+        server if server is not None else create_server(deps.registry())
+    )
+
+
+def _catalog_view(loaded: LoadedContext) -> dict[str, Any]:
+    """What planning reads: the catalog's waits, statuses, showtimes; weather in park hours."""
+    live = loaded.live_context
+    ids = {a.node_id for a in mk_catalog()}
+    park = capture_park()
+    return {
+        "snapshot": (live.snapshot_id, live.retrieved_at, loaded.source),
+        "waits": {k: v for k, v in live.waits.items() if k in ids},
+        "statuses": {k: v for k, v in live.statuses.items() if k in ids},
+        "showtimes": {k: sorted(v) for k, v in live.showtimes.items() if k in ids},
+        "weather": [
+            h
+            for h in live.weather
+            if h.timestamp < park.closing_time
+            and h.timestamp.hour >= park.opening_time.hour
+        ],
+        "coverage": (
+            live.coverage.required_attractions_covered,
+            live.coverage.required_shows_covered,
+            live.coverage.weather_covered,
+            live.coverage.accessibility_checks_complete,
+        ),
+        "checks": sorted(
+            (c.guest_id, c.attraction_id, c.eligible, c.conflicting_requirement)
+            for c in live.accessibility_results
+        ),
+    }
+
+
+def test_mcp_context_equals_in_process_context() -> None:
+    deps = _party(Deps())
+
+    direct = _direct(deps)
+    over_mcp = _through(deps, _mcp(deps))
+
+    assert direct.transport == "in_process"
+    assert over_mcp.transport == "mcp"
+    assert _catalog_view(over_mcp) == _catalog_view(direct)
+    assert _catalog_view(over_mcp)["checks"], "the party's accessibility was checked"
+    tools = [call.tool_name for call in over_mcp.live_context.tool_trace]
+    assert "mcp:data.get_live_waits" in tools
+    assert "mcp:knowledge.check_accessibility" in tools
+
+
+def test_the_tool_trace_carries_no_accessibility_values() -> None:
+    """The trace is checkpointed with the context [C19]: names and counts only."""
+    deps = _party(Deps())
+
+    trace = _through(deps, _mcp(deps)).for_state().tool_trace
+
+    text = json.dumps([call.model_dump(mode="json") for call in trace])
+    for value in ("WHEELCHAIR", "EXPECTANT", "TRANSFER", "g2"):
+        assert value not in text, value
+
+
+def _sent_flags(deps: Deps) -> list[str]:
+    requirement = deps.sessions.get("s1", "g2")
+    assert requirement is not None
+    return sorted(f.value for f in guest_flags(requirement))
+
+
+def test_accessibility_checks_over_mcp_do_not_say_whose_flags_they_are(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deps = _party(Deps())
+    registry = deps.registry()
+    seen: list[tuple[str, dict[str, Any]]] = []
+    call = registry.call
+
+    def recording(name: str, arguments: Any) -> Any:
+        seen.append((name, dict(arguments)))
+        return call(name, arguments)
+
+    monkeypatch.setattr(registry, "call", recording)
+
+    loaded = _through(deps, McpContextData(create_server(registry)))
+
+    checks = [args for name, args in seen if name == "knowledge.check_accessibility"]
+    assert checks
+    for args in checks:  # as the server received them, defaults filled in by the SDK
+        assert args["guest_id"] == "guest"  # the tool's default label, not the guest
+        assert sorted(RideRestriction(f).value for f in args["flags"]) == _sent_flags(
+            deps
+        )
+    assert {c.guest_id for c in loaded.live_context.accessibility_results} == {"g2"}
+
+
+def test_load_context_logs_never_carry_flags_or_guest_ids(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Neither a read nor a transport error whose text quotes the request (C19)."""
+    caplog.set_level(logging.DEBUG)
+    deps = _party(Deps())
+    request = McpContextData._request
+
+    async def quoting_failure(
+        self: McpContextData, client: Any, tool: str, arguments: dict[str, Any]
+    ) -> Any:
+        if tool == "knowledge.check_accessibility":
+            raise RuntimeError(f"rejected {tool} {arguments} for g2")
+        return await request(self, client, tool, arguments)
+
+    assert _through(deps, _mcp(deps)).transport == "mcp"
+    monkeypatch.setattr(McpContextData, "_request", quoting_failure)
+    assert _through(deps, _mcp(deps)).transport == "in_process_fallback"
+
+    logged = "\n".join(r.getMessage() for r in caplog.records)
+    assert "knowledge.check_accessibility: RuntimeError" in logged
+    for value in [*_sent_flags(deps), "WHEELCHAIR", "'g2'", " g2"]:
+        assert value not in logged, value
+
+
+def test_one_mcp_session_serves_the_whole_load_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    opened: list[Any] = []
+
+    class CountingClient(Client):
+        async def __aenter__(self) -> Any:
+            opened.append(self)
+            return await super().__aenter__()
+
+    monkeypatch.setattr(context_client, "Client", CountingClient)
+    deps = _party(Deps())
+
+    loaded = _through(deps, _mcp(deps))
+
+    assert loaded.transport == "mcp"
+    assert len(loaded.live_context.tool_trace) >= 6
+    assert len(opened) == 1
+
+
+def test_a_read_outside_a_session_opens_its_own() -> None:
+    deps = Deps()
+
+    catalog = _mcp(deps).catalog()
+
+    assert {a.node_id for a in catalog} == {a.node_id for a in mk_catalog()}
+
+
+@pytest.fixture
+def silent_server() -> Iterator[str]:
+    """A port that accepts connections and never answers."""
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen()
+    held: list[socket.socket] = []
+    stop = threading.Event()
+
+    def accept() -> None:
+        listener.settimeout(0.2)
+        while not stop.is_set():
+            try:
+                held.append(listener.accept()[0])
+            except OSError:
+                continue
+
+    thread = threading.Thread(target=accept, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{listener.getsockname()[1]}/mcp"
+    stop.set()
+    thread.join()
+    for conn in held:
+        conn.close()
+    listener.close()
+
+
+def test_a_server_that_never_answers_cannot_hold_load_context_up(
+    silent_server: str,
+) -> None:
+    deps = _party(Deps())
+
+    started = time.monotonic()
+    loaded = _through(deps, McpContextData(silent_server, timeout_seconds=1))
+
+    assert loaded.transport == "in_process_fallback"
+    assert time.monotonic() - started < 5
+
+
+def test_server_down_falls_back_in_process() -> None:
+    deps = _party(Deps())
+
+    fallback = _through(deps, McpContextData(UNREACHABLE, timeout_seconds=3))
+
+    assert fallback.transport == "in_process_fallback"
+    assert _catalog_view(fallback) == _catalog_view(_direct(deps))
+    assert all(
+        c.tool_name.startswith("in_process:") for c in fallback.live_context.tool_trace
+    )
+
+
+class _TwoSnapshots(InProcessContextData):
+    """A transport whose waits come from another snapshot than the rest."""
+
+    transport = "mcp"
+
+    def live_waits(self) -> FromSnapshotRef:  # type: ignore[type-arg]
+        answer = super().live_waits()
+        other = SnapshotRef("snap_other", answer.snapshot.retrieved_at, "snapshot")
+        return FromSnapshotRef(answer.value, other)
+
+
+def test_a_context_stitched_from_two_snapshots_is_refused() -> None:
+    deps = _party(Deps())
+
+    loaded = _through(deps, _TwoSnapshots(factory_for(deps.value), clock=lambda: NOW))
+
+    assert (
+        loaded.transport == "in_process_fallback"
+    )  # refused, then answered in-process
+    assert loaded.live_context.snapshot_id != "snap_other"
+
+
+def test_no_snapshot_anywhere_ends_with_context_unavailable() -> None:
+    """The server has none, so the in-process adapter is asked -- and has none either."""
+    empty = Deps(collect_at=None)
+
+    with pytest.raises(ContextUnavailableError, match="snapshot"):
+        _through(empty, _mcp(empty))
+
+
+class _FailingCatalog:
+    """An AttractionRepository whose store is down."""
+
+    def list_attractions(self, park_id: str) -> list[Any]:
+        raise RepositoryUnavailableError("attractions store down")
+
+
+def _server_over(deps: PlanningDeps) -> Any:
+    return create_server(build_registry(ToolContext(factory_for(deps), lambda: NOW)))
+
+
+def test_a_server_that_cannot_read_its_catalog_is_answered_in_process() -> None:
+    """data.get_attraction_info answers UNAVAILABLE: a fallback, never a raw exception."""
+    deps = _party(Deps())
+    broken = replace(deps.value, attractions=_FailingCatalog())
+
+    loaded = _through(deps, _mcp(deps, _server_over(broken)))  # type: ignore[arg-type]
+
+    assert loaded.transport == "in_process_fallback"
+    assert _catalog_view(loaded) == _catalog_view(_direct(deps))
+
+
+def test_a_server_without_data_is_answered_in_process() -> None:
+    """The in-process adapter is the authority on "no data", not the server."""
+    deps = _party(Deps())
+    server_side = Deps(collect_at=None)  # no snapshot on the server's side
+
+    loaded = _through(deps, _mcp(server_side))
+
+    assert loaded.transport == "in_process_fallback"
+    assert _catalog_view(loaded) == _catalog_view(_direct(deps))
+
+
+class _BrokenTransport:
+    transport = "mcp"
+
+    def __getattr__(self, name: str) -> Any:
+        def fail(*args: Any, **kwargs: Any) -> Any:
+            raise ContextTransportError(f"data.{name}: ConnectError")
+
+        return fail
+
+
+def test_when_the_fallback_fails_too_both_failures_are_logged(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    empty = Deps(collect_at=None)
+
+    with pytest.raises(ContextUnavailableError, match="snapshot"):
+        _through(empty, _BrokenTransport())
+
+    failed = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(failed) == 1
+    assert "ConnectError" in failed[0] and "snapshot" in failed[0]
+
+
+def test_a_fallback_that_reads_two_snapshots_ends_with_a_plain_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deps = _party(Deps())
+    monkeypatch.setattr(load_context_module, "InProcessContextData", _TwoSnapshots)
+
+    with pytest.raises(
+        ContextUnavailableError, match="changed while it was being read"
+    ):
+        _through(deps, _BrokenTransport())
+
+
+def test_the_setting_selects_the_transport(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "CONTEXT_TRANSPORT", "in_process")
+    assert configured_context_data() is None
+
+    monkeypatch.setattr(settings, "CONTEXT_TRANSPORT", "mcp")
+    monkeypatch.setattr(settings, "MCP_URL", "http://127.0.0.1:8765/mcp")
+    port = configured_context_data()
+    assert isinstance(port, McpContextData)
+
+
+def test_plans_are_identical_over_mcp() -> None:
+    """The planner reaches the same plan whether LOAD CONTEXT read over MCP or in-process."""
+    deps = Deps()
+    constraints = factories.party_constraints(
+        party_size=2,
+        guests=[
+            factories.guest(guest_id="g1"),
+            factories.guest(guest_id="g2", height_cm=168.0),
+        ],
+        must_do=[SPACE_MOUNTAIN],
+        departure_time=NOW.replace(hour=17, minute=30, second=0),
+    )
+
+    def plan_stops(port: Any) -> list[tuple[str, str, datetime]]:
+        candidate = PlannerQueries(
+            factory_for(deps.value), context_data=port
+        ).build_plan(
+            session_id="s1", constraints=constraints, profiles=[], guest_ids=[], now=NOW
+        )
+        assert candidate.check.valid
+        return [(s.node_id, s.kind.value, s.arrival_time) for s in candidate.plan.stops]
+
+    in_process = plan_stops(None)
+    over_mcp = plan_stops(_mcp(deps))
+
+    assert over_mcp == in_process
+
+
+def test_the_planner_behind_the_tools_never_reads_over_mcp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Even with PARKMIND_CONTEXT_TRANSPORT=mcp: planner.* is served by the boundary itself."""
+    monkeypatch.setattr(settings, "CONTEXT_TRANSPORT", "mcp")
+    deps = Deps()
+
+    loaded = PlannerQueries(factory_for(deps.value))._load.execute("s1", [], NOW)
+
+    assert loaded.transport == "in_process"
+    assert LoadContextUseCase(factory_for(deps.value))._context_data is not None

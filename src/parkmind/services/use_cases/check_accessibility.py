@@ -76,7 +76,23 @@ def check_accessibility(
     guest is ineligible only because no notice is on file
     (``provenance["notice_on_file"]`` is then ``False``).
     """
-    flags = guest_flags(requirements)
+    return check_flags(
+        requirements.guest_id, guest_flags(requirements), attraction_id, store
+    )
+
+
+def check_flags(
+    guest_id: str,
+    flags: frozenset[RideRestriction],
+    attraction_id: str,
+    store: KnowledgeStore,
+) -> AccessibilityCheck:
+    """``check_accessibility`` on a guest's already derived flags (section 30's input).
+
+    The same fail-closed matching: no flags is eligible everywhere; flags and no
+    notice on file is not eligible. ``knowledge.check_accessibility`` (P0-26)
+    calls this, so the MCP tool never re-implements the rule.
+    """
     notice = store.notice_for(attraction_id)
     provenance = {
         "source": NOTICE_SOURCE,
@@ -98,7 +114,7 @@ def check_accessibility(
 
     return AccessibilityCheck(
         attraction_id=attraction_id,
-        guest_id=requirements.guest_id,
+        guest_id=guest_id,
         eligible=eligible,
         conflicting_requirement=conflict,
         provenance=provenance,

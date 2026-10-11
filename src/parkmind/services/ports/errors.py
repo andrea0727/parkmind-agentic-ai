@@ -103,3 +103,27 @@ class RoutingSchemaError(RoutingError):
 
 class ForecastSourceError(Exception):
     """A forecast strategy's source failed or is malformed (section 43: fall back)."""
+
+
+# --- Knowledge port exceptions ---
+
+
+class KnowledgeUnavailableError(Exception):
+    """Semantic retrieval cannot answer: no index for this corpus and embedder,
+    the embedding model is not available, or the store failed (section 43:
+    degrade to keyword search; accessibility checks never degrade)."""
+
+
+# --- Context transport exceptions ---
+
+
+class ContextTransportError(Exception):
+    """A ContextDataPort transport (the MCP client) failed or answered
+    inconsistently; LOAD CONTEXT falls back to the in-process adapter."""
+
+
+class ContextDataUnavailableError(Exception):
+    """A ContextDataPort source answered that it cannot give this data (no
+    snapshot, no schedule, its own store down). A missing schedule is a coverage
+    gap; for anything else LOAD CONTEXT asks the in-process adapter, whose
+    answer is the definitive one."""
