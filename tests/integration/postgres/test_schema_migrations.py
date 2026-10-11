@@ -160,12 +160,24 @@ def test_vector_extension_installed(empty_database_url: str) -> None:
     assert (major, minor) >= (0, 5)
 
 
-def test_downgrade_removes_the_vector_extension(empty_database_url: str) -> None:
+def test_downgrade_keeps_the_vector_extension_other_objects_use(
+    empty_database_url: str,
+) -> None:
     migrate.upgrade(empty_database_url)
+    with psycopg.connect(empty_database_url) as conn:
+        conn.execute("CREATE TABLE other_vectors (v vector(3))")
+
     migrate.downgrade(empty_database_url, "0002")
 
-    assert _extension_version(empty_database_url) is None
-    assert _tables(empty_database_url) == MVP_TABLES | {"alembic_version"}
+    assert _extension_version(empty_database_url) is not None
+    assert _tables(empty_database_url) == MVP_TABLES | {
+        "alembic_version",
+        "other_vectors",
+    }
+
+    migrate.upgrade(empty_database_url)
+
+    assert _tables(empty_database_url) == SCHEMA_TABLES | {"other_vectors"}
 
 
 def test_knowledge_chunks_rank_by_cosine_distance(conn: psycopg.Connection) -> None:

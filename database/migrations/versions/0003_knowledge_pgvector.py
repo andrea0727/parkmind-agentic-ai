@@ -13,6 +13,9 @@ One row = one chunk of one corpus version, embedded by one embedder.
 ``embedder_id`` is part of the key: vectors from different models are never
 compared, and re-indexing with a new model leaves the old rows untouched.
 384 is the dimension of the configured multilingual MiniLM model.
+
+The downgrade drops the table and keeps the ``vector`` extension: other objects
+may use it, and the upgrade's ``CREATE EXTENSION IF NOT EXISTS`` finds it there.
 """
 
 import sqlalchemy as sa
@@ -74,4 +77,3 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS knowledge_chunks")
-    op.execute("DROP EXTENSION IF EXISTS vector")
