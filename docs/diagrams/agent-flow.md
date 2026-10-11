@@ -18,8 +18,10 @@ flowchart TD
   S([START]) --> EL["elicit<br/>LLM extraction (AnthropicExtractor)"]:::impl
   EL -- missing information --> AM["ask_missing<br/>interrupt()"]:::impl
   AM --> EL
+  EL -- new input --> EL
   EL -- constraints proposed --> CH{"confirm_hard_constraints<br/>interrupt(): echo + consent + retention"}:::impl
-  CH -- corrects --> EL
+  CH -- correction with text --> EL
+  CH -- empty correction --> AM
   CH -- confirmed --> VA["validate_constraints<br/>only writer of constraints_valid"]:::impl
   VA --> LC
 
@@ -58,14 +60,31 @@ Notes:
 
 ```mermaid
 flowchart TD
-  EV[["Event: wait time, weather, closure"]]:::target --> EP["EVENT POLICY"]:::target
+  MON[["MONITOR EVENT<br/>typed event"]]:::target --> AP
+  UR["USER REPORT"]:::target --> IT["INTERPRET<br/>LLM → typed Event"]:::target
+  IT -- constraint change --> EL([ELICIT]):::target
+  IT --> SV["SCHEMA VALIDATE"]:::target
+  SV --> CF{"CONFIRM<br/>interrupt on low confidence<br/>or hard constraint"}:::target
+  CF -- discarded --> Z([END])
+  CF --> AP["APPLY EXECUTION UPDATES<br/>PARTY_RELOCATED → execution_state<br/>dedupe by event_id"]:::target
+  AP --> EP{"EVENT POLICY<br/>per event: severity + requires_replan"}:::target
+  EP -- no event requires replan --> IG([IGNORE]):::target
+  EP -- pending proposal --> SS([SUPERSEDE]):::target
   EP --> LC["LOAD CONTEXT"]:::target
-  LC --> RP["REPLAN"]:::target
+  LC --> RG["RESOLVE GROUP OBJECTIVE<br/>re-run: eligible sets with fresh context"]:::target
+  RG --> RP["REPLAN<br/>from current plan + execution state"]:::target
   RP --> CP{"CHECK PLAN"}:::target
-  CP -- valid --> PD["PLAN DIFF"]:::target
+  CP -- fails --> RS["RE-SOLVE"]:::target
+  RS --> RP
+  CP -- valid --> PD["PLAN DIFF<br/>diff_plans exists, not wired"]:::target
   PD --> EX["EXPLAIN"]:::target
   EX --> PR["PROPOSE"]:::target
   PR --> IN{"INTERRUPT<br/>human decision"}:::target
+  IN -- APPROVE --> LB1["LOG BEHAVIOR"]:::target --> PS["PERSIST"]:::target
+  IN -- EDIT --> LB2["LOG BEHAVIOR"]:::target --> RC["RECHECK"]:::target
+  IN -- REJECT --> LR["LOG REASON"]:::target --> UP["UPDATE PREFERENCES"]:::target --> KP["KEEP CURRENT PLAN"]:::target
 
   classDef target fill:#fff2cc,stroke:#d6b656,stroke-dasharray:5 5,color:#000
 ```
+
+Once the Replanner (#83) merges, `REPLAN` and `ReplanUseCase` stop being stubs.

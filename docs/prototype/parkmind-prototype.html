@@ -6,8 +6,8 @@
 <title>ParkMind · Prototype</title>
 <!--
   VISUAL MOCKUP — not the final client.
-  Design and interaction reference for the ParkMind UI. The MVP client is the
-  Streamlit app consuming the P0-35 endpoints (src/parkmind/api/).
+  Design and interaction reference for the ParkMind UI. The MVP client will be
+  built with React on top of the FastAPI channel (P0-35, src/parkmind/api/).
   FIXTURE field names are an ILLUSTRATIVE SHAPE, NOT the domain contract: the
   real contract comes from P0-35 (§33) and core/contracts.
   See docs/UI-INTEGRATION.md and the matching ADR in docs/decisions/.
@@ -949,15 +949,22 @@ const FIXTURE = {
     { name:"Tomás",  role:"child",     note:{es:"8 años · montañas rusas",en:"8 years old · roller coasters",
                                              pt:"8 anos · montanhas-russas",fr:"8 ans · montagnes russes"} }
   ],
-  party_constraints: {
-    exit_by:"18:00",
-    accessibility:[
+  /* PartyConstraints (§33) no lleva accesibilidad ni preferencias [C15, C19]:
+     la accesibilidad es AccessibilityRequirements por invitado (carga por
+     sesión, nunca en el estado del grafo) y las preferencias blandas son
+     GuestProfile. Aquí van separadas por esa razón. */
+  party_constraints: { party_size:3, departure_time:"18:00" },
+  accessibility_requirements: {
+    guest_id:"Carmen", consent:true, retention_policy:"session_only",
+    flags:[
       { code:"wheelchair_access", mandatory:true,
         label:{es:"Silla de ruedas",en:"Wheelchair access",pt:"Cadeira de rodas",fr:"Fauteuil roulant"} },
       { code:"no_stairs", mandatory:true,
         label:{es:"Sin escaleras",en:"Step-free",pt:"Sem escadas",fr:"Sans escaliers"} }
-    ],
-    preferences:[
+    ]
+  },
+  guest_preferences: {
+    soft:[
       { code:"thrill", weight:0.9, label:{es:"Montañas rusas",en:"Roller coasters",pt:"Montanhas-russas",fr:"Montagnes russes"} },
       { code:"shade",  weight:0.5, label:{es:"Evitar sol del mediodía",en:"Avoid midday sun",pt:"Evitar sol do meio-dia",fr:"Éviter le soleil de midi"} },
       { code:"shows",  weight:0.4, label:{es:"Espectáculos",en:"Shows",pt:"Espetáculos",fr:"Spectacles"} }
@@ -1546,10 +1553,10 @@ function renderProfile(){
     row.innerHTML = `<span>${esc(m.name)}<small>${esc(loc(m.note))}</small></span>`;
     p.appendChild(row);
   });
-  $("#profA11y").innerHTML = FIXTURE.party_constraints.accessibility
+  $("#profA11y").innerHTML = FIXTURE.accessibility_requirements.flags
     .map(a => `<span class="tag hard">♿ ${esc(loc(a.label))}</span>`).join("")
     + `<span class="tag plain">${t("stops_exit").split("·").pop().trim()}</span>`;
-  $("#profPrefs").innerHTML = FIXTURE.party_constraints.preferences
+  $("#profPrefs").innerHTML = FIXTURE.guest_preferences.soft
     .map(x => `<span class="tag soft">${esc(loc(x.label))}</span>`).join("");
 }
 function renderLangGrid(){
@@ -1719,10 +1726,10 @@ function mockReply(text){
     return { text:{es:"Listo. Guardé esto para tu grupo:",en:"Got it. Saved this for your party:",
                    pt:"Pronto. Salvei isto para o seu grupo:",fr:"C'est noté. Enregistré pour votre groupe :"}[LANG],
       constraints:[
-        {kind:"hard",label:"♿ "+loc(FIXTURE.party_constraints.accessibility[0].label)},
-        {kind:"hard",label:loc(FIXTURE.party_constraints.accessibility[1].label)},
-        {kind:"hard",label:"⏱ "+FIXTURE.party_constraints.exit_by},
-        {kind:"soft",label:loc(FIXTURE.party_constraints.preferences[0].label)}],
+        {kind:"hard",label:"♿ "+loc(FIXTURE.accessibility_requirements.flags[0].label)},
+        {kind:"hard",label:loc(FIXTURE.accessibility_requirements.flags[1].label)},
+        {kind:"hard",label:"⏱ "+FIXTURE.party_constraints.departure_time},
+        {kind:"soft",label:loc(FIXTURE.guest_preferences.soft[0].label)}],
       confirm:true };   // P0-29: las restricciones duras no entran sin confirmación
 
   if (has("lluvia","llover","lloviendo","rain","raining","chuva","chover","pluie","pleuvoir",
@@ -1880,9 +1887,9 @@ async function deliver(r){
     return;
   }
 
-  if (r.follow){
+  if (r.follow || r.plan_preview){
     await new Promise(res => setTimeout(res, 480));
-    let h = `<p>${esc(r.follow)}</p>`;
+    let h = r.follow ? `<p>${esc(r.follow)}</p>` : "";
     if (r.plan_preview){
       h += `<div class="propcard"><b>${STATE.plan.events.length} ${t("stops_exit").split("·")[0].trim()}</b>` +
         STATE.plan.events.slice(0,3).map(e =>
