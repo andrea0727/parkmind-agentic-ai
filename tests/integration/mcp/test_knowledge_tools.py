@@ -4,12 +4,16 @@ Without a semantic search port the keyword fallback answers, and says so; the
 pgvector-backed path is covered in tests/integration/postgres.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
-from mcp_support import Deps, call_tool, list_tools
+from mcp_support import NOW, Deps, call_tool, fixed_search, list_tools
 
 from parkmind.services.clients.knowledge import magic_kingdom_knowledge_store
+from parkmind.services.ports import RepositoryUnavailableError
 from parkmind.services.use_cases.check_accessibility import check_flags
+from parkmind.tools.registry import ToolContext, build_registry
 
 KNOWLEDGE_TOOLS = {
     "knowledge.search_policies",
@@ -141,3 +145,36 @@ def test_find_similar_needs_exactly_one_reference() -> None:
 
     assert result.is_error is True
     assert result.structured_content["error"]["code"] == "INVALID_ARGUMENT"
+
+
+def test_knowledge_tools_answer_while_the_planner_ports_are_down() -> None:
+    """They open only what they read: no database, provider or weather client."""
+
+    @contextmanager
+    def ports_down() -> Iterator[Any]:
+        raise RepositoryUnavailableError("database down")
+        yield  # pragma: no cover
+
+    registry = build_registry(ToolContext(ports_down, lambda: NOW, fixed_search(None)))
+
+    check = _ok(
+        call_tool(
+            registry,
+            "knowledge.check_accessibility",
+            {"attraction_ids": [BIG_THUNDER, SMALL_WORLD], "flags": [TRANSFER]},
+        )
+    )
+    similar = _ok(
+        call_tool(
+            registry,
+            "knowledge.find_similar_attractions",
+            {"attraction_id": BIG_THUNDER, "k": 3},
+        )
+    )
+    search = _ok(
+        call_tool(registry, "knowledge.search_policies", {"query": "Rider Switch"})
+    )
+
+    assert [c["eligible"] for c in check["data"]["checks"]] == [False, True]
+    assert similar["data"]["attractions"]
+    assert search["data"]["passages"]

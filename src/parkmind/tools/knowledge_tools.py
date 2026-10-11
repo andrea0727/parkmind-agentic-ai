@@ -131,7 +131,7 @@ def _passage(hit: KnowledgeHit) -> Passage:
 
 
 def knowledge_tools(ctx: ToolContext) -> list[ToolSpec]:
-    queries = KnowledgeQueries(ctx.deps_factory)
+    queries = KnowledgeQueries(search=ctx.knowledge_search)
 
     def search_policies(
         request: SearchPoliciesRequest,

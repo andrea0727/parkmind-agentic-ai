@@ -17,14 +17,10 @@ from collections.abc import Callable, Iterator, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager, nullcontext
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from functools import lru_cache
 from typing import Any, Protocol
 
-from parkmind.config.settings import settings
 from parkmind.core.contracts import PARK_TZ, AccessibilityRequirements, Attraction, Park
 from parkmind.services.clients.knowledge import magic_kingdom_knowledge_store
-from parkmind.services.clients.knowledge.embeddings import FastEmbedEmbedder
-from parkmind.services.clients.knowledge.pgvector_store import PgvectorKnowledgeSearch
 from parkmind.services.clients.open_meteo_client import OpenMeteoClient
 from parkmind.services.clients.postgres import (
     PostgresAttractionRepository,
@@ -41,7 +37,6 @@ from parkmind.services.clients.themeparks_errors import ThemeParksClientError
 from parkmind.services.ports import (
     AttractionRepository,
     IdMappingRepository,
-    KnowledgeSearch,
     KnowledgeStore,
     PlanRepository,
     ProposalRepository,
@@ -100,8 +95,6 @@ class PlanningDeps:
     """One atomic unit over ``plans`` and ``proposals`` (a DB transaction by default)."""
     park_data: ParkDataSource | None = None
     """Fetches (and caches in ``attractions``) a catalog or schedule the database lacks."""
-    knowledge_search: KnowledgeSearch | None = None
-    """Semantic search over the knowledge corpus (P0-26); ``None`` leaves only the keyword fallback."""
 
 
 DepsFactory = Callable[[], AbstractContextManager[PlanningDeps]]
@@ -128,21 +121,7 @@ def default_planning_deps() -> Iterator[PlanningDeps]:
             collector=SnapshotCollector(parks, weather, snapshots, id_mappings),
             transaction=lambda: conn.transaction(),
             park_data=parks,
-            knowledge_search=_knowledge_search(conn),
         )
-
-
-@lru_cache(maxsize=1)
-def _shared_embedder() -> FastEmbedEmbedder:
-    """One embedding model per process: loading it per call would cost a second each time."""
-    return FastEmbedEmbedder(settings.EMBEDDING_MODEL, cache_dir=settings.EMBEDDING_CACHE)
-
-
-def _knowledge_search(conn: Any) -> KnowledgeSearch | None:
-    """pgvector by default; ``PARKMIND_KNOWLEDGE_BACKEND=in_memory`` keeps keyword search only."""
-    if settings.KNOWLEDGE_BACKEND != "pgvector":
-        return None
-    return PgvectorKnowledgeSearch(conn, _shared_embedder())
 
 
 _PORT_FAILURES: tuple[type[Exception], ...] = (

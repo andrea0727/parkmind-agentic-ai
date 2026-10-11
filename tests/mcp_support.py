@@ -8,7 +8,8 @@ network, no Postgres, no MCP server running beforehand.
 
 import asyncio
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -43,7 +44,25 @@ from parkmind.tools.registry import ToolContext, ToolRegistry, build_registry
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 CHILDREN = FIXTURES / "themeparks" / "children_magic_kingdom_2026-10-01.json"
 
-__all__ = ["NOW", "PARK_ID", "CatalogRepository", "Deps", "call_tool", "list_tools"]
+__all__ = [
+    "NOW",
+    "PARK_ID",
+    "CatalogRepository",
+    "Deps",
+    "call_tool",
+    "fixed_search",
+    "list_tools",
+]
+
+
+def fixed_search(search: Any) -> Callable[[], Any]:
+    """A knowledge-search factory that always opens ``search`` (``None``: keyword only)."""
+
+    @contextmanager
+    def factory() -> Iterator[Any]:
+        yield search
+
+    return factory
 
 
 def mk_catalog() -> list[Attraction]:
@@ -120,8 +139,8 @@ class Deps:
             plans=self.plans,  # type: ignore[arg-type]
             proposals=self.proposals,  # type: ignore[arg-type]
             collector=self._collector() if live_collector else None,
-            knowledge_search=knowledge_search,
         )
+        self.knowledge_search = fixed_search(knowledge_search)
 
     def _collector(self) -> SnapshotCollector:
         provider = Provider()
@@ -130,7 +149,9 @@ class Deps:
         )
 
     def registry(self, clock: Callable[[], datetime] = lambda: NOW) -> ToolRegistry:
-        return build_registry(ToolContext(factory_for(self.value), clock))
+        return build_registry(
+            ToolContext(factory_for(self.value), clock, self.knowledge_search)
+        )
 
 
 def list_tools(registry: ToolRegistry) -> Any:

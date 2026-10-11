@@ -59,6 +59,7 @@ from parkmind.services.use_cases.park_data_queries import FromSnapshot, ParkData
 from parkmind.services.use_cases.planning_deps import (
     ContextUnavailableError,
     DepsFactory,
+    open_deps,
 )
 from parkmind.services.use_cases.snapshot_normalization import coverage_report
 
@@ -79,7 +80,6 @@ class InProcessContextData:
         self._data = ParkDataQueries(deps_factory)
         self._deps_factory = deps_factory
         self._clock = clock
-        self._knowledge: KnowledgeQueries | None = None
 
     def session(self) -> AbstractContextManager[None]:
         return nullcontext()
@@ -112,11 +112,12 @@ class InProcessContextData:
         flags: frozenset[RideRestriction],
         attraction_ids: Sequence[str],
     ) -> list[AccessibilityCheck]:
-        if self._knowledge is None:
-            self._knowledge = KnowledgeQueries(self._deps_factory)
-        return self._knowledge.check_accessibility(
-            attraction_ids, sorted(flags), guest_id
-        ).checks
+        # The notices the direct path reads, so both paths judge alike.
+        with open_deps(self._deps_factory) as deps:
+            queries = KnowledgeQueries(notices=deps.knowledge)
+            return queries.check_accessibility(
+                attraction_ids, sorted(flags), guest_id
+            ).checks
 
 
 def _ref(answer: FromSnapshot[V], value: Callable[[V], T]) -> FromSnapshotRef[T]:

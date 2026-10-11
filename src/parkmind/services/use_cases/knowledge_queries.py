@@ -15,15 +15,28 @@
   keeps only attractions of a strictly lower tier, never an ``unknown`` one.
 * ``check_accessibility`` -- delegates to ``check_flags`` (P0-26a) and keeps its
   fail-closed result. It never depends on retrieval and never degrades.
+
+Each query opens only what it reads. The notices are in memory, so checks do no
+I/O at all; semantic search opens a database connection of its own
+(``default_knowledge_search``) and never the planner's ports, so a provider or a
+database that is down costs search its semantic ranking and nothing else.
 """
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Literal
 
+from parkmind.config.settings import settings
 from parkmind.core.contracts import AccessibilityCheck, RideRestriction
+from parkmind.services.clients.knowledge import magic_kingdom_knowledge_store
+from parkmind.services.clients.knowledge.embeddings import FastEmbedEmbedder
 from parkmind.services.clients.knowledge.keyword_search import keyword_knowledge_search
+from parkmind.services.clients.knowledge.pgvector_store import PgvectorKnowledgeSearch
+from parkmind.services.clients.postgres import connect
+from parkmind.services.clients.postgres.connection import DATABASE_PROBLEMS
 from parkmind.services.ports import (
     KnowledgeHit,
     KnowledgeSearch,
@@ -31,21 +44,17 @@ from parkmind.services.ports import (
     KnowledgeUnavailableError,
 )
 from parkmind.services.use_cases.check_accessibility import check_flags
-from parkmind.services.use_cases.planning_deps import (
-    DepsFactory,
-    PlanningUnavailableError,
-    default_planning_deps,
-    open_deps,
-)
 
 __all__ = [
     "AccessibilityAnswer",
     "KnowledgeHit",
     "KnowledgeQueries",
+    "KnowledgeSearchFactory",
     "SearchAnswer",
     "SimilarAnswer",
     "SimilarAttraction",
     "UnknownAttractionError",
+    "default_knowledge_search",
     "intensity",
 ]
 
@@ -65,8 +74,39 @@ _CANDIDATES_PER_RESULT = (
 )
 
 
+KnowledgeSearchFactory = Callable[[], AbstractContextManager[KnowledgeSearch | None]]
+"""Opens semantic search for one query; yields ``None`` when it is not configured."""
+
+
 class UnknownAttractionError(LookupError):
     """The attraction has no profile in the knowledge corpus."""
+
+
+@lru_cache(maxsize=1)
+def _shared_embedder() -> FastEmbedEmbedder:
+    """One embedding model per process: loading it per call would cost a second each time."""
+    return FastEmbedEmbedder(
+        settings.EMBEDDING_MODEL, cache_dir=settings.EMBEDDING_CACHE
+    )
+
+
+@lru_cache(maxsize=1)
+def _keyword_fallback() -> KnowledgeSearch:
+    return keyword_knowledge_search()
+
+
+@contextmanager
+def default_knowledge_search() -> Iterator[KnowledgeSearch | None]:
+    """pgvector on its own connection; ``PARKMIND_KNOWLEDGE_BACKEND=in_memory`` keeps
+    keyword search only. A database that is down makes search unavailable (section 43)."""
+    if settings.KNOWLEDGE_BACKEND != "pgvector":
+        yield None
+        return
+    try:
+        with connect() as conn:
+            yield PgvectorKnowledgeSearch(conn, _shared_embedder())
+    except DATABASE_PROBLEMS as exc:
+        raise KnowledgeUnavailableError(f"database: {type(exc).__name__}") from exc
 
 
 @dataclass(frozen=True)
@@ -113,26 +153,27 @@ def intensity(store: KnowledgeStore, attraction_id: str) -> Intensity:
 class KnowledgeQueries:
     def __init__(
         self,
-        deps_factory: DepsFactory = default_planning_deps,
         *,
+        search: KnowledgeSearchFactory = default_knowledge_search,
+        notices: KnowledgeStore | None = None,
         fallback: KnowledgeSearch | None = None,
     ) -> None:
-        self._deps_factory = deps_factory
-        self._fallback = (
-            fallback if fallback is not None else keyword_knowledge_search()
+        self._search = search
+        self._notices = (
+            notices if notices is not None else magic_kingdom_knowledge_store()
         )
+        self._fallback = fallback if fallback is not None else _keyword_fallback()
 
     def search_policies(self, query: str, k: int) -> SearchAnswer:
         try:
-            with open_deps(self._deps_factory) as deps:
-                primary = deps.knowledge_search
+            with self._search() as primary:
                 if primary is not None:
                     hits = primary.search_policies(query, k)
                     return SearchAnswer(
                         hits, primary.corpus_version, primary.strategy, None
                     )
             reason = "semantic_search_not_configured"
-        except (KnowledgeUnavailableError, PlanningUnavailableError) as exc:
+        except KnowledgeUnavailableError as exc:
             logger.warning("search_policies degraded to keyword search: %s", exc)
             reason = "semantic_search_unavailable"
         hits = self._fallback.search_policies(query, k)
@@ -150,11 +191,9 @@ class KnowledgeQueries:
     ) -> SimilarAnswer:
         if (attraction_id is None) == (text is None):
             raise ValueError("give exactly one of attraction_id or text")
-        with open_deps(self._deps_factory) as deps:
-            notices = deps.knowledge
-            primary = deps.knowledge_search
-            reference = intensity(notices, attraction_id) if attraction_id else None
-            hits, search, degraded = self._similar(primary, attraction_id, text, k)
+        notices = self._notices
+        reference = intensity(notices, attraction_id) if attraction_id else None
+        hits, search, degraded = self._similar(attraction_id, text, k)
         if (
             attraction_id is not None
             and not hits
@@ -182,28 +221,24 @@ class KnowledgeQueries:
 
     def _similar(
         self,
-        primary: KnowledgeSearch | None,
         attraction_id: str | None,
         text: str | None,
         k: int,
     ) -> tuple[list[KnowledgeHit], KnowledgeSearch, str | None]:
         wanted = k * _CANDIDATES_PER_RESULT
-        if primary is not None:
-            try:
-                return (
-                    primary.similar_attractions(
+        try:
+            with self._search() as primary:
+                if primary is not None:
+                    hits = primary.similar_attractions(
                         attraction_id=attraction_id, text=text, k=wanted
-                    ),
-                    primary,
-                    None,
-                )
-            except KnowledgeUnavailableError as exc:
-                logger.warning(
-                    "find_similar_attractions degraded to keyword search: %s", exc
-                )
-                reason = "semantic_search_unavailable"
-        else:
+                    )
+                    return hits, primary, None
             reason = "semantic_search_not_configured"
+        except KnowledgeUnavailableError as exc:
+            logger.warning(
+                "find_similar_attractions degraded to keyword search: %s", exc
+            )
+            reason = "semantic_search_unavailable"
         hits = self._fallback.similar_attractions(
             attraction_id=attraction_id, text=text, k=wanted
         )
@@ -215,11 +250,9 @@ class KnowledgeQueries:
         flags: Sequence[RideRestriction],
         guest_id: str = "guest",
     ) -> AccessibilityAnswer:
-        with open_deps(self._deps_factory) as deps:
-            store = deps.knowledge
-            derived = frozenset(flags)
-            checks = [
-                check_flags(guest_id, derived, a, store)
-                for a in dict.fromkeys(attraction_ids)
-            ]
-            return AccessibilityAnswer(checks, store.corpus_version)
+        derived = frozenset(flags)
+        checks = [
+            check_flags(guest_id, derived, a, self._notices)
+            for a in dict.fromkeys(attraction_ids)
+        ]
+        return AccessibilityAnswer(checks, self._notices.corpus_version)

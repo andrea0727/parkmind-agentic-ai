@@ -13,6 +13,10 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from parkmind.core.contracts import PARK_TZ
+from parkmind.services.use_cases.knowledge_queries import (
+    KnowledgeSearchFactory,
+    default_knowledge_search,
+)
 from parkmind.services.use_cases.planning_deps import DepsFactory, default_planning_deps
 from parkmind.tools.contracts import ToolResult
 
@@ -34,6 +38,8 @@ class ToolContext:
 
     deps_factory: DepsFactory = default_planning_deps
     clock: Callable[[], datetime] = park_now
+    knowledge_search: KnowledgeSearchFactory = default_knowledge_search
+    """Semantic search for ``knowledge.*``: its own connection, not the planner's ports."""
 
 
 @dataclass(frozen=True)
