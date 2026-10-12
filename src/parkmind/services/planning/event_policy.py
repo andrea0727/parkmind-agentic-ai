@@ -38,7 +38,9 @@ calibrate like the resolver's threshold ranges:
   section 39.1's +18 minutes is MEDIUM.
 * the fatigue cap (decided 2026-10-12): ``min(daily limit - walked,
   fatigue_cap_fraction x walking left in the plan)`` with fraction 0.5; only the
-  plan term without a daily limit; never above an existing cap, never below 0.
+  plan term without a daily limit (or when the guest's requirements could not
+  be read -- that report then needs confirmation); never above an existing cap,
+  never below 0.
   Section 33: the cap "never exceeds daily limit - consumed". The daily limit is
   passed in from the guest's ``AccessibilityRequirements``; it never comes
   from, or goes to, graph state [C19].
@@ -93,6 +95,8 @@ class PartyEventContext:
     execution_state: PlanExecutionState | None = None
     daily_walking_limits: Mapping[str, int] | None = None
     """guest_id -> daily walking limit, from AccessibilityRequirements; never from state [C19]."""
+    unread_requirements: Collection[str] = ()
+    """Guests whose AccessibilityRequirements could not be read: their limit is unknown."""
 
 
 # ---- effects ---------------------------------------------------------------
@@ -168,14 +172,17 @@ def needs_confirmation(
     *,
     thresholds: EventThresholds,
     daily_walking_limits: Mapping[str, int] | None = None,
+    unread_requirements: Collection[str] = (),
     config: PolicyConfig = DEFAULT_POLICY_CONFIG,
 ) -> bool:
     """Section 25 [C10]: does this event need the guests' confirmation first?
 
     Only user reports do: when their confidence is below
     ``min_user_confidence``, or for ``GUEST_FATIGUE`` -- hard-constraint
-    adjacent -- when the guest has a daily walking limit or the confidence is
-    below ``thresholds.fatigue_threshold``.
+    adjacent -- when the guest has a daily walking limit, when their
+    requirements could not be read (the limit is unknown, so it fails closed as
+    if there were one), or when the confidence is below
+    ``thresholds.fatigue_threshold``.
     """
     if event.source is not EventSource.USER:
         return False
@@ -183,7 +190,8 @@ def needs_confirmation(
         return True
     if event.type is EventType.GUEST_FATIGUE:
         has_limit = event.guest_id in (daily_walking_limits or {})
-        return has_limit or event.confidence < thresholds.fatigue_threshold
+        unknown = event.guest_id in unread_requirements
+        return has_limit or unknown or event.confidence < thresholds.fatigue_threshold
     return False
 
 
@@ -261,6 +269,7 @@ def classify(
             event,
             thresholds=party.thresholds,
             daily_walking_limits=party.daily_walking_limits,
+            unread_requirements=party.unread_requirements,
             config=config,
         )
         if gate and not confirmed:

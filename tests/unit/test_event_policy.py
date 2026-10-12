@@ -330,6 +330,16 @@ def test_fatigue_for_a_guest_with_a_walking_limit_always_needs_confirmation():
     )
 
 
+def test_fatigue_for_a_guest_whose_requirements_could_not_be_read_needs_confirmation():
+    """Review #86 (I5): an unknown limit fails closed, like a known one."""
+    assert needs_confirmation(
+        _fatigue(confidence=0.99),
+        thresholds=THRESHOLDS,
+        daily_walking_limits={},
+        unread_requirements=["g2"],
+    )
+
+
 def test_an_unconfirmed_event_that_needs_confirmation_is_refused():
     with pytest.raises(UnconfirmedEventError):
         classify([_fatigue()], party=_party(), confirmed=False)

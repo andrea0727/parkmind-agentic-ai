@@ -156,13 +156,13 @@ def test_a_relocation_is_persisted_and_does_not_supersede(deps):
     )
 
 
-def _fatigue(confidence: float = 0.9):
+def _fatigue(confidence: float = 0.9, guest: str = "g2"):
     return factories.event(
         event_id="raw-tired",
         type=EventType.GUEST_FATIGUE,
         source=EventSource.USER,
         attraction_id=None,
-        guest_id="g2",
+        guest_id=guest,
         confidence=confidence,
         timestamp=NOW,
     )
@@ -188,11 +188,18 @@ def test_fatigue_caps_walking_from_the_session_store_limit(deps):
     assert handled.superseded == ["prop_pending"]
 
 
-def test_without_the_record_the_limit_is_unknown_and_only_the_plan_term_caps(deps):
-    _handle(deps, [_fatigue()], ref=())
+def test_without_the_record_fatigue_needs_confirmation_and_the_plan_term_caps(deps):
+    """Review #86 (I5): the record of g3 cannot be read, so the limit is
+    unknown. The report fails closed -- it needs confirmation, as with a known
+    limit -- and once confirmed only the plan term can cap."""
+    with pytest.raises(UnconfirmedEventError):
+        _handle(deps, [_fatigue(guest="g3")], confirmed=False, ref=("g2", "g3"))
 
+    handled = _handle(deps, [_fatigue(guest="g3")], ref=("g2", "g3"))
+
+    assert handled.requirements_missing == ("g3",)
     assert deps.execution_states.get(PLAN.plan_id).remaining_walking_cap_minutes == {
-        "g2": 15.0
+        "g3": 15.0
     }
 
 

@@ -11,7 +11,9 @@ In one transaction:
 
 1. the thread's recorded events, the plan's execution state, the catalog's
    outdoor flags and the guests' daily walking limits (from the SessionStore
-   by ``accessibility_ref``, never from state [C19]) are read;
+   by ``accessibility_ref``, never from state [C19]) are read. A guest whose
+   record cannot be read has an unknown limit: their fatigue report needs
+   confirmation, as with a known limit, and ``requirements_missing`` says so;
 2. ``BEHIND_SCHEDULE`` is derived from the execution state;
 3. ``deduplicate`` drops what the thread already holds, whatever the source;
 4. ``PARTY_RELOCATED`` is applied to the execution state, *then* the policy
@@ -27,6 +29,7 @@ An event that needs the guests' confirmation and arrives unconfirmed raises
 ``UnconfirmedEventError`` before anything is written.
 """
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -57,6 +60,7 @@ from parkmind.services.use_cases.planning_deps import (
     open_deps,
 )
 
+logger = logging.getLogger(__name__)
 
 class UnclassifiedEventError(RuntimeError):
     """An event reached the repository without EventPolicy's severity and requires_replan."""
@@ -71,6 +75,8 @@ class HandledEvents:
     superseded: list[str]
     """Proposal ids marked SUPERSEDED."""
     execution_state: PlanExecutionState | None
+    requirements_missing: tuple[str, ...] = ()
+    """Guests whose accessibility requirements could not be read (limits unknown)."""
 
     @property
     def requires_replan(self) -> bool:
@@ -108,7 +114,16 @@ class HandleEventsUseCase:
             history = deps.events.list_for_thread(thread_id)
             stored_state = deps.execution_states.get(plan.plan_id)
             outdoor = {a.node_id for a in load_catalog(deps) if a.outdoor}
-            requirements, _ = load_requirements(deps, thread_id, accessibility_ref)
+            requirements, missing = load_requirements(
+                deps, thread_id, accessibility_ref
+            )
+            if missing:
+                logger.warning(
+                    "thread %s: accessibility requirements of %s could not be read; "
+                    "their fatigue reports need confirmation",
+                    thread_id,
+                    ", ".join(missing),
+                )
             limits = {
                 r.guest_id: r.daily_walking_limit_minutes
                 for r in requirements
@@ -131,6 +146,7 @@ class HandleEventsUseCase:
                     outdoor_ids=outdoor,
                     execution_state=state,
                     daily_walking_limits=limits,
+                    unread_requirements=missing,
                 ),
                 confirmed=confirmed,
                 config=self._config,
@@ -158,4 +174,5 @@ class HandleEventsUseCase:
             duplicates=len(pool) - len(new),
             superseded=superseded,
             execution_state=state,
+            requirements_missing=tuple(missing),
         )
