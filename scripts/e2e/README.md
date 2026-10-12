@@ -19,7 +19,7 @@ Each full run makes real LLM calls (about 35, roughly 15 minutes). Results depen
 python scripts/e2e/capture.py                      # all 33, skipping ones already in docs/e2e/raw/
 python scripts/e2e/capture.py espanol grupo_de_1   # only these
 FORCE=1 python scripts/e2e/capture.py              # re-capture everything
-python scripts/e2e/build_report.py                 # no credentials needed: docs/e2e/raw -> docs/e2e/REPORT.md
+python scripts/e2e/build_report.py                 # no credentials needed: docs/e2e/raw -> docs/e2e/REPORT.md (raw/ is git-ignored; run capture.py first)
 ```
 
 Optional env vars: `E2E_RAW_DIR`, `E2E_BAD_DATABASE_URL` (a port nobody listens on, to simulate a DB outage), `E2E_ALLURE_RESULTS`.
