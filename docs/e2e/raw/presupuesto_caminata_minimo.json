@@ -11,7 +11,7 @@
     "decision": "APPROVED"
   },
   "setup": null,
-  "now": "21:01",
+  "now": "18:51",
   "steps": [],
   "llm_calls": 1,
   "extracted": {
@@ -68,19 +68,15 @@
     "check_valid": false,
     "violations": [
       {
-        "rule": "OPENING_HOURS",
-        "message": "Stop 72c7343a-f7fb-4f66-95df-c91016de7338 falls outside park operating hours"
-      },
-      {
-        "rule": "OPENING_HOURS",
-        "message": "Stop 5a43d1a7-ad53-4d25-abfe-25625f0da304 falls outside park operating hours"
+        "rule": "MUST_DO",
+        "message": "Must-do 9d4d5229-7142-44b6-b4fb-528920969a2c is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon"
       },
       {
         "rule": "WALKING_BUDGET",
-        "message": "Plan walking total 85.4 minutes exceeds party budget of 10 minutes"
+        "message": "Plan walking total 17.4 minutes exceeds party budget of 10 minutes"
       }
     ],
-    "last_ai": "I couldn't build a plan that meets every requirement, so nothing was proposed.\n- Stop 72c7343a-f7fb-4f66-95df-c91016de7338 falls outside park operating hours\n- Stop 5a43d1a7-ad53-4d25-abfe-25625f0da304 falls outside park operating hours\n- Plan walking total 85.4 minutes exceeds party budget of 10 minutes\nYou can relax a constraint (for example the must-dos or the departure time) and I'll try again."
+    "last_ai": "I couldn't build a plan that meets every requirement, so nothing was proposed.\n- Must-do 9d4d5229-7142-44b6-b4fb-528920969a2c is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon\n- Plan walking total 17.4 minutes exceeds party budget of 10 minutes\nYou can relax a constraint (for example the must-dos or the departure time) and I'll try again."
   },
-  "seconds": 21.6
+  "seconds": 5.9
 }

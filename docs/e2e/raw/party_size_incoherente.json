@@ -11,9 +11,9 @@
     "decision": "APPROVED"
   },
   "setup": null,
-  "now": "20:58",
+  "now": "18:47",
   "steps": [],
-  "llm_calls": 1,
+  "llm_calls": 2,
   "extracted": {
     "party_size": 5,
     "must_do": [
@@ -24,12 +24,9 @@
     "lunch_window": null,
     "heights": [
       170,
-      165,
-      null,
-      null,
-      null
+      165
     ],
-    "n_guests": 5
+    "n_guests": 2
   },
   "stages_elicit": [],
   "interrupt1": {
@@ -37,15 +34,13 @@
     "payload": {
       "kind": "missing_information",
       "missing": [
-        "guest_role:g3",
-        "guest_role:g4",
-        "guest_role:g5"
+        "unreadable_response"
       ],
-      "question": "Is g3 an adult or a child? Is g4 an adult or a child? Is g5 an adult or a child?"
+      "question": "I couldn't understand that. Could you describe your party and plans again?"
     }
   },
   "facts1": {
-    "last_ai": "Is g3 an adult or a child? Is g4 an adult or a child? Is g5 an adult or a child?"
+    "last_ai": "I couldn't understand that. Could you describe your party and plans again?"
   },
-  "seconds": 27.1
+  "seconds": 36.6
 }

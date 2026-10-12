@@ -11,7 +11,7 @@
     "decision": "APPROVED"
   },
   "setup": null,
-  "now": "20:56",
+  "now": "16:38",
   "steps": [],
   "llm_calls": 1,
   "extracted": {
@@ -38,5 +38,5 @@
   "facts1": {
     "last_ai": "Who is in your party (how many people, and are they adults or children)? What time do you plan to leave the park?"
   },
-  "seconds": 4.6
+  "seconds": 4.7
 }

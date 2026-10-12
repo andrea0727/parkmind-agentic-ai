@@ -11,11 +11,11 @@
     "decision": "APPROVED"
   },
   "setup": "<lambda>",
-  "now": "20:42",
+  "now": "16:33",
   "steps": [],
   "exception": {
     "type": "CatalogUnavailableError",
     "message": "no attraction catalog for park '75ea578a-adc8-4116-a54d-dccb60765ef9'"
   },
-  "seconds": 17.5
+  "seconds": 78.3
 }

@@ -11,7 +11,7 @@
     "decision": "APPROVED"
   },
   "setup": null,
-  "now": "21:00",
+  "now": "18:49",
   "steps": [],
   "llm_calls": 1,
   "extracted": {
@@ -86,52 +86,42 @@
     "load_context",
     "resolve_group",
     "build_plan",
-    "check",
-    "explain",
-    "propose"
+    "check"
   ],
-  "interrupt2": {
-    "kind": "plan_approval",
-    "payload": {
-      "kind": "plan_approval",
-      "proposal": "<Proposal>"
-    }
-  },
+  "interrupt2": null,
   "facts2": {
-    "check_valid": true,
-    "violations": [],
-    "n_stops": 20,
-    "stops_head": [
+    "check_valid": false,
+    "violations": [
       {
-        "kind": "ATTRACTION",
-        "node_id": "924a3b2c-6b4b-49e5-99d3-e9dc3f2e8a48",
-        "arrival": "08:05"
+        "rule": "MUST_DO",
+        "message": "Must-do b2260923-9315-40fd-9c6b-44dd811dbe64 is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon"
       },
       {
-        "kind": "ATTRACTION",
-        "node_id": "890fa430-89c0-4a3f-96c9-11597888005e",
-        "arrival": "08:26"
+        "rule": "MUST_DO",
+        "message": "Must-do 5a43d1a7-ad53-4d25-abfe-25625f0da304 is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon"
       },
       {
-        "kind": "ATTRACTION",
-        "node_id": "352feb94-e52e-45eb-9c92-e4b44c6b1a9d",
-        "arrival": "08:57"
+        "rule": "MUST_DO",
+        "message": "Must-do 9d4d5229-7142-44b6-b4fb-528920969a2c is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon"
       },
       {
-        "kind": "ATTRACTION",
-        "node_id": "796b0a25-c51e-456e-9bb8-50a324e301b3",
-        "arrival": "09:19"
+        "rule": "MUST_DO",
+        "message": "Must-do 2551a77d-023f-4ab1-9a19-8afec0190f39 is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon"
+      },
+      {
+        "rule": "MUST_DO",
+        "message": "Must-do 796b0a25-c51e-456e-9bb8-50a324e301b3 is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon"
+      },
+      {
+        "rule": "MUST_DO",
+        "message": "Must-do 86a41273-5f15-4b54-93b6-829f140e5161 is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon"
+      },
+      {
+        "rule": "MUST_DO",
+        "message": "Must-do 73cb9445-0695-47a3-87ce-d08ae36b5f3c is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon"
       }
     ],
-    "first_arrival": "08:05",
-    "last_arrival": "17:36",
-    "explanation": "20 stops, 220 min of waiting and 76 min of walking in total.\n08:05 The Barnstormer (5 min wait, 5 min walk)\n08:26 Dumbo the Flying Elephant (5 min wait, 1 min walk)\n08:57 Pirates of the Caribbean (5 min wait, 11 min walk)\n09:19 Jungle Cruise (10 min wait, 3 min walk)\n09:49 Tiana's Bayou Adventure (10 min wait, 5 min walk)\n10:15 Big Thunder Mountain Railroad (15 min wait, 1 min walk)\n10:49 Haunted Mansion (15 min wait, 4 min walk)\n11:22 Peter Pan's Flight (20 min wait, 3 min walk)\n12:04 Space Mountain (15 min wait, 7 min walk)\n12:37 Buzz Lightyear\u2019s Space Ranger Spin (25 min wait, 3 min walk)\n13:23 TRON Lightcycle / Run (30 min wait, 5 min walk)\n14:14 Seven Dwarfs Mine Train (35 min wait, 6 min walk)\n15:08 Tomorrowland Transit Authority PeopleMover (0 min wait, 4 min walk)\n15:24 Astro Orbiter (0 min wait, 0 min walk)\n15:40 Tomorrowland Speedway (5 min wait, 2 min walk)\n16:03 Mad Tea Party (5 min wait, 3 min walk)\n16:26 Under the Sea - Journey of The Little Mermaid (5 min wait, 3 min walk)\n16:50 \"it's a small world\" (5 min wait, 4 min walk)\n17:15 The Magic Carpets of Aladdin (5 min wait, 5 min walk)\n17:36 Swiss Family Treehouse (5 min wait, 1 min walk)"
+    "last_ai": "I couldn't build a plan that meets every requirement, so nothing was proposed.\n- Must-do b2260923-9315-40fd-9c6b-44dd811dbe64 is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon\n- Must-do 5a43d1a7-ad53-4d25-abfe-25625f0da304 is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon\n- Must-do 9d4d5229-7142-44b6-b4fb-528920969a2c is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon\n- Must-do 2551a77d-023f-4ab1-9a19-8afec0190f39 is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon\n- Must-do 796b0a25-c51e-456e-9bb8-50a324e301b3 is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon\n- Must-do 86a41273-5f15-4b54-93b6-829f140e5161 is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon\n- Must-do 73cb9445-0695-47a3-87ce-d08ae36b5f3c is listed as unmet but its status is OPERATING, not confirmed unavailable for the whole horizon\nYou can relax a constraint (for example the must-dos or the departure time) and I'll try again."
   },
-  "stages_after_approval": [
-    "resolve_proposal"
-  ],
-  "approval": "APPROVED",
-  "plan_active": true,
-  "interrupt3": null,
-  "seconds": 26.8
+  "seconds": 9.9
 }

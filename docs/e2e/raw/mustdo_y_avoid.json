@@ -11,9 +11,9 @@
     "decision": "APPROVED"
   },
   "setup": null,
-  "now": "20:56",
+  "now": "16:36",
   "steps": [],
-  "llm_calls": 1,
+  "llm_calls": 2,
   "extracted": {
     "party_size": 2,
     "must_do": [
@@ -36,13 +36,13 @@
     "payload": {
       "kind": "missing_information",
       "missing": [
-        "conflicting_attraction:Space Mountain"
+        "unreadable_response"
       ],
-      "question": "'Space Mountain' is on both your must-do and your avoid list. Do you want it in the plan, or kept out of it?"
+      "question": "I couldn't understand that. Could you describe your party and plans again?"
     }
   },
   "facts1": {
-    "last_ai": "'Space Mountain' is on both your must-do and your avoid list. Do you want it in the plan, or kept out of it?"
+    "last_ai": "I couldn't understand that. Could you describe your party and plans again?"
   },
-  "seconds": 7.6
+  "seconds": 23.1
 }

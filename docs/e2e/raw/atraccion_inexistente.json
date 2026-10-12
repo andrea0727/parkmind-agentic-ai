@@ -11,7 +11,7 @@
     "decision": "APPROVED"
   },
   "setup": null,
-  "now": "20:55",
+  "now": "16:36",
   "steps": [],
   "llm_calls": 1,
   "extracted": {
@@ -19,7 +19,7 @@
     "must_do": [
       "Pirates of Atlantis"
     ],
-    "avoid": [],
+    "avoid": null,
     "departure_time": "22:00",
     "lunch_window": null,
     "heights": [
@@ -42,5 +42,5 @@
   "facts1": {
     "last_ai": "I couldn't find 'Pirates of Atlantis' among this park's attractions. Which attraction do you mean?"
   },
-  "seconds": 9.9
+  "seconds": 12.9
 }

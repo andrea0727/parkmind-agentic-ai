@@ -11,7 +11,7 @@
     "decision": "APPROVED"
   },
   "setup": null,
-  "now": "21:01",
+  "now": "18:50",
   "steps": [],
   "llm_calls": 1,
   "extracted": {
@@ -43,5 +43,5 @@
   "facts1": {
     "last_ai": "I couldn't find 'Happily Ever After fireworks' among this park's attractions. Which attraction do you mean?"
   },
-  "seconds": 8.9
+  "seconds": 8.1
 }

@@ -11,7 +11,7 @@
     "decision": "APPROVED"
   },
   "setup": null,
-  "now": "20:59",
+  "now": "18:48",
   "steps": [],
   "llm_calls": 1,
   "extracted": {
@@ -23,7 +23,7 @@
     "departure_time": null,
     "lunch_window": null,
     "heights": [
-      null,
+      170,
       null
     ],
     "n_guests": 2
@@ -42,5 +42,5 @@
   "facts1": {
     "last_ai": "What time do you plan to leave the park?"
   },
-  "seconds": 22.9
+  "seconds": 82.7
 }

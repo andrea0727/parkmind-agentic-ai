@@ -12,7 +12,7 @@
     "decision": "APPROVED"
   },
   "setup": null,
-  "now": "20:44",
+  "now": "16:35",
   "steps": [],
   "llm_calls": 1,
   "extracted": {
@@ -78,19 +78,11 @@
     "check_valid": false,
     "violations": [
       {
-        "rule": "OPENING_HOURS",
-        "message": "Stop 73cb9445-0695-47a3-87ce-d08ae36b5f3c falls outside park operating hours"
-      },
-      {
-        "rule": "OPENING_HOURS",
-        "message": "Stop de3309ca-97d5-4211-bffe-739fed47e92f falls outside park operating hours"
-      },
-      {
-        "rule": "OPENING_HOURS",
-        "message": "Stop 9d4d5229-7142-44b6-b4fb-528920969a2c falls outside park operating hours"
+        "rule": "LUNCH_WINDOW",
+        "message": "No meal stop scheduled within the party's lunch window"
       }
     ],
-    "last_ai": "I couldn't build a plan that meets every requirement, so nothing was proposed.\n- Stop 73cb9445-0695-47a3-87ce-d08ae36b5f3c falls outside park operating hours\n- Stop de3309ca-97d5-4211-bffe-739fed47e92f falls outside park operating hours\n- Stop 9d4d5229-7142-44b6-b4fb-528920969a2c falls outside park operating hours\nYou can relax a constraint (for example the must-dos or the departure time) and I'll try again."
+    "last_ai": "I couldn't build a plan that meets every requirement, so nothing was proposed.\n- No meal stop scheduled within the party's lunch window\nYou can relax a constraint (for example the must-dos or the departure time) and I'll try again."
   },
-  "seconds": 134.1
+  "seconds": 31.9
 }

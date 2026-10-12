@@ -11,9 +11,9 @@
     "decision": "APPROVED"
   },
   "setup": null,
-  "now": "21:01",
+  "now": "18:50",
   "steps": [],
-  "llm_calls": 1,
+  "llm_calls": 2,
   "extracted": {
     "party_size": 2,
     "must_do": [
@@ -33,43 +33,17 @@
   },
   "stages_elicit": [],
   "interrupt1": {
-    "kind": "hard_constraint_confirmation",
+    "kind": "missing_information",
     "payload": {
-      "kind": "hard_constraint_confirmation",
-      "pending": [
-        "must_do: Dumbo the Flying Elephant",
-        "departure_time: 11:00",
-        "lunch_window: 13:00-14:00",
-        "height:g1: 170",
-        "height:g2: 170"
+      "kind": "missing_information",
+      "missing": [
+        "unreadable_response"
       ],
-      "echo": [
-        "'Dumbo the Flying Elephant' is a must-do: the plan has to include it.",
-        "You leave the park at 11:00: the plan must end by then.",
-        "Lunch is fixed between 13:00 and 14:00.",
-        "Guest 1 is 170 cm tall (about 5'7\"): rides with a higher minimum will be skipped.",
-        "Guest 2 is 170 cm tall (about 5'7\"): rides with a higher minimum will be skipped."
-      ],
-      "accessibility_guests": []
+      "question": "I couldn't understand that. Could you describe your party and plans again?"
     }
   },
-  "facts1": {},
-  "stages": [
-    "load_context",
-    "resolve_group",
-    "build_plan",
-    "check"
-  ],
-  "interrupt2": null,
-  "facts2": {
-    "check_valid": false,
-    "violations": [
-      {
-        "rule": "LUNCH_WINDOW",
-        "message": "No meal stop scheduled within the party's lunch window"
-      }
-    ],
-    "last_ai": "I couldn't build a plan that meets every requirement, so nothing was proposed.\n- No meal stop scheduled within the party's lunch window\nYou can relax a constraint (for example the must-dos or the departure time) and I'll try again."
+  "facts1": {
+    "last_ai": "I couldn't understand that. Could you describe your party and plans again?"
   },
-  "seconds": 12.4
+  "seconds": 18.6
 }

@@ -12,7 +12,7 @@
     "rejection_reason": "TOO_MUCH_WALKING"
   },
   "setup": null,
-  "now": "20:55",
+  "now": "16:36",
   "steps": [],
   "llm_calls": 1,
   "extracted": {
@@ -71,32 +71,32 @@
   "facts2": {
     "check_valid": true,
     "violations": [],
-    "n_stops": 20,
+    "n_stops": 10,
     "stops_head": [
       {
         "kind": "ATTRACTION",
         "node_id": "352feb94-e52e-45eb-9c92-e4b44c6b1a9d",
-        "arrival": "08:05"
+        "arrival": "16:41"
       },
       {
         "kind": "ATTRACTION",
         "node_id": "2551a77d-023f-4ab1-9a19-8afec0190f39",
-        "arrival": "08:29"
+        "arrival": "17:31"
       },
       {
         "kind": "ATTRACTION",
-        "node_id": "f5aad2d4-a419-4384-bd9a-42f86385c750",
-        "arrival": "09:01"
+        "node_id": "90d79335-c907-4069-a021-d0fe1ec73ae2",
+        "arrival": "18:30"
       },
       {
         "kind": "ATTRACTION",
-        "node_id": "ffcfeaa2-1416-4920-a1ed-543c1a1695c4",
-        "arrival": "09:27"
+        "node_id": "30fe3c64-af71-4c66-a54b-aa61fd7af177",
+        "arrival": "18:49"
       }
     ],
-    "first_arrival": "08:05",
-    "last_arrival": "16:45",
-    "explanation": "20 stops, 185 min of waiting and 81 min of walking in total.\n08:05 Pirates of the Caribbean (5 min wait, 5 min walk)\n08:29 Haunted Mansion (15 min wait, 5 min walk)\n09:01 \"it's a small world\" (5 min wait, 2 min walk)\n09:27 Tomorrowland Transit Authority PeopleMover (0 min wait, 6 min walk)\n09:43 Astro Orbiter (0 min wait, 0 min walk)\n10:00 Tomorrowland Speedway (5 min wait, 2 min walk)\n10:23 The Barnstormer (5 min wait, 3 min walk)\n10:44 Dumbo the Flying Elephant (5 min wait, 1 min walk)\n11:06 Under the Sea - Journey of The Little Mermaid (5 min wait, 2 min walk)\n11:35 Swiss Family Treehouse (5 min wait, 8 min walk)\n11:56 The Magic Carpets of Aladdin (5 min wait, 1 min walk)\n12:17 Jungle Cruise (10 min wait, 1 min walk)\n12:47 Tiana's Bayou Adventure (10 min wait, 5 min walk)\n13:18 Prince Charming Regal Carrousel (10 min wait, 7 min walk)\n13:46 Mad Tea Party (10 min wait, 2 min walk)\n14:15 Space Mountain (10 min wait, 5 min walk)\n14:45 The Many Adventures of Winnie the Pooh (15 min wait, 5 min walk)\n15:18 Peter Pan's Flight (20 min wait, 3 min walk)\n16:00 Big Thunder Mountain Railroad (20 min wait, 6 min walk)\n16:45 Buzz Lightyear\u2019s Space Ranger Spin (25 min wait, 11 min walk)"
+    "first_arrival": "16:41",
+    "last_arrival": "21:25",
+    "explanation": "10 stops, 115 min of waiting and 49 min of walking in total.\n16:41 Pirates of the Caribbean (30 min wait, 5 min walk)\n17:31 Haunted Mansion (40 min wait, 5 min walk)\n18:30 Cinderella Castle (0 min wait, 4 min walk)\n18:49 Swiss Family Treehouse (5 min wait, 4 min walk)\n19:14 Meet Mickey at Town Square Theater (10 min wait, 5 min walk)\n19:49 Casey Jr. Splash 'N' Soak Station (5 min wait, 10 min walk)\n20:12 Enchanted Tales with Belle (0 min wait, 4 min walk)\n20:30 \"it's a small world\" (10 min wait, 2 min walk)\n21:00 The Magic Carpets of Aladdin (5 min wait, 5 min walk)\n21:25 Prince Charming Regal Carrousel (10 min wait, 6 min walk)"
   },
   "stages_after_approval": [
     "resolve_proposal"
@@ -104,5 +104,5 @@
   "approval": "REJECTED",
   "plan_active": false,
   "interrupt3": null,
-  "seconds": 15.4
+  "seconds": 6.4
 }

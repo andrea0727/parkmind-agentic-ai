@@ -11,7 +11,7 @@
     "decision": "APPROVED"
   },
   "setup": null,
-  "now": "20:59",
+  "now": "18:49",
   "steps": [],
   "llm_calls": 1,
   "extracted": {
@@ -73,32 +73,32 @@
   "facts2": {
     "check_valid": true,
     "violations": [],
-    "n_stops": 20,
+    "n_stops": 6,
     "stops_head": [
       {
         "kind": "ATTRACTION",
         "node_id": "890fa430-89c0-4a3f-96c9-11597888005e",
-        "arrival": "08:05"
+        "arrival": "18:54"
       },
       {
         "kind": "ATTRACTION",
         "node_id": "2551a77d-023f-4ab1-9a19-8afec0190f39",
-        "arrival": "08:31"
+        "arrival": "19:36"
       },
       {
         "kind": "ATTRACTION",
-        "node_id": "f5aad2d4-a419-4384-bd9a-42f86385c750",
-        "arrival": "09:03"
+        "node_id": "90d79335-c907-4069-a021-d0fe1ec73ae2",
+        "arrival": "20:20"
       },
       {
         "kind": "ATTRACTION",
-        "node_id": "ffcfeaa2-1416-4920-a1ed-543c1a1695c4",
-        "arrival": "09:30"
+        "node_id": "e76c93df-31af-49a5-8e2f-752c76c937c9",
+        "arrival": "20:39"
       }
     ],
-    "first_arrival": "08:05",
-    "last_arrival": "16:45",
-    "explanation": "20 stops, 175 min of waiting and 90 min of walking in total.\n08:05 Dumbo the Flying Elephant (5 min wait, 5 min walk)\n08:31 Haunted Mansion (15 min wait, 7 min walk)\n09:03 \"it's a small world\" (5 min wait, 2 min walk)\n09:30 Tomorrowland Transit Authority PeopleMover (0 min wait, 6 min walk)\n09:45 Astro Orbiter (0 min wait, 0 min walk)\n10:02 Tomorrowland Speedway (5 min wait, 2 min walk)\n10:25 Mad Tea Party (5 min wait, 3 min walk)\n10:48 Under the Sea - Journey of The Little Mermaid (5 min wait, 3 min walk)\n11:10 The Barnstormer (5 min wait, 3 min walk)\n11:33 The Many Adventures of Winnie the Pooh (10 min wait, 3 min walk)\n12:05 Swiss Family Treehouse (5 min wait, 7 min walk)\n12:27 The Magic Carpets of Aladdin (5 min wait, 1 min walk)\n12:49 Pirates of the Caribbean (5 min wait, 2 min walk)\n13:12 Jungle Cruise (10 min wait, 3 min walk)\n13:42 Tiana's Bayou Adventure (10 min wait, 5 min walk)\n14:13 Prince Charming Regal Carrousel (10 min wait, 7 min walk)\n14:45 Space Mountain (15 min wait, 7 min walk)\n15:29 Big Thunder Mountain Railroad (15 min wait, 14 min walk)\n16:05 Peter Pan's Flight (20 min wait, 6 min walk)\n16:45 Buzz Lightyear\u2019s Space Ranger Spin (25 min wait, 5 min walk)"
+    "first_arrival": "18:54",
+    "last_arrival": "21:22",
+    "explanation": "6 stops, 55 min of waiting and 28 min of walking in total.\n18:54 Dumbo the Flying Elephant (20 min wait, 5 min walk)\n19:36 Haunted Mansion (25 min wait, 7 min walk)\n20:20 Cinderella Castle (0 min wait, 4 min walk)\n20:39 Enchanted Tales with Belle (0 min wait, 3 min walk)\n21:01 Swiss Family Treehouse (5 min wait, 7 min walk)\n21:22 The Magic Carpets of Aladdin (5 min wait, 1 min walk)"
   },
   "stages_after_approval": [
     "resolve_proposal"
@@ -106,5 +106,5 @@
   "approval": "APPROVED",
   "plan_active": true,
   "interrupt3": null,
-  "seconds": 24.5
+  "seconds": 11.1
 }

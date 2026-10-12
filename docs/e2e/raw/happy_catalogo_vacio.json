@@ -12,7 +12,7 @@
     "decision": "APPROVED"
   },
   "setup": "<lambda>",
-  "now": "20:43",
+  "now": "16:34",
   "steps": [],
   "llm_calls": 1,
   "extracted": {
@@ -49,7 +49,7 @@
         "height:g2: 168",
         "height:g3: 130",
         "height:g4: 125",
-        "accessibility:g2"
+        "accessibility:g1"
       ],
       "echo": [
         "'TRON Lightcycle / Run' is a must-do: the plan has to include it.",
@@ -62,7 +62,7 @@
         "Guest 4 is 125 cm tall (about 4'1\"): rides with a higher minimum will be skipped."
       ],
       "accessibility_guests": [
-        "g2"
+        "g1"
       ]
     }
   },
@@ -78,23 +78,15 @@
     "check_valid": false,
     "violations": [
       {
-        "rule": "OPENING_HOURS",
-        "message": "Stop 73cb9445-0695-47a3-87ce-d08ae36b5f3c falls outside park operating hours"
-      },
-      {
-        "rule": "OPENING_HOURS",
-        "message": "Stop de3309ca-97d5-4211-bffe-739fed47e92f falls outside park operating hours"
-      },
-      {
-        "rule": "OPENING_HOURS",
-        "message": "Stop 9d4d5229-7142-44b6-b4fb-528920969a2c falls outside park operating hours"
+        "rule": "LUNCH_WINDOW",
+        "message": "No meal stop scheduled within the party's lunch window"
       }
     ],
-    "last_ai": "I couldn't build a plan that meets every requirement, so nothing was proposed.\n- Stop 73cb9445-0695-47a3-87ce-d08ae36b5f3c falls outside park operating hours\n- Stop de3309ca-97d5-4211-bffe-739fed47e92f falls outside park operating hours\n- Stop 9d4d5229-7142-44b6-b4fb-528920969a2c falls outside park operating hours\nYou can relax a constraint (for example the must-dos or the departure time) and I'll try again."
+    "last_ai": "I couldn't build a plan that meets every requirement, so nothing was proposed.\n- No meal stop scheduled within the party's lunch window\nYou can relax a constraint (for example the must-dos or the departure time) and I'll try again."
   },
   "attraction_rows": {
     "before": 0,
     "after": 50
   },
-  "seconds": 108.5
+  "seconds": 31.6
 }

@@ -11,7 +11,7 @@
     "decision": "APPROVED"
   },
   "setup": null,
-  "now": "20:56",
+  "now": "16:37",
   "steps": [],
   "llm_calls": 1,
   "extracted": {
@@ -42,5 +42,5 @@
   "facts1": {
     "last_ai": "What time do you plan to leave the park?"
   },
-  "seconds": 14.2
+  "seconds": 8.9
 }

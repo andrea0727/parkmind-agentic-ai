@@ -11,7 +11,7 @@
     "decision": "APPROVED"
   },
   "setup": null,
-  "now": "20:57",
+  "now": "16:42",
   "steps": [],
   "llm_calls": 2,
   "extracted": {
@@ -56,5 +56,8 @@
   "facts1": {
     "last_ai": "I couldn't understand that. Could you describe your party and plans again?"
   },
-  "seconds": 60.6
+  "seconds": 7511.8,
+  "llm_retries": [
+    "ReadTimeout: HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=180.0)"
+  ]
 }
