@@ -214,6 +214,10 @@ def j_altura(r: dict[str, Any]) -> tuple[str, str]:
     if (c := crashed(r)):
         return c
     h = (r.get("extracted") or {}).get("heights")
+    if not active(r) and kind(r) == "missing_information" and any(
+        str(m).startswith("height_unverified:") for m in (r["interrupt1"]["payload"].get("missing") or [])
+    ):
+        return ok(f"The extractor returned {h}, which the guests never wrote; the graph asked for the heights instead of planning")
     if h != [400, 20] and h != [20, 400]:
         return bad("B10", f"The user said 400 cm and 20 cm, the extractor returned {h}; values were silently replaced and the plan was {'approved' if active(r) else 'not activated'}")
     return ok("Values preserved and validated")
