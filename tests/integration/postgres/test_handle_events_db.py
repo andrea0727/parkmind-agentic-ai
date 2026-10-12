@@ -25,8 +25,8 @@ from parkmind.services.clients.postgres import (
     PostgresPlanRepository,
     PostgresProposalRepository,
 )
-from parkmind.services.planning.event_policy import UnconfirmedEventError
 from parkmind.services.use_cases.handle_events import HandleEventsUseCase
+from parkmind.services.use_cases.planning_deps import PlanningUnavailableError
 
 NOW = datetime(2026, 9, 16, 10, 30, tzinfo=PARK_TZ)
 THREAD = "thread-db"
@@ -114,16 +114,44 @@ def test_a_closure_from_both_sources_is_stored_once_and_supersedes_once(deps) ->
     )
 
 
-def test_a_refused_event_rolls_the_whole_batch_back(deps) -> None:
-    moved = factories.event(
-        event_id="raw-move",
-        type=EventType.PARTY_RELOCATED,
-        source=EventSource.USER,
-        attraction_id=None,
-        location_node_id="frontierland",
-        confidence=0.95,
-        timestamp=NOW,
-    )
+MOVED = factories.event(
+    event_id="raw-move",
+    type=EventType.PARTY_RELOCATED,
+    source=EventSource.USER,
+    attraction_id=None,
+    location_node_id="frontierland",
+    confidence=0.95,
+    timestamp=NOW,
+)
+
+
+class _SupersedeFails:
+    """The proposals repository, failing at the batch's last write."""
+
+    def __init__(self, inner) -> None:
+        self._inner = inner
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def supersede_pending(self, thread_id, *, at):
+        raise psycopg.OperationalError("connection lost")
+
+
+def test_a_failure_at_the_last_write_rolls_the_whole_batch_back(deps) -> None:
+    failing = replace(deps, proposals=_SupersedeFails(deps.proposals))
+
+    with pytest.raises(PlanningUnavailableError):
+        _handle(failing, [MOVED, _down(EventSource.MONITOR)])
+
+    assert deps.events.list_for_thread(THREAD) == []
+    assert deps.execution_states.get(PLAN.plan_id) is None
+    assert [p.proposal_id for p in deps.proposals.list_pending(THREAD)] == [
+        "prop_pending"
+    ]
+
+
+def test_an_event_awaiting_confirmation_is_not_stored_and_the_rest_is(deps) -> None:
     tired = factories.event(
         event_id="raw-tired",
         type=EventType.GUEST_FATIGUE,
@@ -134,14 +162,15 @@ def test_a_refused_event_rolls_the_whole_batch_back(deps) -> None:
         timestamp=NOW,
     )
 
-    with pytest.raises(UnconfirmedEventError):
-        _handle(deps, [moved, tired], confirmed=False)
+    handled = _handle(deps, [MOVED, tired], confirmed=False)
 
-    assert deps.events.list_for_thread(THREAD) == []
-    assert deps.execution_states.get(PLAN.plan_id) is None
-    assert [p.proposal_id for p in deps.proposals.list_pending(THREAD)] == [
-        "prop_pending"
+    assert [e.type for e in handled.awaiting_confirmation] == [EventType.GUEST_FATIGUE]
+    assert [e.type for e in deps.events.list_for_thread(THREAD)] == [
+        EventType.PARTY_RELOCATED
     ]
+    state = deps.execution_states.get(PLAN.plan_id)
+    assert state.current_location_node_id == "frontierland"
+    assert state.remaining_walking_cap_minutes == {}
 
 
 def test_a_relocation_is_stored_in_the_execution_state(deps) -> None:
