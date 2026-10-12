@@ -252,8 +252,9 @@ class McpContextData:
 
 
 def _close_quietly(stack: ExitStack) -> None:
-    """Close the session; the reads are done, so a failure to close is only logged."""
+    """Close the session; the reads are done, so a failure to close is only logged,
+    by exception type: an SDK or HTTP error's text could quote a request."""
     try:
         stack.close()
-    except Exception:
-        logger.warning("closing the MCP session failed", exc_info=True)
+    except Exception as exc:  # noqa: BLE001 -- any close failure is logged, by type only
+        logger.warning("closing the MCP session failed: %s", type(exc).__name__)

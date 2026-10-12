@@ -11,7 +11,8 @@ import logging
 import socket
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import datetime
 from typing import Any
@@ -191,6 +192,25 @@ def test_load_context_logs_never_carry_flags_or_guest_ids(
     assert "knowledge.check_accessibility: RuntimeError" in logged
     for value in [*_sent_flags(deps), "WHEELCHAIR", "'g2'", " g2"]:
         assert value not in logged, value
+
+
+def test_a_failed_session_close_is_logged_by_type_only(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Closing fails with a message that quotes the request: only its type is logged."""
+
+    @asynccontextmanager
+    async def closing_fails(self: McpContextData) -> AsyncIterator[Any]:
+        yield object()
+        raise RuntimeError("close failed for g2 with NOT_RECOMMENDED_EXPECTANT")
+
+    monkeypatch.setattr(McpContextData, "_connected", closing_fails)
+
+    with McpContextData(UNREACHABLE).session():
+        pass
+
+    assert "closing the MCP session failed: RuntimeError" in caplog.text
+    assert "g2" not in caplog.text and "EXPECTANT" not in caplog.text
 
 
 def test_one_mcp_session_serves_the_whole_load_context(
