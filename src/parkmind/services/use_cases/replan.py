@@ -1,98 +1,204 @@
-"""
-Replan Use Case (P0-23).
+"""Use case: REPLAN the rest of the day for the active plan (P0-23, P0-34).
 
-Orchestrates the replanning workflow: loading current state from repositories, 
-delegating to the deterministic Replanner service, and returning the candidate.
-Persistence is strictly delegated to the PROPOSE node via ProposePlanUseCase.
+Composes the deterministic core exactly as ``BuildPlanUseCase`` does for the initial
+plan -- ``ParkGraph``, ``PreferenceScorer``, ``GreedyInsertionOptimizer`` and the
+section 21 re-solve loop -- and hands them to the ``Replanner``, so the graph reaches
+none of them directly (.importlinter).
+
+Like the initial plan, a replan reads the party's ``AccessibilityRequirements`` from
+the SessionStore by ``accessibility_ref`` on every call (never from state, never
+returned [C19]) and refuses to be fail-open: a guest without a stored record is simply
+absent here and the checker (rule 11) rejects the plan.
+
+The result is only a *candidate*. Nothing is persisted here: ``CheckPlanUseCase``
+decides whether it may be proposed and ``ProposePlanUseCase`` stores it.
+
+Two things the graph's state cannot hold are derived here from the repositories:
+
+* **Progress.** The party's execution state is read from the repository. When it
+  records no completed or skipped stop (nobody reported progress), the party is
+  assumed to be on schedule: stops that should have ended by ``now`` count as done and
+  are frozen, so the replan neither re-sends the party to them nor forgets what they
+  walked. ``as_of`` never lies before ``now``.
+* **Reported availability.** A report the thread recorded after the context's
+  snapshot (for example a guest saying a ride is closed) is applied to the context's
+  statuses, so the replan and the CHECK that follows see the same attractions as
+  unavailable, until a newer snapshot says otherwise.
 """
 
-from collections.abc import Sequence
+import logging
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
 
 from parkmind.core.contracts import (
-    AccessibilityRequirements,
-    Attraction,
+    AttractionStatus,
+    Event,
+    EventType,
     GroupObjective,
+    GuestProfile,
     LiveContext,
-    Park,
     PartyConstraints,
+    Plan,
+    PlanExecutionState,
 )
-from parkmind.services.personalization.preference_scorer import PreferenceScores
-from parkmind.services.planning.forecast_service import ForecastService
+from parkmind.services.planning.constraint_checker import ConstraintChecker
+from parkmind.services.planning.errors import ContextReloadError
+from parkmind.services.planning.optimizer import GreedyInsertionOptimizer
+from parkmind.services.planning.park_graph import ParkGraph
 from parkmind.services.planning.replanner import Replanner, ReplanResult
-from parkmind.services.ports.execution_state_repository import ExecutionStateRepository
-from parkmind.services.ports.plan_repository import PlanRepository
+from parkmind.services.planning.resolve_loop import PlannerResolveLoop
+from parkmind.services.use_cases.forecast import build_forecast_service
+from parkmind.services.use_cases.load_context import LoadContextUseCase
+from parkmind.services.use_cases.party_accessibility import (
+    party_checks,
+    with_checks,
+    without_guests,
+)
+from parkmind.services.use_cases.planning_deps import (
+    DepsFactory,
+    PlanningUnavailableError,
+    default_planning_deps,
+    load_catalog,
+    load_park,
+    load_requirements,
+    open_deps,
+)
+from parkmind.services.use_cases.score_preferences import ScorePreferencesUseCase
+
+logger = logging.getLogger(__name__)
 
 
-@dataclass
+def effective_execution_state(
+    plan: Plan, stored: PlanExecutionState | None, now: datetime
+) -> PlanExecutionState:
+    """The progress to replan from: what is stored, else an on-schedule party."""
+    state = stored or PlanExecutionState(plan_id=plan.plan_id, as_of=now)
+    if not state.completed_stop_ids and not state.skipped_stop_ids:
+        done = [stop.node_id for stop in plan.stops if stop.departure_time <= now]
+        state = state.model_copy(update={"completed_stop_ids": done})
+    return state.model_copy(update={"as_of": max(state.as_of, now)})
+
+
+def with_event_statuses(context: LiveContext, events: Iterable[Event]) -> LiveContext:
+    """``context`` with the availability reports newer than its snapshot applied."""
+    statuses = dict(context.statuses)
+    for event in sorted(events, key=lambda e: (e.timestamp, e.event_id)):
+        if event.attraction_id is None or event.timestamp <= context.retrieved_at:
+            continue
+        if event.type is EventType.ATTRACTION_DOWN:
+            statuses[event.attraction_id] = AttractionStatus.DOWN
+        elif event.type is EventType.ATTRACTION_AVAILABLE:
+            statuses[event.attraction_id] = AttractionStatus.OPERATING
+    if statuses == context.statuses:
+        return context
+    return context.model_copy(update={"statuses": statuses})
+
+
+@dataclass(frozen=True)
 class ReplanRequest:
-    """Input payload for the replan use case."""
     thread_id: str
-    plan_id: str
-    context: LiveContext
+    plan: Plan
+    """The active plan being replanned."""
     constraints: PartyConstraints
-    utilities: dict[str, float]
-    park: Park
-    catalog: Sequence[Attraction]
-    accessibility_reqs: Sequence[AccessibilityRequirements] | None = None
-    group_objective: GroupObjective | None = None
-    forecast_service: ForecastService | None = None
-    scores: PreferenceScores | None = None
+    profiles: Sequence[GuestProfile]
+    accessibility_ref: Sequence[str]
+    live_context: LiveContext
+    objective: GroupObjective
+    now: datetime
+    rest_first: bool = False
+    """A confirmed GUEST_FATIGUE: open the new horizon with a REST stop (section 25)."""
+
+
+@dataclass(frozen=True)
+class ReplanOutcome:
+    result: ReplanResult
+    live_context: LiveContext
+    """What to keep in state: no per-guest accessibility results [C19]."""
+    execution_state: PlanExecutionState
+    """The progress the replan started from (see the module docstring); the CHECK uses it too."""
 
 
 class ReplanUseCase:
-    """
-    Coordinates the retrieval of current plan state and execution of the 
-    re-optimization logic. Does NOT persist the plan (P0-24 compliance).
-    """
+    def __init__(self, deps_factory: DepsFactory = default_planning_deps) -> None:
+        self._deps_factory = deps_factory
 
-    def __init__(
-        self,
-        replanner: Replanner,
-        plan_repo: PlanRepository,
-        state_repo: ExecutionStateRepository,
-    ) -> None:
-        self._replanner = replanner
-        self._plan_repo = plan_repo
-        self._state_repo = state_repo
+    def execute(self, request: ReplanRequest) -> ReplanOutcome:
+        reloaded: list[LiveContext] = []
+        events: list[Event] = []
 
-    def execute(self, request: ReplanRequest) -> ReplanResult:
-        # 1. Load current plan and execution state from the database
-        current_plan = self._plan_repo.get(request.plan_id)
-        if not current_plan:
-            return ReplanResult(
-                valid=False,
-                plan=None,
-                diff=None,
-                unmet_must_do=[],
-                fatal_error=f"Plan '{request.plan_id}' not found.",
+        def reload_context() -> LiveContext:
+            try:
+                loaded = LoadContextUseCase(self._deps_factory).execute(
+                    request.thread_id, request.accessibility_ref, request.now
+                )
+            except PlanningUnavailableError as exc:
+                raise ContextReloadError(str(exc)) from exc
+            reloaded.append(with_event_statuses(loaded.for_state(), events))
+            return with_event_statuses(loaded.live_context, events)
+
+        with open_deps(self._deps_factory) as deps:
+            catalog = load_catalog(deps)
+            park = load_park(deps, request.now)
+            requirements, _ = load_requirements(
+                deps, request.thread_id, request.accessibility_ref
             )
-
-        execution_state = self._state_repo.get(request.plan_id)
-        if not execution_state:
-            return ReplanResult(
-                valid=False,
-                plan=None,
-                diff=None,
-                unmet_must_do=[],
-                fatal_error=f"Execution state for plan '{request.plan_id}' not found.",
+            events.extend(deps.events.list_for_thread(request.thread_id))
+            execution_state = effective_execution_state(
+                request.plan, deps.execution_states.get(request.plan.plan_id), request.now
             )
+            live_context = with_checks(
+                with_event_statuses(request.live_context, events),
+                party_checks(requirements, catalog, deps.knowledge),
+            )
+            park_graph = ParkGraph.from_sources(
+                routing=deps.routing, park=park, attractions=catalog, live_context=live_context
+            )
+            scores = ScorePreferencesUseCase().execute(
+                objective=request.objective,
+                profiles=request.profiles,
+                attractions=catalog,
+                live_context=live_context,
+                knowledge=deps.knowledge,
+                park_graph=park_graph,
+            )
+            forecast = build_forecast_service(
+                deps.snapshots, deps.id_mappings, now=execution_state.as_of
+            )
+            replanner = Replanner(
+                PlannerResolveLoop(GreedyInsertionOptimizer(park_graph=park_graph), ConstraintChecker()),
+                park_graph,
+            )
+            result = replanner.replan(
+                current_plan=request.plan,
+                execution_state=execution_state,
+                context=live_context,
+                constraints=request.constraints,
+                utilities=scores.utilities(),
+                park=park,
+                catalog=catalog,
+                accessibility_reqs=requirements,
+                group_objective=request.objective,
+                forecast_service=forecast,
+                scores=scores,
+                rest_first=request.rest_first,
+                context_reloader=reload_context,
+            )
+            state_context: LiveContext = (
+                reloaded[-1]
+                if reloaded
+                else without_guests(live_context, request.accessibility_ref)
+            )
+        if not result.valid:
+            logger.info("replan of %s found no valid plan: %s", request.plan.plan_id, result.fatal_error)
+        return ReplanOutcome(result, state_context, execution_state)
 
-        # 2. Delegate re-optimization to the deterministic domain service
-        result = self._replanner.replan(
-            current_plan=current_plan,
-            execution_state=execution_state,
-            context=request.context,
-            constraints=request.constraints,
-            utilities=request.utilities,
-            park=request.park,
-            catalog=request.catalog,
-            accessibility_reqs=request.accessibility_reqs,
-            group_objective=request.group_objective,
-            forecast_service=request.forecast_service,
-            scores=request.scores,
-        )
 
-        # 3. Persist the new plan independently (P0-12)
-
-        return result
+__all__: list[Any] = [
+    "ReplanOutcome",
+    "ReplanRequest",
+    "ReplanUseCase",
+    "effective_execution_state",
+    "with_event_statuses",
+]

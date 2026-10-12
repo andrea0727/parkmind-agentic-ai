@@ -138,6 +138,8 @@ class GreedyInsertionOptimizer:
         scores: PreferenceScores | None = None,
         start_location_node_id: str | None = None,
         completed_node_ids: Sequence[str] | None = None,
+        rest_first: bool = False,
+        walking_budget_minutes: float | None = None,
     ) -> Plan:
         """Build a candidate plan.
 
@@ -173,6 +175,15 @@ class GreedyInsertionOptimizer:
             per-guest satisfaction is the scorer's (each guest against the
             best of their own eligible set, C20) and the plan's
             ``preference_model_version`` is the scorer's version.
+        rest_first:
+            Open the plan with a REST stop where the party stands (a confirmed
+            GUEST_FATIGUE, section 25). Skipped when the rest does not fit before
+            the departure time; the caller must check that the plan starts with it.
+        walking_budget_minutes:
+            The most walking this plan may add. A candidate whose walk would go past
+            it is not inserted, so the plan is built to fit the remaining budget
+            instead of being repaired by dropping stops afterwards. Anchors (shows,
+            the meal) are fixed and still left to the checker.
         """
         if forecast_service is not None and now is None:
             raise ValueError("now is required when a forecast_service is given")
@@ -286,6 +297,23 @@ class GreedyInsertionOptimizer:
         cursor_time = start_time
         cursor_node = start_location_node_id or _PARK_ENTRANCE_NODE
         active_minutes_since_rest = 0.0
+
+        if rest_first:
+            rest_end = cursor_time + timedelta(minutes=self._rest_dur)
+            if rest_end <= end_time:
+                stops.append(
+                    Stop(
+                        node_id=cursor_node,
+                        kind=StopKind.REST,
+                        arrival_time=cursor_time,
+                        departure_time=rest_end,
+                        expected_wait_minutes=0.0,
+                        walking_minutes=0.0,
+                        utility=0.0,
+                        served_guests=guest_ids,
+                    )
+                )
+                cursor_time = rest_end
 
         anchor_idx = 0
         meal_inserted = False
@@ -403,6 +431,12 @@ class GreedyInsertionOptimizer:
             ]:
                 for cid in pool:
                     walk_min = self._walk_time(cursor_node, cid)
+                    if (
+                        walking_budget_minutes is not None
+                        and sum(s.walking_minutes for s in stops) + walk_min
+                        > walking_budget_minutes
+                    ):
+                        continue  # would walk past what the guests have left
                     reading = read_wait(cid, cursor_time + timedelta(minutes=walk_min))
                     if reading is None:
                         continue  # no forecast and no typical wait: never charged 0

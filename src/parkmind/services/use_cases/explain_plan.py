@@ -8,7 +8,7 @@ this use case); it reads the plan and never feeds anything back into it.
 
 from collections.abc import Mapping
 
-from parkmind.core.contracts import PARK_TZ, CheckResult, Plan
+from parkmind.core.contracts import PARK_TZ, CheckResult, Plan, PlanDiff
 from parkmind.services.planning.optimizer import MEAL_VENUE_TBD
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
@@ -43,6 +43,30 @@ def explain_plan(plan: Plan, check_result: CheckResult, names: Mapping[str, str]
     return "\n".join(parts)
 
 
+def _label_name(label: str, names: Mapping[str, str]) -> str:
+    node_id, _, kind = label.partition(":")
+    name = names.get(node_id, node_id)
+    return f"{name} ({kind.lower()})" if kind else name
+
+
+def explain_replan(
+    plan: Plan, check_result: CheckResult, names: Mapping[str, str], *, reason: str, diff: PlanDiff
+) -> str:
+    """``explain_plan`` led by why the plan changed and what changed."""
+    changes: list[str] = []
+    for title, labels in (
+        ("Added", diff.stops_added),
+        ("Removed", diff.stops_removed),
+        ("Reordered", diff.stops_reordered),
+        ("Changed", list(diff.stops_modified)),
+    ):
+        if labels:
+            changes.append(f"{title}: {', '.join(_label_name(label, names) for label in labels)}.")
+    if not changes:
+        changes.append("No stops changed; only times shifted.")
+    return "\n".join([reason, *changes, "", explain_plan(plan, check_result, names)])
+
+
 class ExplainPlanUseCase:
     def __init__(self, deps_factory: DepsFactory = default_planning_deps) -> None:
         self._deps_factory = deps_factory
@@ -55,3 +79,14 @@ class ExplainPlanUseCase:
         with open_deps(self._deps_factory) as deps:
             names = {a.node_id: a.name for a in load_catalog(deps)}
         return explain_plan(plan, check_result, names)
+
+    def execute_replan(
+        self, plan: Plan, check_result: CheckResult, *, reason: str, diff: PlanDiff
+    ) -> str:
+        if not check_result.valid:
+            raise ExplainBeforeValidationError(
+                "a plan is explained only after it passed the checker"
+            )
+        with open_deps(self._deps_factory) as deps:
+            names = {a.node_id: a.name for a in load_catalog(deps)}
+        return explain_replan(plan, check_result, names, reason=reason, diff=diff)

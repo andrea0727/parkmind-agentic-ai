@@ -6,6 +6,8 @@ across the workflow. All functions assume state is valid
 (contracts enforce this at boundaries).
 """
 
+from typing import Any
+
 from parkmind.core.contracts import (
     GuestProfile,
     LiveContext,
@@ -78,3 +80,16 @@ def increment_iteration(state: ParkMindState) -> ParkMindState:
     """Increment workflow iteration counter."""
     state["iteration"] = state.get("iteration", 0) + 1
     return state
+
+
+def active_plan_update(plan: Plan) -> dict[str, Any]:
+    """State update mirroring the repository's active plan (read, never an activation)."""
+    return {"current_plan": plan}
+
+
+def discarded_proposal_update() -> dict[str, Any]:
+    """State update that drops the candidate, its proposal and the approval state.
+
+    The active plan is untouched: only an approval ever replaces it.
+    """
+    return {"candidate_plan": None, "proposal": None, "approval": None}

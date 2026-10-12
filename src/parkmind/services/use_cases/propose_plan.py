@@ -11,7 +11,13 @@ earlier ones, so a re-run of the planning stage never leaves two open.
 
 from datetime import datetime
 
-from parkmind.core.contracts import ApprovalStatus, Plan, PlanDiff, Proposal
+from parkmind.core.contracts import (
+    ApprovalStatus,
+    Plan,
+    PlanDiff,
+    PlanExecutionState,
+    Proposal,
+)
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
     default_planning_deps,
@@ -33,6 +39,9 @@ class ProposePlanUseCase:
         explanation: str,
         at: datetime,
         base_plan_id: str | None = None,
+        diff: PlanDiff | None = None,
+        triggering_event_id: str | None = None,
+        execution_state: PlanExecutionState | None = None,
     ) -> Proposal:
         """Persist ``plan`` and open a PENDING proposal for human review.
 
@@ -40,13 +49,19 @@ class ProposePlanUseCase:
         proposal has no prior plan to diff against (the proposals table keeps
         base_plan_id NOT NULL but without an FK precisely for this case --
         see database/migrations/versions/0001_mvp_schema.py).
+
+        A replan passes its ``diff`` against the active plan, the event that
+        triggered it, and the ``execution_state`` it was solved from: that progress
+        is saved for the new plan id (in the same transaction), so the party's
+        completed stops and walked minutes survive the plan swap.
         """
         proposal = Proposal(
             proposal_id=proposal_id,
             base_plan_id=base_plan_id or plan.plan_id,
             candidate_plan_id=plan.plan_id,
             reason=reason,
-            diff=PlanDiff(),
+            triggering_event_id=triggering_event_id,
+            diff=diff or PlanDiff(),
             explanation=explanation,
             approval_status=ApprovalStatus.PENDING,
             provenance=plan.provenance,
@@ -54,5 +69,9 @@ class ProposePlanUseCase:
         with open_deps(self._deps_factory) as deps, deps.transaction():
             deps.proposals.supersede_pending(thread_id, at=at)
             deps.plans.save(thread_id, plan)
+            if execution_state is not None:
+                deps.execution_states.save(
+                    execution_state.model_copy(update={"plan_id": plan.plan_id})
+                )
             deps.proposals.save(thread_id, proposal)
         return proposal
