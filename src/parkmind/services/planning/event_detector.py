@@ -126,7 +126,9 @@ def detect_behind_schedule(
     """``BEHIND_SCHEDULE`` when a stop the party should have left is not done.
 
     The earliest stop whose planned departure is before ``now`` and that is
-    neither completed nor skipped sets ``minutes_behind``. ``None`` without an
+    neither completed nor skipped sets ``minutes_behind`` -- unrounded, so that
+    ``timestamp - minutes_behind`` is that departure (``event_dedup`` keys the
+    event on it). ``None`` without an
     execution state for this plan, when the party is on schedule, or when the
     state records no completed or skipped stop: progress is not being tracked
     (a state created by a relocation or a walking cap), and an empty list would
@@ -144,7 +146,7 @@ def detect_behind_schedule(
     if not overdue:
         return None
     late = min(overdue, key=lambda s: s.departure_time)
-    behind = round((now - late.departure_time).total_seconds() / 60, 1)
+    behind = (now - late.departure_time).total_seconds() / 60
     if behind <= 0:
         return None
     return Event(

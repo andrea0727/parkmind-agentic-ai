@@ -224,6 +224,23 @@ def test_behind_schedule_is_derived_from_the_execution_state(deps):
     assert handled.superseded == ["prop_pending"]
 
 
+def test_staying_behind_supersedes_only_once(deps):
+    deps.execution_states.save(
+        factories.execution_state(
+            plan_id=PLAN.plan_id, completed_stop_ids=["space"], as_of=NOW
+        )
+    )
+    _handle(deps, [], now=NOW + timedelta(minutes=123))
+    deps.proposals.save(
+        THREAD, factories.proposal(proposal_id="prop_replan", candidate_plan_id="p2")
+    )
+
+    still = [_handle(deps, [], now=NOW + timedelta(minutes=m)) for m in (154, 185)]
+
+    assert [h.superseded for h in still] == [[], []]
+    assert _pending(deps) == ["prop_replan"]
+
+
 def test_a_state_created_by_a_relocation_raises_no_behind_schedule_later(deps):
     """Review #86 (I2): the relocation creates the execution state with nothing
     completed; the next cycle, hours later, must not call the party late."""

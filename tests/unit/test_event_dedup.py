@@ -140,6 +140,38 @@ def test_moments_for_different_subjects_are_kept():
     assert len(kept) == 2
 
 
+def _behind(departure: datetime, now: datetime, stop: str = "jungle"):
+    return factories.event(
+        event_id="raw-behind",
+        type=EventType.BEHIND_SCHEDULE,
+        attraction_id=stop,
+        timestamp=now,
+        minutes_behind=(now - departure).total_seconds() / 60,
+    )
+
+
+def test_behind_schedule_is_held_once_per_overdue_stop():
+    """Review #86 (S2): the party staying late must not re-supersede the
+    proposal the first event asked for, at +31 min or at +62 min."""
+    leaves = NOW.replace(second=30, microsecond=0)
+    history, first = _record([], [_behind(leaves, leaves + timedelta(minutes=18))])
+
+    for minutes in (31, 62, 300):
+        repeat = _behind(leaves, leaves + timedelta(minutes=minutes, seconds=3.4))
+        assert deduplicate([repeat], history) == []
+    assert [e.event_id for e in first] == ["BEHIND_SCHEDULE:jungle@20260916T143030Z"]
+
+
+def test_behind_on_a_replanned_departure_is_a_new_event():
+    leaves = NOW
+    history, _ = _record([], [_behind(leaves, leaves + timedelta(minutes=18))])
+
+    replanned = leaves + timedelta(minutes=40)
+    new = deduplicate([_behind(replanned, replanned + timedelta(minutes=20))], history)
+
+    assert len(new) == 1
+
+
 def test_ids_do_not_depend_on_the_source_or_the_raw_id():
     from_user = deduplicate([_fatigue(0, source=EventSource.USER)], [])
     from_monitor = deduplicate([_fatigue(0, source=EventSource.MONITOR)], [])

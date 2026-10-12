@@ -20,11 +20,17 @@ Two kinds of identity:
   report of a closure already held stays a duplicate. A new episode gets
   ``"{TYPE}:{attraction}:{n}"``, ``n`` counting that attraction's events of the
   type, so DOWN -> AVAILABLE -> DOWN is three events.
+* **Once per overdue stop** -- ``BEHIND_SCHEDULE``. The subject is the overdue
+  stop and its planned departure (``timestamp - minutes_behind``), and the
+  thread holds it once, however long the party stays behind: every repeat would
+  supersede the replan proposal the first one asked for. An approved replan
+  moves the departures, so falling behind on the new plan is a new event. The id
+  is ``"BEHIND_SCHEDULE:{stop}@{departure}"``.
 * **Moments** -- every other type. The same (type, subject) within ``window`` of
   one already held is a duplicate; otherwise the id is
   ``"{TYPE}:{subject}:{UTC minute}"``. Subjects: the attraction (wait spike),
-  the first affected hour (rain), the overdue stop (behind schedule), the guest
-  (fatigue), the location (relocation).
+  the first affected hour (rain), the guest (fatigue), the location
+  (relocation).
 
 Pure: the thread's history is passed in, ``now`` is never read.
 """
@@ -57,6 +63,8 @@ def deduplicate(
     ):
         if candidate.type in EPISODIC:
             event_id = _episode_id(candidate, seen, window)
+        elif candidate.type is EventType.BEHIND_SCHEDULE:
+            event_id = _once_id(candidate, seen)
         else:
             event_id = _moment_id(candidate, seen, window)
         if event_id is None:
@@ -77,8 +85,18 @@ def subject(event: Event) -> str:
             return event.guest_id or ""
         case EventType.PARTY_RELOCATED:
             return event.location_node_id or ""
+        case EventType.BEHIND_SCHEDULE:
+            return f"{event.attraction_id or ''}@{_planned_departure(event)}"
         case _:
             return event.attraction_id or ""
+
+
+def _planned_departure(event: Event) -> str:
+    if event.minutes_behind is None:
+        return ""
+    at = event.timestamp - timedelta(minutes=event.minutes_behind)
+    to_the_second = (at + timedelta(milliseconds=500)).replace(microsecond=0)
+    return to_the_second.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
 def _episode_id(candidate: Event, seen: list[Event], window: timedelta) -> str | None:
@@ -96,6 +114,13 @@ def _episode_id(candidate: Event, seen: list[Event], window: timedelta) -> str |
             return None  # the episode is still open
     n = 1 + sum(1 for e in same_attraction if e.type is candidate.type)
     return f"{candidate.type.value}:{attraction}:{n}"
+
+
+def _once_id(candidate: Event, seen: list[Event]) -> str | None:
+    key = subject(candidate)
+    if any(e.type is candidate.type and subject(e) == key for e in seen):
+        return None
+    return f"{candidate.type.value}:{key}"
 
 
 def _moment_id(candidate: Event, seen: list[Event], window: timedelta) -> str | None:
