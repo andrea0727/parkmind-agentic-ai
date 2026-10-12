@@ -1,4 +1,4 @@
-"""RoutingClient adapter — implements RoutingPort.
+"""RoutingClient adapter — implements RoutingPort and WalkEstimator.
 
 Provides walking time estimation between planning nodes with:
 1. Exact zero-duration for same-node queries.
@@ -15,6 +15,7 @@ from parkmind.services.ports import (
     InvalidRouteError,
     RouteNotFoundError,
     RoutingError,
+    WalkEstimate,
 )
 
 from .routing_reference_data import (
@@ -122,27 +123,9 @@ class RoutingClient:
         orig = origin_node_id.strip()
         dest = destination_node_id.strip()
 
-        # Rule 1: Identity
-        if orig == dest:
-            return 0.0
-
-        # Rule 2: Explicit matrix lookup (both directions)
-        if (orig, dest) in self.matrix:
-            return max(0.0, float(self.matrix[(orig, dest)]))
-        if (dest, orig) in self.matrix:
-            return max(0.0, float(self.matrix[(dest, orig)]))
-
-        # Rule 3: Coordinate-based estimation
-        if orig in self.coordinates and dest in self.coordinates:
-            lat1, lon1 = self.coordinates[orig]
-            lat2, lon2 = self.coordinates[dest]
-            distance_meters = calculate_haversine_distance_meters(
-                lat1, lon1, lat2, lon2
-            )
-            detour_distance = distance_meters * self.tortuosity_factor
-            minutes = detour_distance / self.walking_speed_meters_per_minute
-            # Minimum walking threshold for distinct physical nodes: 0.5 minutes
-            return round(max(0.5, minutes), 1)
+        resolved = self._resolve(orig, dest)
+        if resolved is not None and resolved.minutes is not None:
+            return resolved.minutes
 
         # Rule 4: Explicit Fallback
         if self.fallback_enabled:
@@ -159,6 +142,46 @@ class RoutingClient:
             f"No route or coordinates found between node '{orig}' and '{dest}', "
             "and routing fallback is disabled."
         )
+
+    def estimate_walk(
+        self, origin_node_id: str, destination_node_id: str
+    ) -> WalkEstimate:
+        """``WalkEstimator``: the same rules 1-3 with their basis; never the fallback.
+
+        Without a matrix entry or coordinates the answer is ``unknown`` with no
+        minutes, even when ``fallback_enabled`` -- a published walking time must
+        not be a silent default (P0-25).
+        """
+        self._validate_node_id(origin_node_id, "origin_node_id")
+        self._validate_node_id(destination_node_id, "destination_node_id")
+        resolved = self._resolve(origin_node_id.strip(), destination_node_id.strip())
+        return resolved if resolved is not None else WalkEstimate(None, "unknown")
+
+    def _resolve(self, orig: str, dest: str) -> WalkEstimate | None:
+        """Rules 1-3 (identity, matrix, coordinates); ``None`` when none applies."""
+        # Rule 1: Identity
+        if orig == dest:
+            return WalkEstimate(0.0, "identity")
+
+        # Rule 2: Explicit matrix lookup (both directions)
+        if (orig, dest) in self.matrix:
+            return WalkEstimate(max(0.0, float(self.matrix[(orig, dest)])), "curated")
+        if (dest, orig) in self.matrix:
+            return WalkEstimate(max(0.0, float(self.matrix[(dest, orig)])), "curated")
+
+        # Rule 3: Coordinate-based estimation
+        if orig in self.coordinates and dest in self.coordinates:
+            lat1, lon1 = self.coordinates[orig]
+            lat2, lon2 = self.coordinates[dest]
+            distance_meters = calculate_haversine_distance_meters(
+                lat1, lon1, lat2, lon2
+            )
+            detour_distance = distance_meters * self.tortuosity_factor
+            minutes = detour_distance / self.walking_speed_meters_per_minute
+            # Minimum walking threshold for distinct physical nodes: 0.5 minutes
+            return WalkEstimate(round(max(0.5, minutes), 1), "estimated")
+
+        return None
 
     def _validate_node_id(self, node_id: Any, param_name: str) -> None:
         """Validate that a node ID parameter is a non-empty string."""

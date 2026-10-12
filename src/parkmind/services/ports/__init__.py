@@ -16,13 +16,17 @@ without importing an adapter (and therefore a DB driver).
 
 from .attraction_repository import AttractionRepository
 from .behavior_log_repository import BehaviorLogRepository
+from .context_data import ContextDataPort, FromSnapshotRef, SnapshotRef
 from .errors import (
     ConflictError,
     ConsentRequiredError,
+    ContextDataUnavailableError,
+    ContextTransportError,
     ForecastSourceError,
     IdMappingConflictError,
     InvalidRouteError,
     InvalidStateTransitionError,
+    KnowledgeUnavailableError,
     NotApprovedError,
     NotFoundError,
     PendingProposalExistsError,
@@ -44,13 +48,19 @@ from .execution_state_repository import ExecutionStateRepository
 from .forecast import ForecastStrategy, WaitForecast
 from .guest_repository import GuestRepository
 from .id_mapping_repository import EntityKind, IdMappingRepository
-from .knowledge_store import KnowledgeStore
+from .knowledge_store import (
+    KnowledgeChunk,
+    KnowledgeHit,
+    KnowledgeKind,
+    KnowledgeSearch,
+    KnowledgeStore,
+)
 from .park_data import ParkDataPort
 from .plan_repository import PlanRepository
 from .profile_repository import ProfileRepository
 from .proposal_repository import ProposalRepository
 from .provenance_repository import ProvenanceRepository, ProvenanceSubjectKind
-from .routing import RoutingPort
+from .routing import RoutingPort, WalkBasis, WalkEstimate, WalkEstimator
 from .session_store import SessionStore
 from .snapshot_repository import RawPayload, SnapshotMeta, SnapshotRepository
 from .weather import WeatherPort
@@ -60,17 +70,26 @@ __all__ = [
     "BehaviorLogRepository",
     "ConflictError",
     "ConsentRequiredError",
+    "ContextDataPort",
+    "ContextDataUnavailableError",
+    "ContextTransportError",
     "EntityKind",
     "EventRepository",
     "ExecutionStateRepository",
     "ForecastSourceError",
     "ForecastStrategy",
+    "FromSnapshotRef",
     "GuestRepository",
     "IdMappingConflictError",
     "IdMappingRepository",
     "InvalidRouteError",
     "InvalidStateTransitionError",
+    "KnowledgeChunk",
+    "KnowledgeHit",
+    "KnowledgeKind",
+    "KnowledgeSearch",
     "KnowledgeStore",
+    "KnowledgeUnavailableError",
     "NotApprovedError",
     "NotFoundError",
     "ParkDataPort",
@@ -95,8 +114,12 @@ __all__ = [
     "RoutingUnavailableError",
     "SessionStore",
     "SnapshotMeta",
+    "SnapshotRef",
     "SnapshotRepository",
     "StoredDataError",
     "WaitForecast",
+    "WalkBasis",
+    "WalkEstimate",
+    "WalkEstimator",
     "WeatherPort",
 ]

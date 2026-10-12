@@ -119,7 +119,7 @@ def normalize_raw_snapshot(
             gaps.append(f"open_meteo payload rejected: {exc}")
 
     park = _park_window(themeparks.get("schedule"), service_date, park_id, gaps)
-    coverage = _coverage(
+    coverage = coverage_report(
         curated=curated,
         scheduled_shows=scheduled_shows,
         statuses=statuses,
@@ -170,7 +170,7 @@ def _park_window(
         return None
 
 
-def _coverage(
+def coverage_report(
     *,
     curated: Mapping[str, AttractionMetadata],
     scheduled_shows: Collection[str],
@@ -180,6 +180,11 @@ def _coverage(
     park: Park | None,
     gaps: list[str],
 ) -> CoverageReport:
+    """The coverage report over one context's statuses, showtimes and weather.
+
+    Public because LOAD CONTEXT assembled from ``data.*`` tools (P0-24) must judge
+    coverage by this same rule, not a copy of it.
+    """
     # Which entities run on scheduled starts comes from curated data, never from
     # this payload's ``kind``: a curated show that vanished from /live must still
     # count as missing (#64 review). Only *relevant* shows need showtimes
