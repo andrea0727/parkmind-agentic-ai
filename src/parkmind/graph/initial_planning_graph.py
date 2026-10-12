@@ -87,9 +87,14 @@ logger = logging.getLogger(__name__)
 Clock = Callable[[], datetime]
 
 APPROVAL_INTERRUPT_KIND = "plan_approval"
-SUPERSEDED_MESSAGE = (
+_SUPERSEDED = (
     "Something in the park changed while you were deciding, so this proposal was "
-    "replaced and nothing was activated. Your current plan stays as it was."
+    "set aside and nothing was activated."
+)
+_ASK_AGAIN = "Ask me for a new plan and I'll build it from the latest park information."
+SUPERSEDED_MESSAGE = f"{_SUPERSEDED} {_ASK_AGAIN}"
+SUPERSEDED_KEEPS_PLAN_MESSAGE = (
+    f"{_SUPERSEDED} Your current plan stays as it was. {_ASK_AGAIN}"
 )
 UNAVAILABLE_MESSAGE = (
     "I couldn't put a plan together right now because some of the park information "
@@ -326,7 +331,8 @@ def _interrupt_for_approval(
     same interrupt carrying an ``"error"``; the decision is only applied once valid.
 
     A proposal superseded while the guests were deciding (P0-33) is not decided:
-    the guests are told, the candidate is dropped and ``current_plan`` is kept.
+    the guests are told and asked to request a new plan, the candidate and the
+    proposal are dropped and ``current_plan`` is kept.
     """
     plan = state.get("candidate_plan")
     proposal = state.get("proposal")
@@ -360,9 +366,15 @@ def _interrupt_for_approval(
             # Superseded by a significant event while the guests decided (section 9
             # [C18]): the decision is dropped, nothing is activated.
             logger.info("decision on %s not applied: %s", proposal.proposal_id, exc)
+            message = (
+                SUPERSEDED_KEEPS_PLAN_MESSAGE
+                if state.get("current_plan")
+                else SUPERSEDED_MESSAGE
+            )
             return {
-                "messages": [AIMessage(content=SUPERSEDED_MESSAGE)],
+                "messages": [AIMessage(content=message)],
                 "candidate_plan": None,
+                "proposal": None,
                 "approval": None,
             }
         # The same decision was already applied (a re-run after it was stored).

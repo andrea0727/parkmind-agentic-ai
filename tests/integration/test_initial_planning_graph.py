@@ -219,11 +219,32 @@ def test_approving_a_proposal_superseded_meanwhile_activates_nothing(monkeypatch
     final = h.state()
     assert final.get("current_plan") is None
     assert final["candidate_plan"] is None
+    assert final["proposal"] is None
     assert final["approval"] is None
     assert h.deps.plans.get_active("t1") is None
     assert final["messages"][-1].content == ipg.SUPERSEDED_MESSAGE
     superseded = h.deps.proposals.get(pending["proposal"].proposal_id)
     assert superseded.approval_status.value == "SUPERSEDED"
+
+
+def test_a_superseded_proposal_says_the_current_plan_stays_only_when_there_is_one(monkeypatch):
+    """Review #86 (I7)."""
+    h = _Harness(monkeypatch)
+    h.graph.invoke(
+        {
+            "thread_id": "t1",
+            "messages": [HumanMessage(content=m) for m in COMPLETE["messages"]],
+            "current_plan": factories.plan(plan_id="plan_in_use"),
+        },
+        config=CONFIG,
+    )
+    h.graph.invoke(Command(resume={"confirmed": True, "consent": True}), config=CONFIG)
+    h.deps.proposals.supersede_pending("t1", at=NOW)
+
+    h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
+
+    assert h.state()["messages"][-1].content == ipg.SUPERSEDED_KEEPS_PLAN_MESSAGE
+    assert "current plan" not in ipg.SUPERSEDED_MESSAGE
 
 
 def test_a_decision_already_stored_is_applied_again_not_reported_as_superseded(monkeypatch):
