@@ -17,6 +17,8 @@ from typing import Any
 from capture import NOW, PARK_ID, Provider
 from elicit_support import FakeSessionStore
 from fakes import (
+    InMemoryEventRepository,
+    InMemoryExecutionStateRepository,
     InMemoryIdMappingRepository,
     InMemoryPlanRepository,
     InMemoryProposalRepository,
@@ -138,6 +140,8 @@ class Deps:
             sessions=self.sessions,  # type: ignore[arg-type]
             plans=self.plans,  # type: ignore[arg-type]
             proposals=self.proposals,  # type: ignore[arg-type]
+            events=InMemoryEventRepository(),
+            execution_states=InMemoryExecutionStateRepository(self.plans),
             collector=self._collector() if live_collector else None,
         )
         self.knowledge_search = fixed_search(knowledge_search)
