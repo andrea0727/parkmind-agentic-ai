@@ -15,23 +15,25 @@ In one transaction:
    record cannot be read has an unknown limit: their fatigue report needs
    confirmation, as with a known limit, and ``requirements_missing`` says so;
 2. ``BEHIND_SCHEDULE`` is derived from the execution state;
-3. ``deduplicate`` drops what the thread already holds, whatever the source;
-4. ``PARTY_RELOCATED`` is applied to the execution state, *then* the policy
+3. a user event that needs the guests' confirmation (section 25 [C10]) and
+   arrives with ``confirmed`` False is set aside -- not recorded, not applied --
+   and comes back in ``awaiting_confirmation`` for the CONFIRM interrupt. The
+   rest of the batch goes on: a monitor closure is never held back by a
+   doubtful report;
+4. ``deduplicate`` drops what the thread already holds, whatever the source;
+5. ``PARTY_RELOCATED`` is applied to the execution state, *then* the policy
    classifies (section 36);
-5. every event is recorded -- only once classified, so a stored event always
+6. every event is recorded -- only once classified, so a stored event always
    carries ``severity`` and ``requires_replan``;
-6. the execution state is saved if the relocation or a walking cap changed it;
-7. a PENDING proposal is superseded only when a *newly recorded* event
+7. the execution state is saved if the relocation or a walking cap changed it;
+8. a PENDING proposal is superseded only when a *newly recorded* event
    requires a replan (section 9 [C18]); a duplicate or an unimportant change
    never does. No behavior entry is written for it.
-
-An event that needs the guests' confirmation and arrives unconfirmed raises
-``UnconfirmedEventError`` before anything is written.
 """
 
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from parkmind.core.contracts import (
@@ -51,6 +53,7 @@ from parkmind.services.planning.event_policy import (
     apply_decisions,
     apply_execution_updates,
     classify,
+    needs_confirmation,
 )
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
@@ -61,6 +64,7 @@ from parkmind.services.use_cases.planning_deps import (
 )
 
 logger = logging.getLogger(__name__)
+
 
 class UnclassifiedEventError(RuntimeError):
     """An event reached the repository without EventPolicy's severity and requires_replan."""
@@ -77,6 +81,8 @@ class HandledEvents:
     execution_state: PlanExecutionState | None
     requirements_missing: tuple[str, ...] = ()
     """Guests whose accessibility requirements could not be read (limits unknown)."""
+    awaiting_confirmation: list[Event] = field(default_factory=list)
+    """New user events set aside until the guests confirm them; nothing was written for them."""
 
     @property
     def requires_replan(self) -> bool:
@@ -132,7 +138,20 @@ class HandleEventsUseCase:
 
             behind = detect_behind_schedule(plan, stored_state, now=now)
             pool = [*candidates, *([behind] if behind is not None else [])]
-            new = deduplicate(pool, history)
+            held: list[Event] = []
+            ready: list[Event] = []
+            for event in pool:
+                gate = needs_confirmation(
+                    event,
+                    thresholds=objective.event_thresholds,
+                    daily_walking_limits=limits,
+                    unread_requirements=missing,
+                    config=self._config,
+                )
+                (held if gate and not confirmed else ready).append(event)
+            new = deduplicate(ready, history)
+            # A report of something the thread already holds needs no question.
+            awaiting = deduplicate(held, [*history, *new])
 
             state = apply_execution_updates(
                 stored_state, new, plan_id=plan.plan_id, now=now
@@ -171,8 +190,9 @@ class HandleEventsUseCase:
             )
         return HandledEvents(
             decisions=recorded,
-            duplicates=len(pool) - len(new),
+            duplicates=len(pool) - len(new) - len(awaiting),
             superseded=superseded,
             execution_state=state,
             requirements_missing=tuple(missing),
+            awaiting_confirmation=awaiting,
         )

@@ -18,7 +18,6 @@ from parkmind.core.contracts import (
     HardConstraintSet,
     StopKind,
 )
-from parkmind.services.planning.event_policy import UnconfirmedEventError
 from parkmind.services.use_cases.handle_events import HandleEventsUseCase
 
 NOW = datetime(2026, 9, 16, 10, 30, tzinfo=PARK_TZ)
@@ -192,8 +191,8 @@ def test_without_the_record_fatigue_needs_confirmation_and_the_plan_term_caps(de
     """Review #86 (I5): the record of g3 cannot be read, so the limit is
     unknown. The report fails closed -- it needs confirmation, as with a known
     limit -- and once confirmed only the plan term can cap."""
-    with pytest.raises(UnconfirmedEventError):
-        _handle(deps, [_fatigue(guest="g3")], confirmed=False, ref=("g2", "g3"))
+    held = _handle(deps, [_fatigue(guest="g3")], confirmed=False, ref=("g2", "g3"))
+    assert [e.guest_id for e in held.awaiting_confirmation] == ["g3"]
 
     handled = _handle(deps, [_fatigue(guest="g3")], ref=("g2", "g3"))
 
@@ -203,13 +202,38 @@ def test_without_the_record_fatigue_needs_confirmation_and_the_plan_term_caps(de
     }
 
 
-def test_an_unconfirmed_fatigue_report_writes_nothing(deps):
-    with pytest.raises(UnconfirmedEventError):
-        _handle(deps, [_fatigue()], confirmed=False)
+def test_an_unconfirmed_fatigue_report_writes_nothing_and_awaits_confirmation(deps):
+    handled = _handle(deps, [_fatigue()], confirmed=False)
 
+    assert [e.type for e in handled.awaiting_confirmation] == [EventType.GUEST_FATIGUE]
+    assert handled.events == [] and handled.superseded == []
     assert deps.events.list_for_thread(THREAD) == []
     assert deps.execution_states.get(PLAN.plan_id) is None
     assert _pending(deps) == ["prop_pending"]
+
+
+def test_a_doubtful_report_does_not_hold_back_the_rest_of_the_batch(deps):
+    """Review #86 (I6): a monitor closure and a low-confidence fatigue report in
+    one call. The closure is recorded and supersedes; the report waits."""
+    handled = _handle(deps, [_down("space"), _fatigue(confidence=0.5)], confirmed=False)
+
+    assert [e.type for e in handled.events] == [EventType.ATTRACTION_DOWN]
+    assert handled.superseded == ["prop_pending"]
+    assert [e.type for e in handled.awaiting_confirmation] == [EventType.GUEST_FATIGUE]
+    assert [e.type for e in deps.events.list_for_thread(THREAD)] == [
+        EventType.ATTRACTION_DOWN
+    ]
+
+
+def test_a_doubtful_report_of_a_known_closure_asks_nothing(deps):
+    _handle(deps, [_down("space")])
+
+    doubtful = _down("space", source=EventSource.USER, minutes=5).model_copy(
+        update={"confidence": 0.4}
+    )
+    handled = _handle(deps, [doubtful], confirmed=False)
+
+    assert handled.awaiting_confirmation == [] and handled.duplicates == 1
 
 
 def test_behind_schedule_is_derived_from_the_execution_state(deps):
