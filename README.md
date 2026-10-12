@@ -276,7 +276,13 @@ poetry run python scripts/run_monitor.py --no-collect   # detect on what is alre
   below its queue tolerance, does not replan. `PARTY_RELOCATED` never does on its
   own; `ATTRACTION_AVAILABLE` only for a must-do in `unmet_must_do`.
 - **One event per closure.** Ids don't depend on the source, so the monitor and a
-  guest reporting the same closure record one event (`event_dedup.py`).
+  guest reporting the same closure record one event (`event_dedup.py`). A closure
+  the monitor sees again later is a new one (the reopening was missed, or the first
+  report was wrong). `BEHIND_SCHEDULE` is recorded once per late stop, and only
+  while the party's progress is being tracked.
+- **Confirmation first (§25, C10).** A doubtful guest report, or a fatigue report
+  for a guest with a walking limit (or whose limit can't be read), is set aside
+  until the guests confirm it; the rest of the batch goes on.
 - **Superseding.** `HandleEventsUseCase` records a party's events and, when a new
   one requires a replan, marks the pending proposal `SUPERSEDED` (§9, C18). Approving
   a proposal superseded meanwhile activates nothing and tells the guests.
