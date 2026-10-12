@@ -421,7 +421,6 @@ def _propose_replan(
         base_plan_id=current.plan_id,
         diff=diff,
         triggering_event_id=reason.triggering_event_id,
-        execution_state=state.get("execution_state"),
     )
     return propose_plan_change(state, proposal)
 

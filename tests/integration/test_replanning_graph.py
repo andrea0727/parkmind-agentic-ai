@@ -251,15 +251,30 @@ def test_approving_makes_the_replan_the_active_plan(r) -> None:
     assert r.values()["approval"] == "APPROVED"
 
 
-def test_approving_saves_the_progress_the_replan_started_from(r) -> None:
-    r.send(_down(r.stop_node()))
+def test_approving_keeps_the_reported_progress_for_the_new_plan(r) -> None:
+    done = r.active.stops[0].node_id
+    r.deps.execution_states.save(
+        factories.execution_state(
+            plan_id=r.active.plan_id, as_of=NOW, completed_stop_ids=[done]
+        )
+    )
+    r.send(_down(r.stop_node(1)))
     candidate_id = r.pending()[0].candidate_plan_id
 
     r.resume({"decision": "APPROVED"})
 
     saved = r.deps.execution_states.get(candidate_id)
     assert saved is not None
-    assert saved.plan_id == candidate_id
+    assert (saved.plan_id, saved.completed_stop_ids) == (candidate_id, [done])
+
+
+def test_progress_nobody_reported_is_not_stored_for_the_new_plan(r) -> None:
+    r.send(_down(r.stop_node()))
+    candidate_id = r.pending()[0].candidate_plan_id
+
+    r.resume({"decision": "APPROVED"})
+
+    assert r.deps.execution_states.get(candidate_id) is None
 
 
 def test_rejecting_leaves_the_active_plan_unchanged(r) -> None:

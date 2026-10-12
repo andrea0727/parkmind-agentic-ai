@@ -16,6 +16,7 @@ from test_replanning_graph import _down, _Replanning
 from parkmind.core.contracts import AttractionStatus, StopKind
 from parkmind.services.use_cases.load_context import LoadContextUseCase
 from parkmind.services.use_cases.planning_deps import PlanningUnavailableError
+from parkmind.services.use_cases.propose_plan import ProposePlanUseCase
 from parkmind.services.use_cases.replan import ReplanRequest, ReplanUseCase
 
 
@@ -124,6 +125,57 @@ def test_reported_progress_is_trusted_over_the_schedule(r) -> None:
     outcome = _use_case(r).execute(_request(r, now=NOW + timedelta(hours=3)))
 
     assert outcome.execution_state.completed_stop_ids == [first]
+
+
+def _propose_replan(r: _Replanning, plan: Any) -> None:
+    ProposePlanUseCase(factory_for(r.deps)).execute(
+        "t1",
+        plan,
+        proposal_id=f"prop_{plan.plan_id}",
+        reason="r",
+        explanation="e",
+        at=NOW,
+        base_plan_id=r.active.plan_id,
+    )
+
+
+def test_a_second_replan_assumes_the_party_is_still_on_schedule(r) -> None:
+    first = _use_case(r).execute(_request(r))
+    assert first.result.plan is not None, first.result.fatal_error
+    new_plan = first.result.plan
+    _propose_replan(r, new_plan)
+    later = NOW + timedelta(hours=4)
+
+    second = _use_case(r).execute(_request(r, plan=new_plan, now=later))
+
+    expected = {s.node_id for s in new_plan.stops if s.departure_time <= later}
+    assert set(second.execution_state.completed_stop_ids) == expected
+    assert len(expected) > len(first.execution_state.completed_stop_ids)
+
+
+def test_an_assumed_progress_is_not_stored_for_the_new_plan(r) -> None:
+    first = _use_case(r).execute(_request(r))
+    assert first.result.plan is not None, first.result.fatal_error
+
+    _propose_replan(r, first.result.plan)
+
+    assert r.deps.execution_states.get(first.result.plan.plan_id) is None
+
+
+def test_reported_progress_survives_the_plan_swap_and_is_still_trusted(r) -> None:
+    done = r.active.stops[0].node_id
+    r.deps.execution_states.save(
+        factories.execution_state(plan_id=r.active.plan_id, as_of=NOW, completed_stop_ids=[done])
+    )
+    first = _use_case(r).execute(_request(r))
+    assert first.result.plan is not None, first.result.fatal_error
+    _propose_replan(r, first.result.plan)
+
+    second = _use_case(r).execute(
+        _request(r, plan=first.result.plan, now=NOW + timedelta(hours=4))
+    )
+
+    assert second.execution_state.completed_stop_ids == [done]
 
 
 def test_a_guest_with_no_stored_requirements_never_gets_a_valid_replan(r) -> None:

@@ -15,7 +15,6 @@ from parkmind.core.contracts import (
     ApprovalStatus,
     Plan,
     PlanDiff,
-    PlanExecutionState,
     Proposal,
 )
 from parkmind.services.use_cases.planning_deps import (
@@ -41,7 +40,6 @@ class ProposePlanUseCase:
         base_plan_id: str | None = None,
         diff: PlanDiff | None = None,
         triggering_event_id: str | None = None,
-        execution_state: PlanExecutionState | None = None,
     ) -> Proposal:
         """Persist ``plan`` and open a PENDING proposal for human review.
 
@@ -50,10 +48,12 @@ class ProposePlanUseCase:
         base_plan_id NOT NULL but without an FK precisely for this case --
         see database/migrations/versions/0001_mvp_schema.py).
 
-        A replan passes its ``diff`` against the active plan, the event that
-        triggered it, and the ``execution_state`` it was solved from: that progress
-        is saved for the new plan id (in the same transaction), so the party's
-        completed stops and walked minutes survive the plan swap.
+        A replan passes its ``diff`` against the active plan and the event that
+        triggered it. The progress *reported* for the base plan (completed or skipped
+        stops, walked minutes) is saved for the new plan id in the same transaction, so
+        it survives the plan swap. Progress that was only assumed (an on-schedule party,
+        see ``effective_execution_state``) is deliberately not stored: it is derived
+        again from the new plan and the clock on the next replan.
         """
         proposal = Proposal(
             proposal_id=proposal_id,
@@ -69,9 +69,14 @@ class ProposePlanUseCase:
         with open_deps(self._deps_factory) as deps, deps.transaction():
             deps.proposals.supersede_pending(thread_id, at=at)
             deps.plans.save(thread_id, plan)
-            if execution_state is not None:
+            reported = (
+                deps.execution_states.get(proposal.base_plan_id)
+                if proposal.base_plan_id != plan.plan_id
+                else None
+            )
+            if reported is not None:
                 deps.execution_states.save(
-                    execution_state.model_copy(update={"plan_id": plan.plan_id})
+                    reported.model_copy(update={"plan_id": plan.plan_id})
                 )
             deps.proposals.save(thread_id, proposal)
         return proposal

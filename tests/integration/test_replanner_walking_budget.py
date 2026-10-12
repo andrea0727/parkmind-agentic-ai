@@ -347,6 +347,63 @@ def test_check_replan_does_not_charge_the_cap_for_what_was_already_walked(
     assert ok, why
 
 
+def _plan_with_horizon(walked: float, horizon_walking: float) -> Plan:
+    plan = _plan_with_completed(walked)
+    horizon = plan.stops[0].model_copy(
+        update={
+            "node_id": "attr_b",
+            "arrival_time": AS_OF,
+            "departure_time": AS_OF + timedelta(minutes=20),
+            "walking_minutes": horizon_walking,
+        }
+    )
+    return plan.model_copy(
+        update={"stops": [*plan.stops, horizon], "total_walking_minutes": walked + horizon_walking}
+    )
+
+
+def test_check_replan_counts_the_walking_recorded_for_a_guest(park, catalog, context) -> None:
+    # The plan schedules 5.9 + 10 = 15.9 <= 20, but the guest is recorded at 12 walked: 12 + 10 > 20.
+    plan = _plan_with_horizon(5.9, 10.0)
+
+    ok, why = _check_replan(
+        plan, park, catalog, context, _state(walking_minutes_consumed={"g1": 12.0}), daily_limit=20
+    )
+
+    assert not ok
+    assert "g1 walking total 22.0 minutes exceeds" in why
+
+
+def test_check_replan_accepts_recorded_walking_that_still_fits(park, catalog, context) -> None:
+    plan = _plan_with_horizon(5.9, 5.0)
+
+    ok, why = _check_replan(
+        plan, park, catalog, context, _state(walking_minutes_consumed={"g1": 12.0}), daily_limit=20
+    )
+
+    assert ok, why
+
+
+def test_check_replan_reports_the_daily_limit_once_when_the_plan_already_exceeds_it(
+    park, catalog, context
+) -> None:
+    plan = _plan_with_horizon(5.9, 20.0)
+
+    result = ConstraintChecker().check_replan(
+        plan,
+        _constraints(park),
+        [AccessibilityRequirements(guest_id="g1", daily_walking_limit_minutes=20, consent=True)],
+        {a.node_id: a for a in catalog},
+        park,
+        context,
+        AS_OF,
+        _state(walking_minutes_consumed={"g1": 3.0}),
+    )
+
+    limit = [v for v in result.violations if "accessibility limit" in v.message]
+    assert len(limit) == 1
+
+
 def test_check_replan_does_not_hold_a_closure_against_a_stop_already_completed(
     park, catalog, context
 ) -> None:

@@ -409,16 +409,37 @@ def test_a_replan_proposal_records_base_diff_and_trigger():
     assert proposal.approval_status is ApprovalStatus.PENDING
 
 
-def test_the_progress_is_saved_under_the_new_plan_id():
+def test_the_reported_progress_is_saved_under_the_new_plan_id():
     deps = make_deps()
+    deps.plans.save(THREAD, _plan("plan_1"))
     state = factories.execution_state(plan_id="plan_1")
+    deps.execution_states.save(state)
 
-    _propose(deps, _plan("plan_2"), base_plan_id="plan_1", execution_state=state)
+    _propose(deps, _plan("plan_2"), base_plan_id="plan_1")
 
     saved = deps.execution_states.get("plan_2")
     assert saved is not None and saved.plan_id == "plan_2"
     assert saved.walking_minutes_consumed == state.walking_minutes_consumed
-    assert deps.execution_states.get("plan_1") is None
+    assert deps.execution_states.get("plan_1") == state
+
+
+def test_no_progress_is_invented_when_none_was_reported():
+    deps = make_deps()
+
+    _propose(deps, _plan("plan_2"), base_plan_id="plan_1")
+
+    assert deps.execution_states.get("plan_2") is None
+
+
+def test_an_initial_proposal_leaves_its_own_progress_alone():
+    deps = make_deps()
+    deps.plans.save(THREAD, _plan("plan_1"))
+    state = factories.execution_state(plan_id="plan_1")
+    deps.execution_states.save(state)
+
+    _propose(deps, _plan("plan_1"))
+
+    assert deps.execution_states.get("plan_1") == state
 
 
 def test_proposing_supersedes_the_one_that_was_waiting():

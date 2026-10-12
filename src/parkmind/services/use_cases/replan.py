@@ -19,7 +19,10 @@ Two things the graph's state cannot hold are derived here from the repositories:
   records no completed or skipped stop (nobody reported progress), the party is
   assumed to be on schedule: stops that should have ended by ``now`` count as done and
   are frozen, so the replan neither re-sends the party to them nor forgets what they
-  walked. ``as_of`` never lies before ``now``.
+  walked. ``as_of`` never lies before ``now``. That assumption is made again on every
+  replan, from the plan being replanned and the clock: it is never stored, so a later
+  replan never inherits an earlier, stale one (``ProposePlanUseCase`` carries over only
+  what was reported).
 * **Reported availability.** A report the thread recorded after the context's
   snapshot (for example a guest saying a ride is closed) is applied to the context's
   statuses, so the replan and the CHECK that follows see the same attractions as
@@ -191,7 +194,7 @@ class ReplanUseCase:
                 else without_guests(live_context, request.accessibility_ref)
             )
         if not result.valid:
-            logger.info("replan of %s found no valid plan: %s", request.plan.plan_id, result.fatal_error)
+            logger.info("replan of %s found no valid plan", request.plan.plan_id)
         return ReplanOutcome(result, state_context, execution_state)
 
 
