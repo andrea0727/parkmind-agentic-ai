@@ -19,12 +19,14 @@ from parkmind.agents.elicit_agent import ExtractorOutputError
 from parkmind.agents.elicit_prompt import ELICIT_SYSTEM_PROMPT
 from parkmind.agents.elicit_schema import ElicitationExtraction
 from parkmind.core.llm import get_llm
+from parkmind.core.llm_retry import RetryLog, call_with_retries
 from parkmind.graph import initial_planning_graph as ipg
 
 RAW_DIR = Path(os.environ.get("E2E_RAW_DIR", REPO / "docs" / "e2e" / "raw"))
 CONFIRM = {"confirmed": True, "consent": True}
 
 LLM_CALLS: list[dict[str, Any]] = []
+LLM_RETRIES: list[str] = []
 EVENTS: list[str] = []
 
 
@@ -37,7 +39,12 @@ class NvidiaExtractor:
         content = f"Guest messages, oldest first:\n{listing}"
         if repair_hint:
             content += f"\n\nYour previous output was rejected by validation. Fix exactly:\n{repair_hint}"
-        response = self._llm.invoke([SystemMessage(ELICIT_SYSTEM_PROMPT), HumanMessage(content)])
+        messages = [SystemMessage(ELICIT_SYSTEM_PROMPT), HumanMessage(content)]
+        log = RetryLog()
+        try:
+            response = call_with_retries(lambda: self._llm.invoke(messages), log=log)
+        finally:
+            LLM_RETRIES.extend(log.errors)
         calls = getattr(response, "tool_calls", None) or []
         LLM_CALLS.append({"hint": repair_hint, "calls": calls})
         if not calls:
