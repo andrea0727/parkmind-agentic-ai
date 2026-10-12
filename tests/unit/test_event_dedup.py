@@ -71,6 +71,30 @@ def test_down_available_down_are_three_episodes():
     ]
 
 
+def test_the_monitor_seeing_a_closure_after_a_wrong_user_report_is_a_new_episode():
+    """Review #86 (B1): the user's DOWN was wrong, the ride kept running, and it
+    really went down 3 h later. The monitor saw OPERATING -> DOWN, so it is a
+    new closure, not the open episode."""
+    history, _ = _record([], [_down(EventSource.USER)])
+    _, real = _record(history, [_down(EventSource.MONITOR, minutes=180)])
+
+    assert [e.event_id for e in real] == ["ATTRACTION_DOWN:tron:2"]
+
+
+def test_a_missed_available_does_not_hide_the_next_closure():
+    history, _ = _record([], [_down(EventSource.MONITOR)])
+    # The AVAILABLE in between was never recorded (no fresh snapshot).
+    _, again = _record(history, [_down(EventSource.MONITOR, minutes=120)])
+
+    assert [e.event_id for e in again] == ["ATTRACTION_DOWN:tron:2"]
+
+
+def test_a_late_user_report_of_a_known_closure_stays_a_duplicate():
+    history, _ = _record([], [_down(EventSource.MONITOR)])
+
+    assert deduplicate([_down(EventSource.USER, minutes=180)], history) == []
+
+
 def test_a_monitor_rerun_on_the_same_snapshots_records_nothing_new():
     history, _ = _record([], [_down(EventSource.MONITOR)])
 
