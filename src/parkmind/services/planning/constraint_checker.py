@@ -66,6 +66,7 @@ class ConstraintChecker:
         live_context: LiveContext,
         now: datetime,
         execution_state: PlanExecutionState | None = None,
+        start_location_node_id: str | None = None,
     ) -> CheckResult:
         all_guest_ids = [guest.guest_id for guest in constraints.guests]
         accessibility_by_guest = {req.guest_id: req for req in accessibility}
