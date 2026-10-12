@@ -14,7 +14,7 @@ Failures are split in two. A transport that fails -- unreachable server,
 timeout, protocol error, malformed answer -- raises ``ContextTransportError``.
 A tool that answers ``UNAVAILABLE`` or ``NOT_FOUND`` (no snapshot, no schedule,
 the server's database down) raises ``ContextDataUnavailableError``. LOAD CONTEXT
-answers both in-process; only a missing schedule stays a coverage gap.
+answers both in-process, whose own answer decides whether a schedule is missing.
 
 What crosses the wire is section 30's input and nothing more: an accessibility
 check sends the attraction ids and the guest's derived flags, never which guest

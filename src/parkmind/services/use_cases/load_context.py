@@ -25,7 +25,8 @@ explicit ``context_data`` port) the context is assembled from the ``data.*`` and
 from the snapshot directly. If the transport fails -- or its server answers that it
 cannot read the data -- the in-process adapter of the same port answers, and its
 answer is the definitive one: when the data really is missing, it raises
-``ContextUnavailableError`` itself. ``LoadedContext.transport`` says which adapter
+``ContextUnavailableError`` itself (a missing schedule is recorded as a coverage
+gap instead). ``LoadedContext.transport`` says which adapter
 answered. The requirements are read here in both cases: only derived flags cross
 the port.
 """

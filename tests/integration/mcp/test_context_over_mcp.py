@@ -335,6 +335,43 @@ def test_a_server_without_data_is_answered_in_process() -> None:
     assert _catalog_view(loaded) == _catalog_view(_direct(deps))
 
 
+class _ScheduleStoreDown:
+    """An AttractionRepository whose catalog answers but whose schedules are down."""
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+
+    def list_attractions(self, park_id: str) -> list[Any]:
+        return self._inner.list_attractions(park_id)
+
+    def get_schedule(self, park_id: str, on_date: Any) -> Any:
+        raise RepositoryUnavailableError("schedule store down")
+
+
+def test_a_server_that_cannot_read_its_schedule_is_answered_in_process() -> None:
+    """Only data.get_schedule fails: a fallback, not a context with weather uncovered."""
+    deps = _party(Deps())
+    broken = replace(deps.value, attractions=_ScheduleStoreDown(deps.value.attractions))
+
+    loaded = _through(deps, _mcp(deps, _server_over(broken)))  # type: ignore[arg-type]
+
+    assert loaded.transport == "in_process_fallback"
+    assert loaded.live_context.coverage.weather_covered
+    assert _catalog_view(loaded) == _catalog_view(_direct(deps))
+
+
+def test_a_schedule_missing_everywhere_is_a_gap_after_the_fallback() -> None:
+    """The in-process adapter decides that the schedule is missing, and LOAD CONTEXT goes on."""
+    deps = _party(Deps(schedules={}))
+
+    loaded = _through(deps, _mcp(deps))
+
+    assert loaded.transport == "in_process_fallback"
+    coverage = loaded.live_context.coverage
+    assert not coverage.weather_covered
+    assert any("no park schedule" in gap for gap in coverage.coverage_gaps)
+
+
 class _BrokenTransport:
     transport = "mcp"
 

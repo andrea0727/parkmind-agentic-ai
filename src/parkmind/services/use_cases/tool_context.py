@@ -13,8 +13,9 @@ adapter as the fallback through the same port.
 The assembled context is the snapshot's, restricted to the catalog (all that
 planning reads): every snapshot-backed answer must name the same snapshot, or
 the assembly is refused (``ContextTransportError``). A transport's failures
-propagate unchanged -- LOAD CONTEXT answers any of them in-process -- except a
-missing schedule, which is a coverage gap on every path. Coverage is judged by the
+propagate unchanged, the schedule's included: LOAD CONTEXT answers any of them
+in-process. Only the in-process adapter's answer that there is no schedule
+(``ContextUnavailableError``) becomes a coverage gap. Coverage is judged by the
 normalizer's own rule (``coverage_report``), not a copy of it. Accessibility is
 asked with each guest's *derived* flags; the requirements stay in this process
 [C19], and the tool trace -- which is checkpointed with the context -- records
@@ -47,7 +48,6 @@ from parkmind.services.clients.themeparks_reference_data import (
 )
 from parkmind.services.ports import (
     ContextDataPort,
-    ContextDataUnavailableError,
     ContextTransportError,
     FromSnapshotRef,
     SnapshotRef,
@@ -184,7 +184,7 @@ def _assemble(
     try:
         park = port.schedule(service_date)
         traced("data.get_schedule", 1, service_date=service_date.isoformat())
-    except (ContextUnavailableError, ContextDataUnavailableError):
+    except ContextUnavailableError:  # the in-process answer: there is no schedule
         park = None
         gaps.append("no park schedule: weather coverage can't be checked")
         traced("data.get_schedule", 0, service_date=service_date.isoformat())
