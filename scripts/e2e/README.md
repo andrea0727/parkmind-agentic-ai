@@ -22,7 +22,7 @@ FORCE=1 python scripts/e2e/capture.py              # re-capture everything
 python scripts/e2e/build_report.py                 # no credentials needed: docs/e2e/raw -> docs/e2e/REPORT.md (raw/ is git-ignored; run capture.py first)
 ```
 
-Optional env vars: `E2E_RAW_DIR`, `E2E_BAD_DATABASE_URL` (a port nobody listens on, to simulate a DB outage), `E2E_ALLURE_RESULTS`.
+Optional env vars: `E2E_NOW` (HH:MM park time the whole run pretends it is; default `10:00`, so results never depend on the real time of day), `E2E_RAW_DIR`, `E2E_BAD_DATABASE_URL` (a port nobody listens on, to simulate a DB outage), `E2E_ALLURE_RESULTS`.
 
 ## Interactive Allure report (not committed)
 

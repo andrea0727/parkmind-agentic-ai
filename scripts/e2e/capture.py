@@ -11,7 +11,6 @@ import re
 import sys
 import time
 import uuid
-from datetime import datetime
 from typing import Any
 
 import harness as h
@@ -19,7 +18,6 @@ import scenarios as sc
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 
-from parkmind.core.contracts import PARK_TZ
 from parkmind.graph import initial_planning_graph as ipg
 from parkmind.graph.checkpointing import default_checkpointer
 
@@ -95,9 +93,9 @@ def run_once(name: str, scenario: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {
         "id": name, "messages": scenario["msgs"], "confirm_payload": jsonable(confirm), "approval_payload": jsonable(approval),
         "setup": getattr(scenario.get("ctx"), "__name__", None) if "ctx" in scenario else None,
-        "now": datetime.now(PARK_TZ).strftime("%H:%M"), "steps": [],
+        "now": h.e2e_now().strftime("%H:%M"), "steps": [],
     }
-    graph = ipg.build_initial_planning_graph(h.NvidiaExtractor(), None, default_checkpointer())
+    graph = ipg.build_initial_planning_graph(h.NvidiaExtractor(), None, default_checkpointer(), clock=h.e2e_now)
     config: Any = {"configurable": {"thread_id": thread}}
     cm = scenario["ctx"]() if "ctx" in scenario else contextlib.nullcontext()
     rows_before = attraction_rows(sc.EDGE_URL) if name == "happy_catalogo_vacio" else None

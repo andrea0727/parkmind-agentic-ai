@@ -4,13 +4,12 @@
 import contextlib
 import os
 from collections.abc import Callable, Iterator
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
-from harness import CONFIRM  # noqa: F401  (re-exported for capture.py)
+from harness import CONFIRM, e2e_now  # noqa: F401  (CONFIRM re-exported for capture.py)
 
 from parkmind.config.settings import settings
-from parkmind.core.contracts import PARK_TZ
 from parkmind.services.clients.themeparks_client import ThemeParksClient
 from parkmind.services.clients.themeparks_errors import ThemeParksUnavailableError
 
@@ -64,7 +63,7 @@ def both(url: str) -> Iterator[None]:
 
 
 def _soon() -> str:
-    return (datetime.now(PARK_TZ) + timedelta(minutes=25)).strftime("%H:%M")
+    return (e2e_now() + timedelta(minutes=25)).strftime("%H:%M")
 
 
 Ctx = Callable[[], contextlib.AbstractContextManager[None]]
