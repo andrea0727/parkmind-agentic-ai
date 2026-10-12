@@ -434,7 +434,9 @@ def test_stale_data_is_reloaded_once_and_the_plan_then_validates(monkeypatch):
 
 def test_stale_data_that_stays_stale_ends_with_the_reason(monkeypatch):
     h = _Harness(monkeypatch, snapshot_age=timedelta(hours=3))
-
+    """
+    Implement once database repositories and schema are ready.
+    """
     h.confirm()
 
     state = h.state()
