@@ -3,6 +3,7 @@
     poetry run python scripts/run_monitor.py                 # collect + detect once
     poetry run python scripts/run_monitor.py --loop          # every 5 minutes until Ctrl+C
     poetry run python scripts/run_monitor.py --no-collect    # detect on what is stored
+    poetry run python scripts/run_monitor.py --database-url postgresql://...   # another database
 
 Each run takes a snapshot exactly as ``scripts/collect_snapshot.py`` does, then
 compares the two most recent stored snapshots and prints the park-wide events
@@ -21,7 +22,8 @@ import os
 import sys
 import time
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import datetime
+from functools import partial
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.dirname(__file__))
@@ -96,7 +98,7 @@ def main(
     *,
     parks: ThemeParksClient | None = None,
     weather: OpenMeteoClient | None = None,
-    deps_factory: DepsFactory = default_planning_deps,
+    deps_factory: DepsFactory | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
@@ -116,9 +118,13 @@ def main(
         default=MAGIC_KINGDOM,
         help="ThemeParks entity id (default Magic Kingdom)",
     )
+    parser.add_argument("--database-url", default=None, help="defaults to DATABASE_URL")
     args = parser.parse_args(argv)
     if args.interval < 60:
         parser.error("--interval must be at least 60 seconds")
+    deps_factory = deps_factory or partial(
+        default_planning_deps, database_url=args.database_url
+    )
 
     factory = (
         None
@@ -128,15 +134,17 @@ def main(
         )
     )
     if not args.loop:
-        return run_once(factory, deps_factory, None, datetime.now(PARK_TZ))
+        return run_once(factory, deps_factory, args.database_url, datetime.now(PARK_TZ))
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     try:
         while True:
-            code = run_once(factory, deps_factory, None, datetime.now(PARK_TZ))
+            code = run_once(
+                factory, deps_factory, args.database_url, datetime.now(PARK_TZ)
+            )
             if code == 1:
                 return code  # a database problem won't fix itself between runs
-            time.sleep(timedelta(seconds=args.interval).total_seconds())
+            time.sleep(args.interval)
     except KeyboardInterrupt:
         return 0
 

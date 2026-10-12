@@ -56,3 +56,19 @@ def test_with_one_snapshot_there_is_nothing_to_compare(script, capsys):
 def test_the_interval_has_a_floor(script):
     with pytest.raises(SystemExit):
         script.main(["--loop", "--interval", "10"])
+
+
+def test_the_database_url_reaches_detection(script, monkeypatch):
+    """Review #86 (S5): ``--database-url`` is not only for the collector."""
+    deps = _deps([(NOW, None)])
+    seen: list[str | None] = []
+
+    def fake_default(database_url=None):
+        seen.append(database_url)
+        return factory_for(deps)()
+
+    monkeypatch.setattr(script, "default_planning_deps", fake_default)
+
+    code = script.main(["--no-collect", "--database-url", "postgresql://elsewhere"])
+
+    assert code == 0 and seen == ["postgresql://elsewhere"]
