@@ -248,6 +248,38 @@ poetry run python scripts/renormalize_snapshots.py             # rows from an ol
 poetry run python scripts/renormalize_snapshots.py --all       # or every snapshot
 ```
 
+### Event monitor (P0-33)
+
+The monitor compares the two most recent stored snapshots and reports what
+changed in the park: an attraction going down or coming back
+(`ATTRACTION_DOWN` / `ATTRACTION_AVAILABLE`), a wait spike, rain moving into
+the next hours. It never wakes the LLM (Architecture §24).
+
+```bash
+poetry run python scripts/run_monitor.py                # collect one snapshot, then detect
+poetry run python scripts/run_monitor.py --loop         # every 5 minutes until Ctrl+C
+poetry run python scripts/run_monitor.py --no-collect   # detect on what is already stored
+```
+
+- **Stale readings never raise an alarm.** ThemeParks keeps some readings for
+  months (a show closed since July, an entity last updated in 2022). A change
+  only counts when the provider's own `lastUpdated` for it is within the
+  30-minute freshness window and after the previous snapshot; it is read from
+  the stored raw payload (§41, C21). Unknown reading time → no event.
+- **One policy for both sources.** `EventPolicy` (`services/planning/event_policy.py`)
+  is the only code that sets `severity` and `requires_replan`, with §25's table and
+  the party's own thresholds: a closure of a ride the party already did, or a spike
+  below its queue tolerance, does not replan. `PARTY_RELOCATED` never does on its
+  own; `ATTRACTION_AVAILABLE` only for a must-do in `unmet_must_do`.
+- **One event per closure.** Ids don't depend on the source, so the monitor and a
+  guest reporting the same closure record one event (`event_dedup.py`).
+- **Superseding.** `HandleEventsUseCase` records a party's events and, when a new
+  one requires a replan, marks the pending proposal `SUPERSEDED` (§9, C18). Approving
+  a proposal superseded meanwhile activates nothing and tells the guests.
+- **Not yet:** waking each party's replanning graph and the replan itself
+  (P0-34). The monitor prints the park-wide events; per-party judgement runs when
+  `HandleEventsUseCase` is called with that party's plan and objective.
+
 ### MCP capability boundary (P0-24..P0-27)
 
 `parkmind-mcp` publishes the same use cases the graph calls in-process as typed
@@ -347,6 +379,7 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 | **LangGraph State v2** | ✅ Done | Typed ParkMindState, state helpers, message reducer |
 | **Preference Resolution** | ✅ Done | Weighted aggregation from GuestProfile (queue, walking, categories) |
 | **Plan Synthesis** | ✅ Initial planning graph [P0-30] | ELICIT → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED. Runs on in-process use cases, no MCP server. EDITED approvals [P0-32] and replanning [P0-31] are follow-ups. |
+| **Event monitor** | ✅ P0-33 | Snapshot-to-event detector with per-reading freshness, `EventPolicy` (§25 table, confirmation gate, fatigue walking cap), cross-source dedup, supersede on significant events, `scripts/run_monitor.py`. The replanning graph that consumes it is P0-34. |
 | **MCP capability boundary** | ✅ P0-24..P0-27 | `parkmind-mcp`: 14 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` follows P0-23. |
 | **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
 | **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
