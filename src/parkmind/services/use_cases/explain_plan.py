@@ -8,14 +8,10 @@ this use case); it reads the plan and never feeds anything back into it.
 
 from collections.abc import Mapping
 
-from parkmind.core.contracts import PARK_TZ, CheckResult, Plan
+from parkmind.core.contracts import PARK_TZ, CheckResult, Plan, ExplainRequest, PlanExplanation
+from parkmind.services.explanation.generator import PlanExplanationGenerator
 from parkmind.services.planning.optimizer import MEAL_VENUE_TBD
-from parkmind.services.use_cases.planning_deps import (
-    DepsFactory,
-    default_planning_deps,
-    load_catalog,
-    open_deps,
-)
+
 
 
 class ExplainBeforeValidationError(RuntimeError):
@@ -44,14 +40,11 @@ def explain_plan(plan: Plan, check_result: CheckResult, names: Mapping[str, str]
 
 
 class ExplainPlanUseCase:
-    def __init__(self, deps_factory: DepsFactory = default_planning_deps) -> None:
-        self._deps_factory = deps_factory
+    """Use case to generate grounded explanations for plans."""
 
-    def execute(self, plan: Plan, check_result: CheckResult) -> str:
-        if not check_result.valid:
-            raise ExplainBeforeValidationError(
-                "a plan is explained only after it passed the checker"
-            )
-        with open_deps(self._deps_factory) as deps:
-            names = {a.node_id: a.name for a in load_catalog(deps)}
-        return explain_plan(plan, check_result, names)
+    def __init__(self, generator: PlanExplanationGenerator | None = None) -> None:
+        self._generator = generator or PlanExplanationGenerator()
+
+    def execute(self, request: ExplainRequest) -> PlanExplanation:
+        """Execute the explanation generation for a given ExplainRequest."""
+        return self._generator.generate(request)

@@ -178,3 +178,11 @@ class RuleId(str, Enum):
     ACCESSIBILITY = "ACCESSIBILITY"
     RIDE_RESTRICTION = "RIDE_RESTRICTION"
     DATA_FRESHNESS = "DATA_FRESHNESS"
+
+
+class AttributionType(str, Enum):
+    """Origin of a recommendation or plan decision."""
+
+    STATED = "STATED"      # Explicit user constraint, must-do, lunch window, declared limit
+    LEARNED = "LEARNED"    # Inferred tolerance, affinity weight from history or behavior
+    SYSTEM = "SYSTEM"      # Park operational bounds, transit/proximity optimization

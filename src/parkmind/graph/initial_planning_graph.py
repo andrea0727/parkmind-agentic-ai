@@ -54,7 +54,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from parkmind.agents.elicit_agent import GuestInfoExtractor
-from parkmind.core.contracts import PARK_TZ, ApprovalStatus, RejectionReason
+from parkmind.core.contracts import PARK_TZ, ApprovalStatus, RejectionReason, ExplainRequest
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.elicitation_graph import (
     StateNode,
@@ -194,8 +194,8 @@ def _make_build_plan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
     return build_plan
 
 
-def _make_check_plan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
-    use_case = CheckPlanUseCase(deps_factory)
+def _make_check_plan_node(_deps_factory: DepsFactory, clock: Clock) -> StateNode:
+    use_case = CheckPlanUseCase()
 
     def check_plan(state: ParkMindState) -> dict[str, Any]:
         ensure_confirmed(state)
@@ -232,15 +232,32 @@ def _no_valid_plan(state: ParkMindState) -> dict[str, Any]:
     return {"messages": [AIMessage(content="\n".join(lines))], "candidate_plan": None}
 
 
-def _make_explain_node(deps_factory: DepsFactory) -> StateNode:
-    use_case = ExplainPlanUseCase(deps_factory)
+def _make_explain_node(_deps_factory: DepsFactory) -> StateNode:
+    use_case = ExplainPlanUseCase()
 
     def explain(state: ParkMindState) -> dict[str, Any]:
         plan = state.get("candidate_plan")
         check = state.get("check_result")
+        
         if plan is None or check is None:
             raise ValueError("a checked candidate plan is required")
-        return {"explanation": use_case.execute(plan, check)}
+            
+        constraints = state.get("constraints")
+        live_context = state.get("live_context")
+        
+        request = ExplainRequest(
+            plan=plan,
+            check_result=check,
+            constraints=constraints,
+            live_context=live_context,
+        )
+        
+        explanation_obj = use_case.execute(request)
+        
+        return {
+            "explanation": explanation_obj.full_text,
+            "plan_explanation": explanation_obj
+        }
 
     return explain
 

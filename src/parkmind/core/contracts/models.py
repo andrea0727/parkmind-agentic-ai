@@ -8,12 +8,13 @@ All timestamps are timezone-aware (America/New_York).
 """
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Mapping, Sequence
 
 from pydantic import Field, field_validator, model_validator
 
 from .base import (
     AccessibilityCheck,
+    CheckResult,
     CoverageReport,
     EventThresholds,
     HardConstraintSet,
@@ -28,6 +29,7 @@ from .enums import (
     ApprovalStatus,
     AttractionCategory,
     AttractionStatus,
+    AttributionType,
     BehaviorEventType,
     DataSource,
     EventSeverity,
@@ -522,3 +524,46 @@ class BehaviorLog(ParkMindBaseModel):
 Plan.model_rebuild()
 Event.model_rebuild()
 Proposal.model_rebuild()
+
+
+# ============================================================================
+# EXPLANATION GENERATOR
+# ============================================================================
+
+
+class StopRationale(ParkMindBaseModel):
+    """Detailed justification answering 'Why was attraction X placed at time Y?'"""
+
+    node_id: str
+    arrival_time: datetime
+    departure_time: datetime
+    primary_reason: str
+    attribution: AttributionType
+    wait_minutes: float
+    walk_minutes: float
+    contributing_factors: list[str] = Field(default_factory=list)
+
+
+class ExplainRequest(ParkMindBaseModel):
+    """Input payload to the Plan Explanation Generator."""
+
+    plan: Plan
+    check_result: CheckResult | None = None
+    diff: PlanDiff | None = None
+    constraints: PartyConstraints | None = None
+    guest_profiles: Sequence[GuestProfile] | None = None
+    live_context: LiveContext | None = None
+    utilities: Mapping[str, float] | None = None
+    catalog_names: Mapping[str, str] = Field(default_factory=dict)
+
+
+class PlanExplanation(ParkMindBaseModel):
+    """Structured, verified explanation artifact."""
+
+    summary: str
+    rationales: list[StopRationale]
+    diff_summary: str | None = None
+    unmet_must_do_summary: str | None = None
+    grounding_verified: bool
+    fallback_used: bool = False
+    full_text: str
