@@ -349,7 +349,12 @@ def test_forecast_waits_caps_attractions_times_arrivals() -> None:
 
 
 def test_forecast_waits_without_times_is_capped_by_the_attractions() -> None:
-    """With ``at`` empty the total is the attraction count, already capped at 100."""
+    """Guards ``attraction_ids``' own cap of 100, not the 500-forecast total.
+
+    With ``at`` empty the total equals the attraction count, which the field cap
+    keeps far below 500, so the total check never runs here; it is covered by
+    ``test_forecast_waits_caps_attractions_times_arrivals``.
+    """
     ids = [f"attraction-{i}" for i in range(MAX_FORECASTS + 1)]
 
     result = call_tool(
