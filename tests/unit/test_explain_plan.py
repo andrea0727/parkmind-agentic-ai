@@ -2,7 +2,7 @@
 
 import factories
 import pytest
-from planning_support import factory_for, make_deps
+from planning_support import PlanningAttractionRepository, factory_for, make_deps
 
 from parkmind.core.contracts import CheckResult, ConstraintViolation, RuleId
 from parkmind.services.use_cases.explain_plan import (
@@ -58,3 +58,79 @@ def test_a_meal_without_a_restaurant_reads_as_lunch_not_as_a_placeholder_id():
     text = explain_plan(plan, CheckResult(valid=True), {})
 
     assert "Lunch" in text and MEAL_VENUE_TBD not in text
+
+
+# --- who sits out a height-restricted ride ---------------------------------------
+
+ADULT = factories.guest(guest_id="g1", height_cm=175)
+CHILD = factories.guest(guest_id="g2", role="child", height_cm=90)
+
+
+def _restricted_plan(served: list[str]):
+    return factories.plan(stops=[factories.stop(node_id="a1", served_guests=served)])
+
+
+def test_a_guest_too_short_for_a_ride_is_named_as_skipping_it():
+    text = explain_plan(
+        _restricted_plan(["g1"]),
+        CheckResult(valid=True),
+        {"a1": "Space Mountain"},
+        guests=[ADULT, CHILD],
+        height_limits={"a1": 112},
+    )
+
+    assert "Guest 2 (90 cm) will skip Space Mountain (minimum height 112 cm)" in text
+    assert "Guest 1" not in text
+
+
+def test_nothing_is_said_when_everyone_rides():
+    text = explain_plan(
+        _restricted_plan(["g1", "g2"]),
+        CheckResult(valid=True),
+        {"a1": "Space Mountain"},
+        guests=[ADULT, factories.guest(guest_id="g2", height_cm=130)],
+        height_limits={"a1": 112},
+    )
+
+    assert "skip" not in text
+
+
+def test_a_whole_party_stop_or_an_unrestricted_ride_adds_no_line():
+    names = {"a1": "Space Mountain"}
+    whole_party = explain_plan(
+        _restricted_plan([]),
+        CheckResult(valid=True),
+        names,
+        guests=[ADULT, CHILD],
+        height_limits={"a1": 112},
+    )
+    unrestricted = explain_plan(
+        _restricted_plan(["g1"]), CheckResult(valid=True), names, guests=[ADULT, CHILD]
+    )
+
+    assert "skip" not in whole_party and "skip" not in unrestricted
+
+
+def test_a_guest_with_unknown_height_who_does_not_ride_is_named_too():
+    unknown = factories.guest(guest_id="g2", height_cm=None)
+
+    text = explain_plan(
+        _restricted_plan(["g1"]),
+        CheckResult(valid=True),
+        {"a1": "Space Mountain"},
+        guests=[ADULT, unknown],
+        height_limits={"a1": 112},
+    )
+
+    assert "Guest 2 will skip Space Mountain" in text
+
+
+def test_the_use_case_reads_the_height_limits_from_the_catalog():
+    plan = _restricted_plan(["g1"])
+    catalog = PlanningAttractionRepository([factories.attraction(height_restriction_cm=112)])
+
+    text = ExplainPlanUseCase(factory_for(make_deps(attractions=catalog))).execute(
+        plan, CheckResult(valid=True), guests=[ADULT, CHILD]
+    )
+
+    assert "Guest 2 (90 cm) will skip Space Mountain (minimum height 112 cm)" in text

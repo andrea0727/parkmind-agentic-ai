@@ -385,9 +385,11 @@ def _make_explain_node(deps_factory: DepsFactory) -> StateNode:
         if plan is None or check is None or diff is None:
             raise ValueError("a checked candidate plan and its diff are required")
         reason = reasons.execute(state.get("events") or [])
+        constraints = state.get("constraints")
+        guests = constraints.guests if constraints is not None else []
         return {
             "explanation": explainer.execute_replan(
-                plan, check, reason=reason.text, diff=diff
+                plan, check, reason=reason.text, diff=diff, guests=guests
             )
         }
 
