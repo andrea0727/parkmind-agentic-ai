@@ -127,12 +127,17 @@ def detect_behind_schedule(
 
     The earliest stop whose planned departure is before ``now`` and that is
     neither completed nor skipped sets ``minutes_behind``. ``None`` without an
-    execution state for this plan, or when the party is on schedule.
+    execution state for this plan, when the party is on schedule, or when the
+    state records no completed or skipped stop: progress is not being tracked
+    (a state created by a relocation or a walking cap), and an empty list would
+    read as every past stop being late.
     """
     _require_aware(now, "now")
     if execution_state is None or execution_state.plan_id != plan.plan_id:
         return None
     done = {*execution_state.completed_stop_ids, *execution_state.skipped_stop_ids}
+    if not done:
+        return None
     overdue = [
         s for s in plan.stops if s.node_id not in done and s.departure_time < now
     ]

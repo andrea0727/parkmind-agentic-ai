@@ -407,6 +407,22 @@ def test_a_party_on_schedule_or_without_state_is_not_behind():
     assert detect_behind_schedule(plan, other, now=NOW) is None
 
 
+def test_a_state_that_records_no_progress_is_not_behind():
+    """Review #86 (I2): a relocation or a walking cap creates a state with
+    nothing completed; that is untracked progress, not three late stops."""
+    plan = factories.plan(
+        stops=[
+            _stop("a1", NOW - timedelta(minutes=200)),
+            _stop("a2", NOW - timedelta(minutes=100)),
+        ]
+    )
+    untracked = factories.execution_state(
+        completed_stop_ids=[], skipped_stop_ids=[], current_location_node_id="a2"
+    )
+
+    assert detect_behind_schedule(plan, untracked, now=NOW) is None
+
+
 def test_now_must_be_timezone_aware():
     previous, current = _pair(AttractionStatus.OPERATING, AttractionStatus.DOWN)
 

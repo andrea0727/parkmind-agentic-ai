@@ -208,19 +208,40 @@ def test_an_unconfirmed_fatigue_report_writes_nothing(deps):
 def test_behind_schedule_is_derived_from_the_execution_state(deps):
     deps.execution_states.save(
         factories.execution_state(
-            plan_id=PLAN.plan_id, completed_stop_ids=[], as_of=NOW
+            plan_id=PLAN.plan_id, completed_stop_ids=["space"], as_of=NOW
         )
     )
 
-    handled = _handle(deps, [], now=NOW + timedelta(minutes=63))
+    # jungle should have been left at +105.
+    handled = _handle(deps, [], now=NOW + timedelta(minutes=123))
 
     [event] = handled.events
     assert (event.type, event.attraction_id, event.minutes_behind) == (
         EventType.BEHIND_SCHEDULE,
-        "space",
+        "jungle",
         18.0,
     )
     assert handled.superseded == ["prop_pending"]
+
+
+def test_a_state_created_by_a_relocation_raises_no_behind_schedule_later(deps):
+    """Review #86 (I2): the relocation creates the execution state with nothing
+    completed; the next cycle, hours later, must not call the party late."""
+    moved = factories.event(
+        event_id="raw-move",
+        type=EventType.PARTY_RELOCATED,
+        source=EventSource.USER,
+        attraction_id=None,
+        location_node_id="frontierland",
+        confidence=0.95,
+        timestamp=NOW,
+    )
+    _handle(deps, [moved])
+
+    later = _handle(deps, [], now=NOW + timedelta(hours=3))
+
+    assert later.events == [] and later.superseded == []
+    assert _pending(deps) == ["prop_pending"]
 
 
 def test_an_available_unmet_must_do_replans_and_another_does_not(deps):
