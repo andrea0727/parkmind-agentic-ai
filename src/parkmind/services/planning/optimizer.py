@@ -137,6 +137,7 @@ class GreedyInsertionOptimizer:
         now: datetime | None = None,
         scores: PreferenceScores | None = None,
         start_location_node_id: str | None = None,
+        completed_node_ids: Sequence[str] | None = None,
     ) -> Plan:
         """Build a candidate plan.
 
@@ -185,7 +186,7 @@ class GreedyInsertionOptimizer:
                     "scores and constraints describe different parties: "
                     f"only scored {sorted(scored - party)}, only in constraints {sorted(party - scored)}"
                 )
-        start_time = self._resolve_start_time(park, context)
+        start_time = self._resolve_start_time(park, context, now)
         end_time = constraints.departure_time
 
         # Effective rest frequency — minimum across all guests [C19]
@@ -199,7 +200,7 @@ class GreedyInsertionOptimizer:
         # Sets for filtering
         avoid_set = set(constraints.avoid)
         must_do_set = set(constraints.must_do)
-        visited: set[str] = set()
+        visited: set[str] = set(completed_node_ids) if completed_node_ids else set()
 
         # Operating status filter
         operating_ids = {
@@ -283,7 +284,7 @@ class GreedyInsertionOptimizer:
             return wait_readings[key]
 
         cursor_time = start_time
-        cursor_node = _PARK_ENTRANCE_NODE
+        cursor_node = start_location_node_id or _PARK_ENTRANCE_NODE
         active_minutes_since_rest = 0.0
 
         anchor_idx = 0
@@ -672,10 +673,12 @@ class GreedyInsertionOptimizer:
         self,
         park: Park | None,
         context: LiveContext,
+        now: datetime | None = None,
     ) -> datetime:
-        if park is not None:
-            return park.opening_time
-        return context.retrieved_at
+        base_time = context.retrieved_at if park is None else park.opening_time
+        if now is not None:
+            return max(now, base_time)
+        return base_time
 
     @staticmethod
     def _resolve_effective_rest_frequency(

@@ -2,19 +2,23 @@
 Replan Use Case (P0-23).
 
 Orchestrates the replanning workflow: loading current state from repositories, 
-delegating to the deterministic Replanner service, and persisting the new plan.
+delegating to the deterministic Replanner service, and returning the candidate.
+Persistence is strictly delegated to the PROPOSE node via ProposePlanUseCase.
 """
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 
 from parkmind.core.contracts import (
+    AccessibilityRequirements,
     Attraction,
-    Event,
+    GroupObjective,
     LiveContext,
     Park,
     PartyConstraints,
 )
+from parkmind.services.personalization.preference_scorer import PreferenceScores
+from parkmind.services.planning.forecast_service import ForecastService
 from parkmind.services.planning.replanner import Replanner, ReplanResult
 from parkmind.services.ports.execution_state_repository import ExecutionStateRepository
 from parkmind.services.ports.plan_repository import PlanRepository
@@ -30,13 +34,16 @@ class ReplanRequest:
     utilities: dict[str, float]
     park: Park
     catalog: Sequence[Attraction]
-    event: Event | None = None
+    accessibility_reqs: Sequence[AccessibilityRequirements] | None = None
+    group_objective: GroupObjective | None = None
+    forecast_service: ForecastService | None = None
+    scores: PreferenceScores | None = None
 
 
 class ReplanUseCase:
     """
-    Coordinates the retrieval of current plan state, execution of the 
-    re-optimization logic, and persistence of the resulting plan.
+    Coordinates the retrieval of current plan state and execution of the 
+    re-optimization logic. Does NOT persist the plan (P0-24 compliance).
     """
 
     def __init__(
@@ -80,11 +87,12 @@ class ReplanUseCase:
             utilities=request.utilities,
             park=request.park,
             catalog=request.catalog,
-            event=request.event,
+            accessibility_reqs=request.accessibility_reqs,
+            group_objective=request.group_objective,
+            forecast_service=request.forecast_service,
+            scores=request.scores,
         )
 
         # 3. Persist the new plan independently (P0-12)
-        if result.valid and result.plan:
-            self._plan_repo.save(request.thread_id, result.plan)
 
         return result

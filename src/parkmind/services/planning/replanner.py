@@ -11,14 +11,17 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from parkmind.core.contracts import (
+    AccessibilityRequirements,
     Attraction,
-    Event,
+    GroupObjective,
     LiveContext,
     Park,
     PartyConstraints,
     Plan,
     PlanExecutionState,
 )
+from parkmind.services.personalization.preference_scorer import PreferenceScores
+from parkmind.services.planning.forecast_service import ForecastService
 from parkmind.services.planning.park_graph import ParkGraph
 from parkmind.services.planning.plan_diff import PlanDiffModel, diff_plans
 from parkmind.services.planning.resolve_loop import PlannerResolveLoop
@@ -53,7 +56,10 @@ class Replanner:
         utilities: dict[str, float],
         park: Park,
         catalog: Sequence[Attraction],
-        event: Event | None = None,
+        accessibility_reqs: Sequence[AccessibilityRequirements] | None = None,
+        group_objective: GroupObjective | None = None,
+        forecast_service: ForecastService | None = None,
+        scores: PreferenceScores | None = None,
     ) -> ReplanResult:
         
         # 1. Segment state: isolate completed stops to freeze them
@@ -68,7 +74,6 @@ class Replanner:
             start_location_id = completed_stops[-1].node_id
 
         # 3. Adjust constraints for the future horizon
-        # (We don't need the optimizer to schedule must-dos that are already done)
         remaining_must_do = [
             node_id for node_id in constraints.must_do 
             if node_id not in completed_stop_ids
@@ -86,8 +91,13 @@ class Replanner:
             now=as_of,
             park=park,
             catalog=catalog,
-            # We pass the start location down to the optimizer via kwargs
             start_location_node_id=start_location_id,
+            accessibility_reqs=accessibility_reqs,
+            group_objective=group_objective,
+            forecast_service=forecast_service,
+            scores=scores,
+            execution_state=execution_state,
+            completed_node_ids=list(completed_stop_ids),
         )
 
         # If the remaining horizon is mathematically infeasible, fail closed safely

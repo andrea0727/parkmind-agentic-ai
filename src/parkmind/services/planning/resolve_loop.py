@@ -25,6 +25,7 @@ from parkmind.core.contracts import (
     ParkMindBaseModel,
     PartyConstraints,
     Plan,
+    PlanExecutionState,
     Provenance,
     RuleId,
     StopKind,
@@ -84,6 +85,8 @@ class PlannerResolveLoop:
         start_location_node_id: str | None = None,
         forecast_service: ForecastService | None = None,
         scores: PreferenceScores | None = None,
+        execution_state: PlanExecutionState | None = None,
+        completed_node_ids: Sequence[str] | None = None,
     ) -> PlannerResolveResult:
         """
         Run the repair loop up to max_attempts.
@@ -113,6 +116,7 @@ class PlannerResolveLoop:
                 forecast_service=forecast_service,
                 now=now,
                 scores=scores,
+                completed_node_ids=completed_node_ids,
             )
 
             # 2. Check candidate plan
@@ -125,6 +129,7 @@ class PlannerResolveLoop:
                 live_context=current_context,
                 now=now,
                 start_location_node_id=start_location_node_id,
+                execution_state=execution_state,
             )
 
             # 3. If clean check, return success
@@ -172,6 +177,8 @@ class PlannerResolveLoop:
                     park=park,
                     live_context=current_context,
                     now=now,
+                    start_location_node_id=start_location_node_id, #?
+                    execution_state=execution_state,
                 )
                 if recheck_result.valid:
                     return PlannerResolveResult(
