@@ -110,9 +110,10 @@ class EventSeverity(str, Enum):
     HIGH = "HIGH"
 
 
-# Event types — closed set of monitor events that trigger replanning
+# Event types — closed set of monitor and user-reported events (§33 [C10, C23])
 class EventType(str, Enum):
     ATTRACTION_DOWN = "ATTRACTION_DOWN"
+    ATTRACTION_AVAILABLE = "ATTRACTION_AVAILABLE"  # [C23] status back to OPERATING
     WAIT_SPIKE = "WAIT_SPIKE"
     RAIN_INCOMING = "RAIN_INCOMING"
     BEHIND_SCHEDULE = "BEHIND_SCHEDULE"
