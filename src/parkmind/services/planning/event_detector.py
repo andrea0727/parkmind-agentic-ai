@@ -22,7 +22,10 @@ What counts as a change:
   snapshots: ``detect_behind_schedule``.
 
 Freshness. No event comes from a current snapshot older than the window at
-``now`` (rule 11's 30 minutes). A status or wait event also needs its own
+``now`` (rule 11's 30 minutes), nor from a pair that is not consecutive: a
+previous snapshot taken more than ``max_gap`` before the current one (a
+collector that stopped for days) is no baseline -- a wait compared with one
+from two weeks ago is not a spike. The next run compares against this one. A status or wait event also needs its own
 reading to be new: the provider's per-entity reading time (``lastUpdated``,
 passed in as ``reading_times``) must be known, within the window at ``now``
 and not before the previous snapshot was taken -- i.e. the change happened
@@ -68,6 +71,8 @@ class DetectorConfig:
     freshness_window: timedelta = FRESHNESS_WINDOW
     clock_skew: timedelta = timedelta(minutes=1)
     """Tolerance between the provider's reading times and ours."""
+    max_gap: timedelta = FRESHNESS_WINDOW
+    """The longest time between two snapshots that still makes them consecutive."""
     spike_floor_minutes: float = 10.0
     """The lowest ``EventThresholds.queue_spike_minutes`` the resolver produces."""
     rain_probability: float = 0.5
@@ -89,11 +94,13 @@ def detect_events(
 
     ``reading_times`` maps attraction id -> the provider's reading time in
     ``current`` (``None`` or absent: unknown). Empty when there is no previous
-    snapshot to compare with, when the snapshots are out of order, or when
-    ``current`` is not fresh at ``now``.
+    snapshot to compare with, when the snapshots are out of order or more than
+    ``max_gap`` apart, or when ``current`` is not fresh at ``now``.
     """
     _require_aware(now, "now")
     if previous is None or previous.retrieved_at >= current.retrieved_at:
+        return []
+    if current.retrieved_at - previous.retrieved_at > config.max_gap:
         return []
     if not _within_window(current.retrieved_at, now, config):
         return []

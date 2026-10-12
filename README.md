@@ -265,7 +265,9 @@ poetry run python scripts/run_monitor.py --no-collect   # detect on what is alre
   months (a show closed since July, an entity last updated in 2022). A change
   only counts when the provider's own `lastUpdated` for it is within the
   30-minute freshness window and after the previous snapshot; it is read from
-  the stored raw payload (§41, C21). Unknown reading time → no event.
+  the stored raw payload (§41, C21). Unknown reading time → no event. Two
+  snapshots more than 30 minutes apart are not compared (after a collector
+  outage the next run only sets the baseline).
 - **One policy for both sources.** `EventPolicy` (`services/planning/event_policy.py`)
   is the only code that sets `severity` and `requires_replan`, with §25's table and
   the party's own thresholds: a closure of a ride the party already did, or a spike

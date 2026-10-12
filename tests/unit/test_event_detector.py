@@ -186,6 +186,19 @@ def test_without_a_previous_snapshot_nothing_is_detected():
     assert detect_events(None, current, now=NOW, reading_times={"a1": FRESH}) == []
 
 
+def test_a_previous_snapshot_from_long_ago_is_no_baseline():
+    """Found live (2026-10-12): the collector had not run since 2026-09-27, and
+    every wait compared with that day looked like a spike."""
+    previous, current = _pair(AttractionStatus.OPERATING, AttractionStatus.DOWN)
+    long_ago = previous.model_copy(update={"retrieved_at": TAKEN - timedelta(days=15)})
+    just_inside = previous.model_copy(
+        update={"retrieved_at": TAKEN - timedelta(minutes=30)}
+    )
+
+    assert detect_events(long_ago, current, now=NOW, reading_times={"a1": FRESH}) == []
+    assert detect_events(just_inside, current, now=NOW, reading_times={"a1": FRESH})
+
+
 def test_out_of_order_snapshots_raise_nothing():
     previous, current = _pair(AttractionStatus.OPERATING, AttractionStatus.DOWN)
 
