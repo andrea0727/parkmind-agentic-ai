@@ -345,7 +345,20 @@ def test_forecast_waits_caps_attractions_times_arrivals() -> None:
         {"attraction_ids": ids, "at": times},
     )
 
-    assert _rejected(result) == ["(request)"]
+    assert _rejected(result) == ["at"]
+
+
+def test_forecast_waits_without_times_is_capped_by_the_attractions() -> None:
+    """With ``at`` empty the total is the attraction count, already capped at 100."""
+    ids = [f"attraction-{i}" for i in range(MAX_FORECASTS + 1)]
+
+    result = call_tool(
+        Deps(collect_at=None).registry(),
+        "planner.forecast_waits",
+        {"attraction_ids": ids},
+    )
+
+    assert _rejected(result) == ["attraction_ids"]
 
 
 def test_forecast_waits_honors_the_callers_now() -> None:

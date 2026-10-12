@@ -25,8 +25,8 @@ from pydantic import (
     ConfigDict,
     Field,
     StringConstraints,
+    ValidationInfo,
     field_validator,
-    model_validator,
 )
 
 from parkmind.core.contracts import (
@@ -116,7 +116,10 @@ class ForecastWaitsRequest(_Request):
     attraction_ids: Annotated[list[Id], Field(min_length=1, max_length=100)]
     at: Annotated[list[AwareDatetime], Field(max_length=48)] = Field(
         default_factory=list,
-        description="Arrival times to forecast (with offset); omit for now.",
+        description=(
+            "Arrival times to forecast (with offset); omit for now. At most "
+            f"{MAX_FORECASTS} forecasts in all: attraction_ids x at."
+        ),
     )
     now: AwareDatetime | None = Field(
         default=None,
@@ -124,11 +127,14 @@ class ForecastWaitsRequest(_Request):
         "(set it to replay a day).",
     )
 
-    @model_validator(mode="after")
-    def _bounded(self) -> "ForecastWaitsRequest":
-        if len(self.attraction_ids) * max(len(self.at), 1) > MAX_FORECASTS:
-            raise ValueError(f"at most {MAX_FORECASTS} forecasts (attractions x times)")
-        return self
+    @field_validator("at")
+    @classmethod
+    def _bounded(cls, at: list[datetime], info: ValidationInfo) -> list[datetime]:
+        """The total is attraction_ids x at; ``at`` is what pushes it over, so it is named."""
+        ids = info.data.get("attraction_ids") or []
+        if len(ids) * max(len(at), 1) > MAX_FORECASTS:
+            raise ValueError(f"at most {MAX_FORECASTS} forecasts (attraction_ids x at)")
+        return at
 
 
 # -- responses ------------------------------------------------------------------------
