@@ -147,12 +147,11 @@ def test_a_status_that_did_not_change_is_no_event():
     [
         datetime(2026, 7, 28, 4, 4, tzinfo=PARK_TZ),  # months old
         NOW - timedelta(minutes=31),  # just outside the window
-        BEFORE - timedelta(minutes=2),  # before the previous snapshot was taken
         None,  # unknown
     ],
-    ids=["months_old", "outside_window", "before_previous", "unknown"],
+    ids=["months_old", "outside_window", "unknown"],
 )
-def test_a_reading_that_is_not_new_never_raises_an_event(reading_time):
+def test_a_reading_that_is_not_fresh_never_raises_an_event(reading_time):
     previous, current = _pair(AttractionStatus.OPERATING, AttractionStatus.DOWN)
 
     events = detect_events(
@@ -160,6 +159,18 @@ def test_a_reading_that_is_not_new_never_raises_an_event(reading_time):
     )
 
     assert events == []
+
+
+def test_a_fresh_reading_published_late_by_the_provider_still_counts():
+    """Review #86 (I4): a cached ``lastUpdated`` older than the previous snapshot
+    but inside the window. Dropping it would lose the change for good: the next
+    run sees DOWN -> DOWN."""
+    previous, current = _pair(AttractionStatus.OPERATING, AttractionStatus.DOWN)
+    late = BEFORE - timedelta(minutes=12)
+
+    events = detect_events(previous, current, now=NOW, reading_times={"a1": late})
+
+    assert [e.type for e in events] == [EventType.ATTRACTION_DOWN]
 
 
 def test_a_stale_current_snapshot_raises_nothing():

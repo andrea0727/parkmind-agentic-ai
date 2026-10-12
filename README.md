@@ -267,8 +267,7 @@ poetry run python scripts/run_monitor.py --no-collect   # detect on what is alre
 - **Stale readings never raise an alarm.** ThemeParks keeps some readings for
   months (a show closed since July, an entity last updated in 2022). A change
   only counts when the provider's own `lastUpdated` for it is within the
-  30-minute freshness window and after the previous snapshot; it is read from
-  the stored raw payload (§41, C21). Unknown reading time → no event. Two
+  30-minute freshness window; it is read from the stored raw payload (§41, C21). Unknown reading time → no event. Two
   snapshots more than 30 minutes apart are not compared (after a collector
   outage the next run only sets the baseline).
 - **One policy for both sources.** `EventPolicy` (`services/planning/event_policy.py`)

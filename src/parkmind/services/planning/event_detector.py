@@ -27,15 +27,16 @@ Freshness. No event comes from a current snapshot older than the window at
 ``now`` (rule 11's 30 minutes), nor from a pair that is not consecutive: a
 previous snapshot taken more than ``max_gap`` before the current one (a
 collector that stopped for days) is no baseline -- a wait compared with one
-from two weeks ago is not a spike. The next run compares against this one. A status or wait event also needs its own
-reading to be new: the provider's per-entity reading time (``lastUpdated``,
-passed in as ``reading_times``) must be known, within the window at ``now``
-and not before the previous snapshot was taken -- i.e. the change happened
-between the two snapshots. ThemeParks keeps readings months old (a CLOSED show
-last updated in July, an entity from 2022 in the 2026-09-27 fixture); those
-never raise an alarm. An unknown reading time fails closed: no event. A missed
-change is caught again by LOAD CONTEXT and rule 1 at the next (re)plan; a false
-alarm would wake the party for nothing.
+from two weeks ago is not a spike. The next run compares against this one. A
+status or wait event also needs its own reading to be fresh: the provider's
+per-entity reading time (``lastUpdated``, passed in as ``reading_times``) must
+be known and within the window at ``now``. It may predate the previous
+snapshot -- a provider cache can publish a change late, and the next run would
+see no transition -- and ``event_dedup`` absorbs a repeat. ThemeParks keeps
+readings months old (a CLOSED show last updated in July, an entity from 2022 in
+the 2026-09-27 fixture); those never raise an alarm. An unknown reading time
+fails closed: no event. A missed change is caught again by LOAD CONTEXT and
+rule 1 at the next (re)plan; a false alarm would wake the party for nothing.
 
 Event ids here are provisional and deterministic; ``event_dedup`` assigns the
 cross-source id before anything is recorded.
@@ -109,11 +110,7 @@ def detect_events(
 
     def is_new(attraction_id: str) -> bool:
         observed = reading_times.get(attraction_id)
-        return (
-            observed is not None
-            and _within_window(observed, now, config)
-            and observed >= previous.retrieved_at - config.clock_skew
-        )
+        return observed is not None and _within_window(observed, now, config)
 
     events = [
         *_status_events(previous, current, is_new),
