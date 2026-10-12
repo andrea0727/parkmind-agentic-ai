@@ -77,13 +77,20 @@ from parkmind.services.use_cases.planning_deps import (
 )
 from parkmind.services.use_cases.propose_plan import ProposePlanUseCase
 from parkmind.services.use_cases.resolve_attraction_names import AttractionNameResolver
-from parkmind.services.use_cases.resolve_proposal import ResolveProposalUseCase
+from parkmind.services.use_cases.resolve_proposal import (
+    ProposalNoLongerPendingError,
+    ResolveProposalUseCase,
+)
 
 logger = logging.getLogger(__name__)
 
 Clock = Callable[[], datetime]
 
 APPROVAL_INTERRUPT_KIND = "plan_approval"
+SUPERSEDED_MESSAGE = (
+    "Something in the park changed while you were deciding, so this proposal was "
+    "replaced and nothing was activated. Your current plan stays as it was."
+)
 UNAVAILABLE_MESSAGE = (
     "I couldn't put a plan together right now because some of the park information "
     "I need isn't available. Nothing was proposed. Please try again in a few minutes."
@@ -317,6 +324,9 @@ def _interrupt_for_approval(
     ``APPROVED`` or ``REJECTED`` and, for a rejection, an optional
     ``"rejection_reason"`` RejectionReason value. Anything else is answered with the
     same interrupt carrying an ``"error"``; the decision is only applied once valid.
+
+    A proposal superseded while the guests were deciding (P0-33) is not decided:
+    the guests are told, the candidate is dropped and ``current_plan`` is kept.
     """
     plan = state.get("candidate_plan")
     proposal = state.get("proposal")
@@ -337,13 +347,25 @@ def _interrupt_for_approval(
     approved = status is ApprovalStatus.APPROVED
     rejection_reason = None if approved else given_reason or RejectionReason.OTHER
 
-    ResolveProposalUseCase(deps_factory).execute(
-        state["thread_id"],
-        proposal.proposal_id,
-        status,
-        at=clock(),
-        rejection_reason=rejection_reason,
-    )
+    try:
+        ResolveProposalUseCase(deps_factory).execute(
+            state["thread_id"],
+            proposal.proposal_id,
+            status,
+            at=clock(),
+            rejection_reason=rejection_reason,
+        )
+    except ProposalNoLongerPendingError as exc:
+        if exc.status is not status:
+            # Superseded by a significant event while the guests decided (section 9
+            # [C18]): the decision is dropped, nothing is activated.
+            logger.info("decision on %s not applied: %s", proposal.proposal_id, exc)
+            return {
+                "messages": [AIMessage(content=SUPERSEDED_MESSAGE)],
+                "candidate_plan": None,
+                "approval": None,
+            }
+        # The same decision was already applied (a re-run after it was stored).
 
     if rejection_reason is None:
         return approve_plan(state)
