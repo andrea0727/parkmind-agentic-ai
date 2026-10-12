@@ -16,8 +16,10 @@ What counts as a change:
   any party can have; whether the spike matters to *this* party is the
   policy's call (section 25, profile-aware thresholds).
 * ``RAIN_INCOMING``: look-ahead hours whose precipitation probability crossed
-  ``rain_probability`` since the previous snapshot. Whether an outdoor stop
-  falls in them is again the policy's call.
+  ``rain_probability`` since the previous snapshot: the hour is in the
+  previous forecast, below the threshold. An hour the previous snapshot did not
+  forecast (an empty weather list after a failed call) is unknown, not a change.
+  Whether an outdoor stop falls in them is again the policy's call.
 * ``BEHIND_SCHEDULE`` comes from the party's ``PlanExecutionState``, not from
   snapshots: ``detect_behind_schedule``.
 
@@ -217,10 +219,10 @@ def _rain(
     previous: LiveContext, current: LiveContext, now: datetime, config: DetectorConfig
 ) -> list[Event]:
     """Look-ahead hours that turned rainy. The weather is as fresh as its snapshot."""
-    was_rainy = {
+    was_dry = {
         h.timestamp
         for h in previous.weather
-        if h.precipitation_probability >= config.rain_probability
+        if h.precipitation_probability < config.rain_probability
     }
     horizon_end = now + config.rain_lookahead
     turned = sorted(
@@ -228,7 +230,7 @@ def _rain(
             h
             for h in current.weather
             if h.precipitation_probability >= config.rain_probability
-            and h.timestamp not in was_rainy
+            and h.timestamp in was_dry
             and h.timestamp + timedelta(hours=1) > now  # the hour isn't over yet
             and h.timestamp < horizon_end
         ),

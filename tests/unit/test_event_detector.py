@@ -275,7 +275,9 @@ def test_rain_only_counts_inside_the_look_ahead_and_not_in_past_hours():
     this_hour = NOW.replace(minute=0)
     too_far = NOW + timedelta(hours=4)
 
-    events = _weather({}, {past: 0.9, this_hour: 0.8, too_far: 0.9})
+    dry = {past: 0.1, this_hour: 0.1, too_far: 0.1}
+
+    events = _weather(dry, {past: 0.9, this_hour: 0.8, too_far: 0.9})
 
     assert [e.affected_hours for e in events] == [[this_hour]]
     assert events[0].confidence == 0.8
@@ -285,6 +287,16 @@ def test_rain_already_forecast_in_the_previous_snapshot_is_not_new():
     hour = NOW.replace(minute=0) + timedelta(hours=1)
 
     assert _weather({hour: 0.6}, {hour: 0.9}) == []
+
+
+def test_an_hour_the_previous_snapshot_did_not_forecast_is_no_rain_event():
+    """Review #86 (I3): a failed weather call leaves ``previous.weather`` empty;
+    the hours are unknown then, not dry."""
+    hour = NOW.replace(minute=0) + timedelta(hours=1)
+    other = hour + timedelta(hours=1)
+
+    assert _weather({}, {hour: 0.8}) == []
+    assert _weather({other: 0.1}, {hour: 0.8, other: 0.1}) == []
 
 
 def test_the_real_capture_s_stale_readings_raise_no_alarm():
