@@ -163,6 +163,11 @@ def _schema_errors(exc: ValidationError) -> str:
     )
 
 
+def _with_previous(text: str, problem: str) -> str:
+    """The repair hint: what was wrong, and the answer to fix (never logged)."""
+    return f"{problem}\n\nYour previous explanation:\n{text}"
+
+
 def _preference_labels(payload: ExplanationPayload) -> tuple[dict[str, str], set[str]]:
     """Each stated/learned weight's figure -> its source, and the figures too ambiguous
     to check: also a stop figure, or shared by weights of different sources."""
@@ -210,10 +215,11 @@ def explain_grounded(
             continue
         ungrounded = ungrounded_numerals(draft.text, payload_json)
         if ungrounded:
-            hint = (
+            hint = _with_previous(
+                draft.text,
                 "These numbers are not in the payload: "
                 + ", ".join(ungrounded)
-                + ". Use only figures that appear in the payload, exactly as given."
+                + ". Use only figures that appear in the payload, exactly as given.",
             )
             logger.warning(
                 "explain: attempt %d had %d ungrounded numeral(s)",
@@ -223,10 +229,11 @@ def explain_grounded(
             continue
         mislabelled = mislabelled_preferences(draft.text, labelled, ambiguous)
         if mislabelled:
-            hint = (
+            hint = _with_previous(
+                draft.text,
                 "Label each preference figure by where it comes from: "
                 + "; ".join(mislabelled)
-                + "."
+                + ".",
             )
             logger.warning(
                 "explain: attempt %d had %d mislabelled preference figure(s)",

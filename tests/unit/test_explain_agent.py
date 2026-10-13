@@ -67,6 +67,7 @@ def test_an_ungrounded_answer_is_retried_once_with_the_numbers_listed():
 
     assert (result.source, result.attempts) == ("llm", 2)
     assert narrator.hints[1] is not None and "45" in narrator.hints[1]
+    assert INVENTED in narrator.hints[1]  # the answer to fix, not a blank restart
 
 
 def test_two_ungrounded_answers_fall_back_to_the_template():
