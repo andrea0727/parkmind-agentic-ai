@@ -59,7 +59,11 @@ from parkmind.services.use_cases.planning_deps import (
     load_requirements,
     open_deps,
 )
-from parkmind.services.use_cases.replan import ReplanRequest, ReplanUseCase
+from parkmind.services.use_cases.replan import (
+    ProgressSource,
+    ReplanRequest,
+    ReplanUseCase,
+)
 from parkmind.services.use_cases.score_preferences import ScorePreferencesUseCase
 
 _PRIVATE_RULES: dict[RuleId, tuple[str, str]] = {
@@ -133,6 +137,35 @@ class PlanCandidate:
 
 
 @dataclass(frozen=True)
+class ReplanProgress:
+    """Which stops the replan kept and where it started from.
+
+    Never the walking minutes [C19]: a stored execution state carries the guest's
+    walked minutes and the fatigue cap ``EventPolicy`` derived from their daily
+    limit, and the two together give the limit back.
+    """
+
+    completed_stop_ids: list[str]
+    skipped_stop_ids: list[str]
+    current_location_node_id: str | None
+    as_of: datetime
+    source: ProgressSource
+    """``sent`` by the client, ``stored`` for the plan, or ``assumed`` on schedule."""
+
+
+def public_progress(
+    state: PlanExecutionState, source: ProgressSource
+) -> ReplanProgress:
+    return ReplanProgress(
+        completed_stop_ids=list(state.completed_stop_ids),
+        skipped_stop_ids=list(state.skipped_stop_ids),
+        current_location_node_id=state.current_location_node_id,
+        as_of=state.as_of,
+        source=source,
+    )
+
+
+@dataclass(frozen=True)
 class ReplanCandidate:
     plan: Plan | None
     """The new candidate (completed stops + new horizon), a new plan id; ``None`` if none."""
@@ -144,8 +177,8 @@ class ReplanCandidate:
     unmet_must_do: list[str]
     failure: str | None
     """Why no valid replan was found (redacted), when none was."""
-    execution_state: PlanExecutionState
-    """The progress the replan started from: the one sent, or the on-schedule assumption."""
+    progress: ReplanProgress
+    """The progress the replan started from, without its walking minutes [C19]."""
     context: ContextStamp
 
 
@@ -301,7 +334,7 @@ class PlannerQueries:
             valid=result.valid,
             unmet_must_do=list(result.unmet_must_do),
             failure=public_failure(result.fatal_error),
-            execution_state=outcome.execution_state,
+            progress=public_progress(outcome.execution_state, outcome.progress_source),
             context=_stamp(outcome.live_context, loaded.source, now),
         )
 

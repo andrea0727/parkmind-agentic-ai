@@ -14,6 +14,7 @@ from planning_support import factory_for
 
 from parkmind.core.contracts import (
     MobilityRequirement,
+    Plan,
     PreferenceSource,
     RideRestriction,
     RuleId,
@@ -496,7 +497,8 @@ def test_replan_keeps_the_progress_sent_and_starts_after_it() -> None:
     data = _replan(registry, plan, execution_state=progress)["data"]
 
     assert data["valid"] is True, data["failure"]
-    assert data["execution_state"]["completed_stop_ids"] == done
+    assert data["progress"]["completed_stop_ids"] == done
+    assert data["progress"]["source"] == "sent"
     stops = data["plan"]["stops"]
     assert [s["node_id"] for s in stops[:2]] == done
     assert all(
@@ -511,7 +513,8 @@ def test_replan_with_rest_first_opens_the_new_horizon_with_a_rest() -> None:
     data = _replan(registry, plan, rest_first=True)["data"]
 
     assert data["valid"] is True, data["failure"]
-    done = set(data["execution_state"]["completed_stop_ids"])
+    assert data["progress"]["source"] == "assumed"
+    done = set(data["progress"]["completed_stop_ids"])
     horizon = [s for s in data["plan"]["stops"] if s["node_id"] not in done]
     assert horizon[0]["kind"] == "REST"
 
@@ -566,3 +569,29 @@ def test_an_infeasible_replan_says_why_without_the_guests_limits() -> None:
     assert "details stay in the guest's session" in data["failure"]
     for value in ("walking total", "limit of 7", "rest frequency"):
         assert value not in data["failure"], value
+
+
+def test_replan_never_returns_the_walking_minutes_that_give_a_limit_away() -> None:
+    """Review #89 (1): EventPolicy stores a fatigue cap of ``limit - walked``; walked
+    and cap together would give the guest's 7-minute limit back [C19]."""
+    deps = Deps()
+    registry = deps.registry()
+    plan = _built_plan(registry)
+    _store_requirements(deps)
+    deps.plans.save("s1", Plan.model_validate(plan))
+    deps.value.execution_states.save(
+        factories.execution_state(
+            plan_id=plan["plan_id"],
+            completed_stop_ids=[plan["stops"][0]["node_id"]],
+            as_of=REPLAN_AT,
+            walking_minutes_consumed={"g2": 4.0},
+            remaining_walking_cap_minutes={"g2": 3.0},
+        )
+    )
+
+    payload = _replan(registry, plan, guest_ids=["g2"])
+
+    assert payload["data"]["progress"]["source"] == "stored"
+    text = json.dumps(payload)
+    for field in ("walking_minutes_consumed", "remaining_walking_cap_minutes"):
+        assert field not in text, field

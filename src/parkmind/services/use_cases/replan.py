@@ -40,7 +40,7 @@ import logging
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from parkmind.core.contracts import (
     AttractionStatus,
@@ -132,6 +132,9 @@ class ReplanRequest:
             )
 
 
+ProgressSource = Literal["sent", "stored", "assumed"]
+
+
 @dataclass(frozen=True)
 class ReplanOutcome:
     result: ReplanResult
@@ -139,6 +142,8 @@ class ReplanOutcome:
     """What to keep in state: no per-guest accessibility results [C19]."""
     execution_state: PlanExecutionState
     """The progress the replan started from (see the module docstring); the CHECK uses it too."""
+    progress_source: ProgressSource = "stored"
+    """Where that progress came from: the caller, the repository, or the on-schedule assumption."""
 
 
 class ReplanUseCase:
@@ -173,6 +178,14 @@ class ReplanUseCase:
                 else deps.execution_states.get(request.plan.plan_id)
             )
             execution_state = effective_execution_state(request.plan, stored, request.now)
+            progress_source: ProgressSource = (
+                "assumed"
+                if stored is None
+                or not (stored.completed_stop_ids or stored.skipped_stop_ids)
+                else "sent"
+                if request.execution_state is not None
+                else "stored"
+            )
             live_context = with_checks(
                 with_event_statuses(request.live_context, events),
                 party_checks(requirements, catalog, deps.knowledge),
@@ -217,7 +230,7 @@ class ReplanUseCase:
             )
         if not result.valid:
             logger.info("replan of %s found no valid plan", request.plan.plan_id)
-        return ReplanOutcome(result, state_context, execution_state)
+        return ReplanOutcome(result, state_context, execution_state, progress_source)
 
 
 __all__: list[Any] = [

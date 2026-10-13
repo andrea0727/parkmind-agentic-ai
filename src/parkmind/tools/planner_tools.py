@@ -20,6 +20,7 @@ Inputs are capped well above a real party and day (``MAX_GUESTS``,
 """
 
 from collections.abc import Callable
+from dataclasses import asdict
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
@@ -199,6 +200,18 @@ class CheckPlanData(BaseModel):
     check: CheckResult
 
 
+class ReplanProgressData(BaseModel):
+    """Never the walking minutes: with the fatigue cap they would give a guest's limit [C19]."""
+
+    completed_stop_ids: list[str]
+    skipped_stop_ids: list[str]
+    current_location_node_id: str | None
+    as_of: datetime
+    source: Literal["sent", "stored", "assumed"] = Field(
+        description="Sent by the client, stored for the plan, or assumed on schedule."
+    )
+
+
 class ReplanData(BaseModel):
     valid: bool = Field(
         description="True when the replanned day (completed stops + new horizon) passes the checker."
@@ -212,7 +225,7 @@ class ReplanData(BaseModel):
     check: CheckResult | None = Field(
         description="The whole day's check, counting the walking already done."
     )
-    execution_state: PlanExecutionState = Field(
+    progress: ReplanProgressData = Field(
         description="The progress the replan started from: the one sent, the stored one, or an on-schedule assumption."
     )
     unmet_must_do: list[str]
@@ -342,7 +355,7 @@ def planner_tools(ctx: ToolContext) -> list[ToolSpec]:
                 plan=candidate.plan,
                 diff=candidate.diff,
                 check=candidate.check,
-                execution_state=candidate.execution_state,
+                progress=ReplanProgressData(**asdict(candidate.progress)),
                 unmet_must_do=candidate.unmet_must_do,
                 failure=candidate.failure,
             ),
