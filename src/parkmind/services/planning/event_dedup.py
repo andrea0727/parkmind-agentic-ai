@@ -11,21 +11,26 @@ Two kinds of identity:
 * **Episodes** -- ``ATTRACTION_DOWN`` / ``ATTRACTION_AVAILABLE``. An attraction
   is down until it is available again. While the thread's latest of the two for
   that attraction has the candidate's type, the episode is still open and the
-  candidate is a duplicate -- with one exception: a **monitor** candidate more
-  than ``window`` after that latest event opens a new episode. The monitor only
-  reports a transition it saw (OPERATING -> DOWN), so the attraction was up in
-  between: the open episode was a wrong report or its closing event was missed,
-  and absorbing the candidate would hide a real closure for good. Within the
-  window it is the same closure, whichever source spoke first; a late user
-  report of a closure already held stays a duplicate. A new episode gets
+  candidate is a duplicate -- with one exception: a **monitor** candidate long
+  after that latest event opens a new episode. The monitor only reports a
+  transition it saw (OPERATING -> DOWN), so the attraction was up in between:
+  the open episode was a wrong report or its closing event was missed, and
+  absorbing the candidate would hide a real closure for good. "Long" is
+  ``window`` after a monitor event, and ``user_episode_window`` (2 h, a
+  documented starting point) after a user report: the provider can take a
+  while to show a closure a guest saw first, and that lag is the same closure,
+  not a second one. A late user report of a closure already held stays a
+  duplicate. A new episode gets
   ``"{TYPE}:{attraction}:{n}"``, ``n`` counting that attraction's events of the
   type, so DOWN -> AVAILABLE -> DOWN is three events.
 * **Once per overdue stop** -- ``BEHIND_SCHEDULE``. The subject is the overdue
   stop and its planned departure (``timestamp - minutes_behind``), and the
   thread holds it once, however long the party stays behind: every repeat would
   supersede the replan proposal the first one asked for. An approved replan
-  moves the departures, so falling behind on the new plan is a new event. The id
-  is ``"BEHIND_SCHEDULE:{stop}@{departure}"``.
+  moves the departures, so falling behind on the new plan is a new event. The
+  detector only emits it from the policy's threshold, so the one event held is
+  always the crossing that replans, never a small delay. The id is
+  ``"BEHIND_SCHEDULE:{stop}@{departure}"``.
 * **Moments** -- every other type. The same (type, subject) within ``window`` of
   one already held is a duplicate; otherwise the id is
   ``"{TYPE}:{subject}:{UTC minute}"``. Subjects: the attraction (wait spike),
@@ -43,12 +48,16 @@ from parkmind.services.planning.event_detector import FRESHNESS_WINDOW
 
 EPISODIC = frozenset({EventType.ATTRACTION_DOWN, EventType.ATTRACTION_AVAILABLE})
 
+USER_EPISODE_WINDOW = timedelta(hours=2)
+"""How long the provider may lag behind a guest's report of the same closure."""
+
 
 def deduplicate(
     candidates: Iterable[Event],
     history: Iterable[Event],
     *,
     window: timedelta = FRESHNESS_WINDOW,
+    user_episode_window: timedelta = USER_EPISODE_WINDOW,
 ) -> list[Event]:
     """The candidates that are new to the thread, each with its cross-source id.
 
@@ -62,7 +71,7 @@ def deduplicate(
         candidates, key=lambda e: (e.timestamp, e.type.value, subject(e))
     ):
         if candidate.type in EPISODIC:
-            event_id = _episode_id(candidate, seen, window)
+            event_id = _episode_id(candidate, seen, window, user_episode_window)
         elif candidate.type is EventType.BEHIND_SCHEDULE:
             event_id = _once_id(candidate, seen)
         else:
@@ -99,16 +108,22 @@ def _planned_departure(event: Event) -> str:
     return to_the_second.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
-def _episode_id(candidate: Event, seen: list[Event], window: timedelta) -> str | None:
+def _episode_id(
+    candidate: Event,
+    seen: list[Event],
+    window: timedelta,
+    user_episode_window: timedelta,
+) -> str | None:
     attraction = candidate.attraction_id
     same_attraction = [
         e for e in seen if e.type in EPISODIC and e.attraction_id == attraction
     ]
     if same_attraction and same_attraction[-1].type is candidate.type:
         latest = same_attraction[-1]
+        open_for = user_episode_window if latest.source is EventSource.USER else window
         seen_again = (
             candidate.source is EventSource.MONITOR
-            and candidate.timestamp - latest.timestamp > window
+            and candidate.timestamp - latest.timestamp > open_for
         )
         if not seen_again:
             return None  # the episode is still open

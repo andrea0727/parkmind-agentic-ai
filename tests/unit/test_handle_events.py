@@ -255,6 +255,42 @@ def test_behind_schedule_is_derived_from_the_execution_state(deps):
     assert handled.superseded == ["prop_pending"]
 
 
+def test_a_small_delay_does_not_use_up_the_stop(deps):
+    """Review #86 (N1): +3 min is nothing; +20 min still replans."""
+    deps.execution_states.save(
+        factories.execution_state(
+            plan_id=PLAN.plan_id, completed_stop_ids=["space"], as_of=NOW
+        )
+    )
+
+    small = _handle(deps, [], now=NOW + timedelta(minutes=108))
+    large = _handle(deps, [], now=NOW + timedelta(minutes=125))
+
+    assert small.events == [] and small.superseded == []
+    assert [e.requires_replan for e in large.events] == [True]
+    assert large.superseded == ["prop_pending"]
+
+
+def test_only_the_first_crossing_of_the_threshold_replans(deps):
+    deps.execution_states.save(
+        factories.execution_state(
+            plan_id=PLAN.plan_id, completed_stop_ids=["space"], as_of=NOW
+        )
+    )
+
+    # jungle leaves at +105: 3, 8, 16 and 30 minutes behind.
+    runs = [_handle(deps, [], now=NOW + timedelta(minutes=m)) for m in (108, 113, 121)]
+    deps.proposals.save(
+        THREAD, factories.proposal(proposal_id="prop_replan", candidate_plan_id="p2")
+    )
+    later = _handle(deps, [], now=NOW + timedelta(minutes=135))
+
+    assert [len(r.events) for r in runs] == [0, 0, 1]
+    assert runs[2].superseded == ["prop_pending"]
+    assert later.events == [] and later.superseded == []
+    assert _pending(deps) == ["prop_replan"]
+
+
 def test_staying_behind_supersedes_only_once(deps):
     deps.execution_states.save(
         factories.execution_state(

@@ -142,7 +142,12 @@ class HandleEventsUseCase:
                 if r.daily_walking_limit_minutes is not None
             }
 
-            behind = detect_behind_schedule(plan, stored_state, now=now)
+            behind = detect_behind_schedule(
+                plan,
+                stored_state,
+                now=now,
+                min_minutes_behind=self._config.behind_schedule_minutes,
+            )
             pool = [*candidates, *([behind] if behind is not None else [])]
             held: list[Event] = []
             ready: list[Event] = []

@@ -370,7 +370,7 @@ def test_behind_schedule_measures_from_the_earliest_unfinished_stop():
     )
     state = factories.execution_state(completed_stop_ids=["a1"])
 
-    event = detect_behind_schedule(plan, state, now=NOW)
+    event = detect_behind_schedule(plan, state, now=NOW, min_minutes_behind=0.0)
 
     assert event is not None
     assert (event.type, event.attraction_id, event.minutes_behind) == (
@@ -390,7 +390,10 @@ def test_a_party_on_schedule_or_without_state_is_not_behind():
 
     assert (
         detect_behind_schedule(
-            plan, factories.execution_state(completed_stop_ids=["a1"]), now=NOW
+            plan,
+            factories.execution_state(completed_stop_ids=["a1"]),
+            now=NOW,
+            min_minutes_behind=0.0,
         )
         is None
     )
@@ -399,12 +402,13 @@ def test_a_party_on_schedule_or_without_state_is_not_behind():
             plan,
             factories.execution_state(skipped_stop_ids=["a1"], completed_stop_ids=[]),
             now=NOW,
+            min_minutes_behind=0.0,
         )
         is None
     )
-    assert detect_behind_schedule(plan, None, now=NOW) is None
+    assert detect_behind_schedule(plan, None, now=NOW, min_minutes_behind=0.0) is None
     other = factories.execution_state(plan_id="another_plan", completed_stop_ids=[])
-    assert detect_behind_schedule(plan, other, now=NOW) is None
+    assert detect_behind_schedule(plan, other, now=NOW, min_minutes_behind=0.0) is None
 
 
 def test_a_state_that_records_no_progress_is_not_behind():
@@ -420,7 +424,9 @@ def test_a_state_that_records_no_progress_is_not_behind():
         completed_stop_ids=[], skipped_stop_ids=[], current_location_node_id="a2"
     )
 
-    assert detect_behind_schedule(plan, untracked, now=NOW) is None
+    assert (
+        detect_behind_schedule(plan, untracked, now=NOW, min_minutes_behind=0.0) is None
+    )
 
 
 def test_now_must_be_timezone_aware():
@@ -428,3 +434,21 @@ def test_now_must_be_timezone_aware():
 
     with pytest.raises(ValueError, match="timezone-aware"):
         detect_events(previous, current, now=NOW.replace(tzinfo=None), reading_times={})
+
+
+def test_a_delay_below_the_threshold_is_no_event():
+    """Review #86 (N1): recorded, a 3-minute delay would use up the stop's one
+    event and the large delay after it would never replan."""
+    plan = factories.plan(
+        stops=[
+            _stop("a1", NOW - timedelta(minutes=40)),
+            _stop("a2", NOW - timedelta(minutes=14)),
+        ]
+    )
+    state = factories.execution_state(completed_stop_ids=["a1"])
+
+    assert detect_behind_schedule(plan, state, now=NOW, min_minutes_behind=15) is None
+    at_threshold = detect_behind_schedule(
+        plan, state, now=NOW + timedelta(minutes=1), min_minutes_behind=15
+    )
+    assert at_threshold is not None and at_threshold.minutes_behind == 15.0

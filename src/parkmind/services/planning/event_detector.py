@@ -121,18 +121,27 @@ def detect_events(
 
 
 def detect_behind_schedule(
-    plan: Plan, execution_state: PlanExecutionState | None, *, now: datetime
+    plan: Plan,
+    execution_state: PlanExecutionState | None,
+    *,
+    now: datetime,
+    min_minutes_behind: float,
 ) -> Event | None:
     """``BEHIND_SCHEDULE`` when a stop the party should have left is not done.
 
     The earliest stop whose planned departure is before ``now`` and that is
     neither completed nor skipped sets ``minutes_behind`` -- unrounded, so that
     ``timestamp - minutes_behind`` is that departure (``event_dedup`` keys the
-    event on it). ``None`` without an
-    execution state for this plan, when the party is on schedule, or when the
-    state records no completed or skipped stop: progress is not being tracked
-    (a state created by a relocation or a walking cap), and an empty list would
-    read as every past stop being late.
+    event on it, once per stop).
+
+    ``None`` below ``min_minutes_behind`` -- the policy's significance threshold,
+    which the caller passes in. A smaller delay is no event at all: recorded, it
+    would use up the stop's one event and the large delay that follows would be
+    a duplicate that never replans. ``None`` too without an execution state for
+    this plan, when the party is on schedule, or when the state records no
+    completed or skipped stop: progress is not being tracked (a state created by
+    a relocation or a walking cap), and an empty list would read as every past
+    stop being late.
     """
     _require_aware(now, "now")
     if execution_state is None or execution_state.plan_id != plan.plan_id:
@@ -147,7 +156,7 @@ def detect_behind_schedule(
         return None
     late = min(overdue, key=lambda s: s.departure_time)
     behind = (now - late.departure_time).total_seconds() / 60
-    if behind <= 0:
+    if behind <= 0 or behind < min_minutes_behind:
         return None
     return Event(
         event_id=f"{EventType.BEHIND_SCHEDULE.value}:{plan.plan_id}:{late.node_id}",
