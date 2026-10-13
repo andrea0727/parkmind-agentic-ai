@@ -13,7 +13,6 @@ never returned into graph state [C19].
 """
 
 import logging
-import psycopg
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager, nullcontext
 from dataclasses import dataclass, field
@@ -25,8 +24,10 @@ from parkmind.services.clients.knowledge import magic_kingdom_knowledge_store
 from parkmind.services.clients.open_meteo_client import OpenMeteoClient
 from parkmind.services.clients.postgres import (
     PostgresAttractionRepository,
+    PostgresBehaviorLogRepository,
     PostgresEventRepository,
     PostgresExecutionStateRepository,
+    PostgresGuestRepository,
     PostgresIdMappingRepository,
     PostgresPlanRepository,
     PostgresProposalRepository,
@@ -34,15 +35,15 @@ from parkmind.services.clients.postgres import (
     connect,
 )
 from parkmind.services.clients.postgres.connection import DATABASE_PROBLEMS
-from parkmind.services.clients.postgres.behavior_log_repository import PostgresBehaviorLogRepository
 from parkmind.services.clients.routing_client import RoutingClient
 from parkmind.services.clients.themeparks_client import ThemeParksClient
 from parkmind.services.clients.themeparks_errors import ThemeParksClientError
-from parkmind.services.ports.behavior_log_repository import BehaviorLogRepository
 from parkmind.services.ports import (
     AttractionRepository,
+    BehaviorLogRepository,
     EventRepository,
     ExecutionStateRepository,
+    GuestRepository,
     IdMappingRepository,
     KnowledgeStore,
     PlanRepository,
@@ -98,6 +99,8 @@ class PlanningDeps:
     proposals: ProposalRepository
     events: EventRepository
     execution_states: ExecutionStateRepository
+    guests: GuestRepository
+    """Where a decision registers the party's guests (``party_guest_id``) for the behavior log."""
     behavior: BehaviorLogRepository
     collector: SnapshotCollecting | None = None
     """``None`` plans from the latest stored snapshot only (no provider call)."""
@@ -130,10 +133,11 @@ def default_planning_deps(database_url: str | None = None) -> Iterator[PlanningD
             proposals=PostgresProposalRepository(conn),
             events=PostgresEventRepository(conn),
             execution_states=PostgresExecutionStateRepository(conn),
+            guests=PostgresGuestRepository(conn),
+            behavior=PostgresBehaviorLogRepository(conn),
             collector=SnapshotCollector(parks, weather, snapshots, id_mappings),
             transaction=lambda: conn.transaction(),
             park_data=parks,
-            behavior=PostgresBehaviorLogRepository(conn),
         )
 
 

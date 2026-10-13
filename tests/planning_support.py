@@ -10,6 +10,7 @@ from fakes import (
     InMemoryBehaviorLogRepository,
     InMemoryEventRepository,
     InMemoryExecutionStateRepository,
+    InMemoryGuestRepository,
     InMemoryIdMappingRepository,
     InMemoryPlanRepository,
     InMemoryProposalRepository,
@@ -118,9 +119,8 @@ def make_deps(
     knowledge: InMemoryKnowledgeStore | None = None,
     proposals: InMemoryProposalRepository | None = None,
     events: InMemoryEventRepository | None = None,
-    behavior: InMemoryBehaviorLogRepository | None = None
 ) -> PlanningDeps:
-    behavior_repo = behavior if behavior is not None else InMemoryBehaviorLogRepository()
+    guests = InMemoryGuestRepository()
     proposals = proposals if proposals is not None else InMemoryProposalRepository()
     plans = InMemoryPlanRepository(proposals)
     return PlanningDeps(
@@ -135,8 +135,9 @@ def make_deps(
         proposals=proposals,
         events=events if events is not None else InMemoryEventRepository(),
         execution_states=InMemoryExecutionStateRepository(plans),
+        guests=guests,
+        behavior=InMemoryBehaviorLogRepository(guests),
         collector=collector,
-        behavior=behavior_repo,
     )
 
 
