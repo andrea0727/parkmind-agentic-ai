@@ -29,6 +29,8 @@ from parkmind.config.settings import settings
 from parkmind.services.use_cases.explain_plan import PreparedExplanation
 
 __all__ = [
+    "EXPLAIN_SDK_RETRIES",
+    "EXPLAIN_TIMEOUT_SECONDS",
     "MAX_ATTEMPTS",
     "TEMPLATE_VERSION",
     "AnthropicNarrator",
@@ -45,6 +47,10 @@ MAX_ATTEMPTS = 2
 """One call and one retry (section 40)."""
 TEMPLATE_VERSION = "template"
 """``Provenance.prompt_versions["explain"]`` when the template was used."""
+EXPLAIN_TIMEOUT_SECONDS = 20.0
+"""Per request. EXPLAIN is on the plan's path: a hung call must end in the template."""
+EXPLAIN_SDK_RETRIES = 1
+"""The client's own retries per call, on top of ``MAX_ATTEMPTS``."""
 
 
 class NarratorUnavailableError(RuntimeError):
@@ -64,11 +70,24 @@ class PlanNarrator(Protocol):
 
 
 class AnthropicNarrator:
-    """Claude tool-calling narrator. The client is built on first use."""
+    """Claude tool-calling narrator. The client is built on first use.
 
-    def __init__(self, model: str | None = None, api_key: str | None = None) -> None:
+    Unlike elicit's extractor, every request is bounded (``timeout``, a single SDK
+    retry): the guests are waiting for their plan, and the template can stand in.
+    """
+
+    def __init__(
+        self,
+        model: str | None = None,
+        api_key: str | None = None,
+        *,
+        timeout: float = EXPLAIN_TIMEOUT_SECONDS,
+        max_retries: int = EXPLAIN_SDK_RETRIES,
+    ) -> None:
         self._model = model or settings.EXPLAIN_MODEL
         self._api_key = api_key if api_key is not None else settings.ANTHROPIC_API_KEY
+        self._timeout = timeout
+        self._max_retries = max_retries
         self._llm: Any = None
 
     def _runnable(self) -> Any:
@@ -82,7 +101,8 @@ class AnthropicNarrator:
                 api_key=SecretStr(self._api_key),
                 temperature=0,
                 max_tokens_to_sample=1500,
-                timeout=None,
+                timeout=self._timeout,
+                max_retries=self._max_retries,
                 stop=None,
             )
             self._llm = chat.bind_tools(
