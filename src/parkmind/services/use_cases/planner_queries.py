@@ -46,7 +46,11 @@ from parkmind.core.contracts import (
 )
 from parkmind.services.personalization.preference_scorer import PreferenceScores
 from parkmind.services.planning.park_graph import ParkGraph
-from parkmind.services.ports import ContextDataPort, WaitForecast
+from parkmind.services.ports import (
+    ContextDataPort,
+    RoutingNotFoundError,
+    WaitForecast,
+)
 from parkmind.services.use_cases.build_plan import BuildPlanUseCase
 from parkmind.services.use_cases.check_plan import CheckPlanUseCase
 from parkmind.services.use_cases.forecast import build_forecast_service
@@ -136,6 +140,12 @@ class PlanCandidate:
     failure: str | None
     """Why the re-solve loop found no valid plan (redacted), when it did not."""
     context: ContextStamp
+
+
+class UnknownLocationError(ValueError):
+    """The location a client sent is not on the park map: its mistake, not an outage."""
+
+    field = "execution_state.current_location_node_id"
 
 
 @dataclass(frozen=True)
@@ -293,7 +303,14 @@ class PlannerQueries:
         events: Sequence[Event] = (),
         rest_first: bool = False,
     ) -> ReplanCandidate:
-        """The replanning graph's LOAD CONTEXT -> RESOLVE GROUP -> REPLAN -> CHECK, no proposal."""
+        """The replanning graph's LOAD CONTEXT -> RESOLVE GROUP -> REPLAN -> CHECK, no proposal.
+
+        Raises ``UnknownLocationError`` when the sent progress places the party on a
+        node the park map does not know (the optimizer would fail walking from it).
+        """
+        location = execution_state.current_location_node_id if execution_state else None
+        if location is not None:
+            self._require_on_map(location, plan)
         loaded = self._load.execute(session_id, guest_ids, now)
         context = loaded.for_state()
         objective = self._build.resolve_group(
@@ -329,6 +346,19 @@ class PlannerQueries:
             progress=public_progress(outcome.execution_state, outcome.progress_source),
             context=_stamp(outcome.live_context, loaded.source, now),
         )
+
+    def _require_on_map(self, location: str, plan: Plan) -> None:
+        """``location`` must reach the plan's stops: the replan walks from it."""
+        others = [s.node_id for s in plan.stops if s.node_id != location]
+        if not others:
+            return
+        with open_deps(self._deps_factory) as deps:
+            try:
+                deps.routing.walk_minutes(location, others[0])
+            except RoutingNotFoundError as exc:
+                raise UnknownLocationError(
+                    f"The party's location {location!r} is not on the park map."
+                ) from exc
 
     def check_plan(
         self,

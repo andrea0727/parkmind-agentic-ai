@@ -16,6 +16,7 @@ import logging
 from pydantic import ValidationError
 
 from parkmind.services.use_cases.knowledge_queries import UnknownAttractionError
+from parkmind.services.use_cases.planner_queries import UnknownLocationError
 from parkmind.services.use_cases.planning_deps import (
     ContextUnavailableError,
     PlanningUnavailableError,
@@ -74,6 +75,10 @@ def to_tool_failure(tool_name: str, exc: Exception) -> ToolFailure:
         return exc
     if isinstance(exc, UnknownAttractionError):
         return ToolFailure.of(ToolErrorCode.NOT_FOUND, str(exc))
+    if isinstance(exc, UnknownLocationError):
+        return ToolFailure.of(
+            ToolErrorCode.INVALID_ARGUMENT, str(exc), details={"fields": [exc.field]}
+        )
     if isinstance(exc, ContextUnavailableError):
         logger.info("Tool %s: park data unavailable: %s", tool_name, exc)
         return ToolFailure.of(ToolErrorCode.UNAVAILABLE, str(exc), retryable=True)

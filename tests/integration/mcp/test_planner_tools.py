@@ -615,3 +615,24 @@ def test_a_closure_stamped_before_the_snapshot_still_counts() -> None:
     assert data["valid"] is True, data["failure"]
     assert closed not in _rides(data["plan"], after=REPLAN_AT)
     assert closed in data["diff"]["stops_removed"]
+
+
+def test_a_location_off_the_park_map_is_an_invalid_argument() -> None:
+    """Review #89 (4): the client's mistake, not an outage to retry."""
+    registry = Deps().registry()
+    plan = _built_plan(registry)
+    lost = factories.execution_state(
+        plan_id=plan["plan_id"],
+        completed_stop_ids=[plan["stops"][0]["node_id"]],
+        current_location_node_id="nowhere",
+        as_of=REPLAN_AT,
+    ).model_dump(mode="json")
+
+    result = call_tool(
+        registry,
+        "planner.replan",
+        _args(plan=plan, now=REPLAN_AT.isoformat(), execution_state=lost),
+    )
+
+    assert _rejected(result) == ["execution_state.current_location_node_id"]
+    assert result.structured_content["error"]["retryable"] is False
