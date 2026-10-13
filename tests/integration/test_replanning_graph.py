@@ -612,3 +612,76 @@ def test_the_state_tells_the_guests_what_changed(r) -> None:
     assert values["diff"] is not None
     assert values["explanation"]
     assert r.stop_node() in values["diff"].stops_removed
+
+
+# --- editing a replan (P0-32) ------------------------------------------------------------------
+
+
+def _optional_stop(plan: Any, *, besides: tuple[str, ...] = ()) -> str:
+    """An attraction of the plan that is not a must-do."""
+    return next(
+        s.node_id
+        for s in plan.stops
+        if s.kind is StopKind.ATTRACTION
+        and s.node_id not in ("id-tron", "id-space", *besides)
+    )
+
+
+def test_an_edited_replan_is_checked_again_and_proposed_against_the_active_plan(r) -> None:
+    before = r.active
+    r.send(_down(r.stop_node()))
+    [first] = r.pending()
+    dropped = _optional_stop(r.values()["candidate_plan"])
+
+    result = r.resume({"decision": "EDITED", "edit": {"remove": [dropped]}})
+
+    assert _interrupt(result)["kind"] == "plan_approval"
+    [second] = r.pending()
+    assert second.proposal_id != first.proposal_id
+    assert second.base_plan_id == before.plan_id
+    edited = r.values()
+    assert edited["check_result"].valid
+    assert dropped not in {s.node_id for s in edited["candidate_plan"].stops}
+    assert dropped in second.diff.stops_removed
+    status = {p.proposal_id: p.approval_status for p in r.proposals}
+    assert status[first.proposal_id] is ApprovalStatus.EDITED
+    assert r.active == before
+
+    r.resume({"decision": "APPROVED"})
+
+    assert r.active.plan_id == second.candidate_plan_id
+
+
+def test_a_reopened_proposal_can_be_edited(r) -> None:
+    """The reopened proposal carries the context of the run that proposed it; an edit
+    plans on freshly loaded data instead."""
+    r.send(_down(r.stop_node()))
+    noise = factories.event(
+        event_id="ev_noise",
+        type=EventType.ATTRACTION_DOWN,
+        attraction_id="id-not-in-plan-and-not-a-must-do",
+        timestamp=NOW + timedelta(minutes=2),
+    )
+    r.send(noise)
+    dropped = _optional_stop(r.values()["candidate_plan"])
+    r.h.events.clear()
+
+    result = r.resume({"decision": "EDITED", "edit": {"remove": [dropped]}})
+
+    assert _interrupt(result)["kind"] == "plan_approval"
+    assert r.h.events[:3] == ["resolve:EDITED", "load_context", "resolve_group"]
+    assert dropped not in {s.node_id for s in r.values()["candidate_plan"].stops}
+
+
+def test_a_stop_already_done_cannot_be_edited_out(r) -> None:
+    done = r.active.stops[0].node_id
+    r.deps.execution_states.save(
+        factories.execution_state(plan_id=r.active.plan_id, as_of=NOW, completed_stop_ids=[done])
+    )
+    r.send(_down(r.stop_node(1)))
+    [pending] = r.pending()
+
+    result = r.resume({"decision": "EDITED", "edit": {"remove": [done]}})
+
+    assert _interrupt(result)["error"]
+    assert [p.proposal_id for p in r.pending()] == [pending.proposal_id]

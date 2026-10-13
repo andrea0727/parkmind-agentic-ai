@@ -38,11 +38,16 @@ the top on resume):
   (or a bare bool). A user report that is low-confidence or touches a hard constraint
   is recorded and acted on only once the guests confirm it (section 36); dismissing it
   drops it without a trace.
-* ``plan_approval`` -- as in the initial planning graph.
+* ``plan_approval`` -- as in the initial planning graph. An ``EDITED`` decision
+  (section 36: "EDIT -> LOG BEHAVIOR -> RECHECK") goes back to ``load_context`` with
+  the edited constraints: the replan is built again from the active plan and the
+  execution state (a stop already done cannot be removed), checked against the
+  whole day and proposed again; the active plan stays until a proposal is approved.
 
 Known limits: REJECT's "update preferences" step is not implemented (the reason is
-stored on the proposal); EDIT is P0-32. After a replan finds no valid plan the events
-stay recorded, so a duplicate report does not retry it; a new event does.
+stored on the proposal and in the behavior log; P1-03). After a replan finds no valid
+plan the events stay recorded, so a duplicate report does not retry it; a new event
+does.
 """
 
 import logging
@@ -58,6 +63,7 @@ from parkmind.core.contracts import Event
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.elicitation_graph import StateNode
 from parkmind.graph.initial_planning_graph import (
+    EDIT_REENTRY,
     Clock,
     _guarded,
     _interrupt_for_approval,
@@ -439,7 +445,7 @@ def build_replanning_graph(
     def propose_plan(state: ParkMindState) -> ParkMindState:
         return _propose_replan(state, deps_factory=deps_factory, clock=clock)
 
-    def interrupt_approval(state: ParkMindState) -> ParkMindState:
+    def interrupt_approval(state: ParkMindState) -> Command[Any]:
         return _interrupt_for_approval(state, deps_factory=deps_factory, clock=clock)
 
     def routed(name: str, node: StateNode, destinations: tuple[str, ...]) -> None:
@@ -495,8 +501,9 @@ def build_replanning_graph(
         _guarded(cast(StateNode, propose_plan), then="interrupt_approval"),
         destinations=("interrupt_approval", END),
     )
-    graph.add_node("interrupt_approval", interrupt_approval)
+    graph.add_node(
+        "interrupt_approval", interrupt_approval, destinations=(EDIT_REENTRY, END)
+    )
 
     graph.add_edge(START, "load_plan")
-    graph.add_edge("interrupt_approval", END)
     return graph.compile(checkpointer=checkpointer or default_checkpointer())
