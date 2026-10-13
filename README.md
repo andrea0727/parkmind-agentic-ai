@@ -278,8 +278,16 @@ poetry run python scripts/run_monitor.py --no-collect   # detect on what is alre
 - **One event per closure.** Ids don't depend on the source, so the monitor and a
   guest reporting the same closure record one event (`event_dedup.py`). A closure
   the monitor sees again later is a new one (the reopening was missed, or the first
-  report was wrong). `BEHIND_SCHEDULE` is recorded once per late stop, when the
-  delay reaches 15 minutes, and only while the party's progress is being tracked.
+  report was wrong): more than 30 minutes after a monitor event, or more than 2 h
+  (`USER_EPISODE_WINDOW`, a starting point to tune with real data) after a guest's
+  report, since the provider can lag behind a guest. The cost: a wrong guest report
+  can hide a real closure the monitor sees within those 2 h.
+  `BEHIND_SCHEDULE` is recorded once per late stop, when the delay reaches 15
+  minutes, and only while the party's progress is being tracked. That one event is
+  final for the stop: if the guests reject or ignore the replan it proposes, the
+  same stop does not raise another one, however late the party gets. Until
+  something records `completed_stop_ids` (P0-34, #48), the event is not raised in
+  production.
 - **Confirmation first (§25, C10).** A doubtful guest report, or a fatigue report
   for a guest with a walking limit (or whose limit can't be read), is set aside
   until the guests confirm it; the rest of the batch goes on.
