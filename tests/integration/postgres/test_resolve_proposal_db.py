@@ -56,15 +56,25 @@ def deps(conn: psycopg.Connection):
     )
 
 
-def test_an_unseeded_party_decision_is_logged_per_guest(conn, deps) -> None:
+@pytest.mark.parametrize(
+    ("status", "reason", "decision"),
+    [
+        (ApprovalStatus.APPROVED, None, "ACCEPTED"),
+        (ApprovalStatus.REJECTED, RejectionReason.TOO_MUCH_WALKING, "REJECTED"),
+        (ApprovalStatus.EDITED, None, "EDITED"),
+    ],
+)
+def test_an_unseeded_party_decision_is_logged_per_guest(
+    conn, deps, status, reason, decision
+) -> None:
     _thread_with_a_pending_proposal(conn, "t1")
 
     ResolveProposalUseCase(factory_for(deps)).execute(
         "t1",
         "prop_t1",
-        ApprovalStatus.REJECTED,
+        status,
         at=NOW,
-        rejection_reason=RejectionReason.TOO_MUCH_WALKING,
+        rejection_reason=reason,
         guests=PARTY,
         attraction_ids=["a1"],
     )
@@ -72,8 +82,8 @@ def test_an_unseeded_party_decision_is_logged_per_guest(conn, deps) -> None:
     behavior = PostgresBehaviorLogRepository(conn)
     for guest_id in ("t1:g1", "t1:g2"):
         (entry,) = behavior.get(guest_id).entries
-        assert entry.decision == "REJECTED"
-        assert entry.rejection_reason is RejectionReason.TOO_MUCH_WALKING
+        assert entry.decision == decision
+        assert entry.rejection_reason is reason
         assert entry.attraction_ids == ["a1"]
     child = PostgresGuestRepository(conn).get("t1:g2")
     assert child is not None and child.role is GuestRole.CHILD and child.height_cm is None

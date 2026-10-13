@@ -82,14 +82,17 @@ class ResolveProposalUseCase:
         status: ApprovalStatus,
         *,
         at: datetime,
+        guests: Sequence[Guest],
         rejection_reason: RejectionReason | None = None,
-        guests: Sequence[Guest] = (),
         attraction_ids: Sequence[str] = (),
     ) -> Proposal:
-        """``attraction_ids`` is what the decision was about: the plan's attractions,
-        or for an edit what changed (section 23)."""
+        """``guests`` is the party (at least one: every decision is logged per guest);
+        ``attraction_ids`` is what the decision was about: the plan's attractions, or
+        for an edit what changed (section 23)."""
         if status not in _LOGGED:
             raise ValueError(f"{status.value} is not a decision")
+        if not guests:
+            raise ValueError("a decision is logged per guest: the party's guests are required")
         with open_deps(self._deps_factory) as deps, deps.transaction():
             stored = deps.proposals.get(proposal_id)
             if (
