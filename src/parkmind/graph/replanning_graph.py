@@ -54,6 +54,11 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
+from parkmind.agents.explain_agent import (
+    AnthropicNarrator,
+    PlanNarrator,
+    explain_grounded,
+)
 from parkmind.core.contracts import Event
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.elicitation_graph import StateNode
@@ -64,6 +69,7 @@ from parkmind.graph.initial_planning_graph import (
     _make_load_context_node,
     _make_resolve_group_node,
     _require_valid_candidate,
+    explained,
     park_clock,
 )
 from parkmind.graph.state import ParkMindState
@@ -374,7 +380,8 @@ def _make_diff_node() -> StateNode:
     return diff
 
 
-def _make_explain_node(deps_factory: DepsFactory) -> StateNode:
+def _make_explain_node(deps_factory: DepsFactory, narrator: PlanNarrator | None) -> StateNode:
+    """EXPLAIN (section 40, P0-31): why and what changed, grounded, else the template."""
     explainer = ExplainPlanUseCase(deps_factory)
     reasons = ReplanReasonUseCase(deps_factory)
 
@@ -386,12 +393,16 @@ def _make_explain_node(deps_factory: DepsFactory) -> StateNode:
             raise ValueError("a checked candidate plan and its diff are required")
         reason = reasons.execute(state.get("events") or [])
         constraints = state.get("constraints")
-        guests = constraints.guests if constraints is not None else []
-        return {
-            "explanation": explainer.execute_replan(
-                plan, check, reason=reason.text, diff=diff, guests=guests
-            )
-        }
+        prepared = explainer.prepare(
+            plan,
+            check,
+            guests=constraints.guests if constraints is not None else [],
+            must_do=constraints.must_do if constraints is not None else [],
+            objective=state.get("group_objective"),
+            reason=reason.text,
+            diff=diff,
+        )
+        return explained(plan, explain_grounded(narrator, prepared))
 
     return explain
 
@@ -432,8 +443,14 @@ def build_replanning_graph(
     *,
     deps_factory: DepsFactory = default_planning_deps,
     clock: Clock = park_clock,
+    narrator: PlanNarrator | None = None,
 ) -> Any:
-    """Compile the replanning graph. Nothing is opened here: ports are created per node."""
+    """Compile the replanning graph. Nothing is opened here: ports are created per node.
+
+    EXPLAIN uses ``narrator``, Claude by default; the template stands in for it
+    without a key or when its text is not grounded.
+    """
+    explain_with = narrator or AnthropicNarrator()
     graph = StateGraph(ParkMindState)
 
     def propose_plan(state: ParkMindState) -> ParkMindState:
@@ -487,7 +504,7 @@ def build_replanning_graph(
     )
     graph.add_node(
         "explain",
-        _guarded(_make_explain_node(deps_factory), then="propose_plan"),
+        _guarded(_make_explain_node(deps_factory, explain_with), then="propose_plan"),
         destinations=("propose_plan", END),
     )
     graph.add_node(
