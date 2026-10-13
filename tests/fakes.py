@@ -10,6 +10,9 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
+from parkmind.core.contracts.models import BehaviorEntry
+from parkmind.services.ports.behavior_log_repository import BehaviorLogRepository
+
 from parkmind.core.contracts import (
     ApprovalStatus,
     DataSource,
@@ -29,6 +32,19 @@ from parkmind.services.ports import (
     PlanImmutableError,
     SnapshotMeta,
 )
+
+
+class InMemoryBehaviorLogRepository(BehaviorLogRepository):
+    """Fake in-memory repository for behavior logs during testing."""
+
+    def __init__(self) -> None:
+        self.entries: list[tuple[str, BehaviorEntry]] = []
+
+    def append(self, guest_id: str, entry: BehaviorEntry) -> None:
+        self.entries.append((guest_id, entry))
+
+    def get_by_guest(self, guest_id: str) -> list[BehaviorEntry]:
+        return [entry for g_id, entry in self.entries if g_id == guest_id]
 
 
 class InMemoryIdMappingRepository:

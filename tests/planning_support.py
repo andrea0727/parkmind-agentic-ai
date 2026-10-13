@@ -7,6 +7,7 @@ from typing import Any
 
 from elicit_support import PARK_ID, FakeSessionStore, catalog
 from fakes import (
+    InMemoryBehaviorLogRepository,
     InMemoryEventRepository,
     InMemoryExecutionStateRepository,
     InMemoryIdMappingRepository,
@@ -117,7 +118,9 @@ def make_deps(
     knowledge: InMemoryKnowledgeStore | None = None,
     proposals: InMemoryProposalRepository | None = None,
     events: InMemoryEventRepository | None = None,
+    behavior: InMemoryBehaviorLogRepository | None = None
 ) -> PlanningDeps:
+    behavior_repo = behavior if behavior is not None else InMemoryBehaviorLogRepository()
     proposals = proposals if proposals is not None else InMemoryProposalRepository()
     plans = InMemoryPlanRepository(proposals)
     return PlanningDeps(
@@ -133,6 +136,7 @@ def make_deps(
         events=events if events is not None else InMemoryEventRepository(),
         execution_states=InMemoryExecutionStateRepository(plans),
         collector=collector,
+        behavior=behavior_repo,
     )
 
 
