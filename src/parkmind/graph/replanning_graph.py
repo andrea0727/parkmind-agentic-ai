@@ -68,6 +68,7 @@ from parkmind.core.contracts import Event
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.elicitation_graph import StateNode
 from parkmind.graph.initial_planning_graph import (
+    EDIT_CLEARED,
     EDIT_REENTRY,
     Clock,
     _guarded,
@@ -75,6 +76,7 @@ from parkmind.graph.initial_planning_graph import (
     _make_load_context_node,
     _make_resolve_group_node,
     _require_valid_candidate,
+    before_edit_update,
     explained,
     park_clock,
 )
@@ -322,6 +324,9 @@ def _make_replan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
                 lines.append(
                     f"- Must-dos that no longer fit: {', '.join(result.unmet_must_do)}"
                 )
+            restored = before_edit_update(state, lines)
+            if restored is not None:
+                return Command(update={**update, **restored}, goto="check_plan")
             update["messages"] = [AIMessage(content=_not_proposed(*lines))]
             return Command(update=update, goto=END)
         update["candidate_plan"] = result.plan
@@ -358,6 +363,9 @@ def _make_check_replan_node(deps_factory: DepsFactory) -> StateNode:
         if result.valid:
             return Command(update={"check_result": result}, goto="diff")
         reasons = [f"- {v.message}" for v in result.violations]
+        restored = before_edit_update(state, reasons)
+        if restored is not None:
+            return Command(update={"check_result": result, **restored}, goto="check_plan")
         return Command(
             update={
                 "check_result": result,
@@ -441,7 +449,7 @@ def _propose_replan(
         diff=diff,
         triggering_event_id=reason.triggering_event_id,
     )
-    return propose_plan_change(state, proposal)
+    return {**propose_plan_change(state, proposal), **EDIT_CLEARED}
 
 
 def build_replanning_graph(
@@ -502,7 +510,7 @@ def build_replanning_graph(
         destinations=("replan", END),
     )
     routed("replan", _make_replan_node(deps_factory, clock), ("check_plan",))
-    routed("check_plan", _make_check_replan_node(deps_factory), ("diff",))
+    routed("check_plan", _make_check_replan_node(deps_factory), ("diff", "check_plan"))
     graph.add_node(
         "diff",
         _guarded(_make_diff_node(), then="explain"),

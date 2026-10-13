@@ -28,7 +28,12 @@ from planning_support import (
     snapshot_context,
 )
 
-from parkmind.core.contracts import RuleId
+from parkmind.core.contracts import (
+    AttractionStatus,
+    CheckResult,
+    ConstraintViolation,
+    RuleId,
+)
 from parkmind.graph import initial_planning_graph as ipg
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.state import ParkMindState
@@ -540,6 +545,9 @@ def test_an_edit_is_checked_again_and_proposed_as_a_new_pending_proposal(monkeyp
     assert edited["constraints"].avoid == edit["remove"]
     assert edited["constraints"].constraints_version == first["constraints"].constraints_version + 1
     assert edited["approval"] == "PENDING"
+    # Proposed: nothing of the edit is left to fall back on later.
+    assert edited.get("plan_before_edit") is None
+    assert edited.get("constraints_before_edit") is None
     status = {p.proposal_id: p.approval_status.value for p in h.proposals}
     assert status == {first["proposal"].proposal_id: "EDITED", edited["proposal"].proposal_id: "PENDING"}
     assert h.deps.plans.get_active("t1") is None
@@ -648,3 +656,201 @@ def test_an_ungrounded_narration_falls_back_to_the_template(monkeypatch):
     assert "999" not in proposal.explanation
     assert re.match(r"\d+ stops, ", proposal.explanation)
     assert proposal.provenance.prompt_versions["explain"] == "template"
+
+
+def _fail_plans_without(monkeypatch: pytest.MonkeyPatch, node_id: str) -> None:
+    """The checker refuses any plan that lacks ``node_id`` (an edit that cannot fit)."""
+    original = ipg.CheckPlanUseCase.execute
+
+    def check(this: Any, **kwargs: Any) -> Any:
+        result = original(this, **kwargs)
+        if node_id in {s.node_id for s in kwargs["plan"].stops}:
+            return result
+        violation = ConstraintViolation(rule=RuleId.MUST_DO, message="the edit does not fit")
+        return CheckResult(valid=False, violations=[violation])
+
+    monkeypatch.setattr(ipg.CheckPlanUseCase, "execute", check)
+
+
+def test_an_edit_that_cannot_be_planned_gives_back_the_plan_before_it(monkeypatch):
+    h = _Harness(monkeypatch)
+    h.confirm()
+    first = h.state()
+    edit = _edit_of(first["candidate_plan"])
+    _fail_plans_without(monkeypatch, edit["remove"][0])
+    h.events.clear()
+
+    result = h.graph.invoke(Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG)
+
+    assert result["__interrupt__"][0].value["kind"] == "plan_approval"
+    assert h.events == [
+        "resolve:EDITED",
+        "load_context",
+        "resolve_group",
+        "build_plan",
+        "check",
+        "check",
+        "explain",
+        "propose",
+    ]
+    offered = h.state()
+    assert offered["candidate_plan"].plan_id == first["candidate_plan"].plan_id
+    assert offered["constraints"] == first["constraints"]
+    assert offered["check_result"].valid
+    assert offered.get("plan_before_edit") is None
+    assert offered.get("constraints_before_edit") is None
+    status = {p.proposal_id: p.approval_status.value for p in h.proposals}
+    assert status == {
+        first["proposal"].proposal_id: "EDITED",
+        offered["proposal"].proposal_id: "PENDING",
+    }
+    said = [m.content for m in offered["messages"]]
+    assert any(ipg.EDIT_DID_NOT_FIT_MESSAGE in m and "the edit does not fit" in m for m in said)
+
+    h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
+
+    assert h.deps.plans.get_active("t1").plan_id == first["candidate_plan"].plan_id
+
+
+def test_when_the_plan_before_the_edit_no_longer_passes_nothing_is_proposed(monkeypatch):
+    h = _Harness(monkeypatch)
+    h.confirm()
+    edit = _edit_of(h.state()["candidate_plan"])
+
+    def refuse(this: Any, **kwargs: Any) -> Any:
+        violation = ConstraintViolation(rule=RuleId.MUST_DO, message="nothing fits")
+        return CheckResult(valid=False, violations=[violation])
+
+    monkeypatch.setattr(ipg.CheckPlanUseCase, "execute", refuse)
+
+    result = h.graph.invoke(Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG)
+
+    assert "__interrupt__" not in result
+    final = h.state()
+    assert final["candidate_plan"] is None
+    assert final.get("plan_before_edit") is None
+    assert [p.approval_status.value for p in h.proposals] == ["EDITED"]
+    assert h.deps.plans.get_active("t1") is None
+
+
+def test_a_closed_attraction_added_is_planned_as_an_unmet_must_do(monkeypatch):
+    """Adding a ride that is down is not a failed edit: it is named as not fitting today."""
+    h = _Harness(monkeypatch)
+    h.confirm()
+    removed = _edit_of(h.state()["candidate_plan"])["remove"]
+    h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": {"remove": removed}}), config=CONFIG
+    )
+    live = snapshot_context(snapshot_id="snap_down", retrieved_at=NOW - timedelta(minutes=1))
+    down = {node_id: AttractionStatus.DOWN for node_id in removed}
+    seed_snapshot(h.deps.snapshots, live.model_copy(update={"statuses": {**live.statuses, **down}}))
+
+    h.graph.invoke(Command(resume={"decision": "EDITED", "edit": {"add": removed}}), config=CONFIG)
+
+    edited = h.state()
+    assert edited["check_result"].valid
+    assert edited["candidate_plan"].unmet_must_do == removed
+    assert edited["approval"] == "PENDING"
+
+
+def test_a_second_edit_builds_on_the_first(monkeypatch):
+    h = _Harness(monkeypatch)
+    h.confirm()
+    first = h.state()
+    optional = [
+        s.node_id
+        for s in first["candidate_plan"].stops
+        if s.kind.value == "ATTRACTION" and s.node_id not in ("id-tron", "id-space")
+    ]
+    h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": {"remove": optional[:1]}}), config=CONFIG
+    )
+    second = h.state()
+
+    h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": {"remove": optional[1:2]}}), config=CONFIG
+    )
+
+    third = h.state()
+    assert third["constraints"].avoid == optional[:2]
+    assert third["constraints"].constraints_version == first["constraints"].constraints_version + 2
+    guest = first["constraints"].guests[0].guest_id
+    ids = sorted(e.entry_id for e in h.deps.behavior.get(f"t1:{guest}").entries)
+    assert ids == sorted(
+        f"{p['proposal'].proposal_id}:EDITED" for p in (first, second)
+    )
+
+
+def test_a_refused_edit_can_be_followed_by_a_valid_one(monkeypatch):
+    h = _Harness(monkeypatch)
+    h.confirm()
+    edit = _edit_of(h.state()["candidate_plan"])
+    h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": {"remove": ["id-not-in-the-plan"]}}),
+        config=CONFIG,
+    )
+
+    result = h.graph.invoke(Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG)
+
+    assert "error" not in result["__interrupt__"][0].value
+    assert h.state()["constraints"].avoid == edit["remove"]
+    assert [p.approval_status.value for p in h.proposals] == ["EDITED", "PENDING"]
+
+
+def test_missing_park_data_fails_the_run_and_a_retry_applies_the_stored_answer(monkeypatch):
+    """Replay-safe: an outage is never recorded as a refused answer. The run raises,
+    LangGraph keeps the answer, and retrying the run (no new input) applies it.
+
+    The answer is keyed by its interrupt id: inside the planning subgraph a plain
+    resume value kept from a failed run would also answer the next interrupt.
+    """
+    h = _Harness(monkeypatch)
+    pending = h.confirm()["__interrupt__"][0]
+    edit = _edit_of(h.state()["candidate_plan"])
+    original = ipg.ApplyEditUseCase.execute
+    calls = {"n": 0}
+
+    def flaky(this: Any, *args: Any, **kwargs: Any) -> Any:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ipg.PlanningUnavailableError("catalog unavailable")
+        return original(this, *args, **kwargs)
+
+    monkeypatch.setattr(ipg.ApplyEditUseCase, "execute", flaky)
+
+    answer = {pending.id: {"decision": "EDITED", "edit": edit}}
+    with pytest.raises(ipg.PlanningUnavailableError):
+        h.graph.invoke(Command(resume=answer), config=CONFIG)
+    assert [p.approval_status.value for p in h.proposals] == ["PENDING"]
+
+    result = h.graph.invoke(None, config=CONFIG)
+
+    assert result["__interrupt__"][0].value["kind"] == "plan_approval"
+    assert "error" not in result["__interrupt__"][0].value
+    assert h.state()["constraints"].avoid == edit["remove"]
+    assert [p.approval_status.value for p in h.proposals] == ["EDITED", "PENDING"]
+
+
+@pytest.mark.parametrize("decision", ["APPROVED", "REJECTED"])
+def test_an_edit_sent_with_another_decision_is_refused(monkeypatch, decision):
+    h = _Harness(monkeypatch)
+    h.confirm()
+
+    again = h.graph.invoke(
+        Command(resume={"decision": decision, "edit": {"remove": ["id-tron"]}}), config=CONFIG
+    )
+
+    assert "EDITED" in again["__interrupt__"][0].value["error"]
+    assert [p.approval_status.value for p in h.proposals] == ["PENDING"]
+
+
+def test_a_rejection_reason_is_ignored_on_approval(monkeypatch):
+    h = _Harness(monkeypatch)
+    h.confirm()
+
+    result = h.graph.invoke(
+        Command(resume={"decision": "APPROVED", "rejection_reason": "BECAUSE"}), config=CONFIG
+    )
+
+    assert "__interrupt__" not in result
+    assert h.deps.plans.get_active("t1") is not None

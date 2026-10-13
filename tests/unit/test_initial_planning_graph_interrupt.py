@@ -31,6 +31,7 @@ def _state_with_candidate() -> ParkMindState:
     return {
         "thread_id": "thread_1",
         "messages": [],
+        "constraints": factories.party_constraints(),
         "candidate_plan": factories.plan(),
         "check_result": CheckResult(valid=True),
         "explanation": "Fits the party's limits.",
@@ -184,6 +185,13 @@ def test_resuming_with_rejected_discards_candidate_without_activating(monkeypatc
     assert result.get("current_plan") is None
     assert result["approval"] == "REJECTED"
     assert result["rejection_reason"] == RejectionReason.TOO_MUCH_WALKING
+
+
+def test_a_decision_without_the_party_is_refused_before_the_interrupt():
+    state = {**_state_with_candidate(), "proposal": factories.proposal(), "constraints": None}
+
+    with pytest.raises(ValueError, match="party's guests"):
+        ipg._interrupt_for_approval(state)
 
 
 def test_build_initial_planning_graph_uses_checkpoint_safe_serde():

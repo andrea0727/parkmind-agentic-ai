@@ -648,6 +648,8 @@ def test_an_edited_replan_is_checked_again_and_proposed_against_the_active_plan(
     assert second.base_plan_id == before.plan_id
     edited = r.values()
     assert edited["check_result"].valid
+    assert edited.get("plan_before_edit") is None
+    assert edited.get("constraints_before_edit") is None
     assert dropped not in {s.node_id for s in edited["candidate_plan"].stops}
     assert dropped in second.diff.stops_removed
     status = {p.proposal_id: p.approval_status for p in r.proposals}
@@ -705,3 +707,37 @@ def test_the_replan_narrator_explains_from_the_reason_and_the_changes(monkeypatc
     assert proposal.explanation == "Your plan changed because a ride closed."
     payload = json.loads(narrator.payloads[0])
     assert payload["reason"] and payload["changes"] is not None
+
+
+def test_an_edited_replan_that_cannot_be_planned_gives_back_the_replan_before_it(
+    r, monkeypatch
+) -> None:
+    before = r.active
+    r.send(_down(r.stop_node()))
+    [first] = r.pending()
+    original = r.values()["candidate_plan"]
+    constraints = r.values()["constraints"]
+    dropped = _optional_stop(original)
+    check = rg.CheckPlanUseCase.execute_replan
+
+    def refuse_without_dropped(this: Any, **kwargs: Any) -> Any:
+        result = check(this, **kwargs)
+        if dropped in {s.node_id for s in kwargs["plan"].stops}:
+            return result
+        violation = ConstraintViolation(rule=RuleId.MUST_DO, message="the edit does not fit")
+        return result.model_copy(update={"valid": False, "violations": [violation]})
+
+    monkeypatch.setattr(rg.CheckPlanUseCase, "execute_replan", refuse_without_dropped)
+
+    result = r.resume({"decision": "EDITED", "edit": {"remove": [dropped]}})
+
+    assert _interrupt(result)["kind"] == "plan_approval"
+    [second] = r.pending()
+    assert second.proposal_id != first.proposal_id
+    assert second.candidate_plan_id == original.plan_id
+    offered = r.values()
+    assert offered["constraints"] == constraints
+    assert offered.get("plan_before_edit") is None
+    said = [str(m.content) for m in offered["messages"]]
+    assert any(ipg.EDIT_DID_NOT_FIT_MESSAGE in m and "the edit does not fit" in m for m in said)
+    assert r.active == before

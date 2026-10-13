@@ -80,6 +80,10 @@ class ParkMindState(TypedDict, total=False):
     # Human Decision
     approval: Literal["PENDING", "APPROVED", "REJECTED", "EDITED"] | None
     rejection_reason: RejectionReason | None
+    # While an edit is re-planned (P0-32): what the guests had before it, re-offered
+    # (checked again) if no valid plan fits the edit; cleared once anything is proposed.
+    constraints_before_edit: PartyConstraints | None
+    plan_before_edit: Plan | None
 
     # Provenance & Learning
     provenance: list[Provenance]
