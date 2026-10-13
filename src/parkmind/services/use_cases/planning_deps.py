@@ -98,8 +98,8 @@ class PlanningDeps:
     proposals: ProposalRepository
     events: EventRepository
     execution_states: ExecutionStateRepository
-    collector: SnapshotCollecting | None = None
     behavior: BehaviorLogRepository
+    collector: SnapshotCollecting | None = None
     """``None`` plans from the latest stored snapshot only (no provider call)."""
     transaction: Callable[[], AbstractContextManager[Any]] = field(default=nullcontext)
     """One atomic unit over the repositories (a DB transaction by default)."""

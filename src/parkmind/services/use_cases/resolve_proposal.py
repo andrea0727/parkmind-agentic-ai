@@ -78,7 +78,7 @@ class ResolveProposalUseCase:
                     proposal_id, current.approval_status if current else None
                 ) from exc
             
-            # Solo activa si es explícitamente APPROVED
+            # Only activated if explicitly APPROVED
             if status is ApprovalStatus.APPROVED:
                 deps.plans.activate(thread_id, proposal.candidate_plan_id, at=at)
                 if proposal.base_plan_id != proposal.candidate_plan_id:
@@ -90,27 +90,35 @@ class ResolveProposalUseCase:
                             )
                         )
             
-            # Registrar el evento en el comportamiento (Behavior Log)
-            event_type_map = {
-                ApprovalStatus.APPROVED: BehaviorEventType.PROPOSAL_ACCEPTED,
-                ApprovalStatus.REJECTED: BehaviorEventType.PROPOSAL_REJECTED,
-                ApprovalStatus.EDITED: BehaviorEventType.PROPOSAL_EDITED,
-            }
-            event_type = event_type_map[status]
+            # Record the event in the behavior (Behavior Log)
+            if status in (ApprovalStatus.APPROVED, ApprovalStatus.REJECTED, ApprovalStatus.EDITED):
+                event_type_map = {
+                    ApprovalStatus.APPROVED: BehaviorEventType.PROPOSAL_ACCEPTED,
+                    ApprovalStatus.REJECTED: BehaviorEventType.PROPOSAL_REJECTED,
+                    ApprovalStatus.EDITED: BehaviorEventType.PROPOSAL_EDITED,
+                }
+                decision_map = {
+                    ApprovalStatus.APPROVED: "ACCEPTED",
+                    ApprovalStatus.REJECTED: "REJECTED",
+                    ApprovalStatus.EDITED: "EDITED",
+                }
+                
+                event_type = event_type_map[status]
+                decision_str = decision_map[status]
 
-            # Si no se pasan guest_ids explícitos, usar thread_id como id de sujeto por defecto
+            # If no explicit guest_ids are passed, use thread_id as the default subject id
             target_guests = guest_ids if guest_ids else [thread_id]
 
             for guest_id in target_guests:
-                entry = BehaviorEntry(
-                    entry_id=f"beh_{proposal_id}_{status.value}_{guest_id}",
-                    event_type=event_type,
-                    proposal_id=proposal_id,
-                    plan_id=proposal.candidate_plan_id,
-                    decision=status.value,
-                    rejection_reason=rejection_reason,
-                    timestamp=at,
-                )
-                deps.behavior.append(guest_id, entry)
+                    entry = BehaviorEntry(
+                        entry_id=f"beh_{proposal_id}_{status.value}_{guest_id}",
+                        event_type=event_type,
+                        proposal_id=proposal_id,
+                        plan_id=proposal.candidate_plan_id,
+                        decision=decision_str,
+                        rejection_reason=rejection_reason,
+                        timestamp=at,
+                    )
+                    deps.behavior.append(guest_id, entry)
 
         return proposal
