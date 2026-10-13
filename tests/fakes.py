@@ -13,8 +13,10 @@ from typing import Any
 from parkmind.core.contracts import (
     ApprovalStatus,
     DataSource,
+    Event,
     LiveContext,
     Plan,
+    PlanExecutionState,
     Proposal,
     RejectionReason,
 )
@@ -213,3 +215,45 @@ class InMemoryProposalRepository:
         for proposal_id in ids:
             self.resolve(proposal_id, ApprovalStatus.SUPERSEDED, at=at)
         return ids
+
+
+class InMemoryEventRepository:
+    """EventRepository: idempotent on (thread, event_id), listed by timestamp then id."""
+
+    def __init__(self) -> None:
+        self.rows: dict[tuple[str, str], Event] = {}
+
+    def record(self, thread_id: str, event: Event) -> bool:
+        key = (thread_id, event.event_id)
+        if key in self.rows:
+            return False
+        self.rows[key] = event
+        return True
+
+    def list_for_thread(self, thread_id: str, *, since: datetime | None = None) -> list[Event]:
+        events = [
+            e
+            for (t, _), e in self.rows.items()
+            if t == thread_id and (since is None or e.timestamp >= since)
+        ]
+        return sorted(events, key=lambda e: (e.timestamp, e.event_id))
+
+
+class InMemoryExecutionStateRepository:
+    """ExecutionStateRepository: keeps the newest ``as_of`` per plan."""
+
+    def __init__(self, plans: "InMemoryPlanRepository | None" = None) -> None:
+        self._plans = plans
+        self.rows: dict[str, PlanExecutionState] = {}
+
+    def save(self, state: PlanExecutionState) -> bool:
+        if self._plans is not None and state.plan_id not in self._plans.plans:
+            raise NotFoundError("plan does not exist")
+        stored = self.rows.get(state.plan_id)
+        if stored is not None and stored.as_of > state.as_of:
+            return False
+        self.rows[state.plan_id] = state
+        return True
+
+    def get(self, plan_id: str) -> PlanExecutionState | None:
+        return self.rows.get(plan_id)

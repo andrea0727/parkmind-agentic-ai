@@ -413,21 +413,29 @@ class Event(ParkMindBaseModel):
     confidence: float = Field(ge=0, le=1)
     timestamp: datetime
     requires_replan: bool | None = None  # Set by EventPolicy
-    delta_minutes: int | None = None  # Minutes of impact (e.g., wait time increase)
-    minutes_behind: int | None = None  # How far behind schedule
-    affected_hours: float | None = None  # Estimated hours of visitor impact
+    delta_minutes: float | None = None  # WAIT_SPIKE: wait increase [C23]
+    minutes_behind: float | None = None  # BEHIND_SCHEDULE [C23]
+    affected_hours: list[datetime] | None = None  # RAIN_INCOMING: hour starts [C23]
 
     @model_validator(mode="after")
     def validate_event_fields(self) -> "Event":
-        """Validate event-type-specific fields."""
-        if (
-            self.type in (EventType.ATTRACTION_DOWN, EventType.WAIT_SPIKE)
-            and not self.attraction_id
-        ):
-            raise ValueError(f"{self.type} requires attraction_id")
-        if self.type == EventType.GUEST_FATIGUE and not self.guest_id:
-            raise ValueError(f"{self.type} requires guest_id")
+        """Each type carries the typed field its policy reads (§33: no free dict)."""
+        required = _EVENT_REQUIRED_FIELDS.get(self.type, ())
+        for name in required:
+            if getattr(self, name) in (None, []):
+                raise ValueError(f"{self.type.value} requires {name}")
         return self
+
+
+_EVENT_REQUIRED_FIELDS: dict[EventType, tuple[str, ...]] = {
+    EventType.ATTRACTION_DOWN: ("attraction_id",),
+    EventType.ATTRACTION_AVAILABLE: ("attraction_id",),
+    EventType.WAIT_SPIKE: ("attraction_id", "delta_minutes"),
+    EventType.RAIN_INCOMING: ("affected_hours",),
+    EventType.BEHIND_SCHEDULE: ("minutes_behind",),
+    EventType.GUEST_FATIGUE: ("guest_id",),
+    EventType.PARTY_RELOCATED: ("location_node_id",),
+}
 
 
 class Proposal(ParkMindBaseModel):

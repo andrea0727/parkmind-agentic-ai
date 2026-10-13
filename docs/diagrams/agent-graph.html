@@ -217,12 +217,12 @@ const NODES=[
  const F='graph/replanning_graph.py';
  const STUB='Target state machine (§36). <code>build_replanning_graph()</code> raises <code>NotImplementedError</code>; commented out in agent.py and not listed in langgraph.json';
  const SEQ='Planned sequence (§36): monitor event or user report → interpret → schema validate → confirm → apply execution updates → event policy → load context → resolve group objective → replan → check plan → plan diff → explain → propose → interrupt → human decision';
- const STUBS='EventDetector, Replanner, MonitorEvents and ReplanUseCase are stubs; REPLAN and ReplanUseCase stop being stubs once the Replanner (#83) merges';
+ const STUBS='EventDetector, EventPolicy, MonitorEvents and HandleEvents are implemented (P0-33); Replanner and ReplanUseCase stop being stubs once the Replanner (#83) merges';
  const mk=(id,title,sub,cx,cy,w,h,notes=[],kind='target')=>({id,kind,...R(cx,cy,w,h),title,sub,
   dock:{file:F,notes:[STUB,SEQ,...notes,STUBS]}});
  const r1=975,r2=1085;
  return [
-  mk('rmon','MONITOR EVENT','event_detector (stub)',920,890,170,44,['Typed events from the monitor skip interpret / validate / confirm and enter at the execution-updates step']),
+  mk('rmon','MONITOR EVENT','event_detector (P0-33)',920,890,170,44,['Typed events from the monitor skip interpret / validate / confirm and enter at the execution-updates step']),
   mk('rusr','USER REPORT','free text',120,r1,160,56,['A guest reports something in chat (e.g. a closure or a relocation)']),
   mk('rint','INTERPRET','LLM → typed Event',320,r1,160,56,['The LLM only proposes a typed Event; it never changes the plan','A change of constraint goes back to ELICIT']),
   mk('rsch','SCHEMA VALIDATE','closed schema',520,r1,160,56,['The typed Event is validated against a closed schema before anything else runs']),
@@ -427,7 +427,7 @@ const ES={
 "requires_replan": "requires_replan",
 "fails": "falla",
 "Planned sequence (§36): monitor event or user report → interpret → schema validate → confirm → apply execution updates → event policy → load context → resolve group objective → replan → check plan → plan diff → explain → propose → interrupt → human decision": "Secuencia planificada (§36): evento del monitor o reporte del usuario → interpretar → validar esquema → confirmar → aplicar actualizaciones de ejecución → política de eventos → cargar contexto → resolver objetivo del grupo → replanificar → verificar plan → diff del plan → explicar → proponer → interrupt → decisión humana",
-"EventDetector, Replanner, MonitorEvents and ReplanUseCase are stubs; REPLAN and ReplanUseCase stop being stubs once the Replanner (#83) merges": "EventDetector, Replanner, MonitorEvents y ReplanUseCase son stubs; REPLAN y ReplanUseCase dejan de serlo cuando se integre el Replanner (#83)",
+"EventDetector, EventPolicy, MonitorEvents and HandleEvents are implemented (P0-33); Replanner and ReplanUseCase stop being stubs once the Replanner (#83) merges": "EventDetector, EventPolicy, MonitorEvents y HandleEvents están implementados (P0-33); Replanner y ReplanUseCase dejan de ser stubs cuando se integre el Replanner (#83)",
 "Typed events from the monitor skip interpret / validate / confirm and enter at the execution-updates step": "Los eventos tipados del monitor se saltan interpretar / validar / confirmar y entran en el paso de actualizaciones de ejecución",
 "A guest reports something in chat (e.g. a closure or a relocation)": "Un visitante reporta algo en el chat (p. ej. un cierre o un traslado)",
 "The LLM only proposes a typed Event; it never changes the plan": "El LLM solo propone un Event tipado; nunca cambia el plan",
@@ -557,7 +557,7 @@ const ES={
 "no plan, nothing proposed": "sin plan, nada propuesto",
 "Any <code>PlanningUnavailableError</code> raised inside a guarded node ends the stage with a message, not an exception": "Cualquier <code>PlanningUnavailableError</code> lanzado dentro de un nodo protegido termina la etapa con un mensaje, no con una excepción",
 "Guarded: load_context, resolve_group, build_plan, check_plan, explain, propose_plan. Not guarded: no_valid_plan, interrupt_approval and the elicitation nodes": "Protegidos: load_context, resolve_group, build_plan, check_plan, explain, propose_plan. No protegidos: no_valid_plan, interrupt_approval y los nodos de elicitación",
-"event_detector (stub)": "event_detector (stub)",
+"event_detector (P0-33)": "event_detector (P0-33)",
 "policy": "política",
 "reuse": "reutiliza",
 "Replanner (stub)": "Replanner (stub)",

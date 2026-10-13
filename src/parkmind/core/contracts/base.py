@@ -198,4 +198,5 @@ class EventThresholds(ParkMindBaseModel):
     walking_overrun_minutes: float = Field(ge=0, default=10)  # minutes over daily limit
     fatigue_threshold: float = Field(
         ge=0, le=1, default=0.7
-    )  # confidence level for GUEST_FATIGUE to require replan
+    )  # min confidence of a user GUEST_FATIGUE before it needs confirmation (§25 [C10]);
+    # confidence never sets requires_replan

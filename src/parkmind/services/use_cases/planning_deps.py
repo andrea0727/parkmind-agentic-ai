@@ -24,6 +24,8 @@ from parkmind.services.clients.knowledge import magic_kingdom_knowledge_store
 from parkmind.services.clients.open_meteo_client import OpenMeteoClient
 from parkmind.services.clients.postgres import (
     PostgresAttractionRepository,
+    PostgresEventRepository,
+    PostgresExecutionStateRepository,
     PostgresIdMappingRepository,
     PostgresPlanRepository,
     PostgresProposalRepository,
@@ -36,6 +38,8 @@ from parkmind.services.clients.themeparks_client import ThemeParksClient
 from parkmind.services.clients.themeparks_errors import ThemeParksClientError
 from parkmind.services.ports import (
     AttractionRepository,
+    EventRepository,
+    ExecutionStateRepository,
     IdMappingRepository,
     KnowledgeStore,
     PlanRepository,
@@ -89,10 +93,12 @@ class PlanningDeps:
     sessions: SessionStore
     plans: PlanRepository
     proposals: ProposalRepository
+    events: EventRepository
+    execution_states: ExecutionStateRepository
     collector: SnapshotCollecting | None = None
     """``None`` plans from the latest stored snapshot only (no provider call)."""
     transaction: Callable[[], AbstractContextManager[Any]] = field(default=nullcontext)
-    """One atomic unit over ``plans`` and ``proposals`` (a DB transaction by default)."""
+    """One atomic unit over the repositories (a DB transaction by default)."""
     park_data: ParkDataSource | None = None
     """Fetches (and caches in ``attractions``) a catalog or schedule the database lacks."""
 
@@ -101,9 +107,9 @@ DepsFactory = Callable[[], AbstractContextManager[PlanningDeps]]
 
 
 @contextmanager
-def default_planning_deps() -> Iterator[PlanningDeps]:
+def default_planning_deps(database_url: str | None = None) -> Iterator[PlanningDeps]:
     with ExitStack() as stack:
-        conn = stack.enter_context(connect())
+        conn = stack.enter_context(connect(database_url))
         parks = stack.enter_context(ThemeParksClient(MAGIC_KINGDOM_PARK_ID))
         weather = stack.enter_context(OpenMeteoClient())
         snapshots = PostgresSnapshotRepository(conn)
@@ -118,6 +124,8 @@ def default_planning_deps() -> Iterator[PlanningDeps]:
             sessions=session_store(conn),
             plans=PostgresPlanRepository(conn),
             proposals=PostgresProposalRepository(conn),
+            events=PostgresEventRepository(conn),
+            execution_states=PostgresExecutionStateRepository(conn),
             collector=SnapshotCollector(parks, weather, snapshots, id_mappings),
             transaction=lambda: conn.transaction(),
             park_data=parks,
