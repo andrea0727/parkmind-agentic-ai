@@ -83,3 +83,18 @@ forbidden_modules =
     parkmind.services.clients
 # Direct-import boundary only: see graph-tools-forbidden-imports above.
 allow_indirect_imports = true
+
+[importlinter:contract:api-forbidden-imports]
+name = api calls the Conversation port and use_cases only, never planner, graph, agents, tools or clients
+type = forbidden
+source_modules =
+    parkmind.api
+forbidden_modules =
+    parkmind.services.planning
+    parkmind.services.personalization
+    parkmind.services.clients
+    parkmind.graph
+    parkmind.agents
+    parkmind.tools
+# Direct-import boundary only: see graph-tools-forbidden-imports above.
+allow_indirect_imports = true

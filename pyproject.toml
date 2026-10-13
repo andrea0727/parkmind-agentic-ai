@@ -29,6 +29,8 @@ langgraph-checkpoint-postgres = "^3.1.2"
 alembic = "^1.20.0"
 mcp = "~2.3"
 fastembed = "~0.9"
+fastapi = "^0.143.0"
+uvicorn = {extras = ["standard"], version = "^0.54.0"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0"
@@ -36,6 +38,7 @@ pytest-cov = ">=5.0"
 ruff = ">=0.6"
 mypy = "^2.3.1"
 import-linter = "^2.15"
+httpx = "^0.28.1"
 
 [tool.mypy]
 python_version = "3.12"
