@@ -32,7 +32,7 @@ def test_session_store_uses_the_process_wide_memory():
 
 def test_intake_and_planning_deps_build_their_stores_on_the_same_memory(monkeypatch):
     monkeypatch.setattr(accessibility_intake, "connect", _Conn)
-    monkeypatch.setattr(planning_deps, "connect", _Conn)
+    monkeypatch.setattr(planning_deps, "connect", lambda url=None: _Conn())
     for name in (
         "ThemeParksClient",
         "OpenMeteoClient",

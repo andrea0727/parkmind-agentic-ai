@@ -54,7 +54,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from parkmind.agents.elicit_agent import GuestInfoExtractor
-from parkmind.core.contracts import PARK_TZ, ApprovalStatus, RejectionReason, ExplainRequest
+from parkmind.core.contracts import PARK_TZ, ApprovalStatus, RejectionReason
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.elicitation_graph import (
     StateNode,
@@ -77,13 +77,25 @@ from parkmind.services.use_cases.planning_deps import (
 )
 from parkmind.services.use_cases.propose_plan import ProposePlanUseCase
 from parkmind.services.use_cases.resolve_attraction_names import AttractionNameResolver
-from parkmind.services.use_cases.resolve_proposal import ResolveProposalUseCase
+from parkmind.services.use_cases.resolve_proposal import (
+    ProposalNoLongerPendingError,
+    ResolveProposalUseCase,
+)
 
 logger = logging.getLogger(__name__)
 
 Clock = Callable[[], datetime]
 
 APPROVAL_INTERRUPT_KIND = "plan_approval"
+_SUPERSEDED = (
+    "Something in the park changed while you were deciding, so this proposal was "
+    "set aside and nothing was activated."
+)
+_ASK_AGAIN = "Ask me for a new plan and I'll build it from the latest park information."
+SUPERSEDED_MESSAGE = f"{_SUPERSEDED} {_ASK_AGAIN}"
+SUPERSEDED_KEEPS_PLAN_MESSAGE = (
+    f"{_SUPERSEDED} Your current plan stays as it was. {_ASK_AGAIN}"
+)
 UNAVAILABLE_MESSAGE = (
     "I couldn't put a plan together right now because some of the park information "
     "I need isn't available. Nothing was proposed. Please try again in a few minutes."
@@ -194,8 +206,8 @@ def _make_build_plan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
     return build_plan
 
 
-def _make_check_plan_node(_deps_factory: DepsFactory, clock: Clock) -> StateNode:
-    use_case = CheckPlanUseCase()
+def _make_check_plan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
+    use_case = CheckPlanUseCase(deps_factory)
 
     def check_plan(state: ParkMindState) -> dict[str, Any]:
         ensure_confirmed(state)
@@ -232,32 +244,17 @@ def _no_valid_plan(state: ParkMindState) -> dict[str, Any]:
     return {"messages": [AIMessage(content="\n".join(lines))], "candidate_plan": None}
 
 
-def _make_explain_node(_deps_factory: DepsFactory) -> StateNode:
-    use_case = ExplainPlanUseCase()
+def _make_explain_node(deps_factory: DepsFactory) -> StateNode:
+    use_case = ExplainPlanUseCase(deps_factory)
 
     def explain(state: ParkMindState) -> dict[str, Any]:
         plan = state.get("candidate_plan")
         check = state.get("check_result")
-        
         if plan is None or check is None:
             raise ValueError("a checked candidate plan is required")
-            
         constraints = state.get("constraints")
-        live_context = state.get("live_context")
-        
-        request = ExplainRequest(
-            plan=plan,
-            check_result=check,
-            constraints=constraints,
-            live_context=live_context,
-        )
-        
-        explanation_obj = use_case.execute(request)
-        
-        return {
-            "explanation": explanation_obj.full_text,
-            "plan_explanation": explanation_obj
-        }
+        guests = constraints.guests if constraints is not None else []
+        return {"explanation": use_case.execute(plan, check, guests=guests)}
 
     return explain
 
@@ -334,6 +331,10 @@ def _interrupt_for_approval(
     ``APPROVED`` or ``REJECTED`` and, for a rejection, an optional
     ``"rejection_reason"`` RejectionReason value. Anything else is answered with the
     same interrupt carrying an ``"error"``; the decision is only applied once valid.
+
+    A proposal superseded while the guests were deciding (P0-33) is not decided:
+    the guests are told and asked to request a new plan, the candidate and the
+    proposal are dropped and ``current_plan`` is kept.
     """
     plan = state.get("candidate_plan")
     proposal = state.get("proposal")
@@ -354,13 +355,31 @@ def _interrupt_for_approval(
     approved = status is ApprovalStatus.APPROVED
     rejection_reason = None if approved else given_reason or RejectionReason.OTHER
 
-    ResolveProposalUseCase(deps_factory).execute(
-        state["thread_id"],
-        proposal.proposal_id,
-        status,
-        at=clock(),
-        rejection_reason=rejection_reason,
-    )
+    try:
+        ResolveProposalUseCase(deps_factory).execute(
+            state["thread_id"],
+            proposal.proposal_id,
+            status,
+            at=clock(),
+            rejection_reason=rejection_reason,
+        )
+    except ProposalNoLongerPendingError as exc:
+        if exc.status is not status:
+            # Superseded by a significant event while the guests decided (section 9
+            # [C18]): the decision is dropped, nothing is activated.
+            logger.info("decision on %s not applied: %s", proposal.proposal_id, exc)
+            message = (
+                SUPERSEDED_KEEPS_PLAN_MESSAGE
+                if state.get("current_plan")
+                else SUPERSEDED_MESSAGE
+            )
+            return {
+                "messages": [AIMessage(content=message)],
+                "candidate_plan": None,
+                "proposal": None,
+                "approval": None,
+            }
+        # The same decision was already applied (a re-run after it was stored).
 
     if rejection_reason is None:
         return approve_plan(state)

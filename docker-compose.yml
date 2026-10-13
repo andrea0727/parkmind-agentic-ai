@@ -1,10 +1,13 @@
-# scope: Postgres only. No pgvector/Qdrant container (knowledge
-# store is in-memory
-# src/parkmind/services/clients/knowledge/in_memory.py).
+# scope: one Postgres 16 with pgvector (P0-26). Transactional data and the
+# knowledge store's embeddings share the instance (Architecture section 41);
+# the image is built from database/Dockerfile.
+#
+# After pulling this change, rebuild once: `docker compose up -d --build`
+# (the pgdata volume and its data are kept).
 
 services:
   postgres:
-    image: postgres:16
+    build: ./database
     environment:
       POSTGRES_USER: parkmind
       POSTGRES_PASSWORD: parkmind
@@ -15,6 +18,11 @@ services:
       - pgdata:/var/lib/postgresql/data
       # No init.sql mount: the schema is owned by Alembic (database/migrations/).
       # Apply it with `poetry run alembic -c database/alembic.ini upgrade head`.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parkmind -d parkmind"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   pgdata:

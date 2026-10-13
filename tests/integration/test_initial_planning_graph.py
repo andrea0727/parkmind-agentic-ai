@@ -206,6 +206,63 @@ def test_stages_run_in_order_and_explain_follows_check(monkeypatch):
     assert h.events == ["load_context", "resolve_group", "build_plan", "check", "explain", "propose"]
 
 
+def test_approving_a_proposal_superseded_meanwhile_activates_nothing(monkeypatch):
+    """A significant event supersedes the proposal while the guests decide (P0-33)."""
+    h = _Harness(monkeypatch)
+    h.confirm()
+    pending = h.state()
+    h.deps.proposals.supersede_pending("t1", at=NOW)
+
+    result = h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
+
+    assert "__interrupt__" not in result
+    final = h.state()
+    assert final.get("current_plan") is None
+    assert final["candidate_plan"] is None
+    assert final["proposal"] is None
+    assert final["approval"] is None
+    assert h.deps.plans.get_active("t1") is None
+    assert final["messages"][-1].content == ipg.SUPERSEDED_MESSAGE
+    superseded = h.deps.proposals.get(pending["proposal"].proposal_id)
+    assert superseded.approval_status.value == "SUPERSEDED"
+
+
+def test_a_superseded_proposal_says_the_current_plan_stays_only_when_there_is_one(monkeypatch):
+    """Review #86 (I7)."""
+    h = _Harness(monkeypatch)
+    h.graph.invoke(
+        {
+            "thread_id": "t1",
+            "messages": [HumanMessage(content=m) for m in COMPLETE["messages"]],
+            "current_plan": factories.plan(plan_id="plan_in_use"),
+        },
+        config=CONFIG,
+    )
+    h.graph.invoke(Command(resume={"confirmed": True, "consent": True}), config=CONFIG)
+    h.deps.proposals.supersede_pending("t1", at=NOW)
+
+    h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
+
+    assert h.state()["messages"][-1].content == ipg.SUPERSEDED_KEEPS_PLAN_MESSAGE
+    assert "current plan" not in ipg.SUPERSEDED_MESSAGE
+
+
+def test_a_decision_already_stored_is_applied_again_not_reported_as_superseded(monkeypatch):
+    """LangGraph re-runs the approval node if it stops after the decision was stored."""
+    h = _Harness(monkeypatch)
+    h.confirm()
+    pending = h.state()
+    h.deps.proposals.resolve(pending["proposal"].proposal_id, ipg.ApprovalStatus.APPROVED, at=NOW)
+    h.deps.plans.activate("t1", pending["candidate_plan"].plan_id, at=NOW)
+
+    h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
+
+    final = h.state()
+    assert final["approval"] == "APPROVED"
+    assert final["current_plan"].plan_id == pending["candidate_plan"].plan_id
+    assert final["messages"][-1].content != ipg.SUPERSEDED_MESSAGE
+
+
 def test_the_plan_is_not_active_until_a_human_approves(monkeypatch):
     h = _Harness(monkeypatch)
     h.confirm()
@@ -434,7 +491,6 @@ def test_stale_data_is_reloaded_once_and_the_plan_then_validates(monkeypatch):
 
 def test_stale_data_that_stays_stale_ends_with_the_reason(monkeypatch):
     h = _Harness(monkeypatch, snapshot_age=timedelta(hours=3))
-
     h.confirm()
 
     state = h.state()

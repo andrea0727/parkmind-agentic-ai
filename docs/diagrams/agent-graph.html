@@ -163,7 +163,7 @@ const NS='http://www.w3.org/2000/svg';
 const LANES=[
  {y:60,h:310,label:'1 · ELICITATION GRAPH · P0-29'},
  {y:410,h:390,label:'2 · PLANNING STAGE · P0-30 · compiled as the "downstream" subgraph'},
- {y:830,h:540,label:'3 · REPLANNING GRAPH · §36 · TARGET / STUB',target:true}
+ {y:830,h:540,label:'3 · REPLANNING GRAPH · §36 · P0-34 (INTERPRET FRONT = TARGET)',target:true}
 ];
 const KIND={llm:'LLM',human:'HUMAN INTERRUPT',det:'DETERMINISTIC',sub:'SUBGRAPH',err:'ERROR PATH',target:'TARGET',term:''};
 const G='graph/elicitation_graph.py',P='graph/initial_planning_graph.py';
@@ -215,14 +215,14 @@ const NODES=[
    notes:['Any <code>PlanningUnavailableError</code> raised inside a guarded node ends the stage with a message, not an exception','Guarded: load_context, resolve_group, build_plan, check_plan, explain, propose_plan. Not guarded: no_valid_plan, interrupt_approval and the elicitation nodes']}},
 ...(()=>{
  const F='graph/replanning_graph.py';
- const STUB='Target state machine (§36). <code>build_replanning_graph()</code> raises <code>NotImplementedError</code>; commented out in agent.py and not listed in langgraph.json';
- const SEQ='Planned sequence (§36): monitor event or user report → interpret → schema validate → confirm → apply execution updates → event policy → load context → resolve group objective → replan → check plan → plan diff → explain → propose → interrupt → human decision';
- const STUBS='EventDetector, Replanner, MonitorEvents and ReplanUseCase are stubs; REPLAN and ReplanUseCase stop being stubs once the Replanner (#83) merges';
+ const STUB='Implemented (P0-34, §36) from the events step on: <code>build_replanning_graph()</code> is compiled in agent.py and listed in langgraph.json as <code>replanning</code>. The user-report front (interpret → validate) is still target';
+ const SEQ='Implemented sequence: events → load plan → handle events (dedupe, execution updates, event policy, supersede) → confirm interrupt (doubtful reports) → load context → resolve group → replan → check → diff → explain → propose → interrupt → human decision';
+ const STUBS='EventDetector, EventPolicy, MonitorEvents and HandleEvents (P0-33) and Replanner and ReplanUseCase (P0-23, P0-34) are implemented';
  const mk=(id,title,sub,cx,cy,w,h,notes=[],kind='target')=>({id,kind,...R(cx,cy,w,h),title,sub,
   dock:{file:F,notes:[STUB,SEQ,...notes,STUBS]}});
  const r1=975,r2=1085;
  return [
-  mk('rmon','MONITOR EVENT','event_detector (stub)',920,890,170,44,['Typed events from the monitor skip interpret / validate / confirm and enter at the execution-updates step']),
+  mk('rmon','MONITOR EVENT','event_detector (P0-33)',920,890,170,44,['Typed events from the monitor skip interpret / validate / confirm and enter at the execution-updates step']),
   mk('rusr','USER REPORT','free text',120,r1,160,56,['A guest reports something in chat (e.g. a closure or a relocation)']),
   mk('rint','INTERPRET','LLM → typed Event',320,r1,160,56,['The LLM only proposes a typed Event; it never changes the plan','A change of constraint goes back to ELICIT']),
   mk('rsch','SCHEMA VALIDATE','closed schema',520,r1,160,56,['The typed Event is validated against a closed schema before anything else runs']),
@@ -236,12 +236,12 @@ const NODES=[
   mk('rlc','LOAD CONTEXT','reuse',95,r2,130,56),
   mk('rrg','RESOLVE GROUP','objective re-run',271,r2,130,56,['Re-run so eligible sets are computed with the fresh context']),
   mk('rrp','REPLAN','plan + execution state',447,r2,130,56,['Starts from the current plan plus execution state, not from scratch']),
-  mk('rck','CHECK PLAN','reuse',623,r2,130,56,['On failure it goes to RE-SOLVE']),
-  mk('rrs','RE-SOLVE','',560,1180,110,40,['Resolve loop: relax and retry, then check again']),
-  mk('rdf','PLAN DIFF','diff_plans ✓ exists',799,r2,130,56,['<code>diff_plans</code> exists in services/planning but is not wired into any graph']),
+  mk('rck','CHECK PLAN','reuse',623,r2,130,56,['Same gate as an initial plan, over the whole day. On failure nothing is proposed and the active plan stays']),
+  mk('rrs','RE-SOLVE','',560,1180,110,40,['Runs inside REPLAN (PlannerResolveLoop): relax and retry before the check']),
+  mk('rdf','PLAN DIFF','diff_plans ✓ wired',799,r2,130,56,['<code>DiffPlanUseCase</code> wraps <code>diff_plans</code>; the diff is shown to the guests and stored on the proposal']),
   mk('rex','EXPLAIN','reuse',975,r2,130,56),
   mk('rpr','PROPOSE','reuse',1151,r2,130,56),
-  mk('rin','INTERRUPT','human',1327,r2,130,56,['The human decides: approve, edit or reject']),
+  mk('rin','INTERRUPT','human',1327,r2,130,56,['The human decides: approve or reject (edit is P0-32, not yet supported)']),
   mk('rap','APPROVE','',830,1190,150,44),
   mk('rap2','LOG BEHAVIOR','',1000,1190,150,44),
   mk('rap3','PERSIST','',1170,1190,150,44,['Activation goes through ResolveProposalUseCase, the only place a plan is activated']),
@@ -389,7 +389,7 @@ const SCENARIOS=[
    end('The decision is applied only once the resume value is valid.')]}
 ];
 const ES={
-"diff_plans ✓ exists": "diff_plans ✓ existe",
+"diff_plans ✓ wired": "diff_plans ✓ conectado",
 "MONITOR EVENT": "EVENTO DEL MONITOR",
 "USER REPORT": "REPORTE DEL USUARIO",
 "free text": "texto libre",
@@ -426,8 +426,8 @@ const ES={
 "pending proposal": "propuesta pendiente",
 "requires_replan": "requires_replan",
 "fails": "falla",
-"Planned sequence (§36): monitor event or user report → interpret → schema validate → confirm → apply execution updates → event policy → load context → resolve group objective → replan → check plan → plan diff → explain → propose → interrupt → human decision": "Secuencia planificada (§36): evento del monitor o reporte del usuario → interpretar → validar esquema → confirmar → aplicar actualizaciones de ejecución → política de eventos → cargar contexto → resolver objetivo del grupo → replanificar → verificar plan → diff del plan → explicar → proponer → interrupt → decisión humana",
-"EventDetector, Replanner, MonitorEvents and ReplanUseCase are stubs; REPLAN and ReplanUseCase stop being stubs once the Replanner (#83) merges": "EventDetector, Replanner, MonitorEvents y ReplanUseCase son stubs; REPLAN y ReplanUseCase dejan de serlo cuando se integre el Replanner (#83)",
+"Implemented sequence: events → load plan → handle events (dedupe, execution updates, event policy, supersede) → confirm interrupt (doubtful reports) → load context → resolve group → replan → check → diff → explain → propose → interrupt → human decision": "Secuencia implementada: eventos → cargar plan → manejar eventos (dedupe, actualizaciones de ejecución, política de eventos, reemplazo) → interrupt de confirmación (reportes dudosos) → cargar contexto → resolver grupo → replanificar → verificar → diff → explicar → proponer → interrupt → decisión humana",
+"EventDetector, EventPolicy, MonitorEvents and HandleEvents (P0-33) and Replanner and ReplanUseCase (P0-23, P0-34) are implemented": "EventDetector, EventPolicy, MonitorEvents y HandleEvents (P0-33) y Replanner y ReplanUseCase (P0-23, P0-34) están implementados",
 "Typed events from the monitor skip interpret / validate / confirm and enter at the execution-updates step": "Los eventos tipados del monitor se saltan interpretar / validar / confirmar y entran en el paso de actualizaciones de ejecución",
 "A guest reports something in chat (e.g. a closure or a relocation)": "Un visitante reporta algo en el chat (p. ej. un cierre o un traslado)",
 "The LLM only proposes a typed Event; it never changes the plan": "El LLM solo propone un Event tipado; nunca cambia el plan",
@@ -444,9 +444,9 @@ const ES={
 "Discarded report: the run ends without changes": "Reporte descartado: la ejecución termina sin cambios",
 "Re-run so eligible sets are computed with the fresh context": "Se re-ejecuta para calcular los conjuntos elegibles con el contexto fresco",
 "Starts from the current plan plus execution state, not from scratch": "Parte del plan actual más el estado de ejecución, no desde cero",
-"On failure it goes to RE-SOLVE": "Si falla, pasa a RE-RESOLVER",
-"Resolve loop: relax and retry, then check again": "Bucle de resolución: relaja y reintenta, luego verifica de nuevo",
-"The human decides: approve, edit or reject": "La persona decide: aprobar, editar o rechazar",
+"Same gate as an initial plan, over the whole day. On failure nothing is proposed and the active plan stays": "La misma compuerta que un plan inicial, sobre todo el día. Si falla no se propone nada y el plan activo se mantiene",
+"Runs inside REPLAN (PlannerResolveLoop): relax and retry before the check": "Corre dentro de REPLAN (PlannerResolveLoop): relaja y reintenta antes de verificar",
+"The human decides: approve or reject (edit is P0-32, not yet supported)": "La persona decide: aprobar o rechazar (editar es P0-32, aún no soportado)",
 "Activation goes through ResolveProposalUseCase, the only place a plan is activated": "La activación pasa por ResolveProposalUseCase, el único lugar donde se activa un plan",
 "The edited plan goes through the checks again": "El plan editado vuelve a pasar por las verificaciones",
 "Agent graph · how the agent works": "Grafo del agente · cómo funciona el agente",
@@ -495,7 +495,7 @@ const ES={
 "Changes only through node updates. <code>accessibility_ref</code> holds guest ids only [C19].": "Cambia solo mediante actualizaciones de nodos. <code>accessibility_ref</code> guarda solo ids de invitados [C19].",
 "1 · ELICITATION GRAPH · P0-29": "1 · GRAFO DE ELICITACIÓN · P0-29",
 "2 · PLANNING STAGE · P0-30 · compiled as the \"downstream\" subgraph": "2 · ETAPA DE PLANIFICACIÓN · P0-30 · compilada como subgrafo \"downstream\"",
-"3 · REPLANNING GRAPH · §36 · TARGET / STUB": "3 · GRAFO DE REPLANIFICACIÓN · §36 · OBJETIVO / STUB",
+"3 · REPLANNING GRAPH · §36 · P0-34 (INTERPRET FRONT = TARGET)": "3 · GRAFO DE REPLANIFICACIÓN · §36 · P0-34 (FRENTE INTERPRETAR = OBJETIVO)",
 "_guarded · PlanningUnavailableError → plain-language message + END": "_guarded · PlanningUnavailableError → mensaje en lenguaje llano + END",
 "HUMAN INTERRUPT": "INTERRUPCIÓN HUMANA",
 "DETERMINISTIC": "DETERMINISTA",
@@ -557,7 +557,7 @@ const ES={
 "no plan, nothing proposed": "sin plan, nada propuesto",
 "Any <code>PlanningUnavailableError</code> raised inside a guarded node ends the stage with a message, not an exception": "Cualquier <code>PlanningUnavailableError</code> lanzado dentro de un nodo protegido termina la etapa con un mensaje, no con una excepción",
 "Guarded: load_context, resolve_group, build_plan, check_plan, explain, propose_plan. Not guarded: no_valid_plan, interrupt_approval and the elicitation nodes": "Protegidos: load_context, resolve_group, build_plan, check_plan, explain, propose_plan. No protegidos: no_valid_plan, interrupt_approval y los nodos de elicitación",
-"event_detector (stub)": "event_detector (stub)",
+"event_detector (P0-33)": "event_detector (P0-33)",
 "policy": "política",
 "reuse": "reutiliza",
 "Replanner (stub)": "Replanner (stub)",
@@ -565,9 +565,9 @@ const ES={
 "plan_diff ✓ exists": "plan_diff ✓ existe",
 "human": "persona",
 "approve / reject": "aprobar / rechazar",
-"Target state machine (§36). <code>build_replanning_graph()</code> raises <code>NotImplementedError</code>; commented out in agent.py and not listed in langgraph.json": "Máquina de estados objetivo (§36). <code>build_replanning_graph()</code> lanza <code>NotImplementedError</code>; está comentado en agent.py y no figura en langgraph.json",
+"Implemented (P0-34, §36) from the events step on: <code>build_replanning_graph()</code> is compiled in agent.py and listed in langgraph.json as <code>replanning</code>. The user-report front (interpret → validate) is still target": "Implementado (P0-34, §36) desde el paso de eventos: <code>build_replanning_graph()</code> se compila en agent.py y figura en langgraph.json como <code>replanning</code>. El frente de reportes de usuario (interpretar → validar) sigue siendo objetivo",
 "EventDetector, Replanner, MonitorEvents and ReplanUseCase are stubs": "EventDetector, Replanner, MonitorEvents y ReplanUseCase son stubs",
-"<code>diff_plans</code> exists in services/planning but is not wired into any graph": "<code>diff_plans</code> existe en services/planning pero no está conectado a ningún grafo",
+"<code>DiffPlanUseCase</code> wraps <code>diff_plans</code>; the diff is shown to the guests and stored on the proposal": "<code>DiffPlanUseCase</code> envuelve <code>diff_plans</code>; el diff se muestra a los invitados y se guarda en la propuesta",
 "AI question pending": "pregunta de la IA pendiente",
 "answer": "respuesta",
 "new input": "nueva entrada",

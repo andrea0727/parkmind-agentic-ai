@@ -16,13 +16,17 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 
-from parkmind.graph.initial_planning_graph import (
-    build_initial_planning_graph,
-)
+from parkmind.graph.checkpointing import default_checkpointer
+from parkmind.graph.initial_planning_graph import build_initial_planning_graph
+from parkmind.graph.replanning_graph import build_replanning_graph
 
-graph = build_initial_planning_graph()
-# replanning_graph = build_replanning_graph()
+# The replanning graph runs on the thread of the initial plan and reads its checkpoint
+# (constraints, accessibility_ref, group objective), so both share one checkpointer.
+_checkpointer = default_checkpointer()
+graph = build_initial_planning_graph(checkpointer=_checkpointer)
+replanning_graph = build_replanning_graph(_checkpointer)
 
 if __name__ == "__main__":
-    print("initial planning graph compiled; build_replanning_graph() is still a stub — "
-          "see src/parkmind/graph/")
+    for name, compiled in (("initial_planning", graph), ("replanning", replanning_graph)):
+        nodes = [n for n in compiled.get_graph().nodes if not n.startswith("__")]
+        print(f"{name}: {len(nodes)} nodes compiled")

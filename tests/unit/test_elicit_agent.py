@@ -22,6 +22,7 @@ from parkmind.agents.elicit_agent import (
     make_elicit_node,
     missing_information,
     pending_confirmations,
+    ungrounded_heights,
 )
 from parkmind.agents.elicit_schema import ElicitationExtraction
 from parkmind.core.contracts import (
@@ -427,3 +428,86 @@ def test_an_empty_catalog_is_an_error_not_a_question_to_the_guests() -> None:
 
     with pytest.raises(CatalogUnavailableError):
         node(_state(*COMPLETE["messages"]))
+
+
+# --- a height must come from the guests' own words ------------------------------
+
+
+def _with_heights(*heights: float | None) -> ElicitationExtraction:
+    return ElicitationExtraction.model_validate(
+        {
+            "guests": [
+                {"role": "adult" if i == 0 else "child", "height_cm": h}
+                for i, h in enumerate(heights)
+            ],
+            "departure_time": "18:00",
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "text, height",
+    [
+        ("my son is 122 cm", 122),
+        ("he is 1.22 m tall", 122),
+        ("she is 1,70 m", 170),
+        ("about 4 feet tall", 122),
+        ("he is 4'6\" now", 137),
+        ("5 ft 10", 178),
+        ("he is 122", 122),
+    ],
+)
+def test_a_height_the_guests_wrote_is_grounded(text: str, height: float) -> None:
+    assert ungrounded_heights(_with_heights(None, height), [text]) == []
+
+
+def test_a_height_clamped_into_the_schema_range_is_not_grounded() -> None:
+    # "400 cm and 20 cm" came back as 200 and 200: both fit the schema, neither was said.
+    extraction = _with_heights(200, 200)
+
+    assert ungrounded_heights(extraction, ["Two guests, 400 cm and 20 cm."]) == [
+        "height_unverified:g1",
+        "height_unverified:g2",
+    ]
+
+
+def test_a_height_nobody_stated_is_not_grounded() -> None:
+    assert ungrounded_heights(_with_heights(None, 120), ["Me and my son, leaving at 6 PM"]) == [
+        "height_unverified:g2"
+    ]
+
+
+def test_durations_and_counts_are_not_mistaken_for_heights() -> None:
+    text = "2 adults, 120 minutes of walking at most, 100 % sure, leaving at 18:00"
+
+    assert ungrounded_heights(_with_heights(None, 120), [text]) == ["height_unverified:g2"]
+
+
+def test_a_height_stated_in_an_earlier_message_still_counts() -> None:
+    extraction = _with_heights(None, 122)
+
+    assert ungrounded_heights(extraction, ["my son is 122 cm", "we leave at 6"]) == []
+
+
+def test_an_ungrounded_height_asks_instead_of_planning() -> None:
+    extraction = _with_heights(200, 200).model_dump(mode="json")
+    node, _, _ = _node(FakeExtractor(extraction))
+
+    update = node(_state("Two guests, 400 cm and 20 cm. Leaving at 6 PM."))
+
+    assert update["constraints"] is None
+    assert update["pending_hard_constraint_confirmation"] is None
+    assert update["messages"][0].additional_kwargs["missing_information"] == [
+        "height_unverified:g1",
+        "height_unverified:g2",
+    ]
+    assert "How tall is Guest 1, in cm" in update["messages"][0].content
+
+
+def test_a_grounded_height_goes_to_confirmation_as_before() -> None:
+    extraction = _with_heights(None, 122).model_dump(mode="json")
+    node, _, _ = _node(FakeExtractor(extraction))
+
+    update = node(_state("Me and my son, he is 122 cm. Leaving at 6 PM."))
+
+    assert "height:g2: 122" in update["pending_hard_constraint_confirmation"]

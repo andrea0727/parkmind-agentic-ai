@@ -7,6 +7,8 @@ from typing import Any
 
 from elicit_support import PARK_ID, FakeSessionStore, catalog
 from fakes import (
+    InMemoryEventRepository,
+    InMemoryExecutionStateRepository,
     InMemoryIdMappingRepository,
     InMemoryPlanRepository,
     InMemoryProposalRepository,
@@ -114,8 +116,10 @@ def make_deps(
     attractions: PlanningAttractionRepository | None = None,
     knowledge: InMemoryKnowledgeStore | None = None,
     proposals: InMemoryProposalRepository | None = None,
+    events: InMemoryEventRepository | None = None,
 ) -> PlanningDeps:
     proposals = proposals if proposals is not None else InMemoryProposalRepository()
+    plans = InMemoryPlanRepository(proposals)
     return PlanningDeps(
         park_id=PARK_ID,
         attractions=attractions or PlanningAttractionRepository(),  # type: ignore[arg-type]
@@ -124,8 +128,10 @@ def make_deps(
         knowledge=knowledge or InMemoryKnowledgeStore({}, corpus_version="t"),
         routing=FlatRouting(),
         sessions=sessions if sessions is not None else FakeSessionStore(),  # type: ignore[arg-type]
-        plans=InMemoryPlanRepository(proposals),
+        plans=plans,
         proposals=proposals,
+        events=events if events is not None else InMemoryEventRepository(),
+        execution_states=InMemoryExecutionStateRepository(plans),
         collector=collector,
     )
 

@@ -115,9 +115,10 @@ and `agent.py` both add it to the import path, so
 cp .env.example .env          # fill in ANTHROPIC_API_KEY at minimum
 poetry install
 
-# 2. start Postgres, then create the schema (Alembic owns it) and, optionally,
-#    load the reproducible development scenario
-docker compose up -d
+# 2. start Postgres (built with pgvector from database/Dockerfile), then create
+#    the schema (Alembic owns it) and, optionally, load the reproducible
+#    development scenario
+docker compose up -d --build
 poetry run alembic -c database/alembic.ini upgrade head
 poetry run python scripts/seed_db.py
 
@@ -142,6 +143,11 @@ poetry run streamlit run ui/app.py
 - **Reset:** `docker compose down -v && docker compose up -d`, then migrate
   again. A volume created before P0-12 still holds the old `init.sql` tables and
   must be reset this way before the first `upgrade head`.
+- **pgvector (P0-26):** the compose image is `postgres:16` plus the
+  `postgresql-16-pgvector` package (`database/Dockerfile`; CI installs the same
+  package into its service container). Migration `0003` enables the extension.
+  A container started from the old plain image stops it with a message:
+  rebuild once with `docker compose up -d --build` (your data volume is kept).
 - **Tests:** the repository tests are marked `db` and use throwaway
   `parkmind_test_*` databases on the same server, never your `parkmind` one.
   Without a reachable Postgres they are skipped locally and **fail** when `CI`
@@ -161,10 +167,13 @@ between the intake and `load_context` (a test enforces this).
 from parkmind.services.clients.postgres import connect
 from parkmind.services.use_cases.session_memory import session_store
 
+
 def handle_request(thread_id: str, guest_id: str) -> None:
     with connect() as conn:  # per request
         store = session_store(conn)
-        requirements = store.get(thread_id, guest_id)  # session_id == LangGraph thread_id
+        requirements = store.get(
+            thread_id, guest_id
+        )  # session_id == LangGraph thread_id
         ...
 ```
 
@@ -242,6 +251,164 @@ poetry run python scripts/renormalize_snapshots.py             # rows from an ol
 poetry run python scripts/renormalize_snapshots.py --all       # or every snapshot
 ```
 
+### Event monitor (P0-33)
+
+The monitor compares the two most recent stored snapshots and reports what
+changed in the park: an attraction going down or coming back
+(`ATTRACTION_DOWN` / `ATTRACTION_AVAILABLE`), a wait spike, rain moving into
+the next hours. It never wakes the LLM (Architecture §24).
+
+```bash
+poetry run python scripts/run_monitor.py                # collect one snapshot, then detect
+poetry run python scripts/run_monitor.py --loop         # every 5 minutes until Ctrl+C
+poetry run python scripts/run_monitor.py --no-collect   # detect on what is already stored
+```
+
+- **Stale readings never raise an alarm.** ThemeParks keeps some readings for
+  months (a show closed since July, an entity last updated in 2022). A change
+  only counts when the provider's own `lastUpdated` for it is within the
+  30-minute freshness window; it is read from the stored raw payload (§41, C21). Unknown reading time → no event. Two
+  snapshots more than 30 minutes apart are not compared (after a collector
+  outage the next run only sets the baseline).
+- **One policy for both sources.** `EventPolicy` (`services/planning/event_policy.py`)
+  is the only code that sets `severity` and `requires_replan`, with §25's table and
+  the party's own thresholds: a closure of a ride the party already did, or a spike
+  below its queue tolerance, does not replan. `PARTY_RELOCATED` never does on its
+  own; `ATTRACTION_AVAILABLE` only for a must-do in `unmet_must_do`.
+- **One event per closure.** Ids don't depend on the source, so the monitor and a
+  guest reporting the same closure record one event (`event_dedup.py`). A closure
+  the monitor sees again later is a new one (the reopening was missed, or the first
+  report was wrong): more than 30 minutes after a monitor event, or more than 2 h
+  (`USER_EPISODE_WINDOW`, a starting point to tune with real data) after a guest's
+  report, since the provider can lag behind a guest. The cost: a wrong guest report
+  can hide a real closure the monitor sees within those 2 h.
+  `BEHIND_SCHEDULE` is recorded once per late stop, when the delay reaches 15
+  minutes, and only while the party's progress is being tracked. That one event is
+  final for the stop: if the guests reject or ignore the replan it proposes, the
+  same stop does not raise another one, however late the party gets. It needs
+  progress *reported* by the party (`completed_stop_ids` or `skipped_stop_ids`);
+  assumed progress never counts. Until something records it (reporting a stop as
+  done: #48, P0-35b), the event is not raised in production. A replan's reported
+  progress is carried over to the new plan when its proposal is approved, so what
+  the guests report while deciding is not lost.
+- **Confirmation first (§25, C10).** A doubtful guest report, or a fatigue report
+  for a guest with a walking limit (or whose limit can't be read), is set aside
+  until the guests confirm it; the rest of the batch goes on.
+- **Superseding.** `HandleEventsUseCase` records a party's events and, when a new
+  one requires a replan, marks the pending proposal `SUPERSEDED` (§9, C18). Approving
+  a proposal superseded meanwhile activates nothing and tells the guests.
+- **Next step.** The monitor prints the park-wide events; per-party judgement runs
+  when `HandleEventsUseCase` is called with that party's plan and objective, which is
+  what the replanning graph does (below). Waking a party's graph from the monitor
+  is not wired yet.
+
+### Replanning graph (P0-34)
+
+`graph/replanning_graph.py` (`langgraph.json` entry `replanning`) runs on the thread
+of the initial plan, with `{"thread_id": ..., "events": [Event, ...]}` as input;
+constraints, guest profiles, `accessibility_ref` and the group objective come from
+that thread's checkpoint (so `agent.py` gives both graphs one checkpointer).
+
+```
+LOAD PLAN → HANDLE EVENTS (dedup · apply execution updates · EventPolicy)
+   ├─ nothing significant → IGNORE (a pending proposal is put back in front of the guests)
+   ├─ report to confirm   → CONFIRM EVENTS (interrupt) → HANDLE CONFIRMED EVENTS
+   └─ significant         → LOAD CONTEXT → RESOLVE GROUP → REPLAN → CHECK
+                              ├─ valid   → DIFF → EXPLAIN → PROPOSE → APPROVAL (interrupt)
+                              └─ invalid → END: nothing proposed, the active plan stays
+```
+
+- **Same gate as the initial plan.** A replan is a new `plan_id`, proposed only after
+  `ConstraintChecker.check_replan`, which judges the *whole day*: what the party
+  already walked counts against the walking limits, and a stop already completed is
+  not held against a closure that came later.
+- **Human decides.** Only the resumed approval interrupt activates a plan
+  (`ResolveProposalUseCase`); rejecting leaves the active plan untouched. A new
+  significant event supersedes the proposal that was waiting (`supersede_pending`).
+- **Progress.** The replan starts from the stored `PlanExecutionState`. If nobody has
+  reported progress, the party is assumed on schedule: stops that should have ended
+  by now count as done. A closure or reopening reported after the snapshot is applied
+  to the replan's context so the replan and its check see the same availability.
+- **Fatigue.** A confirmed `GUEST_FATIGUE` sets the walking cap (P0-33) and makes the
+  new horizon open with a `REST` stop (§25). If a rest cannot fit, the replan fails
+  closed.
+- **Walking budget.** The optimizer is given what is left of the party budget, the
+  daily limits and the fatigue caps, so it stops adding attractions at the limit
+  instead of leaving the checker to reject the plan. This also applies to initial
+  plans (`walking_done_minutes` is zero there).
+- **Privacy [C19].** State holds only `accessibility_ref`; every use case reads the
+  requirements from the SessionStore.
+- **Known limits.** After a replan finds no valid plan the events stay recorded, so a
+  duplicate report does not retry it (a new event does). REJECT's "update
+  preferences" step is not implemented (the reason is stored on the proposal); EDIT
+  is P0-32. An in-progress stop is treated as still ahead.
+
+### MCP capability boundary (P0-24..P0-27)
+
+`parkmind-mcp` publishes the same use cases the graph calls in-process as typed
+MCP tools (Architecture §27, C22/C23). The graph never depends on it; external
+clients (the LLM-only baseline, P1-15) and, when configured, LOAD CONTEXT do.
+Every result is `{data, provenance}` (§32); failures are structured
+`{"error": {code, message, retryable, details}}`. No tool proposes, persists or
+activates a plan.
+
+| Namespace | Tools |
+|---|---|
+| `data.*` (P0-25) | `get_live_waits`, `get_attraction_status`, `get_schedule`, `get_showtimes`, `get_weather`, `get_walking_time`, `get_attraction_info` |
+| `knowledge.*` (P0-26) | `search_policies`, `find_similar_attractions`, `check_accessibility` |
+| `planner.*` (P0-27) | `build_plan`, `check_plan`, `replan`, `score_preferences`, `forecast_waits` |
+
+```bash
+# stdio (what an MCP client launches), or streamable HTTP at http://127.0.0.1:8765/mcp
+poetry run python scripts/run_mcp_server.py
+poetry run python scripts/run_mcp_server.py --http
+
+# explore it in the MCP Inspector
+npx @modelcontextprotocol/inspector poetry run python scripts/run_mcp_server.py
+```
+
+**Trust model.** The server has no authentication, so it serves only this
+machine: stdio answers the process that launched it, and HTTP binds to loopback
+(any other `--host` is refused; the SDK also checks Host and Origin against DNS
+rebinding). A `session_id` works as a capability: whoever reaches the server and
+knows one gets plans that reflect that session's accessibility requirements, and
+violations name the rule and the stop (P0-27's diagnostics) though never the
+requirement. That is the demo's single-machine boundary; serving it on a network
+needs authentication first (with the API layer, P0-35a).
+
+**Knowledge store (P0-26).** Semantic search runs on pgvector with a local
+multilingual model (fastembed, `paraphrase-multilingual-MiniLM-L12-v2`, ~220 MB,
+English questions against the Spanish corpus quoted from the official park
+pages). One-time setup, after `docker compose up -d --build` and
+`alembic ... upgrade head`:
+
+```bash
+poetry run python scripts/fetch_embedding_model.py   # download once into ~/.cache/parkmind/fastembed
+poetry run python scripts/index_knowledge.py         # embed the corpus into pgvector (idempotent)
+```
+
+Without the model or the index, `knowledge.search_policies` answers by keyword
+search over the same passages and says so in `provenance.degraded` (§43);
+`knowledge.check_accessibility` never degrades (fail-closed, P0-26a). PR CI never
+downloads the model; the manual **Embedding smoke** workflow runs the
+`requires_model` tests with it.
+
+**LOAD CONTEXT over MCP (P0-24).** `PARKMIND_CONTEXT_TRANSPORT=mcp` makes the graph
+read `data.*` and `knowledge.*` through the server at `PARKMIND_MCP_URL` (start
+it with `--http`); if the server is unreachable, the in-process adapter of the
+same port answers and `LoadedContext.transport` says `in_process_fallback`. The
+default, `in_process`, reads the snapshot directly.
+
+**Privacy (C19).** No tool takes `AccessibilityRequirements`. Planner tools take
+a `session_id` and `guest_ids`; the requirements are read from the SessionStore
+server-side and never travel in a request or a response (violations of the
+accessibility rules are reported without their values). A server in another
+process sees only `persisted` records, so a party with `session_only`
+requirements fails closed there. `knowledge.check_accessibility` takes derived
+flags, as §30 defines it, so external clients such as the LLM-only baseline can
+check eligibility without a session; LOAD CONTEXT sends the flags without saying
+whose they are, and its transport errors never quote a request.
+
 ### Using Poetry
 
 If you don't have Poetry installed:
@@ -274,13 +441,15 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 |---|---|---|
 | **LangGraph State v2** | ✅ Done | Typed ParkMindState, state helpers, message reducer |
 | **Preference Resolution** | ✅ Done | Weighted aggregation from GuestProfile (queue, walking, categories) |
-| **Plan Synthesis** | ✅ Initial planning graph [P0-30] | ELICIT → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED. Runs on in-process use cases, no MCP server. EDITED approvals [P0-32] and replanning [P0-31] are follow-ups. |
+| **Plan Synthesis** | ✅ Initial planning graph [P0-30] | ELICIT → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED. Runs on in-process use cases, no MCP server. EDITED approvals [P0-32] are a follow-up. |
+| **Event monitor** | ✅ P0-33 | Snapshot-to-event detector with per-reading freshness, `EventPolicy` (§25 table, confirmation gate, fatigue walking cap), cross-source dedup, supersede on significant events, `scripts/run_monitor.py`. Consumed by the replanning graph [P0-34]. |
+| **MCP capability boundary** | ✅ P0-24..P0-27 | `parkmind-mcp`: 15 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` takes the plan, its progress and the events inline (§31), so a client without a stored plan can replan. |
 | **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
 | **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
 | **PostgreSQL Repos** | ✅ Done | Profiles, Plans, Session store (in-memory for accessibility) |
 | **Initial Planning Graph** | ✅ Done | 5-node orchestration: resolve → fetch → synthesize → propose → approve |
-| **Constraint Checker** | 🔄 Next | Validation rules, PlanDiff generation |
-| **Replanner** | 🔄 Next | Proposal generation, interrupt flow |
+| **Constraint Checker** | ✅ Done | 11 rules, plus `check_replan` for a replanned day; PlanDiff generation |
+| **Replanner** | ✅ P0-23 / P0-34 | Replanner (frozen completed stops, remaining walking budget, rest-first) and the replanning graph: events → policy → replan → check → diff → explain → propose → approval. |
 
 ## Working conventions
 

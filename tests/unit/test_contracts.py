@@ -640,27 +640,91 @@ class TestParkModels:
 
 
 class TestEventEnhancements:
-    """Test Event with new delta/minutes_behind/affected_hours fields."""
+    """Event type-specific fields follow section 33 [C23]."""
 
     def test_event_with_impact_fields(self, aware_datetime):
-        """Event captures impact metrics."""
+        """WAIT_SPIKE / BEHIND_SCHEDULE minutes are floats; RAIN_INCOMING lists hour starts."""
 
         event = Event(
             event_id="ev2",
             type=EventType.WAIT_SPIKE,
             source=EventSource.MONITOR,
             attraction_id="attr2",
-            severity=EventSeverity.MEDIUM,
             confidence=0.8,
             timestamp=aware_datetime,
-            delta_minutes=30,
-            minutes_behind=15,
-            affected_hours=2.5,
+            delta_minutes=30.5,
+            minutes_behind=15.5,
+            affected_hours=[aware_datetime],
         )
 
-        assert event.delta_minutes == 30
-        assert event.minutes_behind == 15
-        assert event.affected_hours == 2.5
+        assert event.delta_minutes == 30.5
+        assert event.minutes_behind == 15.5
+        assert event.affected_hours == [aware_datetime]
+
+    def test_attraction_available_is_an_event_type(self, aware_datetime):
+        event = Event(
+            event_id="ev3",
+            type=EventType.ATTRACTION_AVAILABLE,
+            source=EventSource.MONITOR,
+            attraction_id="tron",
+            confidence=1.0,
+            timestamp=aware_datetime,
+        )
+        assert event.type is EventType.ATTRACTION_AVAILABLE
+
+    @pytest.mark.parametrize(
+        ("event_type", "missing"),
+        [
+            (EventType.ATTRACTION_AVAILABLE, "attraction_id"),
+            (EventType.WAIT_SPIKE, "delta_minutes"),
+            (EventType.RAIN_INCOMING, "affected_hours"),
+            (EventType.BEHIND_SCHEDULE, "minutes_behind"),
+            (EventType.PARTY_RELOCATED, "location_node_id"),
+        ],
+    )
+    def test_each_type_requires_the_field_its_policy_reads(
+        self, aware_datetime, event_type, missing
+    ):
+        fields = {
+            "attraction_id": "tron",
+            "guest_id": "g1",
+            "location_node_id": "frontierland",
+            "delta_minutes": 20.0,
+            "minutes_behind": 18.0,
+            "affected_hours": [aware_datetime],
+        }
+        fields.pop(missing)
+        with pytest.raises(ValueError, match=f"{event_type.value} requires {missing}"):
+            Event(
+                event_id="ev",
+                type=event_type,
+                source=EventSource.MONITOR,
+                confidence=1.0,
+                timestamp=aware_datetime,
+                **fields,
+            )
+
+    def test_rain_needs_at_least_one_affected_hour(self, aware_datetime):
+        with pytest.raises(ValueError, match="RAIN_INCOMING requires affected_hours"):
+            Event(
+                event_id="ev",
+                type=EventType.RAIN_INCOMING,
+                source=EventSource.MONITOR,
+                confidence=0.6,
+                timestamp=aware_datetime,
+                affected_hours=[],
+            )
+
+    def test_affected_hours_must_be_timezone_aware(self, aware_datetime):
+        with pytest.raises(ValueError, match="timezone-aware"):
+            Event(
+                event_id="ev",
+                type=EventType.RAIN_INCOMING,
+                source=EventSource.MONITOR,
+                confidence=0.6,
+                timestamp=aware_datetime,
+                affected_hours=[aware_datetime.replace(tzinfo=None)],
+            )
 
 
 class TestExecutionStateEnhancements:

@@ -39,7 +39,8 @@ from parkmind.services.clients.open_meteo_normalize import parse_hourly_forecast
 from parkmind.services.clients.themeparks_errors import ThemeParksClientError
 from parkmind.services.clients.themeparks_normalize import parse_live, parse_schedule
 from parkmind.services.clients.themeparks_reference_data import AttractionMetadata
-from parkmind.services.use_cases.id_resolution import IdResolver
+from parkmind.services.ports import IdMappingRepository
+from parkmind.services.use_cases.id_resolution import ANCHOR_PROVIDER, IdResolver
 
 RAW_SCHEMA = 1
 ACCESSIBILITY_GAP = "accessibility checks are per party: done by load_context (P0-30), not the collector"
@@ -119,7 +120,7 @@ def normalize_raw_snapshot(
             gaps.append(f"open_meteo payload rejected: {exc}")
 
     park = _park_window(themeparks.get("schedule"), service_date, park_id, gaps)
-    coverage = _coverage(
+    coverage = coverage_report(
         curated=curated,
         scheduled_shows=scheduled_shows,
         statuses=statuses,
@@ -141,6 +142,40 @@ def normalize_raw_snapshot(
         data_sources=data_sources,
         issues=list(live.issues),
     )
+
+
+def reading_times(
+    raw: Mapping[str, Any], id_mappings: IdMappingRepository
+) -> dict[str, datetime | None]:
+    """Each entity's provider reading time (``lastUpdated``) in one stored raw payload.
+
+    Keyed by internal id, like the snapshot's ``LiveContext``; ``None`` where the
+    provider gave no time. This is what per-reading freshness reads (P0-33): the
+    normalized ``LiveContext`` keeps no reading times, the raw payload does (C21).
+
+    Read-only: ids are looked up with ``id_mappings.resolve`` and no sighting is
+    recorded (``IdResolver`` records one; a monitor re-reading old snapshots must
+    not). An unmapped id of the anchor provider is its own internal id, as in
+    ``IdResolver``; two provider ids landing on one internal id are both left
+    out, so their time is unknown and the detector raises nothing for them.
+    """
+    if raw.get("raw_schema") != RAW_SCHEMA:
+        raise RawSnapshotError(f"unsupported raw_schema {raw.get('raw_schema')!r}")
+    try:
+        live = parse_live(raw["themeparks"]["live"])
+    except (KeyError, TypeError) as exc:
+        raise RawSnapshotError(f"malformed raw snapshot payload: {exc}") from None
+    except ThemeParksClientError as exc:
+        raise RawSnapshotError(f"unreadable live payload: {exc}") from None
+    times: dict[str, list[datetime | None]] = {}
+    for provider_id, entity in live.entities.items():
+        internal_id = id_mappings.resolve(
+            ANCHOR_PROVIDER.value, provider_id, entity.kind
+        )
+        times.setdefault(internal_id or provider_id, []).append(entity.observed_at)
+    return {
+        internal_id: seen[0] for internal_id, seen in times.items() if len(seen) == 1
+    }
 
 
 def _park_window(
@@ -170,7 +205,7 @@ def _park_window(
         return None
 
 
-def _coverage(
+def coverage_report(
     *,
     curated: Mapping[str, AttractionMetadata],
     scheduled_shows: Collection[str],
@@ -180,6 +215,11 @@ def _coverage(
     park: Park | None,
     gaps: list[str],
 ) -> CoverageReport:
+    """The coverage report over one context's statuses, showtimes and weather.
+
+    Public because LOAD CONTEXT assembled from ``data.*`` tools (P0-24) must judge
+    coverage by this same rule, not a copy of it.
+    """
     # Which entities run on scheduled starts comes from curated data, never from
     # this payload's ``kind``: a curated show that vanished from /live must still
     # count as missing (#64 review). Only *relevant* shows need showtimes

@@ -24,17 +24,22 @@ from parkmind.services.clients.knowledge import magic_kingdom_knowledge_store
 from parkmind.services.clients.open_meteo_client import OpenMeteoClient
 from parkmind.services.clients.postgres import (
     PostgresAttractionRepository,
+    PostgresEventRepository,
+    PostgresExecutionStateRepository,
     PostgresIdMappingRepository,
     PostgresPlanRepository,
     PostgresProposalRepository,
     PostgresSnapshotRepository,
     connect,
 )
+from parkmind.services.clients.postgres.connection import DATABASE_PROBLEMS
 from parkmind.services.clients.routing_client import RoutingClient
 from parkmind.services.clients.themeparks_client import ThemeParksClient
 from parkmind.services.clients.themeparks_errors import ThemeParksClientError
 from parkmind.services.ports import (
     AttractionRepository,
+    EventRepository,
+    ExecutionStateRepository,
     IdMappingRepository,
     KnowledgeStore,
     PlanRepository,
@@ -88,10 +93,12 @@ class PlanningDeps:
     sessions: SessionStore
     plans: PlanRepository
     proposals: ProposalRepository
+    events: EventRepository
+    execution_states: ExecutionStateRepository
     collector: SnapshotCollecting | None = None
     """``None`` plans from the latest stored snapshot only (no provider call)."""
     transaction: Callable[[], AbstractContextManager[Any]] = field(default=nullcontext)
-    """One atomic unit over ``plans`` and ``proposals`` (a DB transaction by default)."""
+    """One atomic unit over the repositories (a DB transaction by default)."""
     park_data: ParkDataSource | None = None
     """Fetches (and caches in ``attractions``) a catalog or schedule the database lacks."""
 
@@ -100,9 +107,9 @@ DepsFactory = Callable[[], AbstractContextManager[PlanningDeps]]
 
 
 @contextmanager
-def default_planning_deps() -> Iterator[PlanningDeps]:
+def default_planning_deps(database_url: str | None = None) -> Iterator[PlanningDeps]:
     with ExitStack() as stack:
-        conn = stack.enter_context(connect())
+        conn = stack.enter_context(connect(database_url))
         parks = stack.enter_context(ThemeParksClient(MAGIC_KINGDOM_PARK_ID))
         weather = stack.enter_context(OpenMeteoClient())
         snapshots = PostgresSnapshotRepository(conn)
@@ -117,10 +124,21 @@ def default_planning_deps() -> Iterator[PlanningDeps]:
             sessions=session_store(conn),
             plans=PostgresPlanRepository(conn),
             proposals=PostgresProposalRepository(conn),
+            events=PostgresEventRepository(conn),
+            execution_states=PostgresExecutionStateRepository(conn),
             collector=SnapshotCollector(parks, weather, snapshots, id_mappings),
             transaction=lambda: conn.transaction(),
             park_data=parks,
         )
+
+
+_PORT_FAILURES: tuple[type[Exception], ...] = (
+    RoutingError,
+    RepositoryUnavailableError,
+    StoredDataError,
+    ThemeParksClientError,
+    *DATABASE_PROBLEMS,  # a database that is down or not migrated
+)
 
 
 @contextmanager
@@ -135,12 +153,7 @@ def open_deps(deps_factory: DepsFactory) -> Iterator[PlanningDeps]:
             yield deps
     except PlanningUnavailableError:
         raise
-    except (
-        RoutingError,
-        RepositoryUnavailableError,
-        StoredDataError,
-        ThemeParksClientError,
-    ) as exc:
+    except _PORT_FAILURES as exc:
         raise PlanningUnavailableError(f"{type(exc).__name__}: {exc}") from exc
 
 
@@ -163,13 +176,17 @@ def load_park(deps: PlanningDeps, now: datetime) -> Park:
 
     Read from the store, else fetched from the provider and stored for the next call.
     """
-    today = now.astimezone(PARK_TZ).date()
-    park = deps.attractions.get_schedule(deps.park_id, today)
+    return load_schedule(deps, now.astimezone(PARK_TZ).date())
+
+
+def load_schedule(deps: PlanningDeps, on_date: date) -> Park:
+    """The operating window on ``on_date`` (park calendar): store first, then the provider."""
+    park = deps.attractions.get_schedule(deps.park_id, on_date)
     if park is not None:
         return park
     if deps.park_data is None:
-        raise ContextUnavailableError(f"no schedule for park {deps.park_id!r} on {today}")
-    park = deps.park_data.get_schedule(today)
+        raise ContextUnavailableError(f"no schedule for park {deps.park_id!r} on {on_date}")
+    park = deps.park_data.get_schedule(on_date)
     deps.attractions.save_schedule(park)
     return park
 

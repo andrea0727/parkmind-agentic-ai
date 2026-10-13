@@ -1,0 +1,65 @@
+{
+  "description": "Hand-written snapshot pairs and the events the monitor must detect (P0-33). Times are park-local (America/New_York, EDT offsets), written independently of the detector code. 'now' is when the monitor runs; each snapshot lists statuses, posted waits (OPERATING unless stated) and hourly precipitation probabilities; 'reading_times' is the provider's lastUpdated per attraction in the current snapshot.",
+  "cases": [
+    {
+      "name": "tron goes down, space mountain spikes, rain arrives at noon",
+      "now": "2026-09-16T10:31:00-04:00",
+      "previous": {
+        "retrieved_at": "2026-09-16T10:25:00-04:00",
+        "statuses": {"tron": "OPERATING", "space": "OPERATING", "pirates": "OPERATING"},
+        "waits": {"tron": 60, "space": 25, "pirates": 15},
+        "rain": {"2026-09-16T11:00:00-04:00": 0.2, "2026-09-16T12:00:00-04:00": 0.3, "2026-09-16T13:00:00-04:00": 0.6}
+      },
+      "current": {
+        "retrieved_at": "2026-09-16T10:30:00-04:00",
+        "statuses": {"tron": "DOWN", "space": "OPERATING", "pirates": "OPERATING"},
+        "waits": {"space": 40, "pirates": 20},
+        "rain": {"2026-09-16T11:00:00-04:00": 0.2, "2026-09-16T12:00:00-04:00": 0.7, "2026-09-16T13:00:00-04:00": 0.8}
+      },
+      "reading_times": {"tron": "2026-09-16T10:27:00-04:00", "space": "2026-09-16T10:29:00-04:00", "pirates": "2026-09-16T10:29:00-04:00"},
+      "expected": [
+        {"type": "ATTRACTION_DOWN", "attraction_id": "tron"},
+        {"type": "RAIN_INCOMING", "affected_hours": ["2026-09-16T12:00:00-04:00"], "confidence": 0.7},
+        {"type": "WAIT_SPIKE", "attraction_id": "space", "delta_minutes": 15.0}
+      ]
+    },
+    {
+      "name": "tron reopens; a ride closed since July stays silent",
+      "now": "2026-09-16T14:06:00-04:00",
+      "previous": {
+        "retrieved_at": "2026-09-16T14:00:00-04:00",
+        "statuses": {"tron": "DOWN", "carousel": "OPERATING", "show": "CLOSED"},
+        "waits": {},
+        "rain": {}
+      },
+      "current": {
+        "retrieved_at": "2026-09-16T14:05:00-04:00",
+        "statuses": {"tron": "OPERATING", "carousel": "REFURBISHMENT", "show": "CLOSED"},
+        "waits": {"tron": 90},
+        "rain": {}
+      },
+      "reading_times": {"tron": "2026-09-16T14:03:00-04:00", "carousel": "2026-07-28T04:04:15-04:00", "show": "2026-07-28T04:04:15-04:00"},
+      "expected": [
+        {"type": "ATTRACTION_AVAILABLE", "attraction_id": "tron"}
+      ]
+    },
+    {
+      "name": "unimportant changes: a small wait rise, drizzle chance, a status without a previous reading",
+      "now": "2026-09-16T10:31:00-04:00",
+      "previous": {
+        "retrieved_at": "2026-09-16T10:25:00-04:00",
+        "statuses": {"space": "OPERATING"},
+        "waits": {"space": 25},
+        "rain": {"2026-09-16T11:00:00-04:00": 0.1}
+      },
+      "current": {
+        "retrieved_at": "2026-09-16T10:30:00-04:00",
+        "statuses": {"space": "OPERATING", "new_ride": "DOWN"},
+        "waits": {"space": 34},
+        "rain": {"2026-09-16T11:00:00-04:00": 0.4}
+      },
+      "reading_times": {"space": "2026-09-16T10:29:00-04:00", "new_ride": "2026-09-16T10:29:00-04:00"},
+      "expected": []
+    }
+  ]
+}

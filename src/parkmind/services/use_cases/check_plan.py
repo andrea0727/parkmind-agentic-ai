@@ -8,7 +8,13 @@ call and never returned [C19].
 from collections.abc import Sequence
 from datetime import datetime
 
-from parkmind.core.contracts import CheckResult, LiveContext, PartyConstraints, Plan
+from parkmind.core.contracts import (
+    CheckResult,
+    LiveContext,
+    PartyConstraints,
+    Plan,
+    PlanExecutionState,
+)
 from parkmind.services.planning.constraint_checker import ConstraintChecker
 from parkmind.services.use_cases.party_accessibility import party_checks, with_checks
 from parkmind.services.use_cases.planning_deps import (
@@ -50,4 +56,38 @@ class CheckPlanUseCase:
                 park,
                 live_context,
                 now,
+            )
+
+    def execute_replan(
+        self,
+        *,
+        thread_id: str,
+        plan: Plan,
+        constraints: PartyConstraints,
+        accessibility_ref: Sequence[str],
+        live_context: LiveContext,
+        execution_state: PlanExecutionState,
+    ) -> CheckResult:
+        """The same gate for a replanned day: the whole day, judged from ``execution_state``.
+
+        What was already walked counts against the walking limits, and the stops the
+        party completed are not re-checked against the live waits and statuses.
+        """
+        with open_deps(self._deps_factory) as deps:
+            catalog = load_catalog(deps)
+            now = execution_state.as_of
+            park = load_park(deps, now)
+            requirements, _ = load_requirements(deps, thread_id, accessibility_ref)
+            live_context = with_checks(
+                live_context, party_checks(requirements, catalog, deps.knowledge)
+            )
+            return ConstraintChecker().check_replan(
+                plan,
+                constraints,
+                requirements,
+                {a.node_id: a for a in catalog},
+                park,
+                live_context,
+                now,
+                execution_state,
             )
