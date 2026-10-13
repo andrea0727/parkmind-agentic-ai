@@ -318,7 +318,7 @@ def test_a_replan_is_only_explained_after_it_passed_the_checker():
     deps = make_deps()
 
     with pytest.raises(ExplainBeforeValidationError):
-        ExplainPlanUseCase(factory_for(deps)).execute_replan(
+        ExplainPlanUseCase(factory_for(deps)).prepare(
             _plan(), INVALID, reason="why", diff=PlanDiff()
         )
 

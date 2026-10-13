@@ -1,6 +1,6 @@
 """Use case: EXPLAIN a plan that already passed the ConstraintChecker.
 
-Explanation happens only after validation: ``execute`` and ``prepare`` raise
+Explanation happens only after validation: ``prepare`` raises
 ``ExplainBeforeValidationError`` for a result that is not valid. It reads the plan
 and never feeds anything back into it.
 
@@ -319,34 +319,6 @@ def _catalog_facts(deps_factory: DepsFactory) -> tuple[dict[str, str], dict[str,
 class ExplainPlanUseCase:
     def __init__(self, deps_factory: DepsFactory = default_planning_deps) -> None:
         self._deps_factory = deps_factory
-
-    def execute(
-        self, plan: Plan, check_result: CheckResult, *, guests: Sequence[Guest] = ()
-    ) -> str:
-        if not check_result.valid:
-            raise ExplainBeforeValidationError(
-                "a plan is explained only after it passed the checker"
-            )
-        names, limits = _catalog_facts(self._deps_factory)
-        return explain_plan(plan, check_result, names, guests=guests, height_limits=limits)
-
-    def execute_replan(
-        self,
-        plan: Plan,
-        check_result: CheckResult,
-        *,
-        reason: str,
-        diff: PlanDiff,
-        guests: Sequence[Guest] = (),
-    ) -> str:
-        if not check_result.valid:
-            raise ExplainBeforeValidationError(
-                "a plan is explained only after it passed the checker"
-            )
-        names, limits = _catalog_facts(self._deps_factory)
-        return explain_replan(
-            plan, check_result, names, reason=reason, diff=diff, guests=guests, height_limits=limits
-        )
 
     def prepare(
         self,

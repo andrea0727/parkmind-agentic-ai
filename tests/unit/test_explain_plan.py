@@ -34,7 +34,7 @@ def test_explaining_an_unvalidated_plan_raises():
     with pytest.raises(ExplainBeforeValidationError):
         explain_plan(factories.plan(), INVALID, {})
     with pytest.raises(ExplainBeforeValidationError):
-        ExplainPlanUseCase(factory_for(make_deps())).execute(factories.plan(), INVALID)
+        ExplainPlanUseCase(factory_for(make_deps())).prepare(factories.plan(), INVALID)
 
 
 def test_the_explanation_lists_each_stop_with_its_name_wait_and_walk():
@@ -55,7 +55,11 @@ def test_unmet_must_dos_are_called_out_by_name():
 def test_the_use_case_resolves_names_from_the_catalog():
     plan = factories.plan(stops=[factories.stop(node_id="id-tron")])
 
-    text = ExplainPlanUseCase(factory_for(make_deps())).execute(plan, CheckResult(valid=True))
+    text = (
+        ExplainPlanUseCase(factory_for(make_deps()))
+        .prepare(plan, CheckResult(valid=True))
+        .template
+    )
 
     assert "TRON" in text
 
@@ -140,8 +144,10 @@ def test_the_use_case_reads_the_height_limits_from_the_catalog():
     plan = _restricted_plan(["g1"])
     catalog = PlanningAttractionRepository([factories.attraction(height_restriction_cm=112)])
 
-    text = ExplainPlanUseCase(factory_for(make_deps(attractions=catalog))).execute(
-        plan, CheckResult(valid=True), guests=[ADULT, CHILD]
+    text = (
+        ExplainPlanUseCase(factory_for(make_deps(attractions=catalog)))
+        .prepare(plan, CheckResult(valid=True), guests=[ADULT, CHILD])
+        .template
     )
 
     assert "Guest 2 (90 cm) will skip Space Mountain (minimum height 112 cm)" in text
