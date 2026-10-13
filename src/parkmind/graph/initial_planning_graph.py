@@ -54,8 +54,14 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from parkmind.agents.elicit_agent import GuestInfoExtractor
-from parkmind.core.contracts import PARK_TZ, ApprovalStatus, RejectionReason
-from parkmind.core.language import text
+from parkmind.agents.explain_agent import (
+    AnthropicNarrator,
+    GroundedExplanation,
+    PlanNarrator,
+    explain_grounded,
+)
+from parkmind.core.contracts import PARK_TZ, ApprovalStatus, Plan, RejectionReason
+from parkmind.core.language import DEFAULT_LANGUAGE, text
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.elicitation_graph import (
     StateNode,
@@ -252,7 +258,24 @@ def _no_valid_plan(state: ParkMindState) -> dict[str, Any]:
     return {"messages": [AIMessage(content="\n".join(lines))], "candidate_plan": None}
 
 
-def _make_explain_node(deps_factory: DepsFactory) -> StateNode:
+def explained(plan: Plan, result: GroundedExplanation) -> dict[str, Any]:
+    """EXPLAIN's state update: the text, and which prompt wrote it in the plan's provenance.
+
+    ``prompt_versions["explain"]`` is ``explain-v1`` for grounded LLM text and
+    ``template`` for the fallback; it travels to the proposal with the plan.
+    """
+    provenance = plan.provenance
+    versions = {**provenance.prompt_versions, "explain": result.prompt_version}
+    return {
+        "explanation": result.text,
+        "candidate_plan": plan.model_copy(
+            update={"provenance": provenance.model_copy(update={"prompt_versions": versions})}
+        ),
+    }
+
+
+def _make_explain_node(deps_factory: DepsFactory, narrator: PlanNarrator | None) -> StateNode:
+    """EXPLAIN (section 40, P0-31): the narrator's grounded text, else the template."""
     use_case = ExplainPlanUseCase(deps_factory)
 
     def explain(state: ParkMindState) -> dict[str, Any]:
@@ -261,12 +284,18 @@ def _make_explain_node(deps_factory: DepsFactory) -> StateNode:
         if plan is None or check is None:
             raise ValueError("a checked candidate plan is required")
         constraints = state.get("constraints")
-        guests = constraints.guests if constraints is not None else []
-        return {
-            "explanation": use_case.execute(
-                plan, check, guests=guests, lang=language_of(state)
-            )
-        }
+        lang = language_of(state)
+        prepared = use_case.prepare(
+            plan,
+            check,
+            guests=constraints.guests if constraints is not None else [],
+            must_do=constraints.must_do if constraints is not None else [],
+            objective=state.get("group_objective"),
+            lang=lang,
+        )
+        # The narrator writes English only; other languages get the localized template.
+        active = narrator if lang == DEFAULT_LANGUAGE else None
+        return explained(plan, explain_grounded(active, prepared))
 
     return explain
 
@@ -400,9 +429,16 @@ def _interrupt_for_approval(
 
 
 def build_planning_stage(
-    deps_factory: DepsFactory = default_planning_deps, clock: Clock = park_clock
+    deps_factory: DepsFactory = default_planning_deps,
+    clock: Clock = park_clock,
+    narrator: PlanNarrator | None = None,
 ) -> Any:
-    """LOAD CONTEXT -> RESOLVE GROUP -> BUILD PLAN -> CHECK -> EXPLAIN -> PROPOSE -> APPROVAL."""
+    """LOAD CONTEXT -> RESOLVE GROUP -> BUILD PLAN -> CHECK -> EXPLAIN -> PROPOSE -> APPROVAL.
+
+    Built on its own, the stage's EXPLAIN uses the template unless a ``narrator`` is
+    given; ``build_initial_planning_graph``, the graph the app runs, passes Claude by
+    default.
+    """
     graph = StateGraph(ParkMindState)
 
     def propose_plan(state: ParkMindState) -> ParkMindState:
@@ -419,7 +455,7 @@ def build_planning_stage(
     guarded_node("resolve_group", _make_resolve_group_node(deps_factory), "build_plan")
     guarded_node("build_plan", _make_build_plan_node(deps_factory, clock), "check_plan")
     guarded_node("check_plan", _make_check_plan_node(deps_factory, clock), None)
-    guarded_node("explain", _make_explain_node(deps_factory), "propose_plan")
+    guarded_node("explain", _make_explain_node(deps_factory, narrator), "propose_plan")
     guarded_node("propose_plan", cast(StateNode, propose_plan), "interrupt_approval")
     graph.add_node("no_valid_plan", _no_valid_plan)
     graph.add_node("interrupt_approval", interrupt_approval)
@@ -439,11 +475,14 @@ def build_initial_planning_graph(
     deps_factory: DepsFactory = default_planning_deps,
     clock: Clock = park_clock,
     names: AttractionNameResolver | None = None,
+    narrator: PlanNarrator | None = None,
 ) -> Any:
     """Compile the end-to-end initial planning graph.
 
     Nothing is opened here: connections and provider clients are created per node
     by ``deps_factory``, so building the graph needs no database or network.
+    EXPLAIN uses ``narrator``, Claude by default (like elicit's extractor); without a
+    key, or whenever its text is not grounded, the template stands in.
     """
     resolver = names or AttractionNameResolver(
         deferred_attraction_repository(deps_factory), MAGIC_KINGDOM_PARK_ID
@@ -452,6 +491,9 @@ def build_initial_planning_graph(
         extractor,
         intake,
         checkpointer or default_checkpointer(),
-        cast(StateNode, build_planning_stage(deps_factory, clock)),
+        cast(
+            StateNode,
+            build_planning_stage(deps_factory, clock, narrator or AnthropicNarrator()),
+        ),
         names=resolver,
     )

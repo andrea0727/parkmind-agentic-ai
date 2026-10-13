@@ -6,6 +6,7 @@ natural language -> confirm hard constraints -> LOAD CONTEXT -> RESOLVE GROUP ->
 BUILD PLAN -> CHECK -> EXPLAIN -> PROPOSE -> human approval.
 """
 
+import json
 import re
 import sys
 from datetime import timedelta
@@ -14,6 +15,7 @@ from typing import Any
 import factories
 import pytest
 from elicit_support import FakeExtractor, make_intake, make_names, scenario
+from explain_support import NoNarrator, ScriptedNarrator
 from fakes import InMemorySnapshotRepository
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command
@@ -79,6 +81,7 @@ class _Harness:
         snapshot_age: timedelta = timedelta(0),
         collector: Any = None,
         extraction: Any = None,
+        narrator: Any = None,
     ):
         self.events: list[str] = []
         intake, sessions = make_intake()
@@ -94,12 +97,13 @@ class _Harness:
             deps_factory=factory_for(deps),
             clock=lambda: NOW,
             names=make_names(),
+            narrator=narrator or NoNarrator(),
         )
         self._spy(monkeypatch, ipg.LoadContextUseCase, "execute", "load_context")
         self._spy(monkeypatch, ipg.BuildPlanUseCase, "resolve_group", "resolve_group")
         self._spy(monkeypatch, ipg.BuildPlanUseCase, "build", "build_plan")
         self._spy(monkeypatch, ipg.CheckPlanUseCase, "execute", "check")
-        self._spy(monkeypatch, ipg.ExplainPlanUseCase, "execute", "explain")
+        self._spy(monkeypatch, ipg.ExplainPlanUseCase, "prepare", "explain")
         self._spy(monkeypatch, ipg.ProposePlanUseCase, "execute", "propose")
         self._spy_resolve(monkeypatch)
 
@@ -499,3 +503,31 @@ def test_stale_data_that_stays_stale_ends_with_the_reason(monkeypatch):
     assert state["check_result"] is not None and not state["check_result"].valid
     assert state.get("candidate_plan") is None
     assert h.proposals == []
+
+
+# --- EXPLAIN through the grounded narrator (P0-31) ------------------------------------
+
+
+def test_a_grounded_narration_is_what_the_guests_read(monkeypatch):
+    narrator = ScriptedNarrator("Here is your day at the park.")
+    h = _Harness(monkeypatch, narrator=narrator)
+
+    h.confirm()
+
+    [proposal] = h.proposals
+    assert proposal.explanation == "Here is your day at the park."
+    assert proposal.provenance.prompt_versions["explain"] == "explain-v1"
+    payload = json.loads(narrator.payloads[0])
+    assert payload["stops"] and "preferences" in payload
+
+
+def test_an_ungrounded_narration_falls_back_to_the_template(monkeypatch):
+    narrator = ScriptedNarrator("A 999 minute wait.", "Still a 999 minute wait.")
+    h = _Harness(monkeypatch, narrator=narrator)
+
+    h.confirm()
+
+    [proposal] = h.proposals
+    assert "999" not in proposal.explanation
+    assert re.match(r"\d+ stops, ", proposal.explanation)
+    assert proposal.provenance.prompt_versions["explain"] == "template"

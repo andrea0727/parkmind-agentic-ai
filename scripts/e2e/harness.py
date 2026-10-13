@@ -59,7 +59,7 @@ def install_stage_spies() -> None:
         (ipg.BuildPlanUseCase, "resolve_group", "resolve_group"),
         (ipg.BuildPlanUseCase, "build", "build_plan"),
         (ipg.CheckPlanUseCase, "execute", "check"),
-        (ipg.ExplainPlanUseCase, "execute", "explain"),
+        (ipg.ExplainPlanUseCase, "prepare", "explain"),
         (ipg.ProposePlanUseCase, "execute", "propose"),
         (ipg.ResolveProposalUseCase, "execute", "resolve_proposal"),
     ):
