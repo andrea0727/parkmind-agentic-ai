@@ -1,7 +1,9 @@
 """The deterministic numeral check behind EXPLAIN (P0-31 Done-when: "No numerical value
 can be introduced unless present in the supplied data")."""
 
+import json
 from datetime import timedelta
+from pathlib import Path
 
 import factories
 import pytest
@@ -115,3 +117,19 @@ def test_the_template_never_says_a_figure_its_payload_lacks(replan: bool):
 def test_a_colon_after_a_time_is_punctuation_but_seconds_are_not_a_time():
     assert numerals("Space Mountain at 14:05: then lunch") == {"14:05"}
     assert numerals("at 14:05:30") == {"14", "5", "30"}
+
+
+# --- the fixture behind the Done-when -----------------------------------------------
+
+FIXTURE = json.loads(
+    (Path(__file__).resolve().parents[1] / "fixtures" / "explain" / "grounded_cases.json")
+    .read_text(encoding="utf-8")
+)
+CASES = FIXTURE["cases"]
+
+
+@pytest.mark.parametrize("case", CASES, ids=[c["name"] for c in CASES])
+def test_fixture_outputs_get_exactly_the_expected_verdict(case):
+    payload = json.dumps(FIXTURE["payload"], ensure_ascii=False, indent=1)
+
+    assert ungrounded_numerals(case["output"], payload) == case["ungrounded"]
