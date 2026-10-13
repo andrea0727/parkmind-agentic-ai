@@ -39,6 +39,10 @@ class NotExpectedError(ConversationError):
     """The input does not answer what the planner is waiting for."""
 
 
+class UnknownAttractionError(ConversationError):
+    """An event names an attraction that is not in the park catalog."""
+
+
 class StaleProposalError(ConversationError):
     """The decision names a proposal that is no longer the one waiting for the guests."""
 

@@ -51,18 +51,42 @@ _CATALOG: dict[str, dict[Language, str]] = {
         "en": "What time do you plan to leave the park?",
         "es": "¿A qué hora piensan salir del parque?",
     },
+    "q_departure_time_solo": {
+        "en": "What time do you plan to leave the park?",
+        "es": "¿A qué hora piensas salir del parque?",
+    },
     "q_unreadable_response": {
         "en": "I couldn't understand that. Could you describe your party and plans again?",
         "es": "No pude entender eso. ¿Pueden describir de nuevo a su grupo y sus planes?",
+    },
+    "q_unreadable_response_solo": {
+        "en": "I couldn't understand that. Could you describe your plans again?",
+        "es": "No pude entender eso. ¿Puedes describir de nuevo tus planes?",
     },
     "q_guest_role": {
         "en": "Is {who} an adult or a child?",
         "es": "¿{who} es adulto o niño?",
     },
-    "q_unknown_attraction": {
-        "en": "I couldn't find '{name}' among this park's attractions. Which attraction do you mean?",
-        "es": "No encontré '{name}' entre las atracciones de este parque. ¿A qué atracción se refieren?",
+    "q_guest_role_solo": {
+        "en": "Are you an adult or a child?",
+        "es": "¿Eres adulto o niño?",
     },
+    "q_unknown_attraction": {
+        "en": "I couldn't find '{name}' among this park's attractions.{options} Which one do you mean?",
+        "es": "No encontré '{name}' entre las atracciones de este parque.{options} ¿A cuál se refieren?",
+    },
+    "q_unknown_attraction_solo": {
+        "en": "I couldn't find '{name}' among this park's attractions.{options} Which one do you mean?",
+        "es": "No encontré '{name}' entre las atracciones de este parque.{options} ¿A cuál te refieres?",
+    },
+    "attraction_options": {
+        "en": " The park has: {groups}.",
+        "es": " El parque tiene: {groups}.",
+    },
+    "attraction_group_THRILL": {"en": "thrill rides", "es": "intensas"},
+    "attraction_group_FAMILY": {"en": "gentle family rides", "es": "suaves o familiares"},
+    "attraction_group_DARK_RIDE": {"en": "dark rides", "es": "recorridos oscuros"},
+    "attraction_group_WATER": {"en": "water rides", "es": "de agua"},
     "q_ambiguous_attraction": {
         "en": "'{name}' could be {options}. Which one do you mean?",
         "es": "'{name}' podría ser {options}. ¿Cuál de ellas?",
@@ -77,6 +101,16 @@ _CATALOG: dict[str, dict[Language, str]] = {
             "¿Cuánto mide la Persona {guest}, en cm (entre 50 y 250)?"
         ),
     },
+    "q_unverified_height_solo": {
+        "en": (
+            "I couldn't match the height I understood to what you wrote. "
+            "How tall are you, in cm (between 50 and 250)?"
+        ),
+        "es": (
+            "No pude relacionar la estatura que entendí con lo que escribiste. "
+            "¿Cuánto mides, en cm (entre 50 y 250)?"
+        ),
+    },
     "q_conflicting_attraction": {
         "en": (
             "'{name}' is on both your must-do and your avoid list. "
@@ -87,9 +121,23 @@ _CATALOG: dict[str, dict[Language, str]] = {
             "¿La quieren en el plan o fuera de él?"
         ),
     },
+    "q_conflicting_attraction_solo": {
+        "en": (
+            "'{name}' is on both your must-do and your avoid list. "
+            "Do you want it in the plan, or kept out of it?"
+        ),
+        "es": (
+            "'{name}' está en tu lista de imprescindibles y también en la de evitar. "
+            "¿La quieres en el plan o fuera de él?"
+        ),
+    },
     "q_generic": {
         "en": "Could you tell me about {key}?",
         "es": "¿Pueden contarme sobre {key}?",
+    },
+    "q_generic_solo": {
+        "en": "Could you tell me about {key}?",
+        "es": "¿Puedes contarme sobre {key}?",
     },
     "what_to_change": {
         "en": "What should I change?",
@@ -107,6 +155,10 @@ _CATALOG: dict[str, dict[Language, str]] = {
     "echo_departure_time": {
         "en": "You leave the park at {value}: the plan must end by then.",
         "es": "Salen del parque a las {value}: el plan debe terminar para entonces.",
+    },
+    "echo_departure_time_solo": {
+        "en": "You leave the park at {value}: the plan must end by then.",
+        "es": "Sales del parque a las {value}: el plan debe terminar para entonces.",
     },
     "echo_lunch_window": {
         "en": "Lunch is fixed between {start} and {end}.",
@@ -126,6 +178,16 @@ _CATALOG: dict[str, dict[Language, str]] = {
             "se omitirán las atracciones con una estatura mínima mayor."
         ),
     },
+    "echo_height_solo": {
+        "en": (
+            "You are {value} cm tall (about {feet}): "
+            "rides with a higher minimum will be skipped."
+        ),
+        "es": (
+            "Mides {value} cm: "
+            "se omitirán las atracciones con una estatura mínima mayor."
+        ),
+    },
     # planning stage
     "superseded": {
         "en": (
@@ -137,13 +199,31 @@ _CATALOG: dict[str, dict[Language, str]] = {
             "de lado y no se activó nada."
         ),
     },
+    "superseded_solo": {
+        "en": (
+            "Something in the park changed while you were deciding, so this proposal was "
+            "set aside and nothing was activated."
+        ),
+        "es": (
+            "Algo cambió en el parque mientras decidías, así que esta propuesta se dejó "
+            "de lado y no se activó nada."
+        ),
+    },
     "keeps_plan": {
         "en": "Your current plan stays as it was.",
         "es": "Su plan actual sigue como estaba.",
     },
+    "keeps_plan_solo": {
+        "en": "Your current plan stays as it was.",
+        "es": "Tu plan actual sigue como estaba.",
+    },
     "ask_again": {
         "en": "Ask me for a new plan and I'll build it from the latest park information.",
         "es": "Pídanme un plan nuevo y lo armaré con la información más reciente del parque.",
+    },
+    "ask_again_solo": {
+        "en": "Ask me for a new plan and I'll build it from the latest park information.",
+        "es": "Pídeme un plan nuevo y lo armaré con la información más reciente del parque.",
     },
     "unavailable": {
         "en": (
@@ -153,6 +233,16 @@ _CATALOG: dict[str, dict[Language, str]] = {
         "es": (
             "No pude armar un plan ahora porque falta información del parque que necesito. "
             "No se propuso nada. Intenten de nuevo en unos minutos."
+        ),
+    },
+    "unavailable_solo": {
+        "en": (
+            "I couldn't put a plan together right now because some of the park information "
+            "I need isn't available. Nothing was proposed. Please try again in a few minutes."
+        ),
+        "es": (
+            "No pude armar un plan ahora porque falta información del parque que necesito. "
+            "No se propuso nada. Intenta de nuevo en unos minutos."
         ),
     },
     "no_valid_plan": {
@@ -169,6 +259,16 @@ _CATALOG: dict[str, dict[Language, str]] = {
             "de salida) y lo intento de nuevo."
         ),
     },
+    "relax_hint_solo": {
+        "en": (
+            "You can relax a constraint (for example the must-dos or the departure time) "
+            "and I'll try again."
+        ),
+        "es": (
+            "Puedes flexibilizar una restricción (por ejemplo los imprescindibles o la hora "
+            "de salida) y lo intento de nuevo."
+        ),
+    },
     "initial_plan_reason": {
         "en": "Initial plan for the party",
         "es": "Plan inicial para el grupo",
@@ -182,6 +282,16 @@ _CATALOG: dict[str, dict[Language, str]] = {
         "es": (
             "Todavía no hay un plan confirmado para este grupo, así que no hay nada que "
             "ajustar. Pídanme un plan primero."
+        ),
+    },
+    "nothing_to_replan_solo": {
+        "en": (
+            "There is no confirmed plan yet, so there is nothing to adjust. "
+            "Ask me for a plan first."
+        ),
+        "es": (
+            "Todavía no hay un plan confirmado, así que no hay nada que "
+            "ajustar. Pídeme un plan primero."
         ),
     },
     "replan_not_proposed": {
@@ -233,6 +343,10 @@ _CATALOG: dict[str, dict[Language, str]] = {
         "en": "Lunch (restaurant to be chosen, near your previous stop)",
         "es": "Almuerzo (restaurante por elegir, cerca de su parada anterior)",
     },
+    "plan_lunch_tbd_solo": {
+        "en": "Lunch (restaurant to be chosen, near your previous stop)",
+        "es": "Almuerzo (restaurante por elegir, cerca de tu parada anterior)",
+    },
     "plan_skip": {
         "en": "{who} will skip {name} (minimum height {limit} cm) and wait outside.",
         "es": "{who} no subirá a {name} (estatura mínima {limit} cm) y esperará afuera.",
@@ -240,6 +354,10 @@ _CATALOG: dict[str, dict[Language, str]] = {
     "plan_unmet": {
         "en": "Could not fit your must-dos today: {names}.",
         "es": "No pudieron caber hoy sus imprescindibles: {names}.",
+    },
+    "plan_unmet_solo": {
+        "en": "Could not fit your must-dos today: {names}.",
+        "es": "No pudieron caber hoy tus imprescindibles: {names}.",
     },
     "diff_added": {"en": "Added", "es": "Agregado"},
     "diff_removed": {"en": "Removed", "es": "Quitado"},
@@ -253,6 +371,13 @@ _CATALOG: dict[str, dict[Language, str]] = {
 }
 
 
-def text(key: str, lang: Language = DEFAULT_LANGUAGE, /, **params: object) -> str:
-    """The planner's wording for ``key`` in ``lang``, with ``params`` filled in."""
-    return _CATALOG[key][lang].format(**params)
+def text(
+    key: str, lang: Language = DEFAULT_LANGUAGE, /, *, solo: bool = False, **params: object
+) -> str:
+    """The planner's wording for ``key`` in ``lang``, with ``params`` filled in.
+
+    ``solo`` picks the singular wording (``<key>_solo``) when the catalog has one: the
+    party is a single person, so Spanish says "tu"/"puedes", not "su"/"pueden".
+    """
+    entry = _CATALOG.get(f"{key}_solo") if solo else None
+    return (entry or _CATALOG[key])[lang].format(**params)

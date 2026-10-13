@@ -25,6 +25,12 @@ def language_of(state: ParkMindState) -> Language:
     return state.get("language") or DEFAULT_LANGUAGE
 
 
+def solo_of(state: ParkMindState) -> bool:
+    """Whether the party is a single guest, so messages address "you" rather than "you all"."""
+    constraints = state.get("constraints")
+    return constraints is not None and len(constraints.guests) == 1
+
+
 def set_constraints(
     state: ParkMindState, constraints: PartyConstraints
 ) -> ParkMindState:

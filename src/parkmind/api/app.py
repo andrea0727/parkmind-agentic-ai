@@ -51,6 +51,7 @@ from parkmind.core.conversation import (
     HardConstraintAnswer,
     NotExpectedError,
     StaleProposalError,
+    UnknownAttractionError,
     UnknownThreadError,
 )
 from parkmind.services.use_cases.describe_plan import DescribePlanUseCase
@@ -229,6 +230,10 @@ def create_app(
     @app.exception_handler(StaleProposalError)
     async def _stale(_: Request, exc: StaleProposalError) -> JSONResponse:
         return _problem(409, exc)
+
+    @app.exception_handler(UnknownAttractionError)
+    async def _unknown_attraction(_: Request, exc: UnknownAttractionError) -> JSONResponse:
+        return _problem(422, exc)
 
     @app.exception_handler(ConversationError)
     async def _conversation(_: Request, exc: ConversationError) -> JSONResponse:

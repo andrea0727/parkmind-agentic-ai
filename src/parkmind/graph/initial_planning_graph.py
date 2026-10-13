@@ -68,6 +68,7 @@ from parkmind.graph.state_helpers import (
     language_of,
     propose_plan_change,
     reject_plan,
+    solo_of,
 )
 from parkmind.services.use_cases.accessibility_intake import AccessibilityIntakeUseCase
 from parkmind.services.use_cases.build_plan import BuildPlanUseCase
@@ -137,7 +138,7 @@ def _guarded(node: StateNode, *, then: str | None) -> StateNode:
             logger.exception("planning is unavailable")
             return Command(
                 update={
-                    "messages": [AIMessage(content=text("unavailable", language_of(state)))],
+                    "messages": [AIMessage(content=text("unavailable", language_of(state), solo=solo_of(state)))],
                     "candidate_plan": None,
                     "check_result": None,
                     "explanation": None,
@@ -247,7 +248,7 @@ def _no_valid_plan(state: ParkMindState) -> dict[str, Any]:
     lang = language_of(state)
     lines = [text("no_valid_plan", lang)]
     lines += [f"- {reason}" for reason in reasons]
-    lines.append(text("relax_hint", lang))
+    lines.append(text("relax_hint", lang, solo=solo_of(state)))
     return {"messages": [AIMessage(content="\n".join(lines))], "candidate_plan": None}
 
 
@@ -380,10 +381,10 @@ def _interrupt_for_approval(
             # [C18]): the decision is dropped, nothing is activated.
             logger.info("decision on %s not applied: %s", proposal.proposal_id, exc)
             lang = language_of(state)
-            parts = [text("superseded", lang)]
+            parts = [text("superseded", lang, solo=solo_of(state))]
             if state.get("current_plan"):
-                parts.append(text("keeps_plan", lang))
-            parts.append(text("ask_again", lang))
+                parts.append(text("keeps_plan", lang, solo=solo_of(state)))
+            parts.append(text("ask_again", lang, solo=solo_of(state)))
             message = " ".join(parts)
             return {
                 "messages": [AIMessage(content=message)],

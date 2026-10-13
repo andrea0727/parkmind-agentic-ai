@@ -343,3 +343,17 @@ def test_the_api_package_imports_no_planner_graph_or_client_code():
                 assert not name.startswith(PLANNER_MODULES), (
                     f"{path.name} imports {name}"
                 )
+
+
+def test_an_event_on_an_unknown_attraction_is_a_422_not_a_silent_ignore(client):
+    t, turn = _to_proposal(client)
+    client.post(f"/api/proposal/{turn['proposal']['proposal_id']}/approve", params=t)
+
+    response = client.post(
+        "/api/events",
+        params=t,
+        json={"type": "ATTRACTION_DOWN", "attraction_id": "not_a_ride"},
+    )
+
+    assert response.status_code == 422
+    assert "not_a_ride" in response.json()["detail"]

@@ -33,6 +33,7 @@ from parkmind.core.conversation import (
     StaleProposalError,
     Turn,
     TurnStatus,
+    UnknownAttractionError,
     UnknownThreadError,
 )
 from parkmind.core.language import as_language
@@ -40,7 +41,12 @@ from parkmind.graph.initial_planning_graph import APPROVAL_INTERRUPT_KIND
 from parkmind.graph.replanning_graph import EVENT_CONFIRMATION_INTERRUPT_KIND
 from parkmind.services.use_cases.active_plan import ActivePlanUseCase
 from parkmind.services.use_cases.pending_proposal import PendingProposalUseCase
-from parkmind.services.use_cases.planning_deps import DepsFactory, default_planning_deps
+from parkmind.services.use_cases.planning_deps import (
+    DepsFactory,
+    default_planning_deps,
+    load_catalog,
+    open_deps,
+)
 
 MISSING_INFORMATION_KIND = "missing_information"
 HARD_CONSTRAINT_KIND = "hard_constraint_confirmation"
@@ -75,6 +81,7 @@ class ConversationService:
             "initial": initial_graph,
             "replanning": replanning_graph,
         }
+        self._deps_factory = deps_factory
         self._pending = PendingProposalUseCase(deps_factory)
         self._active = ActivePlanUseCase(deps_factory)
         self._new_thread_id = new_thread_id
@@ -156,8 +163,21 @@ class ConversationService:
                 raise NotExpectedError(
                     f"the planner is waiting for {thread.waiting_for}"
                 )
+            self._require_known_attractions(events)
             payload = {"thread_id": thread_id, "events": list(events)}
             return self._run(thread_id, thread, "replanning", payload)
+
+    def _require_known_attractions(self, events: Sequence[Event]) -> None:
+        named = {e.attraction_id for e in events if e.attraction_id is not None}
+        if not named:
+            return
+        with open_deps(self._deps_factory) as deps:
+            known = {a.node_id for a in load_catalog(deps)}
+        unknown = sorted(named - known)
+        if unknown:
+            raise UnknownAttractionError(
+                f"unknown attraction: {', '.join(unknown)}"
+            )
 
     def pending_proposal(self, thread_id: str) -> tuple[Proposal, Plan] | None:
         self._thread(thread_id)

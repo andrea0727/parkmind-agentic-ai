@@ -128,3 +128,68 @@ def test_the_elicit_node_defaults_to_english() -> None:
 
     assert update["language"] == "en"
     assert re.search(r"leave", update["messages"][0].content)
+
+
+def test_guest_role_question_never_shows_the_internal_id() -> None:
+    from parkmind.agents.elicit_agent import _question_for
+
+    assert _question_for(["guest_role:g1"], None, "es", 1) == "¿Eres adulto o niño?"
+    assert _question_for(["guest_role:g2"], None, "es", 2) == "¿Persona 2 es adulto o niño?"
+    assert _question_for(["guest_role:g2"], None, "en", 2) == "Is Guest 2 an adult or a child?"
+
+
+def test_unknown_attraction_question_lists_what_the_park_has_by_intensity() -> None:
+    from parkmind.agents.elicit_agent import _question_for
+    from parkmind.services.use_cases.resolve_attraction_names import NameResolution
+
+    resolution = NameResolution(
+        unknown=("Space Rocket",),
+        options_by_category={"THRILL": ("Big Drop", "Twister"), "FAMILY": ("Carousel",)},
+    )
+    missing = ["unknown_attraction:Space Rocket"]
+
+    solo = _question_for(missing, resolution, "es", 1)
+    group = _question_for(missing, resolution, "es", 3)
+
+    assert "intensas (Big Drop, Twister)" in solo
+    assert "suaves o familiares (Carousel)" in solo
+    assert solo.endswith("¿A cuál te refieres?")
+    assert group.endswith("¿A cuál se refieren?")
+
+
+def test_every_solo_wording_has_the_same_placeholders_as_the_plural_one() -> None:
+    fields = string.Formatter().parse
+    for key, entry in _CATALOG.items():
+        if key.endswith("_solo") and key.removesuffix("_solo") in _CATALOG:
+            base = _CATALOG[key.removesuffix("_solo")]
+            for lang in entry:
+                solo_fields = {f for _, f, _, _ in fields(entry[lang]) if f}
+                base_fields = {f for _, f, _, _ in fields(base[lang]) if f}
+                assert solo_fields <= base_fields, key
+
+
+def test_party_of_one_is_addressed_in_the_singular() -> None:
+    assert text("keeps_plan", "es", solo=True) == "Tu plan actual sigue como estaba."
+    assert text("keeps_plan", "es") == "Su plan actual sigue como estaba."
+    assert echo_for("departure_time: 18:00", "es", solo=True).startswith("Sales ")
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("Voy solo, mido 1.75, salgo a las 8pm", 175.0),
+        ("Voy solo, mido 1,75, salgo a las 8pm", 175.0),
+        ("I'm 175, leaving at 8pm", 175.0),
+        ("Mido 1.75.", 175.0),
+    ],
+)
+def test_a_height_followed_by_punctuation_is_still_found(message: str, expected: float) -> None:
+    from parkmind.agents.elicit_agent import heights_mentioned_cm
+
+    assert expected in heights_mentioned_cm(message)
+
+
+def test_a_time_is_not_read_as_a_height() -> None:
+    from parkmind.agents.elicit_agent import heights_mentioned_cm
+
+    assert 18.0 not in heights_mentioned_cm("salimos a las 18:30, somos 2")

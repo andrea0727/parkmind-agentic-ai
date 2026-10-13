@@ -689,7 +689,7 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
         if (turn.status === "needs_event_confirmation") upd(() => ({ sheet: true }));
         await deliverTurn(turn);
       } catch (e) {
-        toast(e instanceof ApiError ? e.message : String(e));
+        toast(e instanceof ApiError ? (e.status === 422 ? tt("ev_unknown") : e.message) : String(e));
       }
     },
     [upd, toast, notify, deliverTurn],

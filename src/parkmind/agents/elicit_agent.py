@@ -238,9 +238,9 @@ _FEET_RE = re.compile(
     r"(\d)\s*(?:'|’|ft\b|feet\b|foot\b|-foot\b|pies?\b)\s*(?:(\d{1,2})\s*(?:\"|in\b|inch\w*|pulgadas?\b)?)?",
     re.IGNORECASE,
 )
-_DECIMAL_METERS_RE = re.compile(r"(?<![\d.,])([12][.,]\d{1,2})(?![\d.,])")
+_DECIMAL_METERS_RE = re.compile(r"(?<![\d.,])([12][.,]\d{1,2})(?!\d|[.,]\d)")
 _BARE_RE = re.compile(
-    r"(?<![\d.,:])(\d{2,3})(?![\d.,:])(?!\s*(?:min|minutes?|minutos?|hours?|horas?|hrs?|h\b|pm|am|%|years?|años?|anos?|yo\b))",
+    r"(?<![\d.,:])(\d{2,3})(?!\d|[.,:]\d)(?!\s*(?:min|minutes?|minutos?|hours?|horas?|hrs?|h\b|pm|am|%|years?|años?|anos?|yo\b))",
     re.IGNORECASE,
 )
 
@@ -312,14 +312,32 @@ def _question_for(
     missing: Sequence[str],
     resolution: NameResolution | None = None,
     lang: Language = DEFAULT_LANGUAGE,
+    party_size: int = 0,
 ) -> str:
     questions: list[str] = []
+    solo = party_size == 1
     for key in missing:
         if key.startswith("guest_role:"):
-            questions.append(text("q_guest_role", lang, who=key.split(":", 1)[1]))
+            number = key.split(":", 1)[1].removeprefix("g")
+            if solo:
+                questions.append(text("q_guest_role_solo", lang))
+            else:
+                who = text("guest_label", lang, number=number)
+                questions.append(text("q_guest_role", lang, who=who))
         elif key.startswith(_UNKNOWN_ATTRACTION):
             name = key.removeprefix(_UNKNOWN_ATTRACTION)
-            questions.append(text("q_unknown_attraction", lang, name=name))
+            groups = (
+                "; ".join(
+                    f"{text(f'attraction_group_{category}', lang)} ({', '.join(names)})"
+                    for category, names in resolution.options_by_category.items()
+                )
+                if resolution is not None
+                else ""
+            )
+            suggestions = text("attraction_options", lang, groups=groups) if groups else ""
+            questions.append(
+                text("q_unknown_attraction", lang, solo=solo, name=name, options=suggestions)
+            )
         elif key.startswith(_AMBIGUOUS_ATTRACTION):
             name = key.removeprefix(_AMBIGUOUS_ATTRACTION)
             options = resolution.ambiguous[name] if resolution is not None else ()
@@ -333,14 +351,14 @@ def _question_for(
             )
         elif key.startswith(_UNVERIFIED_HEIGHT):
             guest = key.removeprefix(_UNVERIFIED_HEIGHT).removeprefix("g")
-            questions.append(text("q_unverified_height", lang, guest=guest))
+            questions.append(text("q_unverified_height", lang, solo=solo, guest=guest))
         elif key.startswith(_CONFLICTING_ATTRACTION):
             name = key.removeprefix(_CONFLICTING_ATTRACTION)
-            questions.append(text("q_conflicting_attraction", lang, name=name))
+            questions.append(text("q_conflicting_attraction", lang, solo=solo, name=name))
         elif key in _MISSING_QUESTIONS:
-            questions.append(text(_MISSING_QUESTIONS[key], lang))
+            questions.append(text(_MISSING_QUESTIONS[key], lang, solo=solo))
         else:
-            questions.append(text("q_generic", lang, key=key))
+            questions.append(text("q_generic", lang, solo=solo, key=key))
     return " ".join(questions)
 
 
@@ -460,11 +478,11 @@ def pending_confirmations(
     return pending
 
 
-def echo_for(entry: str, lang: Language = DEFAULT_LANGUAGE) -> str:
+def echo_for(entry: str, lang: Language = DEFAULT_LANGUAGE, *, solo: bool = False) -> str:
     """Plain-language echo of a non-accessibility pending entry, for confirmation."""
     kind, _, value = entry.partition(": ")
     if kind in ("must_do", "avoid", "departure_time", "walking_budget"):
-        return text(f"echo_{kind}", lang, value=value)
+        return text(f"echo_{kind}", lang, solo=solo, value=value)
     if kind == "lunch_window":
         start, _, end = value.partition("-")
         return text("echo_lunch_window", lang, start=start, end=end)
@@ -473,6 +491,7 @@ def echo_for(entry: str, lang: Language = DEFAULT_LANGUAGE) -> str:
         return text(
             "echo_height",
             lang,
+            solo=solo,
             guest=guest,
             value=value,
             feet=_feet_inches(float(value)),
@@ -580,7 +599,12 @@ def make_elicit_node(
                 "pending_hard_constraint_confirmation": None,
                 "messages": [
                     AIMessage(
-                        content=_question_for(missing, resolution, lang),
+                        content=_question_for(
+                            missing,
+                            resolution,
+                            lang,
+                            len(outcome.extraction.guests) if outcome.extraction else 0,
+                        ),
                         additional_kwargs={"missing_information": missing},
                     )
                 ],

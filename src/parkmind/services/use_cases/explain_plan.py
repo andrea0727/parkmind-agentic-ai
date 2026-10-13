@@ -70,7 +70,8 @@ def explain_plan(
 ) -> str:
     if not check_result.valid:
         raise ExplainBeforeValidationError("a plan is explained only after it passed the checker")
-    names = {**names, MEAL_VENUE_TBD: text("plan_lunch_tbd", lang)}
+    solo = len(guests) == 1
+    names = {**names, MEAL_VENUE_TBD: text("plan_lunch_tbd", lang, solo=solo)}
     lines = [
         text(
             "plan_stop",
@@ -92,7 +93,7 @@ def explain_plan(
     parts = [summary, *lines, *_skipped_rides(plan, names, guests, height_limits or {}, lang)]
     if plan.unmet_must_do:
         unmet = ", ".join(names.get(node_id, node_id) for node_id in plan.unmet_must_do)
-        parts.append(text("plan_unmet", lang, names=unmet))
+        parts.append(text("plan_unmet", lang, solo=solo, names=unmet))
     return "\n".join(parts)
 
 

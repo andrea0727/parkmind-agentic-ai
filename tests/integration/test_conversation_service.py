@@ -11,8 +11,10 @@ from parkmind.core.conversation import (
     NotExpectedError,
     StaleProposalError,
     TurnStatus,
+    UnknownAttractionError,
     UnknownThreadError,
 )
+from parkmind.services.use_cases.planning_deps import load_catalog
 
 CONFIRM = HardConstraintAnswer(confirmed=True, consent=True)
 
@@ -144,9 +146,30 @@ def test_an_event_before_any_plan_says_there_is_nothing_to_adjust():
     rig = make_rig()
     thread = rig.service.start()
 
+    known = load_catalog(rig.deps)[0].node_id
+
     turn = rig.service.report_events(
-        thread, [factories.event(event_id="e1", timestamp=NOW)]
+        thread, [factories.event(event_id="e1", attraction_id=known, timestamp=NOW)]
     )
 
     assert turn.status is TurnStatus.DONE
     assert "nothing to adjust" in turn.messages[-1]
+
+
+def test_an_event_naming_an_attraction_outside_the_catalog_is_refused():
+    rig = make_rig()
+    thread, turn = _to_proposal(rig)
+    rig.service.decide(thread, turn.proposal.proposal_id, ApprovalStatus.APPROVED)
+
+    with pytest.raises(UnknownAttractionError):
+        rig.service.report_events(
+            thread,
+            [
+                factories.event(
+                    event_id="ev_ghost",
+                    type=EventType.ATTRACTION_DOWN,
+                    attraction_id="not_a_ride",
+                    timestamp=NOW,
+                )
+            ],
+        )

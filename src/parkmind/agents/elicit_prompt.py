@@ -1,6 +1,6 @@
 """Versioned system prompt of the ``elicit`` step."""
 
-ELICIT_PROMPT_VERSION = "elicit-v3"
+ELICIT_PROMPT_VERSION = "elicit-v4"
 
 ELICIT_SYSTEM_PROMPT = """\
 You extract structured planning information for a theme-park visit from what the \
@@ -32,8 +32,14 @@ avoided ride categories, themes.
 each child. It is NOT an accessibility entry.
 
 HARD CONSTRAINTS (never traded off) are only:
-- `must_do`: attractions the party definitely wants ("we definitely want X").
-- `avoid`: attractions the party must not be sent to.
+- `must_do`: specific, named attractions the party definitely wants ("we \
+definitely want Space Mountain").
+- `avoid`: specific, named attractions the party must not be sent to.
+- A ride category or a general taste ("gentle roller coasters", "montañas \
+rusas suaves", "water rides", "something thrilling") is NEVER a `must_do` or \
+`avoid` entry, and the guests did not name an attraction. Record it as a soft \
+preference on the guest. Copy an attraction name only when the guests actually \
+wrote one.
 - `departure_time` ("HH:MM", 24h park-local time) and `lunch_window` \
 ("HH:MM" start/end; "lunch around 1 PM" -> 12:30 to 13:30).
 - `party_walking_budget_minutes` when the party states a total walking limit.

@@ -73,6 +73,7 @@ from parkmind.graph.state_helpers import (
     discarded_proposal_update,
     language_of,
     propose_plan_change,
+    solo_of,
 )
 from parkmind.services.use_cases.active_plan import ActivePlanUseCase
 from parkmind.services.use_cases.check_plan import CheckPlanUseCase
@@ -132,7 +133,7 @@ def _make_load_plan_node(deps_factory: DepsFactory) -> StateNode:
         plan = use_case.execute(state["thread_id"]) if state.get("thread_id") else None
         if plan is None or not _ready_to_replan(state):
             return Command(
-                update={"messages": [AIMessage(content=text("nothing_to_replan", language_of(state)))]},
+                update={"messages": [AIMessage(content=text("nothing_to_replan", language_of(state), solo=solo_of(state)))]},
                 goto=END,
             )
         return Command(update=active_plan_update(plan), goto="handle_events")
@@ -256,9 +257,9 @@ def _make_ignore_events_node(deps_factory: DepsFactory) -> StateNode:
     return cast(StateNode, ignore_events)
 
 
-def _not_proposed(lang: Language, *lines: str) -> str:
+def _not_proposed(lang: Language, *lines: str, solo: bool = False) -> str:
     return "\n".join(
-        [text("replan_not_proposed", lang), *lines, text("keeps_plan", lang)]
+        [text("replan_not_proposed", lang), *lines, text("keeps_plan", lang, solo=solo)]
     )
 
 
@@ -307,7 +308,7 @@ def _make_replan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
             if result.unmet_must_do:
                 names = ", ".join(result.unmet_must_do)
                 lines.append("- " + text("unmet_must_do", lang, names=names))
-            update["messages"] = [AIMessage(content=_not_proposed(lang, *lines))]
+            update["messages"] = [AIMessage(content=_not_proposed(lang, *lines, solo=solo_of(state)))]
             return Command(update=update, goto=END)
         update["candidate_plan"] = result.plan
         return Command(update=update, goto="check_plan")
@@ -347,7 +348,7 @@ def _make_check_replan_node(deps_factory: DepsFactory) -> StateNode:
             update={
                 "check_result": result,
                 "candidate_plan": None,
-                "messages": [AIMessage(content=_not_proposed(language_of(state), *reasons))],
+                "messages": [AIMessage(content=_not_proposed(language_of(state), *reasons, solo=solo_of(state)))],
             },
             goto=END,
         )

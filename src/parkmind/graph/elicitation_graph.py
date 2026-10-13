@@ -47,6 +47,7 @@ from parkmind.agents.elicit_agent import (
 from parkmind.core.language import DEFAULT_LANGUAGE, text
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.state import ParkMindState
+from parkmind.graph.state_helpers import solo_of
 from parkmind.services.use_cases.accessibility_intake import (
     DEFAULT_RETENTION,
     AccessibilityIntakeUseCase,
@@ -107,6 +108,7 @@ def _make_confirm_node(
     def confirm_hard_constraints(state: ParkMindState) -> dict[str, Any]:
         session_id = state["thread_id"]
         lang = state.get("language") or DEFAULT_LANGUAGE
+        solo = solo_of(state)
         pending = list(state.get("pending_hard_constraint_confirmation") or [])
         if not pending:
             return {}
@@ -120,7 +122,7 @@ def _make_confirm_node(
             "kind": "hard_constraint_confirmation",
             "pending": pending,
             "echo": [
-                echo_for(e, lang)
+                echo_for(e, lang, solo=solo)
                 for e in pending
                 if not e.startswith(_ACCESSIBILITY_PREFIX)
             ],
