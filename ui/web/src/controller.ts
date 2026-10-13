@@ -51,7 +51,20 @@ export interface State {
   toast: string | null;
   map: MapState;
   awaitingCorrection: boolean;
+  inbox: InboxItem[];
 }
+
+export interface InboxItem {
+  id: string;
+  kind: string;
+  icon: string;
+  at: number;
+  titleKey: string;
+  bodyKey: string;
+  vars?: Record<string, string | number>;
+}
+
+export type EventKind = "behind" | "tired" | "wait" | "down";
 
 export interface Notif {
   id: string;
@@ -92,6 +105,7 @@ function initial(): State {
     toast: null,
     map: { ...MAP_HOME, filter: "all", selected: null },
     awaitingCorrection: false,
+    inbox: [],
   };
 }
 
@@ -108,29 +122,46 @@ function liveBlank(threadId: string): State {
 }
 
 export function notificationsOf(s: State, t: TFn): Notif[] {
-  const list: Notif[] = FIXTURE.alerts
-    .filter((a) => s.mode === "mock" && !s.dismissed.includes(a.id))
-    .map((a) => ({
-      id: a.id,
-      kind: a.kind,
-      icon: a.icon,
-      mins: a.mins,
-      title: t(a.title_key),
-      body: t(a.body_key),
+  const now = Date.now();
+  const list: Notif[] = [
+    ...[...s.inbox].reverse().map((i) => ({
+      id: i.id,
+      kind: i.kind,
+      icon: i.icon,
+      mins: Math.max(0, Math.floor((now - i.at) / 60000)),
+      title: t(i.titleKey, i.vars),
+      body: t(i.bodyKey, i.vars),
       action: null,
-    }));
-  if (s.proposalState === "pending")
+    })),
+    ...FIXTURE.alerts
+      .filter((a) => s.mode === "mock")
+      .map((a) => ({
+        id: a.id,
+        kind: a.kind,
+        icon: a.icon,
+        mins: a.mins,
+        title: t(a.title_key),
+        body: t(a.body_key),
+        action: null,
+      })),
+  ].filter((n) => !s.dismissed.includes(n.id));
+  if (s.proposalState === "pending") {
+    const live = s.mode === "live" && s.proposal;
     list.unshift({
       id: "n_proposal",
       kind: "change",
-      icon: "🌧️",
+      icon: live && s.proposal?.metrics.initial ? "🗺️" : "🌧️",
       mins: 0,
-      title: t("change_title"),
-      body: t("change_body"),
+      title: live && s.proposal?.metrics.initial ? t("n_plan_prop_t") : t("change_title"),
+      body: live && s.proposal ? plainOf(s.proposal.trigger) : t("change_body"),
       action: "review",
     });
+  }
   return list;
 }
+
+const plainOf = (v: string | Partial<Record<Lang, string>>): string =>
+  typeof v === "string" ? v : (Object.values(v)[0] ?? "");
 
 export function useController(lang: Lang, t: TFn, loc: LocFn) {
   const [s, setS] = useState<State>(initial);
@@ -139,6 +170,7 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
   const toastTimer = useRef<number>();
   const sessTimer = useRef<number>();
   const seen = useRef<Set<string>>(new Set());
+  const deliverTurnRef = useRef<(turn: Turn) => Promise<void>>(async () => {});
   const env = useRef({ lang, t, loc });
   env.current = { lang, t, loc };
 
@@ -157,6 +189,17 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
     [upd],
   );
 
+  /* Inbox entries are deduplicated by id, so a reminder can be re-checked on every tick. */
+  const notify = useCallback(
+    (item: Omit<InboxItem, "at" | "kind" | "icon"> & { kind?: string; icon?: string }, withToast = true) => {
+      if (ref.current.inbox.some((i) => i.id === item.id)) return;
+      const full: InboxItem = { kind: "info", icon: "🔔", ...item, at: Date.now() };
+      upd((st) => ({ inbox: [...st.inbox, full] }));
+      if (withToast) toast(env.current.t(full.titleKey, full.vars));
+    },
+    [upd, toast],
+  );
+
   /* ---------------- chat helpers ---------------- */
   const push = useCallback(
     (item: DistributiveOmit<ChatItem, "id">): number => {
@@ -172,7 +215,7 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
     window.clearTimeout(sessTimer.current);
     upd(() => ({ sessbar: false }));
     sessTimer.current = window.setTimeout(() => {
-      if (ref.current.sheet) upd(() => ({ sessbar: true }));
+      if (ref.current.sheet && ref.current.mode === "mock") upd(() => ({ sessbar: true }));
     }, SESSION_MS);
   }, [upd]);
 
@@ -208,10 +251,11 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
 
   const go = useCallback(
     (screen: Screen | "assistant") => {
-      if (screen === "assistant") return openSheet();
-      upd(() => ({ screen }));
+      if (screen === "assistant") return ref.current.sheet ? closeSheet() : openSheet();
+      window.clearTimeout(sessTimer.current);
+      upd(() => ({ screen, sheet: false, sessbar: false }));
     },
-    [upd, openSheet],
+    [upd, openSheet, closeSheet],
   );
 
   /* ---------------- proposals ---------------- */
@@ -227,39 +271,53 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
   );
 
   const applyProposal = useCallback(async () => {
+    window.clearTimeout(sessTimer.current);
     const st = ref.current;
     const p = st.proposal;
     if (!p) return;
     const { t: tt } = env.current;
     try {
+      let events: PlanEvent[];
       if (st.mode === "live" && st.threadId) {
         await api.decide(st.threadId, p.proposal_id, "approve");
         const fresh = await api.plan(st.threadId);
-        const events = fresh ? markChanged(planFromApi(fresh), p) : st.plan;
-        upd(() => ({ plan: events, proposalState: "applied", planStatus: "updated", psheet: false, screen: "plan" }));
-        toast(tt("applied", { n: events.length }));
+        events = fresh ? markChanged(planFromApi(fresh), p) : st.plan;
       } else {
-        const events = applyDiff(st.plan, p);
-        upd(() => ({ plan: events, proposalState: "applied", planStatus: "updated", psheet: false, screen: "plan" }));
-        toast(tt("applied", { n: events.length }));
+        events = applyDiff(st.plan, p);
       }
+      upd(() => ({ plan: events, proposalState: "applied", planStatus: "updated", psheet: false, nsheet: false, sheet: false, sessbar: false, screen: "plan" }));
+      notify(
+        {
+          id: `plan:${p.proposal_id}`,
+          icon: "✅",
+          titleKey: st.plan.length === 0 ? "n_plan_ready_t" : "n_plan_upd_t",
+          bodyKey: st.plan.length === 0 ? "n_plan_ready_b" : "n_plan_upd_b",
+          vars: { n: events.length },
+        },
+        false,
+      );
+      toast(tt("applied", { n: events.length }));
     } catch (e) {
       toast(e instanceof ApiError ? e.message : String(e));
     }
-  }, [upd, toast]);
+  }, [upd, toast, notify]);
 
   const keepPlan = useCallback(async () => {
     const st = ref.current;
     const p = st.proposal;
     if (!p) return;
+    const live = st.mode === "live" && !!st.threadId;
     try {
-      if (st.mode === "live" && st.threadId) await api.decide(st.threadId, p.proposal_id, "reject");
-      upd(() => ({ proposalState: "kept", psheet: false }));
+      const turn = live ? await api.decide(st.threadId!, p.proposal_id, "reject") : null;
+      upd(() => ({ proposalState: live ? "none" : "kept", psheet: false, nsheet: false }));
+      notify({ id: `kept:${p.proposal_id}`, icon: "👌", titleKey: "n_kept_t", bodyKey: "n_kept_b" }, false);
       toast(env.current.t("kept_toast"));
+      if (turn && turn.status !== "done") await deliverTurnRef.current(turn);
+      else push({ k: "bot", text: env.current.t("kept_bot") });
     } catch (e) {
       toast(e instanceof ApiError ? e.message : String(e));
     }
-  }, [upd, toast]);
+  }, [upd, toast, notify, push]);
 
   /* ---------------- chat delivery ---------------- */
   const suggest = useCallback(
@@ -270,7 +328,7 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
   const deliver = useCallback(
     async (r: Reply) => {
       const { t: tt } = env.current;
-      push({ k: "bot", text: r.text, chips: r.constraints });
+      if (r.text || r.constraints?.length) push({ k: "bot", text: r.text, chips: r.constraints });
 
       if (r.confirm) {
         await sleep(420);
@@ -346,6 +404,8 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
     [ingestProposal, turnToReply, deliver, upd],
   );
 
+  deliverTurnRef.current = deliverTurn;
+
   const failBubble = useCallback(
     (e: unknown) => push({ k: "bot", text: `⚠ ${e instanceof ApiError ? e.message : String(e)}` }),
     [push],
@@ -401,10 +461,10 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
   const dismissSeed = useCallback(() => upd(() => ({ seeded: false })), [upd]);
 
   const confirmOk = useCallback(
-    async (chatId: number, consent: boolean, retention: "session" | "profile") => {
+    async (chatId: number, consent: boolean) => {
       const { t: tt, lang: L } = env.current;
       drop(chatId);
-      push({ k: "meta", text: tt("cf_done", { r: retention === "session" ? tt("cf_ret_s") : tt("cf_ret_k") }) });
+      push({ k: "meta", text: tt("cf_done") });
       const ty = push({ k: "typing" });
       const st = ref.current;
       if (st.mode === "live" && st.threadId) {
@@ -412,7 +472,6 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
           const turn = await api.confirmConstraints(st.threadId, {
             confirmed: true,
             consent,
-            retention_policy: retention === "session" ? "session_only" : "persisted",
           });
           drop(ty);
           await deliverTurn(turn);
@@ -560,14 +619,81 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
     const tick = async () => {
       try {
         const p = await api.proposal(threadId);
-        if (p && ref.current.threadId === threadId) ingestProposal(p);
+        if (p && ref.current.threadId === threadId && ingestProposal(p)) toast(env.current.t("change_title"));
       } catch {
         /* a failed poll is retried on the next tick */
       }
     };
     const timer = window.setInterval(tick, POLL_MS);
     return () => window.clearInterval(timer);
-  }, [s.mode, s.threadId, ingestProposal]);
+  }, [s.mode, s.threadId, ingestProposal, toast]);
+
+  /* Reminders: the next stop within 5 minutes and the end of the plan within 15, from the plan's own times. */
+  useEffect(() => {
+    if (s.mode !== "live") return;
+    const clock = (ms: number) =>
+      new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "America/New_York" });
+    const tick = () => {
+      const plan = ref.current.plan;
+      const now = Date.now();
+      const next = plan.find((e) => e.startAt != null && e.startAt > now);
+      if (next?.startAt && next.startAt - now <= 5 * 60000)
+        notify({
+          id: `next:${next.event_id}:${next.startAt}`,
+          icon: "⏰",
+          kind: "urgent",
+          titleKey: "n_next_t",
+          bodyKey: "n_next_b",
+          vars: { n: Math.max(1, Math.ceil((next.startAt - now) / 60000)), title: next.title, time: clock(next.startAt) },
+        });
+      const last = plan[plan.length - 1];
+      if (last?.endAt && last.endAt > now && last.endAt - now <= 15 * 60000)
+        notify({
+          id: `end:${last.event_id}:${last.endAt}`,
+          icon: "🌙",
+          titleKey: "n_end_t",
+          bodyKey: "n_end_b",
+          vars: { title: last.title, time: clock(last.endAt) },
+        });
+    };
+    tick();
+    const timer = window.setInterval(tick, 20000);
+    return () => window.clearInterval(timer);
+  }, [s.mode, s.plan, notify]);
+
+  /* Guest-reported events go through /api/events; the planner decides whether they need a replan. */
+  const reportEvent = useCallback(
+    async (kind: EventKind, stop?: PlanEvent) => {
+      const st = ref.current;
+      const { t: tt } = env.current;
+      if (st.mode !== "live" || !st.threadId) return;
+      const guest = st.plan.find((e) => e.guests?.length)?.guests?.[0];
+      const body: Record<string, unknown> =
+        kind === "behind" ? { type: "BEHIND_SCHEDULE", minutes_behind: 15 }
+        : kind === "tired" ? { type: "GUEST_FATIGUE", guest_id: guest }
+        : kind === "wait" ? { type: "WAIT_SPIKE", attraction_id: stop?.event_id, delta_minutes: 30 }
+        : { type: "ATTRACTION_DOWN", attraction_id: stop?.event_id };
+      const what =
+        kind === "behind" ? tt("ev_what_behind")
+        : kind === "tired" ? tt("ev_what_tired")
+        : kind === "wait" ? tt("ev_what_wait", { title: stop?.title ?? "" })
+        : tt("ev_what_down", { title: stop?.title ?? "" });
+      try {
+        const turn = await api.reportEvent(st.threadId, body);
+        notify({ id: `ev:${Date.now()}`, icon: "📣", titleKey: "n_ev_t", bodyKey: "n_ev_b", vars: { what } }, false);
+        if (turn.status === "done") {
+          toast(tt("ev_none"));
+          return;
+        }
+        toast(tt("ev_sent"));
+        if (turn.status === "needs_event_confirmation") upd(() => ({ sheet: true }));
+        await deliverTurn(turn);
+      } catch (e) {
+        toast(e instanceof ApiError ? e.message : String(e));
+      }
+    },
+    [upd, toast, notify, deliverTurn],
+  );
 
   const notifs = useMemo(() => notificationsOf(s, t), [s, t]);
 
@@ -579,7 +705,7 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
       go, openSheet, closeSheet, openProposal, closeProposal, openNotifs, closeNotifs, openLang, closeLang,
       closeTop, closeAll, dismissSess, armSessionTimer, send, pickSuggestion, dismissSeed, confirmOk, confirmEdit,
       eventConfirm, applyProposal, keepPlan, markRead, dismissAlert, markAllRead, reviewProposal, setMap,
-      zoomToMe, zoomBy, setMode, reset, toast,
+      zoomToMe, zoomBy, setMode, reset, toast, reportEvent,
     },
   };
 }

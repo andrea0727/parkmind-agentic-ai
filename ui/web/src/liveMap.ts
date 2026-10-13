@@ -29,6 +29,9 @@ export function planFromApi(plan: Plan): PlanEvent[] {
     state: i === 0 ? "current" : "upcoming",
     location: locationOf(s.title),
     walk_m: s.walking_minutes * WALK_M_PER_MIN,
+    startAt: Date.parse(s.arrival),
+    endAt: Date.parse(s.departure),
+    guests: s.served_guests,
   }));
 }
 
@@ -85,6 +88,9 @@ export function proposalFromApi(p: Proposal, current: PlanEvent[]): ProposalView
         m.walking_minutes_before == null ? null : signed(m.walking_minutes_after - m.walking_minutes_before),
       wait_delta_min:
         m.wait_minutes_before == null ? null : signed(m.wait_minutes_after - m.wait_minutes_before),
+      initial: p.base_plan_id === p.candidate_plan_id || m.wait_minutes_before == null,
+      walk_total_min: Math.round(m.walking_minutes_after),
+      wait_total_min: Math.round(m.wait_minutes_after),
     },
     accessibility_verified: true,
     accessibility_note: extraLoc("a11y_live"),

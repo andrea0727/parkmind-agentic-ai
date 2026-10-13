@@ -1,4 +1,4 @@
-"""Shared plumbing for the real-ports e2e runner: env loading, NVIDIA extractor, call spies."""
+"""Shared plumbing for the real-ports e2e runner: env loading, Anthropic extractor, call spies."""
 
 import os
 import sys
@@ -14,13 +14,7 @@ from dotenv import load_dotenv
 
 load_dotenv(REPO / ".env")
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
-from parkmind.agents.elicit_agent import ExtractorOutputError
-from parkmind.agents.elicit_prompt import ELICIT_SYSTEM_PROMPT
-from parkmind.agents.elicit_schema import ElicitationExtraction
-from parkmind.agents.llm import get_llm
-from parkmind.agents.llm_retry import RetryLog, call_with_retries
+from parkmind.agents.elicit_agent import AnthropicExtractor
 from parkmind.core.contracts import PARK_TZ
 from parkmind.graph import initial_planning_graph as ipg
 
@@ -34,30 +28,19 @@ def e2e_now() -> datetime:
 
 
 LLM_CALLS: list[dict[str, Any]] = []
-LLM_RETRIES: list[str] = []
 EVENTS: list[str] = []
 
 
-class NvidiaExtractor:
+class RecordingExtractor:
+    """The production Anthropic extractor, recording each call for the report."""
+
     def __init__(self) -> None:
-        self._llm = get_llm().bind_tools([ElicitationExtraction], tool_choice=ElicitationExtraction.__name__)
+        self._inner = AnthropicExtractor()
 
     def extract(self, human_messages: Sequence[str], repair_hint: str | None = None) -> Mapping[str, Any]:
-        listing = "\n".join(f"{i}. {t}" for i, t in enumerate(human_messages, start=1))
-        content = f"Guest messages, oldest first:\n{listing}"
-        if repair_hint:
-            content += f"\n\nYour previous output was rejected by validation. Fix exactly:\n{repair_hint}"
-        messages = [SystemMessage(ELICIT_SYSTEM_PROMPT), HumanMessage(content)]
-        log = RetryLog()
-        try:
-            response = call_with_retries(lambda: self._llm.invoke(messages), log=log)
-        finally:
-            LLM_RETRIES.extend(log.errors)
-        calls = getattr(response, "tool_calls", None) or []
-        LLM_CALLS.append({"hint": repair_hint, "calls": calls})
-        if not calls:
-            raise ExtractorOutputError("no tool call")
-        return calls[0]["args"]
+        args = self._inner.extract(human_messages, repair_hint)
+        LLM_CALLS.append({"hint": repair_hint, "calls": [{"args": args}]})
+        return args
 
 
 def spy(cls: Any, method: str, label: str) -> None:

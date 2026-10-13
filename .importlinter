@@ -42,7 +42,6 @@ forbidden_modules =
     psycopg
     sqlalchemy
     langchain_anthropic
-    langchain_nvidia_ai_endpoints
     anthropic
 
 [importlinter:contract:use-cases-forbidden-imports]

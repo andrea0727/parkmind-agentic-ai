@@ -1,4 +1,5 @@
 // Thin client over the FastAPI layer; the shapes mirror src/parkmind/api/schemas.py.
+import { debug } from "./debug";
 
 export type TurnStatus =
   | "needs_answer"
@@ -36,6 +37,8 @@ export interface DiffEntry {
 
 export interface Proposal {
   proposal_id: string;
+  base_plan_id: string;
+  candidate_plan_id: string;
   trigger: string;
   explanation: string;
   diff: {
@@ -132,27 +135,46 @@ export const auth = {
   },
 };
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T | null> {
-  const headers: Record<string, string> = {};
-  if (body !== undefined) headers["Content-Type"] = "application/json";
-  const token = path === "/api/login" ? null : sessionStorage.getItem(TOKEN_KEY);
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(path, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (response.status === 204) return null;
-  const data = await response.json().catch(() => ({}));
-  if (response.status === 401 && path !== "/api/login") {
-    auth.clear();
-    unauthorized();
+/* A poll that keeps returning nothing (204) or the same body is not worth a log line. */
+let lastQuiet = "";
+
+async function call<T>(method: string, path: string, body?: unknown, quiet = false): Promise<T | null> {
+  const started = performance.now();
+  let status: number | null = null;
+  let payload: unknown;
+  try {
+    const headers: Record<string, string> = {};
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    const token = path === "/api/login" ? null : sessionStorage.getItem(TOKEN_KEY);
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const response = await fetch(path, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    status = response.status;
+    if (response.status === 204) return null;
+    const data = await response.json().catch(() => ({}));
+    payload = data;
+    if (response.status === 401 && path !== "/api/login") {
+      auth.clear();
+      unauthorized();
+    }
+    if (!response.ok) {
+      const detail = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
+      throw new ApiError(response.status, detail ?? `HTTP ${response.status}`);
+    }
+    return data as T;
+  } catch (e) {
+    if (status === null) payload = { network_error: String(e) };
+    throw e;
+  } finally {
+    const key = `${status}:${JSON.stringify(payload ?? null)}`;
+    if (!quiet || key !== lastQuiet) {
+      debug.record({ method, path, status, ms: Math.round(performance.now() - started), request: body, response: payload });
+    }
+    if (quiet) lastQuiet = key;
   }
-  if (!response.ok) {
-    const detail = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
-    throw new ApiError(response.status, detail ?? `HTTP ${response.status}`);
-  }
-  return data as T;
 }
 
 const q = (threadId: string) => `thread_id=${encodeURIComponent(threadId)}`;
@@ -161,9 +183,9 @@ export const api = {
   startSession: async () => (await call<{ thread_id: string }>("POST", "/api/session"))!.thread_id,
   say: async (t: string, text: string, lang: string) =>
     (await call<Turn>("POST", `/api/message?${q(t)}`, { text, lang }))!,
-  confirmConstraints: async (t: string, body: { confirmed: boolean; consent: boolean; retention_policy?: "session_only" | "persisted"; correction?: string }) =>
+  confirmConstraints: async (t: string, body: { confirmed: boolean; consent: boolean; correction?: string }) =>
     (await call<Turn>("POST", `/api/constraints/confirm?${q(t)}`, body))!,
-  proposal: (t: string) => call<Proposal>("GET", `/api/proposal?${q(t)}`),
+  proposal: (t: string) => call<Proposal>("GET", `/api/proposal?${q(t)}`, undefined, true),
   plan: (t: string) => call<Plan>("GET", `/api/plan?${q(t)}`),
   decide: async (t: string, id: string, decision: "approve" | "reject", reason?: string) =>
     (await call<Turn>("POST", `/api/proposal/${encodeURIComponent(id)}/${decision}?${q(t)}`, reason ? { reason } : {}))!,

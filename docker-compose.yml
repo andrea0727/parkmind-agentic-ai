@@ -7,7 +7,7 @@
 
 services:
   # `docker compose up --build` -> http://localhost:8000 (UI) and /docs (OpenAPI).
-  # Needs ANTHROPIC_API_KEY (preferred) or NVIDIA_API_KEY in .env, plus PARKMIND_AUTH_USERS and
+  # Needs ANTHROPIC_API_KEY in .env, plus PARKMIND_AUTH_USERS and
   # PARKMIND_JWT_SECRET (see .env.example): the API refuses to start without credentials.
   # Single worker by design (in-memory sessions).
   app:

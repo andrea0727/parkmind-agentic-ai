@@ -18,6 +18,10 @@ export interface PlanEvent {
   changed?: "tag_new" | "tag_moved";
   /** Walking distance into this stop; set by the live adapter, otherwise derived from coordinates. */
   walk_m?: number;
+  /** Epoch ms of arrival and departure (live plans only); drives the "next stop" reminders. */
+  startAt?: number;
+  endAt?: number;
+  guests?: string[];
 }
 
 export interface ProposalDiff {
@@ -42,6 +46,10 @@ export interface ProposalView {
     /** Live proposals report minutes directly instead of the prototype's illustrative figures. */
     walk_delta_min?: number | null;
     wait_delta_min?: number | null;
+    /** The first plan has nothing to compare against, so the sheet shows totals instead of deltas. */
+    initial?: boolean;
+    walk_total_min?: number;
+    wait_total_min?: number;
   };
   accessibility_verified: boolean;
   accessibility_note: Loc;

@@ -1,4 +1,4 @@
-from parkmind.agents.nvidia_extractor import without_empty_accessibility
+from parkmind.agents.elicit_agent import without_empty_accessibility
 
 
 def test_drops_empty_accessibility_entries() -> None:

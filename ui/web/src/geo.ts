@@ -80,13 +80,13 @@ export const MAP_W = 360;
 export const MAP_H = 430;
 
 export function legMeters(prev: PlanEvent | undefined, ev: PlanEvent): number | null {
-  if (!prev) return null;
   if (ev.walk_m != null) return Math.round(ev.walk_m);
+  if (!prev) return null;
   return haversine(prev.location, ev.location);
 }
 
 export function totalWalk(events: PlanEvent[]): number {
-  return events.reduce((sum, ev, i) => (i ? sum + (legMeters(events[i - 1], ev) || 0) : 0), 0);
+  return events.reduce((sum, ev, i) => sum + (legMeters(events[i - 1], ev) || 0), 0);
 }
 
 /* One function previews the metrics and applies the change, so the sheet and the plan cannot diverge. */

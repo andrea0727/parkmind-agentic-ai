@@ -280,11 +280,6 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
 .cf-consent input{width:20px;height:20px;flex:0 0 auto;accent-color:var(--twilight);margin:1px 0 0}
 .cf-consent span{font-size:13px;color:var(--muted);font-weight:500;line-height:1.42}
 .cf-consent span b{display:block;font-size:13.5px;color:var(--ink);font-weight:800;margin-bottom:2px}
-.cf-ret{margin-bottom:13px}
-.cf-ret>b{font-size:13.5px;font-weight:800;display:block;margin-bottom:7px}
-.cf-opts{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-.cf-opt{font-size:12.5px;font-weight:700;padding:11px 8px;border-radius:11px;border:1px solid var(--line);color:var(--muted)}
-.cf-opt.on{border-color:var(--twilight);background:#F7F4FE;color:var(--twilight)}
 .cf-actions{display:grid;grid-template-columns:1fr 1.3fr;gap:9px}
 .cf-edit{padding:13px;border-radius:12px;background:var(--wash);color:var(--ink);font-size:14px;font-weight:800}
 .cf-ok{padding:13px;border-radius:12px;background:var(--dusk);color:#fff;font-size:14px;font-weight:800}
@@ -394,3 +389,31 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
 .login-langs{display:flex;gap:6px;justify-content:center;margin-top:4px}
 .login-langs button{font-size:11px;font-weight:700;padding:5px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
 .login-langs button.on{background:var(--dusk);color:#fff;border-color:var(--dusk)}
+
+/* Dev tools */
+.devlog{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.devcall{border:1px solid var(--line);border-radius:12px;background:#fff;font-size:12px}
+.devcall summary{display:flex;gap:8px;align-items:center;padding:9px 11px;cursor:pointer;font-weight:600;list-style:none}
+.devcall summary::-webkit-details-marker{display:none}
+.devcall .m{font-weight:800;color:var(--dusk)}
+.devcall .p{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.devcall .st{padding:1px 7px;border-radius:999px;background:var(--wash);font-weight:800}
+.devcall .st.ok{background:#dff5ea;color:#0a6b43}
+.devcall .st.err{background:#fde3e8;color:#a0213f}
+.devcall .ms{color:var(--muted);font-weight:500}
+.devcall pre{margin:0;padding:8px 11px;border-top:1px solid var(--line);font-size:11px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto}
+.devcall h5{margin:0;padding:8px 11px 0;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.devprov{font-family:ui-monospace,Menlo,monospace;font-size:11px}
+
+/* With the assistant open the tab bar stays usable, so the user can leave by navigating. */
+.device.assist-open .tabs{z-index:92}
+.device.assist-open .sheet{bottom:var(--tabs-h,60px)}
+.device.assist-open .scrim{bottom:var(--tabs-h,60px)}
+
+.report{margin-top:18px;padding:14px;border-radius:16px;background:var(--wash);border:1px solid var(--line)}
+.report>b{display:block;font-size:13.5px;font-weight:800;margin-bottom:9px}
+.rp-chips,.rp-pick{display:flex;flex-wrap:wrap;gap:7px}
+.rp-chips button,.rp-pick button{font-size:12.5px;font-weight:700;padding:9px 12px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink)}
+.rp-chips button[aria-pressed="true"]{border-color:var(--twilight);background:#F7F4FE;color:var(--twilight)}
+.rp-pick{margin-top:10px}
+.rp-pick small{flex:0 0 100%;font-size:12px;color:var(--muted);font-weight:600}

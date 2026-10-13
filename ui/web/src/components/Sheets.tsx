@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApp } from "../ctx";
+import { useDebug } from "../debug";
 import { FIXTURE } from "../fixture";
 import { WALK_M_PER_MIN, applyDiff, totalWalk } from "../geo";
 import { I18N, LANGS } from "../i18n";
@@ -158,7 +159,6 @@ function Chips({ chips }: { chips?: ChipView[] }) {
 function ConfirmCard({ item }: { item: Extract<ChatItem, { k: "confirm" }> }) {
   const { c, t } = useApp();
   const [consent, setConsent] = useState(false);
-  const [retention, setRetention] = useState<"session" | "profile">("session");
   const [warn, setWarn] = useState("");
   return (
     <div className="confirm">
@@ -180,22 +180,6 @@ function ConfirmCard({ item }: { item: Extract<ChatItem, { k: "confirm" }> }) {
         />
         <span><b>{t("cf_consent")}</b>{t("cf_consent_b")}</span>
       </label>
-      <div className="cf-ret">
-        <b>{t("cf_ret")}</b>
-        <div className="cf-opts">
-          {(["session", "profile"] as const).map((r) => (
-            <button
-              key={r}
-              type="button"
-              className={`cf-opt${retention === r ? " on" : ""}`}
-              aria-pressed={retention === r}
-              onClick={() => setRetention(r)}
-            >
-              {t(r === "session" ? "cf_ret_s" : "cf_ret_k")}
-            </button>
-          ))}
-        </div>
-      </div>
       <div className="cf-actions">
         <button type="button" className="cf-edit" onClick={() => c.actions.confirmEdit(item.id)}>{t("cf_edit")}</button>
         <button
@@ -206,7 +190,7 @@ function ConfirmCard({ item }: { item: Extract<ChatItem, { k: "confirm" }> }) {
               setWarn(t("cf_need"));
               return;
             }
-            void c.actions.confirmOk(item.id, consent, retention);
+            void c.actions.confirmOk(item.id, consent);
           }}
         >
           {t("cf_ok")}
@@ -323,11 +307,15 @@ export function AssistantSheet() {
           <>
             <div className="welcome">
               <div className="em">💬</div>
-              <h4>{greet} {FIXTURE.guest_profile.display_name}</h4>
+              <h4>{s.mode === "live" ? greet : `${greet} ${FIXTURE.guest_profile.display_name}`}</h4>
               <p>{t("welcome_desc")}</p>
             </div>
-            <div className="suggest-label"><span>✨</span> {t("try_topics")}</div>
-            <Carousel prompts={SEED_ORDER} onPick={(title) => void a.send(title)} />
+            {s.mode !== "live" && (
+              <>
+                <div className="suggest-label"><span>✨</span> {t("try_topics")}</div>
+                <Carousel prompts={SEED_ORDER} onPick={(title) => void a.send(title)} />
+              </>
+            )}
           </>
         )}
         {s.chat.map((item) => (
@@ -437,18 +425,23 @@ export function ProposalSheet() {
   const { s } = c;
   const a = c.actions;
   const p = s.proposal;
+  const { enabled: debugOn } = useDebug();
 
   let stats: ReactNode = null;
   if (p) {
     const m = p.metrics;
     if (s.mode === "live") {
-      const cell = (v: number | null | undefined, label: string) => (
-        <div className="stat"><b>{v == null ? "—" : signed(Math.round(v))}</b><small>{label}</small></div>
+      const cell = (v: number | null | undefined, label: string, absolute: boolean) => (
+        <div className="stat">
+          <b>{v == null ? "—" : absolute ? Math.round(v) : signed(Math.round(v))}</b>
+          <small>{label}</small>
+        </div>
       );
+      const initial = !!m.initial;
       stats = (
         <>
-          {cell(m.walk_delta_min, loc(m.walk_label))}
-          {cell(m.wait_delta_min, t("stat_wait"))}
+          {cell(initial ? m.walk_total_min : m.walk_delta_min, loc(m.walk_label), initial)}
+          {cell(initial ? m.wait_total_min : m.wait_delta_min, t("stat_wait"), initial)}
         </>
       );
     } else {
@@ -474,7 +467,7 @@ export function ProposalSheet() {
         <h3 id="pTitle">{t("proposed")}</h3>
         {p && (
           <>
-            <p className="why">{loc(p.trigger)} {loc(p.explanation)}</p>
+            <p className="why">{loc(p.explanation).startsWith(loc(p.trigger)) ? loc(p.explanation) : `${loc(p.trigger)} ${loc(p.explanation)}`}</p>
             <div className="diff">
               {p.diff.removed.map((x) => (
                 <div className="drow rm" key={`r${x.ref}`}>
@@ -500,7 +493,12 @@ export function ProposalSheet() {
               <b>{t("a11y_ok")}</b>
               <p>{s.mode === "live" ? t("a11y_live") : loc(p.accessibility_note)}</p>
             </div>
-            <p className="note">{loc(p.provenance)}</p>
+            {debugOn && (
+              <p className="note devprov">
+                <b>{t("dev_prov")}</b><br />
+                {loc(p.provenance)}
+              </p>
+            )}
           </>
         )}
       </div>

@@ -193,8 +193,6 @@ const NODES=[
 /* ---------- external llm / obs ---------- */
  {id:'anthropic',x:470,y:50,w:170,h:60,title:'Anthropic',lines:['Claude Haiku 4.5','structured extraction'],status:'external',
   dock:{summary:'LLM provider used by AnthropicExtractor.',notes:['Used only for extraction, never to build, edit or activate a plan']}},
- {id:'nvidia',x:660,y:50,w:170,h:60,title:'NVIDIA NIM',lines:['ChatNVIDIA via agents/llm.py','E2E harness only'],status:'external',
-  dock:{summary:'LLM used by the E2E runner, which injects it as the extractor. It is not part of the runtime path.',files:['src/parkmind/agents/llm.py','scripts/e2e/harness.py'],notes:['<code>get_llm()</code> has no caller inside <code>src/</code>','Same <code>GuestInfoExtractor</code> port as the Anthropic adapter','The <code>timeout=180</code> / <code>max_tokens=8192</code> limits belong to <code>agents/llm.py</code> (E2E harness only), not to the production extractor']}},
  {id:'langfuse',x:850,y:50,w:170,h:60,title:'Langfuse',lines:['declared in pyproject','not wired yet'],status:'target',
   dock:{summary:'Observability is declared as a dependency but unused.'}},
 /* ---------- application layer ---------- */
@@ -282,7 +280,6 @@ const EDGES=[
  {flow:'f1',from:'elicitG',to:'elicitA',bi:1,pts:[[455,232],[480,232]]},
  {flow:'f1',from:'elicitA',to:'anthropic',bi:1,pts:[[555,200],[555,110]],label:'extract',lx:563,ly:160,anchor:'start'},
  {flow:'f1',from:'elicitA',to:'uc_elicit',pts:[[625,232],[695,232]],label:'intake',lx:660,ly:222},
- {flow:'f1',from:'elicitA',to:'nvidia',style:'dashed',pts:[[595,200],[595,125],[745,125],[745,110]],label:'e2e only',lx:670,ly:120},
  {flow:'f1',from:'api',to:'elicitG',bi:1,style:'dashed',pts:[[210,373],[276,373],[276,250],[305,250]]},
  {flow:'f1',from:'ui',to:'elicitG',bi:1,style:'dashed',pts:[[210,448],[284,448],[284,260],[305,260]]},
 /* F2 human approval */
@@ -469,11 +466,6 @@ const ES={
 "structured extraction": "extracción estructurada",
 "LLM provider used by AnthropicExtractor.": "Proveedor de LLM usado por AnthropicExtractor.",
 "Used only for extraction, never to build, edit or activate a plan": "Se usa solo para extraer, nunca para construir, editar ni activar un plan",
-"E2E harness only": "solo arnés E2E",
-"LLM used by the E2E runner, which injects it as the extractor. It is not part of the runtime path.": "LLM usado por el runner E2E, que lo inyecta como extractor. No forma parte del camino en ejecución.",
-"<code>get_llm()</code> has no caller inside <code>src/</code>": "<code>get_llm()</code> no tiene ningún llamador dentro de <code>src/</code>",
-"Same <code>GuestInfoExtractor</code> port as the Anthropic adapter": "El mismo puerto <code>GuestInfoExtractor</code> que el adaptador de Anthropic",
-"The <code>timeout=180</code> / <code>max_tokens=8192</code> limits belong to <code>agents/llm.py</code> (E2E harness only), not to the production extractor": "Los límites <code>timeout=180</code> / <code>max_tokens=8192</code> pertenecen a <code>agents/llm.py</code> (solo arnés E2E), no al extractor de producción",
 "declared in pyproject": "declarado en pyproject",
 "not wired yet": "aún sin conectar",
 "Observability is declared as a dependency but unused.": "La observabilidad está declarada como dependencia pero no se usa.",
@@ -613,7 +605,6 @@ const ES={
 "Public hourly weather forecast.": "Pronóstico meteorológico público por hora.",
 "extract": "extraer",
 "intake": "intake",
-"e2e only": "solo e2e",
 "plan approval": "aprobación del plan",
 "calls": "llama",
 "resolve": "resolver",
@@ -657,7 +648,7 @@ const ICONS={
  globe:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18'
 };
 const ICON_OF={guest:'users',studio:'server',api:'plug',ui:'monitor',proto:'layout',elicitG:'ask',elicitA:'sparkles',planG:'network',replanG:'bolt',ckpt:'save',tools:'wrench',
- anthropic:'chip',nvidia:'chip',langfuse:'eye',uc_elicit:'usercheck',uc_plan:'layers',uc_replan:'bolt',uc_data:'database',core_pers:'users',core_build:'route',core_check:'scale',
+ anthropic:'chip',langfuse:'eye',uc_elicit:'usercheck',uc_plan:'layers',uc_replan:'bolt',uc_data:'database',core_pers:'users',core_build:'route',core_check:'scale',
  core_diff:'diff',core_ctr:'cube',p_pg:'database',p_sess:'lock',p_tp:'clock',p_om:'cloud',p_route:'route',p_know:'book',note:'shield',safety:'shield',evalx:'flask',db:'database',tp_ext:'globe',om_ext:'cloud'};
 const icon=(parent,name,cx,cy,size)=>{
   const k=size/24;

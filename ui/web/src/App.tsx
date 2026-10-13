@@ -83,7 +83,7 @@ function Shell({ lang, setLang, onSignOut }: { lang: Lang; setLang: (l: Lang) =>
         {s.mode === "mock" && !s.booting && <span className="demo-badge">{t("demo")}</span>}
       </div>
 
-      <div className="device" ref={deviceRef}>
+      <div className={`device${s.sheet && !s.psheet && !s.lsheet && !s.nsheet ? " assist-open" : ""}`} ref={deviceRef}>
         <div className="notch" />
         <div className="statusbar"><span>{time}</span><span className="sig">▂▄▆ ᯤ ▮</span></div>
 
@@ -122,7 +122,7 @@ function Shell({ lang, setLang, onSignOut }: { lang: Lang; setLang: (l: Lang) =>
 
       <div className="stage-foot">
         <span style={{ fontSize: 12, opacity: 0.6, fontWeight: 500 }}>
-          Interface mockup · illustrative data · not a production implementation
+          {s.mode === "live" ? "Live mode · connected to the ParkMind API · park data is fictional" : "Interface mockup · illustrative data · not a production implementation"}
         </span>
         <button className="ghost-btn" onClick={() => void a.reset()}>Reset</button>
         <button

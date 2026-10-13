@@ -1,8 +1,10 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApp } from "../ctx";
+import { debug, useDebug, type ApiCall } from "../debug";
 import { FIXTURE } from "../fixture";
 import { haversine, legMeters, totalWalk, walkMin } from "../geo";
-import type { Screen as ScreenName } from "../controller";
+import type { EventKind, Screen as ScreenName } from "../controller";
+import type { PlanEvent } from "../types";
 import { BigMap, PlanMap, visibleRides } from "./ParkMap";
 
 function Pane({ id, children }: { id: ScreenName; children: ReactNode }) {
@@ -37,6 +39,7 @@ export function HomeScreen() {
   const a = c.actions;
   const first = s.plan.find((e) => e.state === "current") ?? s.plan[0];
   const unread = notifs.filter((n) => !s.read.includes(n.id)).length;
+  const live = s.mode === "live";
 
   return (
     <Pane id="home">
@@ -50,7 +53,7 @@ export function HomeScreen() {
             <span className="g">🔔</span>
             <span className={`badge${unread === 0 ? " hide" : ""}`}>{unread > 9 ? "9+" : unread}</span>
           </button>
-          <button className="avatar" aria-label={t("a_profile")} onClick={() => a.go("profile")}>A</button>
+          <button className="avatar" aria-label={t("a_profile")} onClick={() => a.go("profile")}>{live ? "👤" : "A"}</button>
           <button
             className={`spark-btn${s.proposalState === "pending" ? " ping" : ""}`}
             aria-label={t("a_assistant")}
@@ -60,13 +63,22 @@ export function HomeScreen() {
           </button>
         </div>
       </div>
-      <h2 className="greet">{greetWord(t)},<br />{FIXTURE.guest_profile.display_name}</h2>
-      <p className="subline">{FIXTURE.plan.park} · {t("party")} {FIXTURE.guest_profile.party_size}</p>
-      <div className="pills">
-        <span className="pill">☀️ 29°</span>
-        <span className="pill warn">{t("rain")}</span>
-        <span className="pill live">{t("busy")}</span>
-      </div>
+      {live ? (
+        <>
+          <h2 className="greet">{greetWord(t)}</h2>
+          <p className="subline">{FIXTURE.plan.park}</p>
+        </>
+      ) : (
+        <>
+          <h2 className="greet">{greetWord(t)},<br />{FIXTURE.guest_profile.display_name}</h2>
+          <p className="subline">{FIXTURE.plan.park} · {t("party")} {FIXTURE.guest_profile.party_size}</p>
+          <div className="pills">
+            <span className="pill">☀️ 29°</span>
+            <span className="pill warn">{t("rain")}</span>
+            <span className="pill live">{t("busy")}</span>
+          </div>
+        </>
+      )}
 
       <h3 className="sect">{t("your_day")}</h3>
       <div className="tiles">
@@ -103,7 +115,7 @@ export function HomeScreen() {
       {s.proposalState === "pending" && (
         <div className="alert">
           <div className="ic">🌧️</div>
-          <div><b>{t("change_title")}</b><p>{t("change_body")}</p></div>
+          <div><b>{t("change_title")}</b><p>{live && s.proposal ? loc(s.proposal.trigger) : t("change_body")}</p></div>
           <button className="cta" onClick={a.openProposal}>{t("review")}</button>
         </div>
       )}
@@ -129,7 +141,9 @@ export function PlanScreen() {
       <div className="screen-head">
         <h2>{t("my_plan")}</h2>
         <p>{FIXTURE.plan.park} · <span>{s.plan.length}</span> <span>{t("stops_exit")}</span></p>
-        <span className="status-chip">{s.proposalState === "applied" ? t("plan_updated") : t("plan_valid")}</span>
+        {s.plan.length > 0 && (
+          <span className="status-chip">{s.proposalState === "applied" ? t("plan_updated") : t("plan_valid")}</span>
+        )}
       </div>
       {s.plan.length === 0 ? (
         <div className="empty">
@@ -164,8 +178,38 @@ export function PlanScreen() {
           </div>
         </>
       )}
+      {s.mode === "live" && s.plan.length > 0 && <ReportChange />}
       <p className="note">{t("plan_note")}</p>
     </Pane>
+  );
+}
+
+function ReportChange() {
+  const { c, t } = useApp();
+  const [pick, setPick] = useState<"wait" | "down" | null>(null);
+  const rides = c.s.plan.filter((e) => e.kind === "ATTRACTION");
+  const send = (kind: EventKind, stop?: PlanEvent) => {
+    setPick(null);
+    void c.actions.reportEvent(kind, stop);
+  };
+  return (
+    <section className="report" aria-label={t("ev_title")}>
+      <b>{t("ev_title")}</b>
+      <div className="rp-chips">
+        <button type="button" onClick={() => send("behind")}>{t("ev_behind")}</button>
+        <button type="button" onClick={() => send("tired")}>{t("ev_tired")}</button>
+        <button type="button" aria-pressed={pick === "wait"} onClick={() => setPick(pick === "wait" ? null : "wait")}>{t("ev_wait")}</button>
+        <button type="button" aria-pressed={pick === "down"} onClick={() => setPick(pick === "down" ? null : "down")}>{t("ev_down")}</button>
+      </div>
+      {pick && (
+        <div className="rp-pick">
+          <small>{t("ev_pick")}</small>
+          {rides.map((r) => (
+            <button type="button" key={r.event_id} onClick={() => send(pick, r)}>{r.title}</button>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -361,6 +405,56 @@ export function ProfileScreen() {
   );
 }
 
+/* ------------------------------------------------------------- Dev tools */
+const pretty = (v: unknown) => JSON.stringify(v, null, 2);
+
+function CallRow({ call }: { call: ApiCall }) {
+  const { t } = useApp();
+  const ok = call.status !== null && call.status < 400;
+  return (
+    <details className="devcall">
+      <summary>
+        <span className="m">{call.method}</span>
+        <span className="p">{call.path}</span>
+        <span className={`st ${ok ? "ok" : "err"}`}>{call.status ?? "ERR"}</span>
+        <span className="ms">{call.ms} ms</span>
+      </summary>
+      {call.request !== undefined && (
+        <>
+          <h5>{t("dev_req")}</h5>
+          <pre>{pretty(call.request)}</pre>
+        </>
+      )}
+      <h5>{t("dev_res")}</h5>
+      <pre>{call.response === undefined ? t("dev_nobody") : pretty(call.response)}</pre>
+    </details>
+  );
+}
+
+function DevTools() {
+  const { t } = useApp();
+  const { enabled, calls } = useDebug();
+  return (
+    <>
+      <button className="row" onClick={() => debug.setEnabled(!enabled)} aria-pressed={enabled}>
+        <span>{t("dev_row")}<small>{t("dev_sub")} · {enabled ? t("dev_on") : t("dev_off")}</small></span>
+        <span className="chev">{enabled ? "●" : "○"}</span>
+      </button>
+      {enabled && (
+        <>
+          <button className="row" onClick={debug.clear}><span>{t("dev_clear")}</span><span className="chev">⌫</span></button>
+          <div className="devlog">
+            {calls.length === 0 && <p className="note">{t("dev_empty")}</p>}
+            {calls.map((call) => (
+              <CallRow key={call.id} call={call} />
+            ))}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 /* ---------------------------------------------------------------- More */
 export function MoreScreen() {
   const { c, t } = useApp();
@@ -378,6 +472,7 @@ export function MoreScreen() {
       <button className="row" onClick={() => void c.actions.reset()}>
         <span>{t("reset_row")}<small>{t("reset_row_sub")}</small></span><span className="chev">↺</span>
       </button>
+      <DevTools />
       <p className="note" style={{ marginTop: 22 }}>{t("data_src")}</p>
       <div className="switch" style={{ marginTop: 8 }}>
         <button className={s.mode === "mock" ? "on" : ""} onClick={() => void c.actions.setMode("mock")}>Mock (fixture)</button>

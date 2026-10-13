@@ -2,6 +2,7 @@
 
 ONE process, ONE worker: sessions (the checkpointer) and session-only data are in memory.
 Env: PORT, PARKMIND_UI_DIR (built UI, default ui/web/dist), PARKMIND_CORS_ORIGINS (comma list),
+ANTHROPIC_API_KEY (the LLM key),
 PARKMIND_AUTH_USERS ("user=password,user2=password2") and PARKMIND_JWT_SECRET (>= 32 chars) are REQUIRED: the server refuses to start without them. PARKMIND_AUTH_DISABLED=1 opts out
 (local demos only; every route is then open). PARKMIND_TOKEN_TTL_HOURS (default 2).
 LLM caps (per user and global per 24 h): PARKMIND_MESSAGES_PER_USER_DAY (300), PARKMIND_MESSAGES_GLOBAL_DAY (2000).
@@ -21,7 +22,6 @@ import uvicorn
 from dotenv import load_dotenv
 
 from parkmind.agents.elicit_agent import AnthropicExtractor
-from parkmind.agents.nvidia_extractor import NvidiaExtractor
 from parkmind.api.app import create_app
 from parkmind.api.guard import ensure_single_worker
 from parkmind.api.security import AuthConfig, AuthConfigError, Limits, parse_users
@@ -104,9 +104,9 @@ def build_app():
     deps_factory = _deps_factory()
     clock = _clock()
     checkpointer = default_checkpointer()
-    extractor = (
-        AnthropicExtractor() if os.environ.get("ANTHROPIC_API_KEY") else NvidiaExtractor()
-    )
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise RuntimeError("ANTHROPIC_API_KEY is required: set it in .env")
+    extractor = AnthropicExtractor()
     initial = build_initial_planning_graph(
         extractor,
         checkpointer=checkpointer,

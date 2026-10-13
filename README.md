@@ -54,8 +54,10 @@ parkmind-agentic-ai/
 │       │   │                    # never planning/personalization directly
 │       │   └── evaluation/      # baselines + metrics (the eval harness)
 │       │
-│       ├── agents/               # ConciergeAgent
-│       ├── graph/                 # LangGraph state + the two graphs
+│       ├── agents/               # elicit agent (Anthropic extractor, closed schema),
+│       │                         # concierge, plan synthesis, preference resolver
+│       ├── graph/                 # LangGraph state, the two graphs, ConversationService
+│       ├── api/                   # FastAPI app: routes, auth/limits (security.py), schemas
 │       ├── tools/                  # MCP tools (data.* / knowledge.* / planner.*)
 │       └── config/                  # settings.py — reads .env
 │
@@ -64,13 +66,18 @@ parkmind-agentic-ai/
 │   └── integration/              # full graphs + the 4 agent quality checks
 │
 ├── docs/
-│   └── evaluation/               # methodology behind the metrics
+│   ├── evaluation/               # methodology behind the metrics
+│   ├── e2e/                      # live-run scenarios (SCENARIOS.md) and last report
+│   ├── diagrams/                 # architecture.html
+│   └── context/, decisions/
 │
 ├── notebooks/                     # exploratory only, nothing imported by the app
-├── scripts/                        # seed_db.py, run_demo_scenario.py, run_baselines.py
+├── scripts/                        # seed_db, collect_snapshot, renormalize_snapshots, run_monitor,
+│                                   # run_mcp_server, fetch_embedding_model, index_knowledge,
+│                                   # e2e/ (live runner); run_demo_scenario and run_baselines are stubs
 ├── database/                        # alembic.ini + migrations/ (schema owner, P0-12)
 ├── ui/
-│   ├── app.py                         # Streamlit app
+│   ├── app.py                         # Streamlit stub (not used; the demo UI is ui/web)
 │   └── web/                           # React + Vite demo UI (served by server.py)
 │
 ├── server.py                           # HTTP entrypoint: FastAPI API + built React UI on :8000
@@ -78,11 +85,12 @@ parkmind-agentic-ai/
 ├── agent.py                            # root entrypoint — exposes the compiled
 │                                        # graph(s) that langgraph.json points to
 ├── langgraph.json
-├── requirements.txt         → see pyproject.toml (uses Poetry)
+├── pyproject.toml, poetry.lock          # dependencies (Poetry)
 ├── docker-compose.yml                   # Postgres + the demo app
 ├── pytest.ini                            # lets pytest find `parkmind.*` without
 │                                         # installing it as a package
 ├── .env.example
+├── .github/workflows/                   # ci.yml, embedding-smoke.yml
 ├── .gitignore
 └── README.md
 ```
@@ -119,20 +127,21 @@ and `agent.py` both add it to the import path, so
 cp .env.example .env          # fill in ANTHROPIC_API_KEY at minimum
 poetry install
 
-# 2. start Postgres (built with pgvector from database/Dockerfile), then create
+# 2. start Postgres only (built with pgvector from database/Dockerfile), then create
 #    the schema (Alembic owns it) and, optionally, load the reproducible
 #    development scenario
-docker compose up -d --build
+docker compose up -d --build postgres
 poetry run alembic -c database/alembic.ini upgrade head
 poetry run python scripts/seed_db.py
 
 # 3. run tests (the `db` tests need the Postgres from step 2)
 poetry run pytest
 
-# 4. sanity-check the graphs build
+# 4. sanity-check the graphs build (prints "initial_planning: N nodes compiled", "replanning: ...")
 poetry run python agent.py
 
-# 5. run the demo app (API + React UI on :8000), see "Demo app" below
+# 5. run the demo app (API + React UI on :8000), see "Demo app" below.
+#    Needs PARKMIND_AUTH_USERS and PARKMIND_JWT_SECRET in .env first.
 docker compose up -d --build
 ```
 
@@ -144,13 +153,13 @@ One container serves the FastAPI API and the built React UI on http://localhost:
 **1. Configure `.env`** (copy from `.env.example`). Required for the app to start:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...                 # or NVIDIA_API_KEY (Anthropic wins if both are set)
+ANTHROPIC_API_KEY=sk-ant-...
 PARKMIND_AUTH_USERS=demo=ChangeMe1234        # name=password[,name2=password2]; 8+ chars, no commas
 PARKMIND_JWT_SECRET=<32+ random chars>       # python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
 Optional: `PARKMIND_TOKEN_TTL_HOURS` (default 2), `PARKMIND_MESSAGES_PER_USER_DAY` (300),
-`PARKMIND_MESSAGES_GLOBAL_DAY` (2000), `PARKMIND_AUTH_DISABLED=1` (local demo only: no login,
+`PARKMIND_MESSAGES_GLOBAL_DAY` (2000), `ELICIT_MODEL` (Anthropic model, default `claude-haiku-4-5-20251001`), `PARKMIND_AUTH_DISABLED=1` (local demo only: no login,
 every route open), `PARKMIND_PLAN_FROM_STORED=1` (plan from the latest stored snapshot),
 `E2E_NOW=HH:MM` (fixed park clock). After editing `.env`: `docker compose up -d app`.
 
@@ -165,7 +174,8 @@ docker compose down                 # stop (add -v to also drop the database vol
 Open http://localhost:8000 and sign in with the user from `PARKMIND_AUTH_USERS`.
 
 **Without Docker** (hot reload for UI work): terminal 1 `docker compose up -d postgres`, then
-`poetry run python server.py`; terminal 2 `cd ui/web && npm ci && npm run dev` and open
+`poetry run alembic -c database/alembic.ini upgrade head && poetry run python scripts/seed_db.py`
+(the container does this on start; here you do it once) and `poetry run python server.py`; terminal 2 `cd ui/web && npm ci && npm run dev` and open
 http://localhost:5173 (Vite proxies `/api` to :8000).
 
 **3. Check that it works**
@@ -201,11 +211,26 @@ messages/day; 5 failed sign-ins per address+user lock that login for 5 minutes.
 ```bash
 poetry run pytest tests/integration/test_api.py tests/integration/test_api_security.py
 poetry run pytest                  # everything
-poetry run ruff check . && poetry run mypy && PYTHONPATH=src poetry run lint-imports
+poetry run ruff check . && poetry run mypy src && PYTHONPATH=src poetry run lint-imports
 ```
 
 (If your shell exports `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`, unset them for the live
 Anthropic tests.)
+
+### E2E on real ports (live LLM)
+
+`scripts/e2e/` runs the initial planning graph against **real** Postgres, ThemeParks,
+Open-Meteo and Anthropic (33 scenarios, ~35 LLM calls, ~15 minutes; costs API credit).
+Not part of CI. Needs `ANTHROPIC_API_KEY` and `DATABASE_URL` in `.env`, a migrated
+database, and (for two scenarios) the throwaway `parkmind_edge` database; details in
+`scripts/e2e/README.md`.
+
+```bash
+poetry run python scripts/e2e/capture.py                 # all scenarios, skipping the captured ones
+poetry run python scripts/e2e/capture.py espanol         # only these
+FORCE=1 poetry run python scripts/e2e/capture.py         # re-capture everything
+poetry run python scripts/e2e/build_report.py            # docs/e2e/raw -> docs/e2e/REPORT.md (no credentials)
+```
 
 ### Database
 
@@ -255,10 +280,10 @@ def handle_request(thread_id: str, guest_id: str) -> None:
 Call `store.end_session(thread_id)` when the session ends. Persisted
 (consented) records are unaffected.
 
-**Single worker only for now.** The memory is process-local, so a deployment
-with several API workers would lose records between them. P0-35 must either
-fail loudly at startup with more than one worker, or use sticky sessions or a
-shared non-table store.
+**Single worker only.** The memory is process-local, so a deployment with
+several API workers would lose records between them. `server.py` fails loudly at
+startup if more than one worker is requested (`WEB_CONCURRENCY` or
+`PARKMIND_WORKERS` above 1, or `--workers`; `api/guard.py`).
 
 ### IDs and normalization (P0-10)
 
@@ -523,7 +548,7 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 | **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
 | **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
 | **PostgreSQL Repos** | ✅ Done | Profiles, Plans, Session store (in-memory for accessibility) |
-| **Initial Planning Graph** | ✅ Done | 5-node orchestration: resolve → fetch → synthesize → propose → approve |
+| **Initial Planning Graph** | ✅ Done | Superseded by the Plan Synthesis row above (P0-30). |
 | **Constraint Checker** | ✅ Done | 11 rules, plus `check_replan` for a replanned day; PlanDiff generation |
 | **Replanner** | ✅ P0-23 / P0-34 | Replanner (frozen completed stops, remaining walking budget, rest-first) and the replanning graph: events → policy → replan → check → diff → explain → propose → approval. |
 
