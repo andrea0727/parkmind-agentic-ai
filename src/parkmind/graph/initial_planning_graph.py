@@ -252,7 +252,9 @@ def _make_explain_node(deps_factory: DepsFactory) -> StateNode:
         check = state.get("check_result")
         if plan is None or check is None:
             raise ValueError("a checked candidate plan is required")
-        return {"explanation": use_case.execute(plan, check)}
+        constraints = state.get("constraints")
+        guests = constraints.guests if constraints is not None else []
+        return {"explanation": use_case.execute(plan, check, guests=guests)}
 
     return explain
 

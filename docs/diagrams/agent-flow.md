@@ -54,37 +54,41 @@ Notes:
 - `EDITED` decisions are rejected with an error until P0-32.
 - State holds only `accessibility_ref` (guest ids) [C19].
 
-## 2. Replanning (target, §36)
+## 2. Replanning graph (implemented: P0-34)
 
-`replanning_graph.py` only has the docstring and `build_replanning_graph()` raises `NotImplementedError`. `diff_plans` exists; the node that calls it does not.
+`build_replanning_graph()` runs on the thread of the initial plan with `{"thread_id", "events"}` as input. Constraints, profiles, `accessibility_ref` and the group objective come from that thread's checkpoint; the active plan comes from the repository. A replan is a new `plan_id`, checked by the same `ConstraintChecker` as an initial plan (`check_replan`: the whole day, counting what was already walked). Only the resumed approval interrupt activates it; rejecting keeps the current plan.
 
 ```mermaid
 flowchart TD
-  MON[["MONITOR EVENT<br/>typed event"]]:::target --> AP
-  UR["USER REPORT"]:::target --> IT["INTERPRET<br/>LLM → typed Event"]:::target
-  IT -- constraint change --> EL([ELICIT]):::target
-  IT --> SV["SCHEMA VALIDATE"]:::target
-  SV --> CF{"CONFIRM<br/>interrupt on low confidence<br/>or hard constraint"}:::target
-  CF -- discarded --> Z([END])
-  CF --> AP["APPLY EXECUTION UPDATES<br/>PARTY_RELOCATED → execution_state<br/>dedupe by event_id"]:::target
-  AP --> EP{"EVENT POLICY<br/>per event: severity + requires_replan"}:::target
-  EP -- no event requires replan --> IG([IGNORE]):::target
-  EP -- pending proposal --> SS([SUPERSEDE]):::target
-  EP --> LC["LOAD CONTEXT"]:::target
-  LC --> RG["RESOLVE GROUP OBJECTIVE<br/>re-run: eligible sets with fresh context"]:::target
-  RG --> RP["REPLAN<br/>from current plan + execution state"]:::target
-  RP --> CP{"CHECK PLAN"}:::target
-  CP -- fails --> RS["RE-SOLVE"]:::target
-  RS --> RP
-  CP -- valid --> PD["PLAN DIFF<br/>diff_plans exists, not wired"]:::target
-  PD --> EX["EXPLAIN"]:::target
-  EX --> PR["PROPOSE"]:::target
-  PR --> IN{"INTERRUPT<br/>human decision"}:::target
-  IN -- APPROVE --> LB1["LOG BEHAVIOR"]:::target --> PS["PERSIST"]:::target
-  IN -- EDIT --> LB2["LOG BEHAVIOR"]:::target --> RC["RECHECK"]:::target
-  IN -- REJECT --> LR["LOG REASON"]:::target --> UP["UPDATE PREFERENCES"]:::target --> KP["KEEP CURRENT PLAN"]:::target
+  S([START]) --> LP["load_plan<br/>active plan from the repository"]:::impl
+  LP -- no plan / not ready --> NP([END: nothing to replan]):::impl
+  LP --> HE["handle_events<br/>dedupe · apply execution updates · EventPolicy<br/>supersede the pending proposal if significant"]:::impl
+  HE -- report to confirm --> CE{"confirm_events<br/>interrupt(): confirm or dismiss"}:::impl
+  CE -- confirmed --> HC["handle_confirmed_events"]:::impl
+  CE -- dismissed --> IG
+  HE -- nothing significant --> IG["ignore_events<br/>pending proposal is re-opened"]:::impl
+  IG -- pending proposal --> IN
+  IG -- none --> Z([END])
+  HE -- significant --> LC
+  HC -- significant --> LC
+  HC -- nothing significant --> IG
+  LC["load_context"]:::impl --> RG["resolve_group<br/>refresh objective"]:::impl
+  RG --> RP["replan<br/>frozen completed stops · remaining walking budget · rest_first"]:::impl
+  RP -- no valid replan --> NV([END: nothing proposed]):::impl
+  RP --> CK{"check_plan<br/>check_replan"}:::impl
+  CK -- invalid --> NV
+  CK -- valid --> DF["diff"]:::impl --> EX["explain"]:::impl --> PR["propose_plan<br/>PENDING proposal, base_plan_id"]:::impl
+  PR --> IN{"interrupt_approval<br/>human decision"}:::impl
+  IN -- APPROVED --> OK["ResolveProposalUseCase: new plan ACTIVE"]:::impl
+  IN -- REJECTED --> RJ["REJECTED: current plan unchanged"]:::impl
+  IN -- malformed value --> IN
+  OK --> Z
+  RJ --> Z
 
-  classDef target fill:#fff2cc,stroke:#d6b656,stroke-dasharray:5 5,color:#000
+  classDef impl fill:#d5e8d4,stroke:#82b366,color:#000
 ```
 
-Once the Replanner (#83) merges, `REPLAN` and `ReplanUseCase` stop being stubs.
+Notes:
+
+- `GUEST_FATIGUE` (confirmed) sets the walking cap and makes the new horizon open with a `REST` stop; if it cannot fit, the replan fails closed.
+- Not implemented: REJECT's "update preferences" step; `EDITED` decisions (P0-32); the user-report interpretation front (`INTERPRET`, `SCHEMA VALIDATE`) is upstream of this graph's `events` input.

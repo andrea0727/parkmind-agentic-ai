@@ -11,7 +11,6 @@ import re
 import sys
 import time
 import uuid
-from datetime import datetime
 from typing import Any
 
 import harness as h
@@ -19,7 +18,6 @@ import scenarios as sc
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 
-from parkmind.core.contracts import PARK_TZ
 from parkmind.graph import initial_planning_graph as ipg
 from parkmind.graph.checkpointing import default_checkpointer
 
@@ -88,15 +86,16 @@ def attraction_rows(url: str) -> int | None:
 def run_once(name: str, scenario: dict[str, Any]) -> dict[str, Any]:
     h.EVENTS.clear()
     h.LLM_CALLS.clear()
+    h.LLM_RETRIES.clear()
     thread = f"{name}-{uuid.uuid4().hex[:6]}"
     confirm = scenario.get("confirm", h.CONFIRM)
     approval = scenario.get("approval", {"decision": "APPROVED"})
     out: dict[str, Any] = {
         "id": name, "messages": scenario["msgs"], "confirm_payload": jsonable(confirm), "approval_payload": jsonable(approval),
         "setup": getattr(scenario.get("ctx"), "__name__", None) if "ctx" in scenario else None,
-        "now": datetime.now(PARK_TZ).strftime("%H:%M"), "steps": [],
+        "now": h.e2e_now().strftime("%H:%M"), "steps": [],
     }
-    graph = ipg.build_initial_planning_graph(h.NvidiaExtractor(), None, default_checkpointer())
+    graph = ipg.build_initial_planning_graph(h.NvidiaExtractor(), None, default_checkpointer(), clock=h.e2e_now)
     config: Any = {"configurable": {"thread_id": thread}}
     cm = scenario["ctx"]() if "ctx" in scenario else contextlib.nullcontext()
     rows_before = attraction_rows(sc.EDGE_URL) if name == "happy_catalogo_vacio" else None
@@ -133,6 +132,8 @@ def run_once(name: str, scenario: dict[str, Any]) -> dict[str, Any]:
     if rows_before is not None:
         out["attraction_rows"] = {"before": rows_before, "after": attraction_rows(sc.EDGE_URL)}
     out["seconds"] = round(time.time() - t0, 1)
+    if h.LLM_RETRIES:
+        out["llm_retries"] = list(h.LLM_RETRIES)
     return out
 
 
@@ -143,9 +144,6 @@ def run(name: str) -> None:
         return
     scenario = sc.SCENARIOS[name]
     out = run_once(name, scenario)
-    if "exception" in out and "Internal server error" in out["exception"]["message"]:
-        out = run_once(name, scenario)
-        out["retried_after_llm_500"] = True
     target.write_text(json.dumps(out, indent=2, default=str))
     print(f"done {name} in {out['seconds']}s exc={out.get('exception', {}).get('type')}", flush=True)
 

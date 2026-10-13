@@ -339,3 +339,21 @@ def test_an_available_unmet_must_do_replans_and_another_does_not(deps):
 
     assert _handle(deps, [available("elsewhere")]).superseded == []
     assert _handle(deps, [available("tron")]).superseded == ["prop_pending"]
+
+
+def test_a_recorded_fatigue_asks_the_next_plan_to_open_with_a_rest(deps):
+    handled = _handle(deps, [_fatigue()])
+
+    assert handled.rest_first is True
+
+
+def test_a_closure_alone_does_not_force_a_rest(deps):
+    handled = _handle(deps, [_down("space")])
+
+    assert handled.rest_first is False
+
+
+def test_a_report_set_aside_for_confirmation_forces_no_rest_yet(deps):
+    handled = _handle(deps, [_fatigue()], confirmed=False)
+
+    assert handled.rest_first is False

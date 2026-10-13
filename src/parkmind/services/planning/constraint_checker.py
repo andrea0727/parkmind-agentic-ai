@@ -66,8 +66,16 @@ class ConstraintChecker:
         live_context: LiveContext,
         now: datetime,
         execution_state: PlanExecutionState | None = None,
-        start_location_node_id: str | None = None,
+        walking_done_minutes: float = 0.0,
     ) -> CheckResult:
+        """Check ``plan`` against the 11 rules.
+
+        When ``plan`` is only the remaining horizon of a replan, ``walking_done_minutes``
+        is what the party already walked in the stops before it, and
+        ``execution_state`` carries the per-guest walking consumed and the
+        fatigue-adjusted remaining cap: the day's walking limits (rules 6 and 9) are
+        measured on what was walked plus the horizon, the remaining cap on the horizon.
+        """
         all_guest_ids = [guest.guest_id for guest in constraints.guests]
         accessibility_by_guest = {req.guest_id: req for req in accessibility}
 
@@ -78,7 +86,7 @@ class ConstraintChecker:
         violations += self._check_show_arrival(plan, live_context)
         violations += self._check_must_do(plan, constraints, live_context)
         violations += self._check_avoid(plan, constraints)
-        violations += self._check_walking_budget(plan, constraints)
+        violations += self._check_walking_budget(plan, constraints, walking_done_minutes)
         violations += self._check_lunch_window(plan, constraints)
         violations += self._check_departure(plan, constraints)
         violations += self._check_accessibility(
@@ -88,12 +96,87 @@ class ConstraintChecker:
             live_context,
             all_guest_ids,
             execution_state,
+            walking_done_minutes,
         )
         violations += self._check_ride_restriction(
             plan, accessibility_by_guest, live_context, all_guest_ids
         )
 
         return CheckResult(valid=not violations, violations=violations)
+
+    def check_replan(
+        self,
+        plan: Plan,
+        constraints: PartyConstraints,
+        accessibility: list[AccessibilityRequirements],
+        attractions: dict[str, Attraction],
+        park: Park,
+        live_context: LiveContext,
+        now: datetime,
+        execution_state: PlanExecutionState,
+    ) -> CheckResult:
+        """Gate for a replanned day: the completed stops plus the new horizon.
+
+        The whole day is checked against the same 11 rules as an initial plan, so the
+        daily walking limits count what was already walked. Stops already completed
+        cannot be changed, so a violation on one of them (an attraction that has since
+        closed) is not held against the replan. The fatigue-adjusted remaining cap
+        (``execution_state``) bounds the walking of the new horizon only.
+        """
+        completed = set(execution_state.completed_stop_ids)
+        walked_in_plan = sum(
+            s.walking_minutes for s in plan.stops if s.node_id in completed
+        )
+        horizon_walking = sum(
+            s.walking_minutes for s in plan.stops if s.node_id not in completed
+        )
+        accessibility_by_guest = {req.guest_id: req for req in accessibility}
+        result = self.check(plan, constraints, accessibility, attractions, park, live_context, now)
+        violations = [
+            v for v in result.violations if v.stop_id is None or v.stop_id not in completed
+        ]
+        violations += self._check_consumed_walking(
+            horizon_walking, walked_in_plan, accessibility_by_guest, execution_state
+        )
+        violations += self._check_remaining_cap(
+            horizon_walking, accessibility_by_guest, execution_state
+        )
+        return CheckResult(valid=not violations, violations=violations)
+
+    @staticmethod
+    def _check_consumed_walking(
+        horizon_walking: float,
+        walked_in_plan: float,
+        accessibility_by_guest: dict[str, AccessibilityRequirements],
+        execution_state: PlanExecutionState,
+    ) -> list[ConstraintViolation]:
+        """Daily walking limit (rule 9) against what a guest was *recorded* to have walked.
+
+        ``check`` measures the day on the walking the plan schedules for the completed
+        stops. When a guest's recorded walking is higher, that is the one that counts,
+        as it does for the optimizer's remaining budget; below it ``check`` already
+        decides, so nothing is reported twice.
+        """
+        violations: list[ConstraintViolation] = []
+        for guest_id, req in accessibility_by_guest.items():
+            if req.daily_walking_limit_minutes is None:
+                continue
+            consumed = execution_state.walking_minutes_consumed.get(guest_id, 0.0)
+            if consumed <= walked_in_plan:
+                continue
+            total_walking = consumed + horizon_walking
+            if total_walking > req.daily_walking_limit_minutes:
+                violations.append(
+                    ConstraintViolation(
+                        rule=RuleId.ACCESSIBILITY,
+                        message=(
+                            f"Guest {guest_id} walking total {total_walking} minutes exceeds "
+                            f"their accessibility limit of {req.daily_walking_limit_minutes} minutes"
+                        ),
+                        suggestion="Drop the lowest-utility optional stop or insert a REST stop.",
+                    )
+                )
+        return violations
 
     @staticmethod
     def _served_guest_ids(stop: Stop, all_guest_ids: list[str]) -> list[str]:
@@ -306,16 +389,17 @@ class ConstraintChecker:
         return violations
 
     def _check_walking_budget(
-        self, plan: Plan, constraints: PartyConstraints
+        self, plan: Plan, constraints: PartyConstraints, walking_done_minutes: float = 0.0
     ) -> list[ConstraintViolation]:
         if constraints.party_walking_budget_minutes is None:
             return []
-        if plan.total_walking_minutes > constraints.party_walking_budget_minutes:
+        total_walking = walking_done_minutes + plan.total_walking_minutes
+        if total_walking > constraints.party_walking_budget_minutes:
             return [
                 ConstraintViolation(
                     rule=RuleId.WALKING_BUDGET,
                     message=(
-                        f"Plan walking total {plan.total_walking_minutes} minutes exceeds "
+                        f"Plan walking total {total_walking} minutes exceeds "
                         f"party budget of {constraints.party_walking_budget_minutes} minutes"
                     ),
                     suggestion="Drop the lowest-utility optional stop or insert a REST stop.",
@@ -368,6 +452,7 @@ class ConstraintChecker:
         live_context: LiveContext,
         all_guest_ids: list[str],
         execution_state: PlanExecutionState | None,
+        walking_done_minutes: float = 0.0,
     ) -> list[ConstraintViolation]:
         violations = []
         for guest_id, req in accessibility_by_guest.items():
@@ -376,7 +461,13 @@ class ConstraintChecker:
             # group total regardless of whether the guest has any stops of
             # their own in the plan.
             if req.daily_walking_limit_minutes is not None:
-                total_walking = plan.total_walking_minutes
+                walked_before = walking_done_minutes
+                if execution_state is not None:
+                    walked_before = max(
+                        walked_before,
+                        execution_state.walking_minutes_consumed.get(guest_id, 0.0),
+                    )
+                total_walking = walked_before + plan.total_walking_minutes
                 if total_walking > req.daily_walking_limit_minutes:
                     violations.append(
                         ConstraintViolation(
@@ -390,24 +481,9 @@ class ConstraintChecker:
                     )
 
             if execution_state is not None:
-                remaining_cap = execution_state.remaining_walking_cap_minutes.get(
-                    guest_id
+                violations += self._check_remaining_cap(
+                    plan.total_walking_minutes, {guest_id: req}, execution_state
                 )
-                if (
-                    remaining_cap is not None
-                    and plan.total_walking_minutes > remaining_cap
-                ):
-                    violations.append(
-                        ConstraintViolation(
-                            rule=RuleId.ACCESSIBILITY,
-                            message=(
-                                f"Guest {guest_id} walking total {plan.total_walking_minutes} "
-                                f"minutes exceeds their remaining fatigue-adjusted cap of "
-                                f"{remaining_cap} minutes"
-                            ),
-                            suggestion="Drop the lowest-utility optional stop or insert a REST stop.",
-                        )
-                    )
 
             guest_stops = sorted(
                 (
@@ -498,6 +574,29 @@ class ConstraintChecker:
                                 ),
                             )
                         )
+        return violations
+
+    @staticmethod
+    def _check_remaining_cap(
+        horizon_walking_minutes: float,
+        accessibility_by_guest: dict[str, AccessibilityRequirements],
+        execution_state: PlanExecutionState,
+    ) -> list[ConstraintViolation]:
+        violations = []
+        for guest_id in accessibility_by_guest:
+            remaining_cap = execution_state.remaining_walking_cap_minutes.get(guest_id)
+            if remaining_cap is not None and horizon_walking_minutes > remaining_cap:
+                violations.append(
+                    ConstraintViolation(
+                        rule=RuleId.ACCESSIBILITY,
+                        message=(
+                            f"Guest {guest_id} walking total {horizon_walking_minutes} "
+                            f"minutes exceeds their remaining fatigue-adjusted cap of "
+                            f"{remaining_cap} minutes"
+                        ),
+                        suggestion="Drop the lowest-utility optional stop or insert a REST stop.",
+                    )
+                )
         return violations
 
     def _check_ride_restriction(

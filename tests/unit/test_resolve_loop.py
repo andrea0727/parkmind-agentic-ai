@@ -606,3 +606,69 @@ def test_show_arrival_protects_must_do_neighbor(base_constraints):
     # Protege el must_do y falla cerrado
     assert result.valid is False
     assert result.plan is None
+
+
+# ---------------------------------------------------------------------------
+# Walking budget handed to the optimizer for a replan (P0-34)
+# ---------------------------------------------------------------------------
+
+
+def _budget(*, party=None, reqs=(), state=None, done=0.0):
+    from parkmind.services.planning.resolve_loop import _remaining_walking_budget
+
+    constraints = MagicMock()
+    constraints.party_walking_budget_minutes = party
+    return _remaining_walking_budget(constraints, list(reqs), state, done)
+
+
+def _req(guest_id="g1", limit=None):
+    from parkmind.core.contracts import AccessibilityRequirements
+
+    return AccessibilityRequirements(
+        guest_id=guest_id, daily_walking_limit_minutes=limit, consent=True
+    )
+
+
+def _walked(consumed=None, cap=None):
+    from parkmind.core.contracts import PlanExecutionState
+
+    return PlanExecutionState(
+        plan_id="p",
+        as_of=DAY.replace(hour=11),
+        walking_minutes_consumed=consumed or {},
+        remaining_walking_cap_minutes=cap or {},
+    )
+
+
+def test_nothing_limits_the_walking_without_budget_limits_or_caps():
+    assert _budget() is None
+    assert _budget(reqs=[_req()]) is None
+
+
+def test_the_party_budget_is_reduced_by_what_was_walked():
+    assert _budget(party=100, done=30.0) == 70.0
+
+
+def test_a_daily_limit_is_reduced_by_the_larger_of_plan_and_reported_walking():
+    assert _budget(reqs=[_req(limit=90)], done=20.0) == 70.0
+    state = _walked(consumed={"g1": 35.0})
+    assert _budget(reqs=[_req(limit=90)], state=state, done=20.0) == 55.0
+
+
+def test_a_fatigue_cap_bounds_the_horizon_directly():
+    state = _walked(cap={"g1": 12.0})
+
+    assert _budget(reqs=[_req(limit=480)], state=state, done=10.0) == 12.0
+
+
+def test_the_tightest_of_all_the_limits_wins():
+    state = _walked(cap={"g1": 40.0, "g2": 25.0})
+    reqs = [_req("g1", limit=100), _req("g2", limit=60)]
+
+    assert _budget(party=200, reqs=reqs, state=state, done=10.0) == 25.0
+
+
+def test_the_loop_exposes_its_checker_for_the_replan_gate():
+    checker = MagicMock()
+
+    assert PlannerResolveLoop(MagicMock(), checker).checker is checker

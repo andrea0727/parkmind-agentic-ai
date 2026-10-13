@@ -53,6 +53,32 @@ class PlannerResolveResult(ParkMindBaseModel):
     fatal_error: str | None = None
 
 
+def _remaining_walking_budget(
+    constraints: PartyConstraints,
+    accessibility_reqs: Sequence[AccessibilityRequirements] | None,
+    execution_state: PlanExecutionState | None,
+    walking_done_minutes: float,
+) -> float | None:
+    """Walking minutes the new horizon may still add, or ``None`` when nothing limits it.
+
+    The tightest of: the party budget (rule 6) and each guest's daily limit (rule 9),
+    both less what was already walked, and each guest's fatigue-adjusted remaining cap.
+    """
+    budgets: list[float] = []
+    if constraints.party_walking_budget_minutes is not None:
+        budgets.append(constraints.party_walking_budget_minutes - walking_done_minutes)
+    for req in accessibility_reqs or ():
+        walked = walking_done_minutes
+        if execution_state is not None:
+            walked = max(walked, execution_state.walking_minutes_consumed.get(req.guest_id, 0.0))
+            cap = execution_state.remaining_walking_cap_minutes.get(req.guest_id)
+            if cap is not None:
+                budgets.append(cap)
+        if req.daily_walking_limit_minutes is not None:
+            budgets.append(req.daily_walking_limit_minutes - walked)
+    return min(budgets) if budgets else None
+
+
 class PlannerResolveLoop:
     """
     Executes the deterministic cycle that sends failed plans back to the
@@ -68,6 +94,10 @@ class PlannerResolveLoop:
         self._optimizer = optimizer
         self._checker = checker
         self._max_attempts = max_attempts
+
+    @property
+    def checker(self) -> ConstraintChecker:
+        return self._checker
 
     def resolve(
         self,
@@ -87,9 +117,16 @@ class PlannerResolveLoop:
         scores: PreferenceScores | None = None,
         execution_state: PlanExecutionState | None = None,
         completed_node_ids: Sequence[str] | None = None,
+        walking_done_minutes: float = 0.0,
+        rest_first: bool = False,
     ) -> PlannerResolveResult:
         """
         Run the repair loop up to max_attempts.
+
+        For a replan, ``walking_done_minutes`` is what the party already walked before
+        the horizon: the optimizer searches the horizon with what is left of the day's
+        walking limits (rules 6 and 9) and of the fatigue cap, and the checker measures
+        the day's limits on walked + horizon. ``rest_first`` opens the horizon with a REST.
 
         If DATA_FRESHNESS fails, the context_reloader is invoked once.
         Returns a PlannerResolveResult. Absolute invariant: valid=True is ONLY
@@ -99,6 +136,9 @@ class PlannerResolveLoop:
         current_context = context
 
         catalog_index = {a.node_id: a for a in catalog} if catalog else {}
+        walking_budget_minutes = _remaining_walking_budget(
+            constraints, accessibility_reqs, execution_state, walking_done_minutes
+        )
 
         for attempt in range(self._max_attempts):
             # 1. Generate candidate plan
@@ -117,6 +157,8 @@ class PlannerResolveLoop:
                 now=now,
                 scores=scores,
                 completed_node_ids=completed_node_ids,
+                rest_first=rest_first,
+                walking_budget_minutes=walking_budget_minutes,
             )
 
             # 2. Check candidate plan
@@ -128,8 +170,8 @@ class PlannerResolveLoop:
                 park=park,
                 live_context=current_context,
                 now=now,
-                start_location_node_id=start_location_node_id,
                 execution_state=execution_state,
+                walking_done_minutes=walking_done_minutes,
             )
 
             # 3. If clean check, return success
@@ -177,8 +219,8 @@ class PlannerResolveLoop:
                     park=park,
                     live_context=current_context,
                     now=now,
-                    start_location_node_id=start_location_node_id, #?
                     execution_state=execution_state,
+                    walking_done_minutes=walking_done_minutes,
                 )
                 if recheck_result.valid:
                     return PlannerResolveResult(

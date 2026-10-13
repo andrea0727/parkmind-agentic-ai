@@ -12,6 +12,7 @@ still missing. It never decides what the checker enforces:
   written to state, and never stored as soft preferences [C15, C19].
 """
 
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time
@@ -196,6 +197,58 @@ _UNKNOWN_ATTRACTION = "unknown_attraction:"
 _AMBIGUOUS_ATTRACTION = "ambiguous_attraction:"
 _CONFLICTING_ATTRACTION = "conflicting_attraction:"
 _HEIGHT = "height:"
+_UNVERIFIED_HEIGHT = "height_unverified:"
+
+_HEIGHT_TOLERANCE_CM = 1.5
+_CM_PER_FOOT = 30.48
+_CM_PER_INCH = 2.54
+_NUMBER = r"(\d+(?:[.,]\d+)?)"
+_CM_RE = re.compile(rf"{_NUMBER}\s*(?:cm|cms|centimet\w*|centím\w*)\b", re.IGNORECASE)
+_METERS_RE = re.compile(rf"{_NUMBER}\s*(?:m|mt|mts|meters?|metres?|metros?)\b", re.IGNORECASE)
+_FEET_RE = re.compile(
+    r"(\d)\s*(?:'|’|ft\b|feet\b|foot\b|-foot\b)\s*(?:(\d{1,2})\s*(?:\"|in\b|inch\w*)?)?",
+    re.IGNORECASE,
+)
+_DECIMAL_METERS_RE = re.compile(r"(?<![\d.,])([12][.,]\d{1,2})(?![\d.,])")
+_BARE_RE = re.compile(
+    r"(?<![\d.,:])(\d{2,3})(?![\d.,:])(?!\s*(?:min|minutes?|hours?|hrs?|h\b|pm|am|%|years?|yo\b))",
+    re.IGNORECASE,
+)
+
+
+def _as_float(raw: str) -> float:
+    return float(raw.replace(",", "."))
+
+
+def heights_mentioned_cm(text: str) -> list[float]:
+    """Every height, in cm, that the text could be stating (cm, m, feet/inches or a bare cm)."""
+    found: list[float] = []
+    found.extend(_as_float(m.group(1)) for m in _CM_RE.finditer(text))
+    found.extend(_as_float(m.group(1)) * 100 for m in _METERS_RE.finditer(text))
+    found.extend(_as_float(m.group(1)) * 100 for m in _DECIMAL_METERS_RE.finditer(text))
+    for m in _FEET_RE.finditer(text):
+        inches = int(m.group(2)) if m.group(2) else 0
+        found.append(int(m.group(1)) * _CM_PER_FOOT + inches * _CM_PER_INCH)
+    found.extend(float(m.group(1)) for m in _BARE_RE.finditer(text))
+    return found
+
+
+def ungrounded_heights(
+    extraction: ElicitationExtraction, texts: Sequence[str]
+) -> list[str]:
+    """Missing-information keys for heights the guests never wrote.
+
+    Height decides who may ride, so the model's value must trace back to the
+    guests' own words. An out-of-range figure ("400 cm") that the model clamped
+    into the schema's range, or one it invented, matches nothing they typed.
+    """
+    stated = [h for text in texts for h in heights_mentioned_cm(text)]
+    return [
+        f"{_UNVERIFIED_HEIGHT}g{index}"
+        for index, guest in enumerate(extraction.guests, start=1)
+        if guest.height_cm is not None
+        and not any(abs(guest.height_cm - h) <= _HEIGHT_TOLERANCE_CM for h in stated)
+    ]
 
 
 def unresolved_names(resolution: NameResolution) -> list[str]:
@@ -243,6 +296,12 @@ def _question_for(
             options = resolution.ambiguous[name] if resolution is not None else ()
             questions.append(
                 f"'{name}' could be {', '.join(options)}. Which one do you mean?"
+            )
+        elif key.startswith(_UNVERIFIED_HEIGHT):
+            guest = key.removeprefix(_UNVERIFIED_HEIGHT).removeprefix("g")
+            questions.append(
+                f"I couldn't match the height I understood for Guest {guest} to what you wrote. "
+                f"How tall is Guest {guest}, in cm (between 50 and 250)?"
             )
         elif key.startswith(_CONFLICTING_ATTRACTION):
             name = key.removeprefix(_CONFLICTING_ATTRACTION)
@@ -481,6 +540,7 @@ def make_elicit_node(
             )
             missing = (
                 missing_information(outcome.extraction)
+                + ungrounded_heights(outcome.extraction, texts)
                 + unresolved_names(resolution)
                 + conflicting_names(outcome.extraction, resolution)
             )

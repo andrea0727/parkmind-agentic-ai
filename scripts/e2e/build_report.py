@@ -214,6 +214,10 @@ def j_altura(r: dict[str, Any]) -> tuple[str, str]:
     if (c := crashed(r)):
         return c
     h = (r.get("extracted") or {}).get("heights")
+    if not active(r) and kind(r) == "missing_information" and any(
+        str(m).startswith("height_unverified:") for m in (r["interrupt1"]["payload"].get("missing") or [])
+    ):
+        return ok(f"The extractor returned {h}, which the guests never wrote; the graph asked for the heights instead of planning")
     if h != [400, 20] and h != [20, 400]:
         return bad("B10", f"The user said 400 cm and 20 cm, the extractor returned {h}; values were silently replaced and the plan was {'approved' if active(r) else 'not activated'}")
     return ok("Values preserved and validated")
@@ -338,8 +342,9 @@ def build_steps(r: dict[str, Any], meta: tuple[Any, ...], status: str, msg: str,
             step(f"Then the stages after the decision are {r.get('stages_after_approval')}, approval={r.get('approval')}, plan active={r.get('plan_active')}")
     if (e := r.get("exception")):
         step(f"Then the run raised {e['type']}: {e['message'][:240]}", "failed" if status == "failed" else "broken", [attach("Exception", f"{e['type']}: {e['message']}", "text/plain")])
-    if r.get("retried_after_llm_500"):
-        step("Note: first attempt hit a transient NVIDIA 500 and was repeated once", "skipped")
+    if r.get("llm_retries"):
+        step(f"Note: {len(r['llm_retries'])} transient LLM server error(s) were retried with backoff",
+             "skipped", [attach("LLM retries", "\n".join(r["llm_retries"]), "text/plain")])
     step(f"Then {expected[0].lower() + expected[1:]}", status, [attach("Verdict", msg + (f"\n\nWhy: {why}" if why and status != 'passed' else ""), "text/plain")])
     return S
 

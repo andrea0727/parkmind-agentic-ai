@@ -91,6 +91,33 @@ def test_a_provider_slower_than_the_guest_is_still_the_same_closure():
         assert deduplicate([_down(EventSource.MONITOR, minutes=minutes)], history) == []
 
 
+def test_the_user_episode_window_ends_exactly_at_two_hours():
+    history, _ = _record([], [_down(EventSource.USER)])
+
+    assert deduplicate([_down(EventSource.MONITOR, minutes=120)], history) == []
+    _, after = _record(history, [_down(EventSource.MONITOR, minutes=121)])
+    assert [e.event_id for e in after] == ["ATTRACTION_DOWN:tron:2"]
+
+
+def test_a_monitor_episode_keeps_the_thirty_minute_window():
+    history, _ = _record([], [_down(EventSource.MONITOR)])
+
+    assert deduplicate([_down(EventSource.MONITOR, minutes=30)], history) == []
+    _, after = _record(history, [_down(EventSource.MONITOR, minutes=31)])
+    assert [e.event_id for e in after] == ["ATTRACTION_DOWN:tron:2"]
+
+
+def test_a_user_available_then_the_monitor_later_is_one_event():
+    history, _ = _record([], [_down(EventSource.MONITOR)])
+    history, user = _record(
+        history, [_down(EventSource.USER, 10, EventType.ATTRACTION_AVAILABLE)]
+    )
+
+    late = _down(EventSource.MONITOR, 55, EventType.ATTRACTION_AVAILABLE)
+    assert [e.event_id for e in user] == ["ATTRACTION_AVAILABLE:tron:1"]
+    assert deduplicate([late], history) == []
+
+
 def test_a_missed_available_does_not_hide_the_next_closure():
     history, _ = _record([], [_down(EventSource.MONITOR)])
     # The AVAILABLE in between was never recorded (no fresh snapshot).

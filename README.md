@@ -170,7 +170,7 @@ from parkmind.services.use_cases.session_memory import session_store
 
 def handle_request(thread_id: str, guest_id: str) -> None:
     with connect() as conn:  # per request
-        store = PostgresSessionStore(conn, SESSION_MEMORY)
+        store = session_store(conn)
         requirements = store.get(
             thread_id, guest_id
         )  # session_id == LangGraph thread_id
@@ -278,17 +278,70 @@ poetry run python scripts/run_monitor.py --no-collect   # detect on what is alre
 - **One event per closure.** Ids don't depend on the source, so the monitor and a
   guest reporting the same closure record one event (`event_dedup.py`). A closure
   the monitor sees again later is a new one (the reopening was missed, or the first
-  report was wrong). `BEHIND_SCHEDULE` is recorded once per late stop, when the
-  delay reaches 15 minutes, and only while the party's progress is being tracked.
+  report was wrong): more than 30 minutes after a monitor event, or more than 2 h
+  (`USER_EPISODE_WINDOW`, a starting point to tune with real data) after a guest's
+  report, since the provider can lag behind a guest. The cost: a wrong guest report
+  can hide a real closure the monitor sees within those 2 h.
+  `BEHIND_SCHEDULE` is recorded once per late stop, when the delay reaches 15
+  minutes, and only while the party's progress is being tracked. That one event is
+  final for the stop: if the guests reject or ignore the replan it proposes, the
+  same stop does not raise another one, however late the party gets. It needs
+  progress *reported* by the party (`completed_stop_ids` or `skipped_stop_ids`);
+  assumed progress never counts. Until something records it (reporting a stop as
+  done: #48, P0-35b), the event is not raised in production. A replan's reported
+  progress is carried over to the new plan when its proposal is approved, so what
+  the guests report while deciding is not lost.
 - **Confirmation first (§25, C10).** A doubtful guest report, or a fatigue report
   for a guest with a walking limit (or whose limit can't be read), is set aside
   until the guests confirm it; the rest of the batch goes on.
 - **Superseding.** `HandleEventsUseCase` records a party's events and, when a new
   one requires a replan, marks the pending proposal `SUPERSEDED` (§9, C18). Approving
   a proposal superseded meanwhile activates nothing and tells the guests.
-- **Not yet:** waking each party's replanning graph and the replan itself
-  (P0-34). The monitor prints the park-wide events; per-party judgement runs when
-  `HandleEventsUseCase` is called with that party's plan and objective.
+- **Next step.** The monitor prints the park-wide events; per-party judgement runs
+  when `HandleEventsUseCase` is called with that party's plan and objective, which is
+  what the replanning graph does (below). Waking a party's graph from the monitor
+  is not wired yet.
+
+### Replanning graph (P0-34)
+
+`graph/replanning_graph.py` (`langgraph.json` entry `replanning`) runs on the thread
+of the initial plan, with `{"thread_id": ..., "events": [Event, ...]}` as input;
+constraints, guest profiles, `accessibility_ref` and the group objective come from
+that thread's checkpoint (so `agent.py` gives both graphs one checkpointer).
+
+```
+LOAD PLAN → HANDLE EVENTS (dedup · apply execution updates · EventPolicy)
+   ├─ nothing significant → IGNORE (a pending proposal is put back in front of the guests)
+   ├─ report to confirm   → CONFIRM EVENTS (interrupt) → HANDLE CONFIRMED EVENTS
+   └─ significant         → LOAD CONTEXT → RESOLVE GROUP → REPLAN → CHECK
+                              ├─ valid   → DIFF → EXPLAIN → PROPOSE → APPROVAL (interrupt)
+                              └─ invalid → END: nothing proposed, the active plan stays
+```
+
+- **Same gate as the initial plan.** A replan is a new `plan_id`, proposed only after
+  `ConstraintChecker.check_replan`, which judges the *whole day*: what the party
+  already walked counts against the walking limits, and a stop already completed is
+  not held against a closure that came later.
+- **Human decides.** Only the resumed approval interrupt activates a plan
+  (`ResolveProposalUseCase`); rejecting leaves the active plan untouched. A new
+  significant event supersedes the proposal that was waiting (`supersede_pending`).
+- **Progress.** The replan starts from the stored `PlanExecutionState`. If nobody has
+  reported progress, the party is assumed on schedule: stops that should have ended
+  by now count as done. A closure or reopening reported after the snapshot is applied
+  to the replan's context so the replan and its check see the same availability.
+- **Fatigue.** A confirmed `GUEST_FATIGUE` sets the walking cap (P0-33) and makes the
+  new horizon open with a `REST` stop (§25). If a rest cannot fit, the replan fails
+  closed.
+- **Walking budget.** The optimizer is given what is left of the party budget, the
+  daily limits and the fatigue caps, so it stops adding attractions at the limit
+  instead of leaving the checker to reject the plan. This also applies to initial
+  plans (`walking_done_minutes` is zero there).
+- **Privacy [C19].** State holds only `accessibility_ref`; every use case reads the
+  requirements from the SessionStore.
+- **Known limits.** After a replan finds no valid plan the events stay recorded, so a
+  duplicate report does not retry it (a new event does). REJECT's "update
+  preferences" step is not implemented (the reason is stored on the proposal); EDIT
+  is P0-32. An in-progress stop is treated as still ahead.
 
 ### MCP capability boundary (P0-24..P0-27)
 
@@ -388,15 +441,15 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 |---|---|---|
 | **LangGraph State v2** | ✅ Done | Typed ParkMindState, state helpers, message reducer |
 | **Preference Resolution** | ✅ Done | Weighted aggregation from GuestProfile (queue, walking, categories) |
-| **Plan Synthesis** | ✅ Initial planning graph [P0-30] | ELICIT → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED. Runs on in-process use cases, no MCP server. EDITED approvals [P0-32] and replanning [P0-31] are follow-ups. |
-| **Event monitor** | ✅ P0-33 | Snapshot-to-event detector with per-reading freshness, `EventPolicy` (§25 table, confirmation gate, fatigue walking cap), cross-source dedup, supersede on significant events, `scripts/run_monitor.py`. The replanning graph that consumes it is P0-34. |
-| **MCP capability boundary** | ✅ P0-24..P0-27 | `parkmind-mcp`: 14 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` follows P0-23. |
+| **Plan Synthesis** | ✅ Initial planning graph [P0-30] | ELICIT → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED. Runs on in-process use cases, no MCP server. EDITED approvals [P0-32] are a follow-up. |
+| **Event monitor** | ✅ P0-33 | Snapshot-to-event detector with per-reading freshness, `EventPolicy` (§25 table, confirmation gate, fatigue walking cap), cross-source dedup, supersede on significant events, `scripts/run_monitor.py`. Consumed by the replanning graph [P0-34]. |
+| **MCP capability boundary** | ✅ P0-24..P0-27 | `parkmind-mcp`: 14 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` is not exposed yet. |
 | **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
 | **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
 | **PostgreSQL Repos** | ✅ Done | Profiles, Plans, Session store (in-memory for accessibility) |
 | **Initial Planning Graph** | ✅ Done | 5-node orchestration: resolve → fetch → synthesize → propose → approve |
-| **Constraint Checker** | 🔄 Next | Validation rules, PlanDiff generation |
-| **Replanner** | 🔄 Next | Proposal generation, interrupt flow |
+| **Constraint Checker** | ✅ Done | 11 rules, plus `check_replan` for a replanned day; PlanDiff generation |
+| **Replanner** | ✅ P0-23 / P0-34 | Replanner (frozen completed stops, remaining walking budget, rest-first) and the replanning graph: events → policy → replan → check → diff → explain → propose → approval. |
 
 ## Working conventions
 

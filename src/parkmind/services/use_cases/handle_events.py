@@ -47,6 +47,7 @@ from parkmind.services.planning.event_dedup import deduplicate
 from parkmind.services.planning.event_detector import detect_behind_schedule
 from parkmind.services.planning.event_policy import (
     DEFAULT_POLICY_CONFIG,
+    ForceRest,
     PartyEventContext,
     PolicyConfig,
     PolicyDecision,
@@ -87,6 +88,11 @@ class HandledEvents:
     @property
     def requires_replan(self) -> bool:
         return any(d.event.requires_replan for d in self.decisions)
+
+    @property
+    def rest_first(self) -> bool:
+        """A recorded GUEST_FATIGUE asks the next plan to open with a rest (section 25)."""
+        return any(isinstance(e, ForceRest) for d in self.decisions for e in d.effects)
 
     @property
     def events(self) -> list[Event]:

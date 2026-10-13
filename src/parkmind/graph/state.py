@@ -68,6 +68,8 @@ class ParkMindState(TypedDict, total=False):
     # Events (monitor / user reports)
     events: list[Event]
     event_confirmation: Literal["PENDING", "CONFIRMED", "DISMISSED"] | None
+    held_events: list[Event]  # user reports waiting for the guests' confirmation
+    rest_first: bool  # a confirmed GUEST_FATIGUE: the next plan opens with a rest (section 25)
 
     # Checking & Proposal
     check_result: CheckResult | None

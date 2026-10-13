@@ -7,6 +7,13 @@ PlanRepository.activate: nothing in the LLM/agent path may activate a plan, only
 the human-approval resume path (see graph/initial_planning_graph.py,
 services/ports/plan_repository.py).
 
+Approving a replan also carries the progress *reported* for the base plan
+(completed or skipped stops, walked minutes) over to the new plan id, read at
+approval so what the guests reported while deciding is kept. Progress that was
+only assumed (an on-schedule party, see ``effective_execution_state``) is never
+stored: it is derived again from the new plan and the clock on the next replan.
+A rejected or superseded proposal leaves no state behind.
+
 A proposal can stop being PENDING while the guests are still deciding: a
 significant event supersedes it (section 9 [C18], P0-33). Deciding on it then
 raises ``ProposalNoLongerPendingError`` and changes nothing.
@@ -64,4 +71,12 @@ class ResolveProposalUseCase:
                 ) from exc
             if status is ApprovalStatus.APPROVED:
                 deps.plans.activate(thread_id, proposal.candidate_plan_id, at=at)
+                if proposal.base_plan_id != proposal.candidate_plan_id:
+                    reported = deps.execution_states.get(proposal.base_plan_id)
+                    if reported is not None:
+                        deps.execution_states.save(
+                            reported.model_copy(
+                                update={"plan_id": proposal.candidate_plan_id}
+                            )
+                        )
         return proposal

@@ -6,7 +6,7 @@ include_external_packages = True
 # updated by the [v2.1 · decided 2026-09-17] core/contracts/ decision) and CLAUDE.local.md
 # "Non-negotiable boundaries":
 #
-#   core/contracts/, services/ports/, services/planning/, services/personalization/,
+#   core/, services/ports/, services/planning/, services/personalization/,
 #   services/simulator/
 #       must NOT import:
 #       services/clients, services/use_cases, graph, agents, tools, api, ui,
@@ -23,7 +23,7 @@ include_external_packages = True
 name = Deterministic core never imports adapters, frameworks or DB drivers
 type = forbidden
 source_modules =
-    parkmind.core.contracts
+    parkmind.core
     parkmind.services.planning
     parkmind.services.personalization
     parkmind.services.ports
@@ -42,6 +42,7 @@ forbidden_modules =
     psycopg
     sqlalchemy
     langchain_anthropic
+    langchain_nvidia_ai_endpoints
     anthropic
 
 [importlinter:contract:use-cases-forbidden-imports]

@@ -3,6 +3,7 @@
 import os
 import sys
 from collections.abc import Mapping, Sequence
+from datetime import datetime, time
 from pathlib import Path
 from typing import Any
 
@@ -18,13 +19,22 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from parkmind.agents.elicit_agent import ExtractorOutputError
 from parkmind.agents.elicit_prompt import ELICIT_SYSTEM_PROMPT
 from parkmind.agents.elicit_schema import ElicitationExtraction
-from parkmind.core.llm import get_llm
+from parkmind.agents.llm import get_llm
+from parkmind.agents.llm_retry import RetryLog, call_with_retries
+from parkmind.core.contracts import PARK_TZ
 from parkmind.graph import initial_planning_graph as ipg
 
 RAW_DIR = Path(os.environ.get("E2E_RAW_DIR", REPO / "docs" / "e2e" / "raw"))
 CONFIRM = {"confirmed": True, "consent": True}
 
+def e2e_now() -> datetime:
+    """Fixed park-time clock (E2E_NOW=HH:MM, default 10:00) so runs never depend on the time of day."""
+    hh, mm = os.environ.get("E2E_NOW", "10:00").split(":")
+    return datetime.combine(datetime.now(PARK_TZ).date(), time(int(hh), int(mm)), tzinfo=PARK_TZ)
+
+
 LLM_CALLS: list[dict[str, Any]] = []
+LLM_RETRIES: list[str] = []
 EVENTS: list[str] = []
 
 
@@ -37,7 +47,12 @@ class NvidiaExtractor:
         content = f"Guest messages, oldest first:\n{listing}"
         if repair_hint:
             content += f"\n\nYour previous output was rejected by validation. Fix exactly:\n{repair_hint}"
-        response = self._llm.invoke([SystemMessage(ELICIT_SYSTEM_PROMPT), HumanMessage(content)])
+        messages = [SystemMessage(ELICIT_SYSTEM_PROMPT), HumanMessage(content)]
+        log = RetryLog()
+        try:
+            response = call_with_retries(lambda: self._llm.invoke(messages), log=log)
+        finally:
+            LLM_RETRIES.extend(log.errors)
         calls = getattr(response, "tool_calls", None) or []
         LLM_CALLS.append({"hint": repair_hint, "calls": calls})
         if not calls:

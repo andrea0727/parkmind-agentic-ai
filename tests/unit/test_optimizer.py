@@ -1409,3 +1409,65 @@ class TestForecastInputsAndEdges:
         [stop] = _attraction_stops(plan)
         assert stop.expected_wait_minutes == 0.0
         assert plan.provenance.forecast_strategy == "typical_wait"
+
+
+class TestReplanKnobs:
+    """``rest_first`` and ``walking_budget_minutes`` (P0-23 follow-up, P0-34)."""
+
+    @staticmethod
+    def _build(optimizer: GreedyInsertionOptimizer, **kwargs):
+        statuses = {n: AttractionStatus.OPERATING for n in (A1, A2, A3)}
+        return optimizer.build_plan(
+            constraints=_constraints(),
+            context=_live_context(waits={A1: 10.0, A2: 5.0, A3: 15.0}, statuses=statuses),
+            utilities={A1: 3.0, A2: 2.0, A3: 1.0},
+            park=_park(),
+            catalog=_catalog(),
+            **kwargs,
+        )
+
+    def test_rest_first_opens_the_plan_with_a_rest_where_the_party_stands(self) -> None:
+        plan = self._build(_build_optimizer(), rest_first=True, start_location_node_id=A2)
+
+        first = plan.stops[0]
+        assert first.kind is StopKind.REST
+        assert first.node_id == A2
+        assert first.walking_minutes == 0.0
+        assert plan.stops[1].arrival_time >= first.departure_time
+
+    def test_without_rest_first_no_rest_is_forced(self) -> None:
+        plan = self._build(_build_optimizer())
+
+        assert plan.stops[0].kind is not StopKind.REST
+
+    def test_rest_first_is_skipped_when_it_does_not_fit_before_departure(self) -> None:
+        optimizer = _build_optimizer()
+        now = DAY.replace(hour=21, minute=59)
+
+        plan = optimizer.build_plan(
+            constraints=_constraints(departure_hour=22),
+            context=_live_context(
+                waits={A1: 10.0}, statuses={A1: AttractionStatus.OPERATING}
+            ),
+            utilities={A1: 3.0},
+            park=_park(),
+            catalog=_catalog(),
+            now=now,
+            rest_first=True,
+        )
+
+        assert all(s.kind is not StopKind.REST for s in plan.stops)
+
+    def test_a_walking_budget_bounds_the_walking_the_plan_adds(self) -> None:
+        # Every hop is 5 minutes: a 12-minute budget admits two hops, not three.
+        unbounded = self._build(_build_optimizer())
+        bounded = self._build(_build_optimizer(), walking_budget_minutes=12.0)
+
+        assert sum(s.walking_minutes for s in unbounded.stops) > 12.0
+        assert sum(s.walking_minutes for s in bounded.stops) <= 12.0
+        assert len(bounded.stops) >= 1
+
+    def test_a_zero_walking_budget_adds_no_walk_to_an_attraction(self) -> None:
+        plan = self._build(_build_optimizer(), walking_budget_minutes=0.0)
+
+        assert [s for s in plan.stops if s.kind is StopKind.ATTRACTION] == []
