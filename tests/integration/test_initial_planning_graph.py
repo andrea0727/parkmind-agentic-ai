@@ -499,3 +499,120 @@ def test_stale_data_that_stays_stale_ends_with_the_reason(monkeypatch):
     assert state["check_result"] is not None and not state["check_result"].valid
     assert state.get("candidate_plan") is None
     assert h.proposals == []
+
+
+def _edit_of(plan: Any) -> dict[str, list[str]]:
+    """Drop an optional attraction (the fixture plan already has the whole catalog)."""
+    stops = [s.node_id for s in plan.stops if s.kind.value == "ATTRACTION"]
+    optional = [n for n in stops if n not in ("id-tron", "id-space")]
+    assert optional, "the fixture plan leaves nothing to remove"
+    return {"remove": optional[:1], "add": []}
+
+
+def test_an_edit_is_checked_again_and_proposed_as_a_new_pending_proposal(monkeypatch):
+    h = _Harness(monkeypatch)
+    h.confirm()
+    first = h.state()
+    edit = _edit_of(first["candidate_plan"])
+    h.events.clear()
+
+    result = h.graph.invoke(Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG)
+
+    assert result["__interrupt__"][0].value["kind"] == "plan_approval"
+    assert h.events == [
+        "resolve:EDITED",
+        "load_context",
+        "resolve_group",
+        "build_plan",
+        "check",
+        "explain",
+        "propose",
+    ]
+    edited = h.state()
+    plan = edited["candidate_plan"]
+    assert plan.plan_id != first["candidate_plan"].plan_id
+    assert edited["check_result"].valid
+    assert not {s.node_id for s in plan.stops} & set(edit["remove"])
+    assert edited["constraints"].avoid == edit["remove"]
+    assert edited["constraints"].constraints_version == first["constraints"].constraints_version + 1
+    assert edited["approval"] == "PENDING"
+    status = {p.proposal_id: p.approval_status.value for p in h.proposals}
+    assert status == {first["proposal"].proposal_id: "EDITED", edited["proposal"].proposal_id: "PENDING"}
+    assert h.deps.plans.get_active("t1") is None
+
+
+def test_an_attraction_added_back_is_planned_as_a_must_do(monkeypatch):
+    h = _Harness(monkeypatch)
+    h.confirm()
+    removed = _edit_of(h.state()["candidate_plan"])["remove"]
+    h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": {"remove": removed}}), config=CONFIG
+    )
+
+    h.graph.invoke(Command(resume={"decision": "EDITED", "edit": {"add": removed}}), config=CONFIG)
+
+    edited = h.state()
+    assert set(removed) <= {s.node_id for s in edited["candidate_plan"].stops}
+    assert set(removed) <= set(edited["constraints"].must_do)
+    assert edited["constraints"].avoid == []
+    assert edited["check_result"].valid
+
+
+def test_an_edited_plan_becomes_active_only_once_approved(monkeypatch):
+    h = _Harness(monkeypatch)
+    h.confirm()
+    h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": _edit_of(h.state()["candidate_plan"])}),
+        config=CONFIG,
+    )
+    edited = h.state()
+
+    h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
+
+    assert h.deps.plans.get_active("t1").plan_id == edited["candidate_plan"].plan_id
+
+
+def test_every_decision_is_in_the_behavior_log_of_each_guest(monkeypatch):
+    h = _Harness(monkeypatch)
+    h.confirm()
+    first = h.state()
+    edit = _edit_of(first["candidate_plan"])
+    h.graph.invoke(Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG)
+    h.graph.invoke(
+        Command(resume={"decision": "REJECTED", "rejection_reason": "BAD_TIMING"}), config=CONFIG
+    )
+
+    for guest in first["constraints"].guests:
+        logged = {e.decision: e for e in h.deps.behavior.get(f"t1:{guest.guest_id}").entries}
+        assert set(logged) == {"EDITED", "REJECTED"}
+        assert logged["EDITED"].proposal_id == first["proposal"].proposal_id
+        assert logged["EDITED"].attraction_ids == edit["remove"] + edit["add"]
+        assert logged["REJECTED"].proposal_id != first["proposal"].proposal_id
+        assert logged["REJECTED"].rejection_reason.value == "BAD_TIMING"
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        {},
+        {"remove": ["id-not-in-the-plan"]},
+        {"add": ["id-unknown"]},
+        {"add": ["id-tron"]},
+        {"remove": ["id-tron"], "add": ["id-tron"]},
+        {"remove": [], "add": [], "stops": []},
+    ],
+)
+def test_an_edit_that_does_not_fit_asks_again_and_changes_nothing(monkeypatch, edit):
+    h = _Harness(monkeypatch)
+    h.confirm()
+    pending = h.state()
+
+    again = h.graph.invoke(Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG)
+
+    payload = again["__interrupt__"][0].value
+    assert payload["kind"] == "plan_approval"
+    assert payload["error"]
+    assert not any(e.startswith("resolve:") for e in h.events)
+    assert [p.approval_status.value for p in h.proposals] == ["PENDING"]
+    assert h.state()["constraints"] == pending["constraints"]
+    assert h.deps.guests.list_all() == []

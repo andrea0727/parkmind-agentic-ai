@@ -121,7 +121,7 @@ def test_resuming_with_approved_activates_and_moves_candidate_to_current(monkeyp
     resolved: dict = {}
 
     def fake_resolve(
-        self, thread_id, proposal_id, status, *, at, rejection_reason=None
+        self, thread_id, proposal_id, status, *, at, rejection_reason=None, **_
     ):
         resolved["thread_id"] = thread_id
         resolved["proposal_id"] = proposal_id
@@ -158,7 +158,7 @@ def test_resuming_with_rejected_discards_candidate_without_activating(monkeypatc
     resolved: dict = {}
 
     def fake_resolve(
-        self, thread_id, proposal_id, status, *, at, rejection_reason=None
+        self, thread_id, proposal_id, status, *, at, rejection_reason=None, **_
     ):
         resolved["status"] = status
         resolved["rejection_reason"] = rejection_reason
