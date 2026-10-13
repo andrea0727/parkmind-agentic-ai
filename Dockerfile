@@ -15,6 +15,7 @@ RUN poetry install --only main --no-root
 COPY src ./src
 COPY database ./database
 COPY scripts ./scripts
+COPY demo ./demo
 COPY server.py ./
 COPY --from=ui /ui/dist ./ui/web/dist
 EXPOSE 8000

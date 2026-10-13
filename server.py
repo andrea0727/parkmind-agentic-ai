@@ -8,6 +8,7 @@ PARKMIND_AUTH_USERS ("user=password,user2=password2") and PARKMIND_JWT_SECRET (>
 LLM caps (per user and global per 24 h): PARKMIND_MESSAGES_PER_USER_DAY (300), PARKMIND_MESSAGES_GLOBAL_DAY (2000).
 PARKMIND_PLAN_FROM_STORED=1 (plan from the latest stored snapshot, no provider call: for demos
 pinned to a snapshot taken during park hours), E2E_NOW=HH:MM (fixed park clock for demos).
+PARKMIND_HOUSEHOLDS_FILE (default demo/households.json): parties saved per username.
 """
 
 import os
@@ -33,7 +34,9 @@ from parkmind.graph.initial_planning_graph import (
     park_clock,
 )
 from parkmind.graph.replanning_graph import build_replanning_graph
+from parkmind.services.personalization.household import load_households
 from parkmind.services.use_cases.describe_plan import DescribePlanUseCase
+from parkmind.services.use_cases.park_status import ParkStatusUseCase
 from parkmind.services.use_cases.planning_deps import default_planning_deps
 
 ROOT = Path(__file__).parent
@@ -127,11 +130,18 @@ def build_app():
     return create_app(
         ConversationService(initial, replanning, deps_factory=deps_factory),
         DescribePlanUseCase(deps_factory),
+        park_status=ParkStatusUseCase(deps_factory),
         clock=clock,
         ui_dir=ui_dir if ui_dir.is_dir() else None,
         cors_origins=origins,
         auth=auth,
         limits=limits_from_env(),
+        saved_parties={
+            name: household.as_message()
+            for name, household in load_households(
+                Path(os.environ.get("PARKMIND_HOUSEHOLDS_FILE", ROOT / "demo" / "households.json"))
+            ).items()
+        },
     )
 
 

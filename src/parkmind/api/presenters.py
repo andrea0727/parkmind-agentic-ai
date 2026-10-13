@@ -162,4 +162,5 @@ class Presenter:
                 for e in turn.held_events
             ],
             error=turn.error,
+            provisional_offer=turn.provisional_offer,
         )

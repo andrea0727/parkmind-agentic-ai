@@ -267,6 +267,15 @@ function ChatRow({ item }: { item: ChatItem }) {
           </div>
         </Bubble>
       );
+    case "provisional":
+      return (
+        <Bubble>
+          <Tag />
+          <div className="cf-actions cf-solo">
+            <button type="button" className="cf-ok" onClick={() => void c.actions.provisionalPlan(item.id)}>{t("provisional_btn")}</button>
+          </div>
+        </Bubble>
+      );
   }
 }
 

@@ -51,6 +51,8 @@ def _require_valid(check_result: CheckResult) -> None:
 
 
 def _guest_name(guest: Guest, lang: Language = DEFAULT_LANGUAGE) -> str:
+    if guest.label:
+        return guest.label
     number = guest.guest_id.removeprefix("g")
     return text("guest_label", lang, number=number) if number.isdigit() else guest.guest_id
 

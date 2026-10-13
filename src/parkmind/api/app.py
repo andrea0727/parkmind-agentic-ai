@@ -30,6 +30,7 @@ from parkmind.api.schemas import (
     HealthOut,
     LoginIn,
     MessageIn,
+    ParkStatusOut,
     PlanOut,
     ProblemOut,
     ProposalOut,
@@ -55,6 +56,7 @@ from parkmind.core.conversation import (
     UnknownThreadError,
 )
 from parkmind.services.use_cases.describe_plan import DescribePlanUseCase
+from parkmind.services.use_cases.park_status import ParkStatusUseCase
 from parkmind.services.use_cases.planning_deps import PlanningUnavailableError
 
 DESCRIPTION = """
@@ -101,6 +103,7 @@ def create_app(
     conversation: Conversation,
     describe: DescribePlanUseCase | None = None,
     *,
+    park_status: ParkStatusUseCase | None = None,
     clock: Callable[[], datetime] = _park_now,
     new_event_id: Callable[[], str] = _new_event_id,
     ui_dir: Path | None = None,
@@ -109,8 +112,12 @@ def create_app(
     argv: Sequence[str] | None = None,
     auth: AuthConfig | None = None,
     limits: Limits | None = None,
+    saved_parties: Mapping[str, str] | None = None,
 ) -> FastAPI:
-    """``auth=None`` leaves every route open: only for tests and an explicit demo opt-out."""
+    """``auth=None`` leaves every route open: only for tests and an explicit demo opt-out.
+
+    ``saved_parties`` maps a username to the party saved for that account, as planner-ready text.
+    """
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         ensure_single_worker(os.environ if env is None else env, argv)
@@ -291,10 +298,20 @@ def create_app(
     )
     def start_session(user: User) -> SessionOut:
         _admit((session_limit, user))
-        thread_id = conversation.start()
+        thread_id = conversation.start((saved_parties or {}).get(user))
         with owners_lock:
             owners[thread_id] = user
-        return SessionOut(thread_id=thread_id)
+        status = park_status.execute(clock()) if park_status is not None else None
+        return SessionOut(
+            thread_id=thread_id,
+            park=ParkStatusOut(
+                closed=status.closed,
+                opening_time=status.opening_time,
+                closing_time=status.closing_time,
+            )
+            if status is not None
+            else None,
+        )
 
     @app.post(
         "/api/message",
@@ -403,6 +420,15 @@ def create_app(
     )
     def confirm_events(body: EventsConfirmIn, thread_id: ThreadId) -> TurnOut:
         return present.turn(conversation.confirm_events(thread_id, body.confirmed))
+
+    @app.post(
+        "/api/provisional",
+        tags=["plan"],
+        response_model=TurnOut,
+        responses=_ERRORS,
+    )
+    def provisional_plan(thread_id: ThreadId) -> TurnOut:
+        return present.turn(conversation.provisional(thread_id))
 
     if ui_dir is not None:
         app.mount("/", StaticFiles(directory=ui_dir, html=True), name="ui")

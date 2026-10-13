@@ -63,6 +63,11 @@ class Guest(ParkMindBaseModel):
     guest_id: str
     role: GuestRole
     height_cm: float | None = Field(default=None, ge=50, le=250)
+    label: str | None = Field(
+        default=None,
+        max_length=30,
+        description="How the guests call this person ('tu mamá', 'your daughter', 'Lucas'); display only",
+    )
 
 
 class PreferenceValue(ParkMindBaseModel):

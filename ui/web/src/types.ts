@@ -116,4 +116,5 @@ export interface Reply {
   open_proposal?: boolean;
   followups?: boolean;
   eventConfirm?: boolean;
+  provisionalOffer?: boolean;
 }

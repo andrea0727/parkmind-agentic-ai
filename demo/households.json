@@ -1,0 +1,17 @@
+{
+  "demo_solo": {
+    "party": [
+      {
+        "role": "adult",
+        "preferences": "loves thrill rides and roller coasters, tolerates long walks, dislikes long queues"
+      }
+    ]
+  },
+  "demo_familia": {
+    "party": [
+      {"role": "adult", "label": "tu pareja", "preferences": "prefers relaxed shows and classic dark rides"},
+      {"role": "child", "label": "tu hija", "preferences": "loves princesses and gentle rides, afraid of the dark"},
+      {"role": "child", "label": "tu hijo", "preferences": "loves fast rides and space themes"}
+    ]
+  }
+}

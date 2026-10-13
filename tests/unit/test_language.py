@@ -134,8 +134,14 @@ def test_guest_role_question_never_shows_the_internal_id() -> None:
     from parkmind.agents.elicit_agent import _question_for
 
     assert _question_for(["guest_role:g1"], None, "es", 1) == "¿Eres adulto o niño?"
-    assert _question_for(["guest_role:g2"], None, "es", 2) == "¿Persona 2 es adulto o niño?"
+    assert _question_for(["guest_role:g2"], None, "es", 2) == "¿La Persona 2 es adulto o niño?"
     assert _question_for(["guest_role:g2"], None, "en", 2) == "Is Guest 2 an adult or a child?"
+    assert _question_for(["guest_role:g2"], None, "es", 2, [None, "tu mamá"]) == (
+        "¿Tu mamá es adulto o niño?"
+    )
+    assert _question_for(["guest_role:g2"], None, "en", 2, [None, "your mom"]) == (
+        "Is your mom an adult or a child?"
+    )
 
 
 def test_unknown_attraction_question_lists_what_the_park_has_by_intensity() -> None:

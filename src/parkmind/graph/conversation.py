@@ -13,6 +13,7 @@ process (``default_checkpointer`` is in-memory), which is why the API runs one w
 import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -37,7 +38,7 @@ from parkmind.core.conversation import (
     UnknownThreadError,
 )
 from parkmind.core.language import DEFAULT_LANGUAGE, Language, as_language, text
-from parkmind.graph.initial_planning_graph import APPROVAL_INTERRUPT_KIND
+from parkmind.graph.initial_planning_graph import APPROVAL_INTERRUPT_KIND, park_clock
 from parkmind.graph.replanning_graph import EVENT_CONFIRMATION_INTERRUPT_KIND
 from parkmind.services.use_cases.active_plan import ActivePlanUseCase
 from parkmind.services.use_cases.pending_proposal import PendingProposalUseCase
@@ -47,6 +48,7 @@ from parkmind.services.use_cases.planning_deps import (
     load_catalog,
     open_deps,
 )
+from parkmind.services.use_cases.provisional_plan import ProvisionalPlanUseCase
 from parkmind.services.use_cases.resolve_attraction_names import suggest_attractions
 
 MISSING_INFORMATION_KIND = "missing_information"
@@ -64,6 +66,7 @@ class _Thread:
     seen_messages: int = 0
     language_hinted: bool = False
     language: Language = DEFAULT_LANGUAGE
+    saved_party: str | None = None
 
 
 def _new_thread_id() -> str:
@@ -78,22 +81,25 @@ class ConversationService:
         *,
         deps_factory: DepsFactory = default_planning_deps,
         new_thread_id: Callable[[], str] = _new_thread_id,
+        clock: Callable[[], datetime] = park_clock,
     ) -> None:
         self._graphs: dict[Owner, Any] = {
             "initial": initial_graph,
             "replanning": replanning_graph,
         }
         self._deps_factory = deps_factory
+        self._clock = clock
+        self._provisional = ProvisionalPlanUseCase(deps_factory)
         self._pending = PendingProposalUseCase(deps_factory)
         self._active = ActivePlanUseCase(deps_factory)
         self._new_thread_id = new_thread_id
         self._threads: dict[str, _Thread] = {}
         self._registry_lock = threading.Lock()
 
-    def start(self) -> str:
+    def start(self, saved_party: str | None = None) -> str:
         thread_id = self._new_thread_id()
         with self._registry_lock:
-            self._threads[thread_id] = _Thread(lock=threading.RLock())
+            self._threads[thread_id] = _Thread(lock=threading.RLock(), saved_party=saved_party)
         return thread_id
 
     def say(self, thread_id: str, text: str, lang: str | None = None) -> Turn:
@@ -106,6 +112,9 @@ class ConversationService:
                 "thread_id": thread_id,
                 "messages": [HumanMessage(content=text)],
             }
+            if thread.saved_party:
+                payload["messages"].insert(0, HumanMessage(content=thread.saved_party))
+                thread.saved_party = None
             hinting = not thread.language_hinted
             if hinting:
                 thread.language = as_language(lang)
@@ -158,6 +167,26 @@ class ConversationService:
                 "replanning",
                 Command(resume={"confirmed": confirmed}),
             )
+
+    def provisional(self, thread_id: str) -> Turn:
+        thread = self._thread(thread_id)
+        with thread.lock:
+            self._require_nothing_pending(thread)
+            config: Any = {"configurable": {"thread_id": thread_id}}
+            values = self._graphs["initial"].get_state(config).values or {}
+            constraints = values.get("constraints")
+            if constraints is None or not values.get("constraints_valid"):
+                raise NotExpectedError("there is no confirmed request to preview")
+            lang = as_language(values.get("language"), fallback=thread.language)
+            preview = self._provisional.execute(
+                thread_id=thread_id,
+                constraints=constraints,
+                profiles=values.get("guest_profiles") or [],
+                accessibility_ref=values.get("accessibility_ref") or [],
+                now=self._clock(),
+                lang=lang,
+            )
+            return Turn(thread_id, TurnStatus.DONE, messages=(preview.text,))
 
     def report_events(self, thread_id: str, events: Sequence[Event]) -> Turn:
         thread = self._thread(thread_id)
@@ -233,7 +262,12 @@ class ConversationService:
         if not interrupts:
             thread.waiting_for = None
             thread.proposal_id = None
-            return Turn(thread_id, TurnStatus.DONE, messages=texts)
+            return Turn(
+                thread_id,
+                TurnStatus.DONE,
+                messages=texts,
+                provisional_offer=bool(result.get("provisional_offer")),
+            )
 
         payload = interrupts[0].value
         kind = payload["kind"]

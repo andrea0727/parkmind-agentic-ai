@@ -35,7 +35,13 @@ from parkmind.core.contracts import (
     PreferenceValue,
     TimeWindow,
 )
-from parkmind.core.language import DEFAULT_LANGUAGE, Language, detect_language, text
+from parkmind.core.language import (
+    DEFAULT_LANGUAGE,
+    Language,
+    detect_language,
+    guest_ref,
+    text,
+)
 from parkmind.graph.state import ParkMindState
 from parkmind.services.use_cases.accessibility_intake import (
     AccessibilityIntakeUseCase,
@@ -313,17 +319,30 @@ def _question_for(
     resolution: NameResolution | None = None,
     lang: Language = DEFAULT_LANGUAGE,
     party_size: int = 0,
+    labels: Sequence[str | None] = (),
 ) -> str:
     questions: list[str] = []
     solo = party_size == 1
+
+    def who(key_ref: str, *, start: bool = False) -> str:
+        number = key_ref.removeprefix("g")
+        index = int(number) - 1 if number.isdigit() else -1
+        label = labels[index] if 0 <= index < len(labels) else None
+        return guest_ref(lang, number, label, start=start)
+
     for key in missing:
         if key.startswith("guest_role:"):
-            number = key.split(":", 1)[1].removeprefix("g")
             if solo:
                 questions.append(text("q_guest_role_solo", lang))
             else:
-                who = text("guest_label", lang, number=number)
-                questions.append(text("q_guest_role", lang, who=who))
+                questions.append(
+                    text(
+                        "q_guest_role",
+                        lang,
+                        # Spanish opens with the guest ("¿Tu mamá es…"); English with "Is".
+                        who=who(key.split(":", 1)[1], start=lang == "es"),
+                    )
+                )
         elif key.startswith(_UNKNOWN_ATTRACTION):
             name = key.removeprefix(_UNKNOWN_ATTRACTION)
             groups = (
@@ -350,8 +369,8 @@ def _question_for(
                 )
             )
         elif key.startswith(_UNVERIFIED_HEIGHT):
-            guest = key.removeprefix(_UNVERIFIED_HEIGHT).removeprefix("g")
-            questions.append(text("q_unverified_height", lang, solo=solo, guest=guest))
+            guest = key.removeprefix(_UNVERIFIED_HEIGHT)
+            questions.append(text("q_unverified_height", lang, solo=solo, who=who(guest)))
         elif key.startswith(_CONFLICTING_ATTRACTION):
             name = key.removeprefix(_CONFLICTING_ATTRACTION)
             questions.append(text("q_conflicting_attraction", lang, solo=solo, name=name))
@@ -376,7 +395,7 @@ def build_party_constraints(
     """Build the contract. Call only when ``missing_information`` is empty and
     ``resolution`` is complete: must_do/avoid hold catalog ``node_id``s."""
     guests = [
-        Guest(guest_id=f"g{i}", role=g.role, height_cm=g.height_cm)  # type: ignore[arg-type]
+        Guest(guest_id=f"g{i}", role=g.role, height_cm=g.height_cm, label=g.label)  # type: ignore[arg-type]
         for i, g in enumerate(extraction.guests, start=1)
     ]
     window = extraction.lunch_window
@@ -478,8 +497,17 @@ def pending_confirmations(
     return pending
 
 
-def echo_for(entry: str, lang: Language = DEFAULT_LANGUAGE, *, solo: bool = False) -> str:
-    """Plain-language echo of a non-accessibility pending entry, for confirmation."""
+def echo_for(
+    entry: str,
+    lang: Language = DEFAULT_LANGUAGE,
+    *,
+    solo: bool = False,
+    labels: Mapping[str, str | None] | None = None,
+) -> str:
+    """Plain-language echo of a non-accessibility pending entry, for confirmation.
+
+    ``labels`` maps a guest id ("g2") to how the guests call them, when they said so.
+    """
     kind, _, value = entry.partition(": ")
     if kind in ("must_do", "avoid", "departure_time", "walking_budget"):
         return text(f"echo_{kind}", lang, solo=solo, value=value)
@@ -487,12 +515,18 @@ def echo_for(entry: str, lang: Language = DEFAULT_LANGUAGE, *, solo: bool = Fals
         start, _, end = value.partition("-")
         return text("echo_lunch_window", lang, start=start, end=end)
     if kind.startswith(_HEIGHT):
-        guest = kind.removeprefix(_HEIGHT).removeprefix("g")
+        guest_id = kind.removeprefix(_HEIGHT)
+        who = guest_ref(
+            lang,
+            guest_id.removeprefix("g"),
+            (labels or {}).get(guest_id),
+            start=True,
+        )
         return text(
             "echo_height",
             lang,
             solo=solo,
-            guest=guest,
+            who=who,
             value=value,
             feet=_feet_inches(float(value)),
         )
@@ -604,6 +638,9 @@ def make_elicit_node(
                             resolution,
                             lang,
                             len(outcome.extraction.guests) if outcome.extraction else 0,
+                            [g.label for g in outcome.extraction.guests]
+                            if outcome.extraction
+                            else (),
                         ),
                         additional_kwargs={"missing_information": missing},
                     )

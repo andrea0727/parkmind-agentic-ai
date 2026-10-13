@@ -86,6 +86,7 @@ export interface Turn {
   proposal: Proposal | null;
   held_events: HeldEvent[];
   error: string | null;
+  provisional_offer: boolean;
 }
 
 export class ApiError extends Error {
@@ -192,7 +193,8 @@ async function call<T>(method: string, path: string, body?: unknown, quiet = fal
 const q = (threadId: string) => `thread_id=${encodeURIComponent(threadId)}`;
 
 export const api = {
-  startSession: async () => (await call<{ thread_id: string }>("POST", "/api/session"))!.thread_id,
+  startSession: async () =>
+    (await call<{ thread_id: string; park: { closed: boolean; closing_time: string } | null }>("POST", "/api/session"))!,
   say: async (t: string, text: string, lang: string) =>
     (await call<Turn>("POST", `/api/message?${q(t)}`, { text, lang }))!,
   confirmConstraints: async (t: string, body: { confirmed: boolean; consent: boolean; correction?: string }) =>
@@ -203,6 +205,7 @@ export const api = {
     (await call<Turn>("POST", `/api/proposal/${encodeURIComponent(id)}/${decision}?${q(t)}`, reason ? { reason } : {}))!,
   reportEvent: async (t: string, event: Record<string, unknown>) =>
     (await call<Turn>("POST", `/api/events?${q(t)}`, event))!,
+  provisional: async (t: string) => (await call<Turn>("POST", `/api/provisional?${q(t)}`))!,
   confirmEvents: async (t: string, confirmed: boolean) =>
     (await call<Turn>("POST", `/api/events/confirm?${q(t)}`, { confirmed }))!,
 };

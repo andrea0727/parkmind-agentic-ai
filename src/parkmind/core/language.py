@@ -97,12 +97,12 @@ _CATALOG: dict[str, dict[Language, str]] = {
     },
     "q_unverified_height": {
         "en": (
-            "I couldn't match the height I understood for Guest {guest} to what you wrote. "
-            "How tall is Guest {guest}, in cm (between 50 and 250)?"
+            "I couldn't match the height I understood for {who} to what you wrote. "
+            "How tall is {who}, in cm (between 50 and 250)?"
         ),
         "es": (
-            "No pude relacionar la estatura que entendí de la Persona {guest} con lo que escribieron. "
-            "¿Cuánto mide la Persona {guest}, en cm (entre 50 y 250)?"
+            "No pude relacionar la estatura que entendí de {who} con lo que escribieron. "
+            "¿Cuánto mide {who}, en cm (entre 50 y 250)?"
         ),
     },
     "q_unverified_height_solo": {
@@ -174,11 +174,11 @@ _CATALOG: dict[str, dict[Language, str]] = {
     },
     "echo_height": {
         "en": (
-            "Guest {guest} is {value} cm tall (about {feet}): "
+            "{who} is {value} cm tall (about {feet}): "
             "rides with a higher minimum will be skipped."
         ),
         "es": (
-            "La Persona {guest} mide {value} cm: "
+            "{who} mide {value} cm: "
             "se omitirán las atracciones con una estatura mínima mayor."
         ),
     },
@@ -247,6 +247,104 @@ _CATALOG: dict[str, dict[Language, str]] = {
         "es": (
             "No pude armar un plan ahora porque falta información del parque que necesito. "
             "No se propuso nada. Intenta de nuevo en unos minutos."
+        ),
+    },
+    "park_closed": {
+        "en": (
+            "The park has already closed for today (it closed at {closing}, park time), so "
+            "there is nothing to plan for today. If you want, I can prepare a provisional plan "
+            "for tomorrow with typical wait times, and refresh it with live data once the park "
+            "opens."
+        ),
+        "es": (
+            "El parque ya cerró por hoy (cerró a las {closing}, hora del parque), así que no "
+            "hay nada que planificar para hoy. Si quieren, les preparo un plan provisional "
+            "para mañana con las esperas típicas, y lo actualizo con datos en vivo cuando el "
+            "parque abra."
+        ),
+    },
+    "park_closed_solo": {
+        "en": (
+            "The park has already closed for today (it closed at {closing}, park time), so "
+            "there is nothing to plan for today. If you want, I can prepare a provisional plan "
+            "for tomorrow with typical wait times, and refresh it with live data once the park "
+            "opens."
+        ),
+        "es": (
+            "El parque ya cerró por hoy (cerró a las {closing}, hora del parque), así que no "
+            "hay nada que planificar para hoy. Si quieres, te preparo un plan provisional "
+            "para mañana con las esperas típicas, y lo actualizo con datos en vivo cuando el "
+            "parque abra."
+        ),
+    },
+    "provisional_header": {
+        "en": (
+            "Provisional plan for tomorrow (the park opens at {opening}, park time). It uses "
+            "typical wait times, not live data."
+        ),
+        "es": (
+            "Plan provisional para mañana (el parque abre a las {opening}, hora del parque). "
+            "Usa esperas típicas, no datos en vivo."
+        ),
+    },
+    "provisional_footer": {
+        "en": (
+            "This is only a preview and was not proposed or saved. Once the park opens, ask me "
+            "again and I'll build the real plan with live data."
+        ),
+        "es": (
+            "Es solo una vista previa: no se propuso ni se guardó. Cuando el parque abra, "
+            "pídanmelo de nuevo y armo el plan real con datos en vivo."
+        ),
+    },
+    "provisional_footer_solo": {
+        "en": (
+            "This is only a preview and was not proposed or saved. Once the park opens, ask me "
+            "again and I'll build the real plan with live data."
+        ),
+        "es": (
+            "Es solo una vista previa: no se propuso ni se guardó. Cuando el parque abra, "
+            "pídemelo de nuevo y armo el plan real con datos en vivo."
+        ),
+    },
+    "provisional_failed": {
+        "en": (
+            "I couldn't put together a provisional plan for tomorrow that meets every "
+            "requirement. Ask me again once the park opens."
+        ),
+        "es": (
+            "No pude armar un plan provisional para mañana que cumpla todos los requisitos. "
+            "Pídanmelo de nuevo cuando el parque abra."
+        ),
+    },
+    "provisional_failed_solo": {
+        "en": (
+            "I couldn't put together a provisional plan for tomorrow that meets every "
+            "requirement. Ask me again once the park opens."
+        ),
+        "es": (
+            "No pude armar un plan provisional para mañana que cumpla todos los requisitos. "
+            "Pídemelo de nuevo cuando el parque abra."
+        ),
+    },
+    "provisional_unavailable": {
+        "en": (
+            "I don't have tomorrow's park schedule yet, so I can't prepare a provisional plan. "
+            "Ask me again once the park opens."
+        ),
+        "es": (
+            "Todavía no tengo el horario del parque de mañana, así que no puedo preparar un "
+            "plan provisional. Pídanmelo de nuevo cuando el parque abra."
+        ),
+    },
+    "provisional_unavailable_solo": {
+        "en": (
+            "I don't have tomorrow's park schedule yet, so I can't prepare a provisional plan. "
+            "Ask me again once the park opens."
+        ),
+        "es": (
+            "Todavía no tengo el horario del parque de mañana, así que no puedo preparar un "
+            "plan provisional. Pídemelo de nuevo cuando el parque abra."
         ),
     },
     "no_valid_plan": {
@@ -335,6 +433,7 @@ _CATALOG: dict[str, dict[Language, str]] = {
     "event_fatigue": {"en": "a guest is tired", "es": "alguien está cansado"},
     # plan explanation
     "guest_label": {"en": "Guest {number}", "es": "Persona {number}"},
+    "guest_ref": {"en": "Guest {number}", "es": "la Persona {number}"},
     "plan_summary": {
         "en": "{stops} stops, {wait} min of waiting and {walk} min of walking in total.",
         "es": "{stops} paradas, {wait} min de espera y {walk} min de caminata en total.",
@@ -385,3 +484,11 @@ def text(
     """
     entry = _CATALOG.get(f"{key}_solo") if solo else None
     return (entry or _CATALOG[key])[lang].format(**params)
+
+
+def guest_ref(
+    lang: Language, number: str, label: str | None = None, *, start: bool = False
+) -> str:
+    """How a sentence names a guest: their own label ("tu mamá") or "Guest 2" / "la Persona 2"."""
+    phrase = label or text("guest_ref", lang, number=number)
+    return phrase[:1].upper() + phrase[1:] if start else phrase

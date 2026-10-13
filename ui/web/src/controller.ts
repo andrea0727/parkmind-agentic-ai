@@ -19,7 +19,8 @@ export type ChatItem =
   | { id: number; k: "typing" }
   | { id: number; k: "suggest"; ids: number[]; label: string }
   | { id: number; k: "confirm"; chips: ChipView[]; consentRequired: boolean }
-  | { id: number; k: "evconfirm"; text: string };
+  | { id: number; k: "evconfirm"; text: string }
+  | { id: number; k: "provisional" };
 
 export interface MapState {
   zoom: number;
@@ -33,6 +34,7 @@ export interface State {
   mode: Mode;
   booting: boolean;
   threadId: string | null;
+  parkClosedAt: string | null;
   plan: PlanEvent[];
   planStatus: "valid" | "updated";
   proposal: ProposalView | null;
@@ -82,11 +84,21 @@ const POLL_MS = 8000;
 const SESSION_MS = 75000;
 const HARD_RE = /wheelchair|stroller|accessib|mobility|height|\bcm\b|depart|step-free|sensory/i;
 
+function parkTime(iso: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "America/New_York",
+  }).format(new Date(iso));
+}
+
 function initial(): State {
   return {
     mode: "mock",
     booting: true,
     threadId: null,
+    parkClosedAt: null,
     plan: structuredClone(FIXTURE.plan.events),
     planStatus: "valid",
     proposal: structuredClone(FIXTURE.proposal),
@@ -344,6 +356,11 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
         push({ k: "evconfirm", text: tt("ev_confirm") });
         return;
       }
+      if (r.provisionalOffer) {
+        await sleep(300);
+        push({ k: "provisional" });
+        return;
+      }
       if (r.follow || r.plan_preview) {
         await sleep(480);
         push({ k: "bot", text: r.follow ?? "", preview: !!r.plan_preview });
@@ -384,6 +401,7 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
         case "needs_answer":
           return { text };
         default:
+          if (turn.provisional_offer) return { text, provisionalOffer: true };
           return { text, followups: true };
       }
     },
@@ -514,6 +532,24 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
     [drop, push, deliverTurn, failBubble],
   );
 
+  const provisionalPlan = useCallback(
+    async (chatId: number) => {
+      drop(chatId);
+      const st = ref.current;
+      if (!st.threadId) return;
+      const ty = push({ k: "typing" });
+      try {
+        const turn = await api.provisional(st.threadId);
+        drop(ty);
+        push({ k: "bot", text: turn.messages.join("\n\n") });
+      } catch (e) {
+        drop(ty);
+        failBubble(e);
+      }
+    },
+    [drop, push, failBubble],
+  );
+
   /* ---------------- notifications ---------------- */
   const markRead = useCallback(
     (id: string) => upd((st) => ({ read: st.read.includes(id) ? st.read : [...st.read, id] })),
@@ -560,9 +596,13 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
   /* ---------------- mode / session ---------------- */
   const goLive = useCallback(async (): Promise<boolean> => {
     try {
-      const threadId = await api.startSession();
+      const session = await api.startSession();
       seen.current = new Set();
-      ref.current = { ...liveBlank(threadId), screen: ref.current.screen };
+      ref.current = {
+        ...liveBlank(session.thread_id),
+        parkClosedAt: session.park?.closed ? parkTime(session.park.closing_time) : null,
+        screen: ref.current.screen,
+      };
       setS(ref.current);
       return true;
     } catch {
@@ -704,7 +744,7 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
     actions: {
       go, openSheet, closeSheet, openProposal, closeProposal, openNotifs, closeNotifs, openLang, closeLang,
       closeTop, closeAll, dismissSess, armSessionTimer, send, pickSuggestion, dismissSeed, confirmOk, confirmEdit,
-      eventConfirm, applyProposal, keepPlan, markRead, dismissAlert, markAllRead, reviewProposal, setMap,
+      eventConfirm, provisionalPlan, applyProposal, keepPlan, markRead, dismissAlert, markAllRead, reviewProposal, setMap,
       zoomToMe, zoomBy, setMode, reset, toast, reportEvent,
     },
   };

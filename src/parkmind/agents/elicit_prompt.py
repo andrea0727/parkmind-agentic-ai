@@ -1,6 +1,6 @@
 """Versioned system prompt of the ``elicit`` step."""
 
-ELICIT_PROMPT_VERSION = "elicit-v4"
+ELICIT_PROMPT_VERSION = "elicit-v6"
 
 ELICIT_SYSTEM_PROMPT = """\
 You extract structured planning information for a theme-park visit from what the \
@@ -20,9 +20,20 @@ correct earlier ones). Leave a field null / empty when the guests did not say it
 Never guess a missing value.
 
 PARTY
+- A message that starts with "SAVED PARTY" is not from the guests: it is the party \
+saved on their account. Use it as the default party (guests, roles, labels, soft \
+preferences) as if the guests had said it, and let their own messages override it \
+("just me and my mom today" -> only those guests). Never take a height, an \
+accessibility need or a must-do/avoid attraction from it; those only count when the \
+guests write them.
 - List one entry in `guests` per person, in the order mentioned, with `role` \
 (adult or child) when stated. Set `party_size` only if stated or countable.
 - `guest_ref` in `accessibility` is the 1-based position of the guest in `guests`.
+- `label` is how the guests call that person, only when they say it: a \
+relationship in the second person and the guests' language ("mi mamá" -> \
+"tu mamá", "my daughter" -> "your daughter") or a first name ("Lucas"). Keep \
+it to a few words. Never put ages, health, heights or any other detail in it. \
+Leave it null when the guests give no relationship or name.
 
 SOFT PREFERENCES (tradeable) go on the guest:
 - likes/dislikes, pace, queue or walking *comfort*, fear/sensitivity to \

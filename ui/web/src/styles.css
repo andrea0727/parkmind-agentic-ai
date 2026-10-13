@@ -52,6 +52,7 @@ button:focus-visible,[tabindex]:focus-visible,input:focus-visible,a:focus-visibl
 
 h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;margin:4px 0 6px}
 .subline{font-size:14px;color:var(--muted);margin:0 0 13px;font-weight:500}
+.park-closed{display:flex;flex-direction:column;gap:3px;margin:0 0 14px;padding:11px 13px;border-radius:14px;background:#FFF4D6;color:#6B4A00;font-size:13px;line-height:1.35}
 .pills{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:18px}
 .pill{font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:999px;background:var(--wash);display:flex;align-items:center;gap:5px}
 .pill.warn{background:#FFF4DC;color:#7A5200}
@@ -283,6 +284,7 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
 .cf-actions{display:grid;grid-template-columns:1fr 1.3fr;gap:9px}
 .cf-edit{padding:13px;border-radius:12px;background:var(--wash);color:var(--ink);font-size:14px;font-weight:800}
 .cf-ok{padding:13px;border-radius:12px;background:var(--dusk);color:#fff;font-size:14px;font-weight:800}
+.cf-solo{grid-template-columns:1fr}
 .cf-warn{margin:9px 0 0;font-size:12.5px;font-weight:700;color:#A3156A;text-align:center;min-height:1px}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px 37px}
 .chip{font-size:13.5px;font-weight:700;padding:10px 15px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--muted);position:relative}

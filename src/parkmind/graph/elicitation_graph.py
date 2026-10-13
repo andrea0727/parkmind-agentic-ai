@@ -118,11 +118,13 @@ def _make_confirm_node(
             for entry in pending
             if entry.startswith(_ACCESSIBILITY_PREFIX)
         )
+        constraints = state.get("constraints")
+        labels = {g.guest_id: g.label for g in constraints.guests} if constraints else {}
         payload: dict[str, Any] = {
             "kind": "hard_constraint_confirmation",
             "pending": pending,
             "echo": [
-                echo_for(e, lang, solo=solo)
+                echo_for(e, lang, solo=solo, labels=labels)
                 for e in pending
                 if not e.startswith(_ACCESSIBILITY_PREFIX)
             ],

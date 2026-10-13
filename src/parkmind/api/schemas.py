@@ -24,8 +24,17 @@ class TokenOut(BaseModel):
     expires_in: int = Field(description="Seconds until the token expires.")
 
 
+class ParkStatusOut(BaseModel):
+    closed: bool = Field(description="True once today's operating hours are over.")
+    opening_time: datetime
+    closing_time: datetime
+
+
 class SessionOut(BaseModel):
     thread_id: str = Field(description="Pass as `?thread_id=` on every other call.")
+    park: ParkStatusOut | None = Field(
+        default=None, description="Today's park status; null when the schedule is unknown."
+    )
 
 
 class MessageIn(_Body):
@@ -170,6 +179,7 @@ class TurnOut(BaseModel):
     proposal: ProposalOut | None
     held_events: list[HeldEventOut]
     error: str | None
+    provisional_offer: bool = False
 
 
 class HealthOut(BaseModel):

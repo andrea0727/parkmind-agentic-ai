@@ -81,6 +81,7 @@ from parkmind.services.use_cases.build_plan import BuildPlanUseCase
 from parkmind.services.use_cases.check_plan import CheckPlanUseCase
 from parkmind.services.use_cases.explain_plan import ExplainPlanUseCase
 from parkmind.services.use_cases.load_context import LoadContextUseCase
+from parkmind.services.use_cases.park_status import ParkClosedError, ParkStatusUseCase
 from parkmind.services.use_cases.planning_deps import (
     MAGIC_KINGDOM_PARK_ID,
     DepsFactory,
@@ -140,6 +141,23 @@ def _guarded(node: StateNode, *, then: str | None) -> StateNode:
     def guarded(state: ParkMindState) -> dict[str, Any] | Command[Any]:
         try:
             update = node(state)
+        except ParkClosedError as closed:
+            message = text(
+                "park_closed",
+                language_of(state),
+                solo=solo_of(state),
+                closing=closed.status.closing_label(),
+            )
+            return Command(
+                update={
+                    "messages": [AIMessage(content=message)],
+                    "candidate_plan": None,
+                    "check_result": None,
+                    "explanation": None,
+                    "provisional_offer": True,
+                },
+                goto=END,
+            )
         except PlanningUnavailableError:
             logger.exception("planning is unavailable")
             return Command(
@@ -158,13 +176,15 @@ def _guarded(node: StateNode, *, then: str | None) -> StateNode:
 
 def _make_load_context_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
     use_case = LoadContextUseCase(deps_factory)
+    park_status = ParkStatusUseCase(deps_factory)
 
     def load_context(state: ParkMindState) -> dict[str, Any]:
         ensure_confirmed(state)
+        park_status.ensure_open(clock())
         loaded = use_case.execute(
             state["thread_id"], state.get("accessibility_ref") or [], clock()
         )
-        return {"live_context": loaded.for_state()}
+        return {"live_context": loaded.for_state(), "provisional_offer": False}
 
     return load_context
 

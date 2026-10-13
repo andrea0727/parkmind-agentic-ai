@@ -73,6 +73,12 @@ export function HomeScreen() {
         <>
           <h2 className="greet">{greetLive(t)}</h2>
           <p className="subline">{FIXTURE.plan.park}</p>
+          {s.parkClosedAt && (
+            <div className="park-closed" role="status">
+              <strong>🌙 {t("park_closed")}</strong>
+              <span>{t("park_closed_body", { time: s.parkClosedAt })}</span>
+            </div>
+          )}
         </>
       ) : (
         <>

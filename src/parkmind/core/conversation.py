@@ -71,7 +71,8 @@ class Turn:
     candidate_plan: Plan | None = None
     held_events: tuple[Event, ...] = ()
     error: str | None = None
-
+    provisional_offer: bool = False
+    """The park is closed; ``Conversation.provisional`` can preview tomorrow."""
 
 @dataclass(frozen=True)
 class HardConstraintAnswer:
@@ -82,8 +83,11 @@ class HardConstraintAnswer:
 
 
 class Conversation(Protocol):
-    def start(self) -> str:
-        """A new session; its id is the ``thread_id`` of every later call."""
+    def start(self, saved_party: str | None = None) -> str:
+        """A new session; its id is the ``thread_id`` of every later call.
+
+        ``saved_party`` is the account's known party, given to the planner with the first message.
+        """
         ...
 
     def say(self, thread_id: str, text: str, lang: str | None = None) -> Turn:
@@ -107,6 +111,12 @@ class Conversation(Protocol):
     ) -> Turn: ...
 
     def confirm_events(self, thread_id: str, confirmed: bool) -> Turn: ...
+
+    def provisional(self, thread_id: str) -> Turn:
+        """A preview plan for the next park day, built from the confirmed request.
+
+        Never proposed or saved; the guests ask again once the park opens."""
+        ...
 
     def report_events(self, thread_id: str, events: Sequence[Event]) -> Turn: ...
 
