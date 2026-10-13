@@ -36,7 +36,7 @@ from parkmind.core.conversation import (
     UnknownAttractionError,
     UnknownThreadError,
 )
-from parkmind.core.language import as_language
+from parkmind.core.language import DEFAULT_LANGUAGE, Language, as_language, text
 from parkmind.graph.initial_planning_graph import APPROVAL_INTERRUPT_KIND
 from parkmind.graph.replanning_graph import EVENT_CONFIRMATION_INTERRUPT_KIND
 from parkmind.services.use_cases.active_plan import ActivePlanUseCase
@@ -47,6 +47,7 @@ from parkmind.services.use_cases.planning_deps import (
     load_catalog,
     open_deps,
 )
+from parkmind.services.use_cases.resolve_attraction_names import suggest_attractions
 
 MISSING_INFORMATION_KIND = "missing_information"
 HARD_CONSTRAINT_KIND = "hard_constraint_confirmation"
@@ -62,6 +63,7 @@ class _Thread:
     proposal_id: str | None = None
     seen_messages: int = 0
     language_hinted: bool = False
+    language: Language = DEFAULT_LANGUAGE
 
 
 def _new_thread_id() -> str:
@@ -106,7 +108,8 @@ class ConversationService:
             }
             hinting = not thread.language_hinted
             if hinting:
-                payload["language"] = as_language(lang)
+                thread.language = as_language(lang)
+                payload["language"] = thread.language
             turn = self._run(thread_id, thread, "initial", payload)
             if hinting:
                 thread.language_hinted = True
@@ -163,20 +166,25 @@ class ConversationService:
                 raise NotExpectedError(
                     f"the planner is waiting for {thread.waiting_for}"
                 )
-            self._require_known_attractions(events)
+            self._require_known_attractions(events, thread.language)
             payload = {"thread_id": thread_id, "events": list(events)}
             return self._run(thread_id, thread, "replanning", payload)
 
-    def _require_known_attractions(self, events: Sequence[Event]) -> None:
+    def _require_known_attractions(self, events: Sequence[Event], lang: Language) -> None:
         named = {e.attraction_id for e in events if e.attraction_id is not None}
         if not named:
             return
         with open_deps(self._deps_factory) as deps:
-            known = {a.node_id for a in load_catalog(deps)}
-        unknown = sorted(named - known)
+            catalog = load_catalog(deps)
+        unknown = sorted(named - {a.node_id for a in catalog})
         if unknown:
+            groups = "; ".join(
+                f"{text(f'attraction_group_{category}', lang)} ({', '.join(names)})"
+                for category, names in suggest_attractions(catalog).items()
+            )
+            options = text("attraction_options", lang, groups=groups) if groups else ""
             raise UnknownAttractionError(
-                f"unknown attraction: {', '.join(unknown)}"
+                text("event_unknown_attraction", lang, name=", ".join(unknown), options=options)
             )
 
     def pending_proposal(self, thread_id: str) -> tuple[Proposal, Plan] | None:

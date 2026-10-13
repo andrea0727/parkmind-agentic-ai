@@ -83,6 +83,10 @@ _CATALOG: dict[str, dict[Language, str]] = {
         "en": " The park has: {groups}.",
         "es": " El parque tiene: {groups}.",
     },
+    "event_unknown_attraction": {
+        "en": "'{name}' is not an attraction in this park.{options}",
+        "es": "'{name}' no es una atracción de este parque.{options}",
+    },
     "attraction_group_THRILL": {"en": "thrill rides", "es": "intensas"},
     "attraction_group_FAMILY": {"en": "gentle family rides", "es": "suaves o familiares"},
     "attraction_group_DARK_RIDE": {"en": "dark rides", "es": "recorridos oscuros"},

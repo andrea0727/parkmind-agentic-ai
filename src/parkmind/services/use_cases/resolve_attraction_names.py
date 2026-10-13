@@ -98,7 +98,7 @@ class AttractionNameResolver:
                 ambiguous[name] = tuple(sorted(a.name for a in matches))
             else:
                 unknown.append(name)
-        options = _options_by_category(catalog) if unknown else {}
+        options = suggest_attractions(catalog) if unknown else {}
         return NameResolution(resolved, tuple(unknown), ambiguous, options)
 
 
@@ -111,7 +111,7 @@ _SUGGESTED_CATEGORIES = (
 _SUGGESTIONS_PER_CATEGORY = 4
 
 
-def _options_by_category(catalog: list[Attraction]) -> dict[str, tuple[str, ...]]:
+def suggest_attractions(catalog: list[Attraction]) -> dict[str, tuple[str, ...]]:
     options: dict[str, tuple[str, ...]] = {}
     for category in _SUGGESTED_CATEGORIES:
         names = sorted(a.name for a in catalog if a.category is category)

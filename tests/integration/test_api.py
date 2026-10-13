@@ -356,4 +356,6 @@ def test_an_event_on_an_unknown_attraction_is_a_422_not_a_silent_ignore(client):
     )
 
     assert response.status_code == 422
-    assert "not_a_ride" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "not_a_ride" in detail
+    assert "The park has:" in detail
