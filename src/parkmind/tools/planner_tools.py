@@ -9,14 +9,21 @@ None of these tools proposes, persists or activates a plan (section 27 [C23]):
 ``replan`` takes the current plan, its progress and the events inline (section
 31), so a client without a stored plan -- the LLM-only baseline (section 44) --
 can replan; ``rest_first`` is the client's to set, since the event policy is not
-run here. Accessibility
-is passed by reference -- ``session_id`` plus ``guest_ids`` -- and read from the
-SessionStore server-side [C19]; no requirement value is accepted or returned.
+run here.
+
+Accessibility is passed by reference -- ``session_id`` plus ``guest_ids`` -- and
+read from the SessionStore server-side [C19]; no requirement value is accepted or
+returned, and ``replan`` returns the progress it started from without its walking
+minutes (with the fatigue cap they would give a limit back). A residual risk
+remains, as for ``check_plan``: a client that varies what it sends (walked minutes,
+stops) and watches which answers fail can narrow a guest's limit down. What bounds
+it is who can call at all: the server has no authentication and serves only this
+machine (README, "Trust model").
 They have no effect on guest, plan or proposal state, so they are read-only; the
 LOAD CONTEXT allowlist still excludes them by namespace (section 8.1).
 
-Inputs are capped well above a real party and day (``MAX_GUESTS``,
-``MAX_STOPS``, ``MAX_FORECASTS``), so one request cannot ask for unbounded work.
+Inputs are capped well above a real party and day (``MAX_GUESTS``, ``MAX_STOPS``,
+``MAX_EVENTS``, ``MAX_FORECASTS``), so one request cannot ask for unbounded work.
 """
 
 from collections.abc import Callable
@@ -115,7 +122,7 @@ class CheckPlanRequest(_PartyRequest):
         return plan
 
 
-class ReplanRequest(CheckPlanRequest):
+class ReplanToolRequest(CheckPlanRequest):
     """The current plan (``plan``), its progress and what happened (section 31)."""
 
     profiles: Profiles = Field(default_factory=list)
@@ -343,7 +350,7 @@ def planner_tools(ctx: ToolContext) -> list[ToolSpec]:
             provenance=_context_provenance(answer.context, "constraint_checker"),
         )
 
-    def replan(request: ReplanRequest) -> ToolResult[ReplanData]:
+    def replan(request: ReplanToolRequest) -> ToolResult[ReplanData]:
         candidate = queries.replan(
             session_id=request.session_id,
             plan=request.plan,
@@ -465,7 +472,7 @@ def planner_tools(ctx: ToolContext) -> list[ToolSpec]:
             "(closures, reopenings): completed stops are kept, the new horizon is re-solved and "
             "the whole day is checked against the 11 rules. Returns a candidate and its diff; "
             "never proposes or activates it.",
-            ReplanRequest,
+            ReplanToolRequest,
             ReplanData,
             replan,
         ),
