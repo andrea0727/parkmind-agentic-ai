@@ -44,6 +44,7 @@ from parkmind.agents.elicit_agent import (
     echo_for,
     make_elicit_node,
 )
+from parkmind.core.language import DEFAULT_LANGUAGE, text
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.state import ParkMindState
 from parkmind.services.use_cases.accessibility_intake import (
@@ -105,6 +106,7 @@ def _make_confirm_node(
 ) -> StateNode:
     def confirm_hard_constraints(state: ParkMindState) -> dict[str, Any]:
         session_id = state["thread_id"]
+        lang = state.get("language") or DEFAULT_LANGUAGE
         pending = list(state.get("pending_hard_constraint_confirmation") or [])
         if not pending:
             return {}
@@ -118,7 +120,9 @@ def _make_confirm_node(
             "kind": "hard_constraint_confirmation",
             "pending": pending,
             "echo": [
-                echo_for(e) for e in pending if not e.startswith(_ACCESSIBILITY_PREFIX)
+                echo_for(e, lang)
+                for e in pending
+                if not e.startswith(_ACCESSIBILITY_PREFIX)
             ],
             "accessibility_guests": accessibility_ids,
         }
@@ -140,7 +144,7 @@ def _make_confirm_node(
                 new_message: Any = HumanMessage(content=correction)
             else:
                 new_message = AIMessage(
-                    content="What should I change?",
+                    content=text("what_to_change", lang),
                     additional_kwargs={"missing_information": ["correction"]},
                 )
             return {

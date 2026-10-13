@@ -55,6 +55,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from parkmind.core.contracts import Event
+from parkmind.core.language import Language, text
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.elicitation_graph import StateNode
 from parkmind.graph.initial_planning_graph import (
@@ -70,6 +71,7 @@ from parkmind.graph.state import ParkMindState
 from parkmind.graph.state_helpers import (
     active_plan_update,
     discarded_proposal_update,
+    language_of,
     propose_plan_change,
 )
 from parkmind.services.use_cases.active_plan import ActivePlanUseCase
@@ -90,7 +92,6 @@ NOTHING_TO_REPLAN_MESSAGE = (
     "There is no confirmed plan for this party yet, so there is nothing to adjust. "
     "Ask me for a plan first."
 )
-_KEEPS_PLAN = "Your current plan stays as it was."
 
 
 def _ready_to_replan(state: ParkMindState) -> bool:
@@ -131,7 +132,7 @@ def _make_load_plan_node(deps_factory: DepsFactory) -> StateNode:
         plan = use_case.execute(state["thread_id"]) if state.get("thread_id") else None
         if plan is None or not _ready_to_replan(state):
             return Command(
-                update={"messages": [AIMessage(content=NOTHING_TO_REPLAN_MESSAGE)]},
+                update={"messages": [AIMessage(content=text("nothing_to_replan", language_of(state)))]},
                 goto=END,
             )
         return Command(update=active_plan_update(plan), goto="handle_events")
@@ -255,13 +256,9 @@ def _make_ignore_events_node(deps_factory: DepsFactory) -> StateNode:
     return cast(StateNode, ignore_events)
 
 
-def _not_proposed(*lines: str) -> str:
+def _not_proposed(lang: Language, *lines: str) -> str:
     return "\n".join(
-        [
-            "I couldn't build an updated plan that meets every requirement, so nothing was proposed.",
-            *lines,
-            _KEEPS_PLAN,
-        ]
+        [text("replan_not_proposed", lang), *lines, text("keeps_plan", lang)]
     )
 
 
@@ -269,6 +266,7 @@ def _make_replan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
     use_case = ReplanUseCase(deps_factory)
 
     def replan(state: ParkMindState) -> Command[Any]:
+        lang = language_of(state)
         plan = state.get("current_plan")
         constraints = state.get("constraints")
         objective = state.get("group_objective")
@@ -307,10 +305,9 @@ def _make_replan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
         if not result.valid or result.plan is None:
             lines = [f"- {result.fatal_error}"] if result.fatal_error else []
             if result.unmet_must_do:
-                lines.append(
-                    f"- Must-dos that no longer fit: {', '.join(result.unmet_must_do)}"
-                )
-            update["messages"] = [AIMessage(content=_not_proposed(*lines))]
+                names = ", ".join(result.unmet_must_do)
+                lines.append("- " + text("unmet_must_do", lang, names=names))
+            update["messages"] = [AIMessage(content=_not_proposed(lang, *lines))]
             return Command(update=update, goto=END)
         update["candidate_plan"] = result.plan
         return Command(update=update, goto="check_plan")
@@ -350,7 +347,7 @@ def _make_check_replan_node(deps_factory: DepsFactory) -> StateNode:
             update={
                 "check_result": result,
                 "candidate_plan": None,
-                "messages": [AIMessage(content=_not_proposed(*reasons))],
+                "messages": [AIMessage(content=_not_proposed(language_of(state), *reasons))],
             },
             goto=END,
         )
@@ -384,12 +381,13 @@ def _make_explain_node(deps_factory: DepsFactory) -> StateNode:
         diff = state.get("diff")
         if plan is None or check is None or diff is None:
             raise ValueError("a checked candidate plan and its diff are required")
-        reason = reasons.execute(state.get("events") or [])
+        lang = language_of(state)
+        reason = reasons.execute(state.get("events") or [], lang)
         constraints = state.get("constraints")
         guests = constraints.guests if constraints is not None else []
         return {
             "explanation": explainer.execute_replan(
-                plan, check, reason=reason.text, diff=diff, guests=guests
+                plan, check, reason=reason.text, diff=diff, guests=guests, lang=lang
             )
         }
 
@@ -412,7 +410,9 @@ def _propose_replan(
         )
     _require_valid_candidate(state)
 
-    reason = ReplanReasonUseCase(deps_factory).execute(state.get("events") or [])
+    reason = ReplanReasonUseCase(deps_factory).execute(
+        state.get("events") or [], language_of(state)
+    )
     proposal = ProposePlanUseCase(deps_factory).execute(
         state["thread_id"],
         plan,

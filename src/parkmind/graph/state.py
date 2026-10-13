@@ -32,6 +32,7 @@ from parkmind.core.contracts import (
     Provenance,
     RejectionReason,
 )
+from parkmind.core.language import Language
 
 
 class ParkMindState(TypedDict, total=False):
@@ -45,6 +46,7 @@ class ParkMindState(TypedDict, total=False):
     thread_id: str
     messages: Annotated[list, add_messages]
     iteration: int
+    language: Language  # the guests' language (en/es), re-detected from each message
 
     # Guest & Group Model
     constraints: PartyConstraints | None

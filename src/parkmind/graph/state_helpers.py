@@ -16,7 +16,13 @@ from parkmind.core.contracts import (
     Proposal,
     RejectionReason,
 )
+from parkmind.core.language import DEFAULT_LANGUAGE, Language
 from parkmind.graph.state import ParkMindState
+
+
+def language_of(state: ParkMindState) -> Language:
+    """The language the guests are writing in (English until one is detected)."""
+    return state.get("language") or DEFAULT_LANGUAGE
 
 
 def set_constraints(

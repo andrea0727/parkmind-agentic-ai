@@ -13,6 +13,17 @@ class _Body(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class LoginIn(_Body):
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=256)
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_in: int = Field(description="Seconds until the token expires.")
+
+
 class SessionOut(BaseModel):
     thread_id: str = Field(description="Pass as `?thread_id=` on every other call.")
 
@@ -22,7 +33,12 @@ class MessageIn(_Body):
         min_length=1, max_length=4000, description="What the guests said."
     )
     lang: Literal["es", "en", "pt", "fr"] = Field(
-        default="en", description="UI language. Planner answers are English for now."
+        default="en",
+        description=(
+            "UI language. The chat answers in the language the guests write (English or "
+            "Spanish, detected from the text); this is only the fallback when a first "
+            "message says too little to tell."
+        ),
     )
 
 
@@ -158,6 +174,7 @@ class TurnOut(BaseModel):
 
 class HealthOut(BaseModel):
     status: Literal["ok"] = "ok"
+    auth_required: bool = True
 
 
 class ProblemOut(BaseModel):

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { auth } from "./api";
 import { AppCtx, type Ctx } from "./ctx";
+import { Login } from "./components/Login";
 import { useController } from "./controller";
 import { makeLoc, makeT, readLang, saveLang, type Lang } from "./i18n";
 import { AssistantSheet, LangSheet, NotifSheet, ProposalSheet, SessBar, Toast } from "./components/Sheets";
@@ -18,7 +20,7 @@ const TABS = [
   { id: "more", glyph: "☰", key: "t_more" },
 ] as const;
 
-function Shell({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
+function Shell({ lang, setLang, onSignOut }: { lang: Lang; setLang: (l: Lang) => void; onSignOut: () => void }) {
   const t = useMemo(() => makeT(lang), [lang]);
   const loc = useMemo(() => makeLoc(lang), [lang]);
   const c = useController(lang, t, loc);
@@ -123,6 +125,15 @@ function Shell({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
           Interface mockup · illustrative data · not a production implementation
         </span>
         <button className="ghost-btn" onClick={() => void a.reset()}>Reset</button>
+        <button
+          className="ghost-btn"
+          onClick={() => {
+            auth.clear();
+            onSignOut();
+          }}
+        >
+          {t("logout")}
+        </button>
       </div>
     </AppCtx.Provider>
   );
@@ -137,5 +148,37 @@ export default function App() {
   useEffect(() => {
     document.documentElement.lang = lang;
   }, [lang]);
-  return <Shell lang={lang} setLang={setLang} />;
+  const [signedIn, setSignedIn] = useState(auth.hasToken);
+  const [expired, setExpired] = useState(false);
+  useEffect(() => {
+    if (signedIn) return;
+    let live = true;
+    auth.required().then((needed) => {
+      if (live && !needed) setSignedIn(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, [signedIn]);
+  useEffect(() => {
+    auth.onUnauthorized(() => {
+      setExpired(true);
+      setSignedIn(false);
+    });
+  }, []);
+  if (!signedIn) {
+    return (
+      <Login
+        lang={lang}
+        setLang={setLang}
+        t={makeT(lang)}
+        expired={expired}
+        onSignedIn={() => {
+          setExpired(false);
+          setSignedIn(true);
+        }}
+      />
+    );
+  }
+  return <Shell lang={lang} setLang={setLang} onSignOut={() => setSignedIn(false)} />;
 }

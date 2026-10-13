@@ -2,6 +2,9 @@
 
 ONE process, ONE worker: sessions (the checkpointer) and session-only data are in memory.
 Env: PORT, PARKMIND_UI_DIR (built UI, default ui/web/dist), PARKMIND_CORS_ORIGINS (comma list),
+PARKMIND_AUTH_USERS ("user=password,user2=password2") and PARKMIND_JWT_SECRET (>= 32 chars) are REQUIRED: the server refuses to start without them. PARKMIND_AUTH_DISABLED=1 opts out
+(local demos only; every route is then open). PARKMIND_TOKEN_TTL_HOURS (default 2).
+LLM caps (per user and global per 24 h): PARKMIND_MESSAGES_PER_USER_DAY (300), PARKMIND_MESSAGES_GLOBAL_DAY (2000).
 PARKMIND_PLAN_FROM_STORED=1 (plan from the latest stored snapshot, no provider call: for demos
 pinned to a snapshot taken during park hours), E2E_NOW=HH:MM (fixed park clock for demos).
 """
@@ -17,9 +20,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 import uvicorn
 from dotenv import load_dotenv
 
+from parkmind.agents.elicit_agent import AnthropicExtractor
 from parkmind.agents.nvidia_extractor import NvidiaExtractor
 from parkmind.api.app import create_app
 from parkmind.api.guard import ensure_single_worker
+from parkmind.api.security import AuthConfig, AuthConfigError, Limits, parse_users
 from parkmind.core.contracts import PARK_TZ
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.conversation import ConversationService
@@ -61,13 +66,49 @@ def _clock():
     return now
 
 
+def auth_from_env(env=os.environ) -> AuthConfig | None:
+    """Fail closed: no credentials configured means no server, unless explicitly disabled."""
+    if env.get("PARKMIND_AUTH_DISABLED") == "1":
+        print("WARNING: PARKMIND_AUTH_DISABLED=1 - the API is open to anyone.", file=sys.stderr)
+        return None
+    users, secret = env.get("PARKMIND_AUTH_USERS", ""), env.get("PARKMIND_JWT_SECRET", "")
+    if not users or not secret:
+        raise AuthConfigError(
+            "set PARKMIND_AUTH_USERS and PARKMIND_JWT_SECRET (see .env.example), "
+            "or PARKMIND_AUTH_DISABLED=1 for a local demo"
+        )
+    hours = _positive(env, "PARKMIND_TOKEN_TTL_HOURS", "2", float)
+    return AuthConfig(parse_users(users), secret, token_ttl_seconds=max(1, int(hours * 3600)))
+
+
+def _positive(env, name: str, default: str, cast):
+    try:
+        value = cast(env.get(name, default))
+    except ValueError:
+        raise AuthConfigError(f"{name} must be a number") from None
+    if not value > 0 or value == float("inf"):
+        raise AuthConfigError(f"{name} must be greater than zero")
+    return value
+
+
+def limits_from_env(env=os.environ) -> Limits:
+    return Limits(
+        messages_per_user_day=_positive(env, "PARKMIND_MESSAGES_PER_USER_DAY", "300", int),
+        messages_global_day=_positive(env, "PARKMIND_MESSAGES_GLOBAL_DAY", "2000", int),
+    )
+
+
 def build_app():
     load_dotenv()
+    auth = auth_from_env()
     deps_factory = _deps_factory()
     clock = _clock()
     checkpointer = default_checkpointer()
+    extractor = (
+        AnthropicExtractor() if os.environ.get("ANTHROPIC_API_KEY") else NvidiaExtractor()
+    )
     initial = build_initial_planning_graph(
-        NvidiaExtractor(),
+        extractor,
         checkpointer=checkpointer,
         deps_factory=deps_factory,
         clock=clock,
@@ -89,6 +130,8 @@ def build_app():
         clock=clock,
         ui_dir=ui_dir if ui_dir.is_dir() else None,
         cors_origins=origins,
+        auth=auth,
+        limits=limits_from_env(),
     )
 
 

@@ -82,8 +82,12 @@ class Conversation(Protocol):
         """A new session; its id is the ``thread_id`` of every later call."""
         ...
 
-    def say(self, thread_id: str, text: str) -> Turn:
-        """A guest message: the first request, the answer to a question, or a new request."""
+    def say(self, thread_id: str, text: str, lang: str | None = None) -> Turn:
+        """A guest message: the first request, the answer to a question, or a new request.
+
+        The reply language is detected from the text; ``lang`` (the UI locale) only
+        breaks the tie for a thread's first message when the text says too little.
+        """
         ...
 
     def confirm_constraints(

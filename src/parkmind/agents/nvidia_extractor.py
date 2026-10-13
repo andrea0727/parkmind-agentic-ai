@@ -7,7 +7,10 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
-from parkmind.agents.elicit_agent import ExtractorOutputError
+from parkmind.agents.elicit_agent import (
+    ExtractorOutputError,
+    without_empty_accessibility,
+)
 from parkmind.agents.elicit_prompt import ELICIT_SYSTEM_PROMPT
 from parkmind.agents.elicit_schema import ElicitationExtraction
 from parkmind.agents.llm_retry import RetryLog, call_with_retries
@@ -53,29 +56,4 @@ class NvidiaExtractor:
         args = calls[0].get("args")
         if not isinstance(args, Mapping):
             raise ExtractorOutputError("the model returned malformed structured output")
-        return _without_empty_accessibility(args)
-
-
-_ACCESS_FLAGS = (
-    "daily_walking_limit_minutes",
-    "rest_frequency_minutes",
-    "mobility_requirements",
-    "heat_sensitivity",
-    "ride_restrictions",
-)
-
-
-def _without_empty_accessibility(args: Mapping[str, Any]) -> Mapping[str, Any]:
-    """Drop accessibility entries that set no flag: with thinking off the model pads every guest.
-
-    An entry with no flag says "no restriction", so dropping it never weakens a constraint.
-    """
-    entries = args.get("accessibility")
-    if not isinstance(entries, list):
-        return args
-    kept = [
-        e
-        for e in entries
-        if not isinstance(e, Mapping) or any(e.get(f) for f in _ACCESS_FLAGS)
-    ]
-    return {**args, "accessibility": kept}
+        return without_empty_accessibility(args)

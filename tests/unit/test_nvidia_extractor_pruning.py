@@ -1,4 +1,4 @@
-from parkmind.agents.nvidia_extractor import _without_empty_accessibility
+from parkmind.agents.nvidia_extractor import without_empty_accessibility
 
 
 def test_drops_empty_accessibility_entries() -> None:
@@ -8,10 +8,10 @@ def test_drops_empty_accessibility_entries() -> None:
             {"guest_id": "g2", "mobility_requirements": ["wheelchair"]},
         ]
     }
-    out = _without_empty_accessibility(args)
+    out = without_empty_accessibility(args)
     assert [a["guest_id"] for a in out["accessibility"]] == ["g2"]
 
 
 def test_leaves_args_without_accessibility_untouched() -> None:
     args = {"departure_time": "09:00"}
-    assert _without_empty_accessibility(args) == args
+    assert without_empty_accessibility(args) == args

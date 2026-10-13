@@ -5,6 +5,7 @@ never plans, checks or decides anything; the planner's gates are behind the conv
 """
 
 import os
+import threading
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -12,9 +13,10 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 from uuid import uuid4
 
-from fastapi import FastAPI, Query, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
@@ -26,12 +28,21 @@ from parkmind.api.schemas import (
     EventIn,
     EventsConfirmIn,
     HealthOut,
+    LoginIn,
     MessageIn,
     PlanOut,
     ProblemOut,
     ProposalOut,
     SessionOut,
+    TokenOut,
     TurnOut,
+)
+from parkmind.api.security import (
+    CONTENT_SECURITY_POLICY,
+    SECURITY_HEADERS,
+    AuthConfig,
+    Limits,
+    RateLimiter,
 )
 from parkmind.core.contracts import PARK_TZ, ApprovalStatus, Event, EventSource
 from parkmind.core.conversation import (
@@ -57,14 +68,20 @@ Talk to the ParkMind planner for one party at Magic Kingdom.
 """
 
 _ERRORS: dict[int | str, dict[str, Any]] = {
+    401: {"model": ProblemOut, "description": "Missing, invalid or expired token."},
+    429: {"model": ProblemOut, "description": "Too many requests."},
     404: {"model": ProblemOut, "description": "Unknown session."},
     409: {"model": ProblemOut, "description": "The planner is not waiting for that."},
     503: {"model": ProblemOut, "description": "Park data or routing unavailable."},
 }
 
-ThreadId = Annotated[
-    str, Query(min_length=1, max_length=64, description="From POST /api/session.")
-]
+_DOC_PATHS = ("/docs", "/redoc", "/openapi.json")
+_ANONYMOUS = "anonymous"
+
+# Per username and per client address: wrong passwords in a row lock the login for a while.
+_LOGIN_FAILURES = 5
+_LOGIN_FAILURES_PER_ADDRESS = 20
+_LOGIN_WINDOW_SECONDS = 300
 
 
 def _park_now() -> datetime:
@@ -89,7 +106,10 @@ def create_app(
     cors_origins: Sequence[str] = (),
     env: Mapping[str, str] | None = None,
     argv: Sequence[str] | None = None,
+    auth: AuthConfig | None = None,
+    limits: Limits | None = None,
 ) -> FastAPI:
+    """``auth=None`` leaves every route open: only for tests and an explicit demo opt-out."""
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         ensure_single_worker(os.environ if env is None else env, argv)
@@ -101,6 +121,7 @@ def create_app(
         description=DESCRIPTION,
         lifespan=lifespan,
         openapi_tags=[
+            {"name": "auth", "description": "Sign in for an access token."},
             {"name": "conversation", "description": "Talking to the planner."},
             {"name": "plan", "description": "Proposals and the active plan."},
             {"name": "events", "description": "Things that happened in the park."},
@@ -111,9 +132,91 @@ def create_app(
             CORSMiddleware,
             allow_origins=list(cors_origins),
             allow_methods=["GET", "POST"],
-            allow_headers=["Content-Type"],
+            allow_headers=["Content-Type", "Authorization"],
         )
+
+    @app.middleware("http")
+    async def _security_headers(
+        request: Request, call_next: Callable[[Request], Any]
+    ) -> Response:
+        response: Response = await call_next(request)
+        for name, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(name, value)
+        if request.url.path.startswith("/api"):
+            response.headers.setdefault("Cache-Control", "no-store")
+        if not request.url.path.startswith(_DOC_PATHS):
+            response.headers.setdefault(
+                "Content-Security-Policy", CONTENT_SECURITY_POLICY
+            )
+        return response
+
     present = Presenter(describe or DescribePlanUseCase())
+
+    bearer = HTTPBearer(auto_error=False)
+    owners: dict[str, str] = {}
+    owners_lock = threading.Lock()
+    login_failures = RateLimiter(_LOGIN_FAILURES, _LOGIN_WINDOW_SECONDS)
+    login_by_address = RateLimiter(_LOGIN_FAILURES_PER_ADDRESS, _LOGIN_WINDOW_SECONDS)
+    admission = threading.Lock()
+    limits = limits or Limits()
+    minute_limit = RateLimiter(limits.messages_per_minute, 60)
+    user_day_limit = RateLimiter(limits.messages_per_user_day, 86400)
+    global_day_limit = RateLimiter(limits.messages_global_day, 86400)
+    session_limit = RateLimiter(limits.sessions_per_hour, 3600)
+
+    def _unauthorized() -> HTTPException:
+        return HTTPException(
+            status_code=401,
+            detail="Sign in to use the API.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    def current_user(
+        credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+    ) -> str:
+        if auth is None:
+            return _ANONYMOUS
+        user = auth.verify_token(credentials.credentials) if credentials else None
+        if user is None:
+            raise _unauthorized()
+        return user
+
+    User = Annotated[str, Depends(current_user)]
+
+    def owned_thread(
+        user: User,
+        thread_id: Annotated[
+            str,
+            Query(min_length=1, max_length=64, description="From POST /api/session."),
+        ],
+    ) -> str:
+        """A session belongs to whoever started it; anyone else sees it as unknown."""
+        with owners_lock:
+            owner = owners.get(thread_id)
+        if auth is not None and owner != user:
+            raise UnknownThreadError(f"unknown session {thread_id!r}")
+        return thread_id
+
+    ThreadId = Annotated[str, Depends(owned_thread)]
+
+    def _admit(*gates: tuple[RateLimiter, str]) -> None:
+        """All gates have room, or 429 with the wait of the one that is full; hits count only on success."""
+        with admission:
+            for limiter, key in gates:
+                if not limiter.check(key):
+                    raise HTTPException(
+                        status_code=429,
+                        detail="Too many requests; slow down and try again shortly.",
+                        headers={"Retry-After": str(limiter.retry_after(key))},
+                    )
+            for limiter, key in gates:
+                limiter.hit(key)
+
+    def llm_budget(user: User) -> None:
+        """Routes that advance the graph: per-minute and per-day per user, plus a global day cap."""
+        _admit((minute_limit, user), (user_day_limit, user), (global_day_limit, "global"))
+
+    Metered = Depends(llm_budget)
 
     @app.exception_handler(UnknownThreadError)
     async def _unknown(_: Request, exc: UnknownThreadError) -> JSONResponse:
@@ -137,28 +240,73 @@ def create_app(
 
     @app.get("/api/health", tags=["conversation"], response_model=HealthOut)
     def health() -> HealthOut:
-        return HealthOut()
+        return HealthOut(auth_required=auth is not None)
+
+    if auth is not None:
+
+        @app.post(
+            "/api/login",
+            tags=["auth"],
+            response_model=TokenOut,
+            responses={401: _ERRORS[401], 429: _ERRORS[429]},
+        )
+        def login(body: LoginIn, request: Request) -> TokenOut:
+            origin = request.client.host if request.client else "unknown"
+            pair = f"{origin}|{body.username}"
+            gates = ((login_failures, pair), (login_by_address, origin))
+            with admission:  # reserve the attempt first so parallel guesses cannot all slip in
+                for limiter, key in gates:
+                    if not limiter.check(key):
+                        raise HTTPException(
+                            status_code=429,
+                            detail="Too many failed sign-ins; try again in a few minutes.",
+                            headers={"Retry-After": str(limiter.retry_after(key))},
+                        )
+                for limiter, key in gates:
+                    limiter.hit(key)
+            if not auth.authenticate(body.username, body.password):
+                raise HTTPException(
+                    status_code=401,
+                    detail="Wrong username or password.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            login_failures.reset(pair)
+            login_by_address.release(origin)
+            return TokenOut(
+                access_token=auth.issue_token(body.username),
+                expires_in=auth.token_ttl_seconds,
+            )
 
     @app.post(
         "/api/session",
         tags=["conversation"],
         response_model=SessionOut,
         status_code=201,
+        responses={401: _ERRORS[401], 429: _ERRORS[429]},
     )
-    def start_session() -> SessionOut:
-        return SessionOut(thread_id=conversation.start())
+    def start_session(user: User) -> SessionOut:
+        _admit((session_limit, user))
+        thread_id = conversation.start()
+        with owners_lock:
+            owners[thread_id] = user
+        return SessionOut(thread_id=thread_id)
 
     @app.post(
-        "/api/message", tags=["conversation"], response_model=TurnOut, responses=_ERRORS
+        "/api/message",
+        tags=["conversation"],
+        response_model=TurnOut,
+        responses=_ERRORS,
+        dependencies=[Metered],
     )
     def say(body: MessageIn, thread_id: ThreadId) -> TurnOut:
-        return present.turn(conversation.say(thread_id, body.text))
+        return present.turn(conversation.say(thread_id, body.text, body.lang))
 
     @app.post(
         "/api/constraints/confirm",
         tags=["conversation"],
         response_model=TurnOut,
         responses=_ERRORS,
+        dependencies=[Metered],
     )
     def confirm_constraints(body: ConstraintsConfirmIn, thread_id: ThreadId) -> TurnOut:
         answer = HardConstraintAnswer(
@@ -189,6 +337,7 @@ def create_app(
         tags=["plan"],
         response_model=TurnOut,
         responses=_ERRORS,
+        dependencies=[Metered],
     )
     def decide(
         proposal_id: str,
@@ -220,7 +369,13 @@ def create_app(
             return Response(status_code=204)
         return present.plan(plan)
 
-    @app.post("/api/events", tags=["events"], response_model=TurnOut, responses=_ERRORS)
+    @app.post(
+        "/api/events",
+        tags=["events"],
+        response_model=TurnOut,
+        responses=_ERRORS,
+        dependencies=[Metered],
+    )
     def report_event(body: EventIn, thread_id: ThreadId) -> TurnOut | JSONResponse:
         try:
             event = Event(
@@ -239,6 +394,7 @@ def create_app(
         tags=["events"],
         response_model=TurnOut,
         responses=_ERRORS,
+        dependencies=[Metered],
     )
     def confirm_events(body: EventsConfirmIn, thread_id: ThreadId) -> TurnOut:
         return present.turn(conversation.confirm_events(thread_id, body.confirmed))

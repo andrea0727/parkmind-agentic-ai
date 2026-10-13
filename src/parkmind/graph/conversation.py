@@ -35,6 +35,7 @@ from parkmind.core.conversation import (
     TurnStatus,
     UnknownThreadError,
 )
+from parkmind.core.language import as_language
 from parkmind.graph.initial_planning_graph import APPROVAL_INTERRUPT_KIND
 from parkmind.graph.replanning_graph import EVENT_CONFIRMATION_INTERRUPT_KIND
 from parkmind.services.use_cases.active_plan import ActivePlanUseCase
@@ -54,6 +55,7 @@ class _Thread:
     waiting_for: str | None = None
     proposal_id: str | None = None
     seen_messages: int = 0
+    language_hinted: bool = False
 
 
 def _new_thread_id() -> str:
@@ -85,14 +87,23 @@ class ConversationService:
             self._threads[thread_id] = _Thread(lock=threading.RLock())
         return thread_id
 
-    def say(self, thread_id: str, text: str) -> Turn:
+    def say(self, thread_id: str, text: str, lang: str | None = None) -> Turn:
         thread = self._thread(thread_id)
         with thread.lock:
             if thread.waiting_for == MISSING_INFORMATION_KIND:
                 return self._run(thread_id, thread, "initial", Command(resume=text))
             self._require_nothing_pending(thread)
-            payload = {"thread_id": thread_id, "messages": [HumanMessage(content=text)]}
-            return self._run(thread_id, thread, "initial", payload)
+            payload: dict[str, Any] = {
+                "thread_id": thread_id,
+                "messages": [HumanMessage(content=text)],
+            }
+            hinting = not thread.language_hinted
+            if hinting:
+                payload["language"] = as_language(lang)
+            turn = self._run(thread_id, thread, "initial", payload)
+            if hinting:
+                thread.language_hinted = True
+            return turn
 
     def confirm_constraints(self, thread_id: str, answer: HardConstraintAnswer) -> Turn:
         thread = self._thread(thread_id)

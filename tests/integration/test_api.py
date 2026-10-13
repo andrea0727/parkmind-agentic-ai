@@ -231,7 +231,7 @@ def test_the_ui_is_served_next_to_the_api(rig, tmp_path):
     (tmp_path / "index.html").write_text("<h1>ParkMind</h1>")
     with TestClient(_app(rig, ui_dir=tmp_path)) as client:
         assert "ParkMind" in client.get("/").text
-        assert client.get("/api/health").json() == {"status": "ok"}
+        assert client.get("/api/health").json() == {"status": "ok", "auth_required": False}
 
 
 # --- one process, one SessionMemory ---------------------------------------------------

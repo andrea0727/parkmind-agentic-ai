@@ -35,6 +35,7 @@ from parkmind.core.contracts import (
     PreferenceValue,
     TimeWindow,
 )
+from parkmind.core.language import DEFAULT_LANGUAGE, Language, detect_language, text
 from parkmind.graph.state import ParkMindState
 from parkmind.services.use_cases.accessibility_intake import (
     AccessibilityIntakeUseCase,
@@ -69,9 +70,9 @@ _DEFAULT_TOLERANCE = 0.5
 _STATED_CONFIDENCE = 0.8
 
 _MISSING_QUESTIONS = {
-    "guests": "Who is in your party (how many people, and are they adults or children)?",
-    "departure_time": "What time do you plan to leave the park?",
-    "unreadable_response": "I couldn't understand that. Could you describe your party and plans again?",
+    "guests": "q_guests",
+    "departure_time": "q_departure_time",
+    "unreadable_response": "q_unreadable_response",
 }
 
 
@@ -91,6 +92,31 @@ class GuestInfoExtractor(Protocol):
         ...
 
 
+_ACCESS_FLAGS = (
+    "daily_walking_limit_minutes",
+    "rest_frequency_minutes",
+    "mobility_requirements",
+    "heat_sensitivity",
+    "ride_restrictions",
+)
+
+
+def without_empty_accessibility(args: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Drop accessibility entries that set no flag: with thinking off the model pads every guest.
+
+    An entry with no flag says "no restriction", so dropping it never weakens a constraint.
+    """
+    entries = args.get("accessibility")
+    if not isinstance(entries, list):
+        return args
+    kept = [
+        e
+        for e in entries
+        if not isinstance(e, Mapping) or any(e.get(f) for f in _ACCESS_FLAGS)
+    ]
+    return {**args, "accessibility": kept}
+
+
 class AnthropicExtractor:
     """Claude tool-calling extractor. The client is built on first use."""
 
@@ -108,7 +134,8 @@ class AnthropicExtractor:
                 api_key=SecretStr(self._api_key),
                 temperature=0,
                 max_tokens_to_sample=1500,
-                timeout=None,
+                timeout=60,
+                max_retries=2,
                 stop=None,
             )
             self._llm = chat.bind_tools(
@@ -137,7 +164,7 @@ class AnthropicExtractor:
         args = calls[0].get("args")
         if not isinstance(args, Mapping):
             raise ExtractorOutputError("the model returned malformed structured output")
-        return args
+        return without_empty_accessibility(args)
 
 
 @dataclass(frozen=True)
@@ -204,14 +231,16 @@ _CM_PER_FOOT = 30.48
 _CM_PER_INCH = 2.54
 _NUMBER = r"(\d+(?:[.,]\d+)?)"
 _CM_RE = re.compile(rf"{_NUMBER}\s*(?:cm|cms|centimet\w*|centím\w*)\b", re.IGNORECASE)
-_METERS_RE = re.compile(rf"{_NUMBER}\s*(?:m|mt|mts|meters?|metres?|metros?)\b", re.IGNORECASE)
+_METERS_RE = re.compile(
+    rf"{_NUMBER}\s*(?:m|mt|mts|meters?|metres?|metros?)\b", re.IGNORECASE
+)
 _FEET_RE = re.compile(
-    r"(\d)\s*(?:'|’|ft\b|feet\b|foot\b|-foot\b)\s*(?:(\d{1,2})\s*(?:\"|in\b|inch\w*)?)?",
+    r"(\d)\s*(?:'|’|ft\b|feet\b|foot\b|-foot\b|pies?\b)\s*(?:(\d{1,2})\s*(?:\"|in\b|inch\w*|pulgadas?\b)?)?",
     re.IGNORECASE,
 )
 _DECIMAL_METERS_RE = re.compile(r"(?<![\d.,])([12][.,]\d{1,2})(?![\d.,])")
 _BARE_RE = re.compile(
-    r"(?<![\d.,:])(\d{2,3})(?![\d.,:])(?!\s*(?:min|minutes?|hours?|hrs?|h\b|pm|am|%|years?|yo\b))",
+    r"(?<![\d.,:])(\d{2,3})(?![\d.,:])(?!\s*(?:min|minutes?|minutos?|hours?|horas?|hrs?|h\b|pm|am|%|years?|años?|anos?|yo\b))",
     re.IGNORECASE,
 )
 
@@ -280,39 +309,38 @@ def conflicting_names(
 
 
 def _question_for(
-    missing: Sequence[str], resolution: NameResolution | None = None
+    missing: Sequence[str],
+    resolution: NameResolution | None = None,
+    lang: Language = DEFAULT_LANGUAGE,
 ) -> str:
     questions: list[str] = []
     for key in missing:
         if key.startswith("guest_role:"):
-            questions.append(f"Is {key.split(':', 1)[1]} an adult or a child?")
+            questions.append(text("q_guest_role", lang, who=key.split(":", 1)[1]))
         elif key.startswith(_UNKNOWN_ATTRACTION):
             name = key.removeprefix(_UNKNOWN_ATTRACTION)
-            questions.append(
-                f"I couldn't find '{name}' among this park's attractions. Which attraction do you mean?"
-            )
+            questions.append(text("q_unknown_attraction", lang, name=name))
         elif key.startswith(_AMBIGUOUS_ATTRACTION):
             name = key.removeprefix(_AMBIGUOUS_ATTRACTION)
             options = resolution.ambiguous[name] if resolution is not None else ()
             questions.append(
-                f"'{name}' could be {', '.join(options)}. Which one do you mean?"
+                text(
+                    "q_ambiguous_attraction",
+                    lang,
+                    name=name,
+                    options=", ".join(options),
+                )
             )
         elif key.startswith(_UNVERIFIED_HEIGHT):
             guest = key.removeprefix(_UNVERIFIED_HEIGHT).removeprefix("g")
-            questions.append(
-                f"I couldn't match the height I understood for Guest {guest} to what you wrote. "
-                f"How tall is Guest {guest}, in cm (between 50 and 250)?"
-            )
+            questions.append(text("q_unverified_height", lang, guest=guest))
         elif key.startswith(_CONFLICTING_ATTRACTION):
             name = key.removeprefix(_CONFLICTING_ATTRACTION)
-            questions.append(
-                f"'{name}' is on both your must-do and your avoid list. "
-                "Do you want it in the plan, or kept out of it?"
-            )
+            questions.append(text("q_conflicting_attraction", lang, name=name))
+        elif key in _MISSING_QUESTIONS:
+            questions.append(text(_MISSING_QUESTIONS[key], lang))
         else:
-            questions.append(
-                _MISSING_QUESTIONS.get(key, f"Could you tell me about {key}?")
-            )
+            questions.append(text("q_generic", lang, key=key))
     return " ".join(questions)
 
 
@@ -432,25 +460,22 @@ def pending_confirmations(
     return pending
 
 
-def echo_for(entry: str) -> str:
+def echo_for(entry: str, lang: Language = DEFAULT_LANGUAGE) -> str:
     """Plain-language echo of a non-accessibility pending entry, for confirmation."""
     kind, _, value = entry.partition(": ")
-    if kind == "must_do":
-        return f"'{value}' is a must-do: the plan has to include it."
-    if kind == "avoid":
-        return f"'{value}' is off-limits: the plan must never include it."
-    if kind == "departure_time":
-        return f"You leave the park at {value}: the plan must end by then."
+    if kind in ("must_do", "avoid", "departure_time", "walking_budget"):
+        return text(f"echo_{kind}", lang, value=value)
     if kind == "lunch_window":
         start, _, end = value.partition("-")
-        return f"Lunch is fixed between {start} and {end}."
-    if kind == "walking_budget":
-        return f"The party's total walking must not exceed {value} minutes."
+        return text("echo_lunch_window", lang, start=start, end=end)
     if kind.startswith(_HEIGHT):
         guest = kind.removeprefix(_HEIGHT).removeprefix("g")
-        return (
-            f"Guest {guest} is {value} cm tall (about {_feet_inches(float(value))}): "
-            "rides with a higher minimum will be skipped."
+        return text(
+            "echo_height",
+            lang,
+            guest=guest,
+            value=value,
+            feet=_feet_inches(float(value)),
         )
     return entry
 
@@ -526,6 +551,9 @@ def make_elicit_node(
         texts = human_texts(state)
         if not texts:
             raise ValueError("elicit needs at least one guest message")
+        lang = detect_language(
+            texts[-1], fallback=state.get("language") or DEFAULT_LANGUAGE
+        )
 
         # Anything staged by an earlier pass is stale: this extraction replaces it.
         intake.discard(session_id)
@@ -546,12 +574,13 @@ def make_elicit_node(
             )
         if outcome.extraction is None or missing:
             return {
+                "language": lang,
                 "constraints": None,
                 "constraints_valid": False,
                 "pending_hard_constraint_confirmation": None,
                 "messages": [
                     AIMessage(
-                        content=_question_for(missing, resolution),
+                        content=_question_for(missing, resolution, lang),
                         additional_kwargs={"missing_information": missing},
                     )
                 ],
@@ -561,6 +590,7 @@ def make_elicit_node(
         for staged in _staged(extraction):
             intake.stage(session_id, staged)
         return {
+            "language": lang,
             "constraints": build_party_constraints(
                 extraction, today=today(), resolution=resolution
             ),

@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from parkmind.core.contracts import Event, EventSeverity, EventType
+from parkmind.core.language import DEFAULT_LANGUAGE, Language, text
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
     default_planning_deps,
@@ -17,7 +18,6 @@ from parkmind.services.use_cases.planning_deps import (
 )
 
 _SEVERITY_RANK = {EventSeverity.HIGH: 0, EventSeverity.MEDIUM: 1, EventSeverity.LOW: 2}
-_NO_REASON = "The plan was updated after a change in the park."
 
 
 @dataclass(frozen=True)
@@ -38,53 +38,60 @@ def _ranked(events: Sequence[Event]) -> list[Event]:
     )
 
 
-def _phrase(event: Event, names: Mapping[str, str]) -> str:
-    name = names.get(event.attraction_id or "", event.attraction_id or "an attraction")
+def _phrase(event: Event, names: Mapping[str, str], lang: Language) -> str:
+    name = names.get(
+        event.attraction_id or "",
+        event.attraction_id or text("event_attraction_fallback", lang),
+    )
     match event.type:
         case EventType.ATTRACTION_DOWN:
-            return f"{name} is down"
+            return text("event_down", lang, name=name)
         case EventType.ATTRACTION_AVAILABLE:
-            return f"{name} is available again"
+            return text("event_available", lang, name=name)
         case EventType.WAIT_SPIKE:
             jump = (
-                f" by {event.delta_minutes:.0f} min"
+                text("event_wait_spike_by", lang, minutes=f"{event.delta_minutes:.0f}")
                 if event.delta_minutes is not None
                 else ""
             )
-            return f"the wait at {name} jumped{jump}"
+            return text("event_wait_spike", lang, name=name, jump=jump)
         case EventType.RAIN_INCOMING:
-            return "rain is coming"
+            return text("event_rain", lang)
         case EventType.BEHIND_SCHEDULE:
             late = (
-                f" {event.minutes_behind:.0f} min"
+                text("event_behind_by", lang, minutes=f"{event.minutes_behind:.0f}")
                 if event.minutes_behind is not None
                 else ""
             )
-            return f"the party is{late} behind schedule"
+            return text("event_behind", lang, late=late)
         case EventType.GUEST_FATIGUE:
-            return "a guest is tired"
+            return text("event_fatigue", lang)
         case _:
             return event.type.value.replace("_", " ").lower()
 
 
-def replan_reason(events: Sequence[Event], names: Mapping[str, str]) -> ReplanReason:
+def replan_reason(
+    events: Sequence[Event], names: Mapping[str, str], lang: Language = DEFAULT_LANGUAGE
+) -> ReplanReason:
     ranked = _ranked(events)
     if not ranked:
-        return ReplanReason(_NO_REASON, None)
+        return ReplanReason(text("reason_none", lang), None)
     phrases: list[str] = []
     for event in ranked:
-        phrase = _phrase(event, names)
+        phrase = _phrase(event, names, lang)
         if phrase not in phrases:
             phrases.append(phrase)
-    text = "Updated plan because " + " and ".join(phrases) + "."
-    return ReplanReason(text, ranked[0].event_id)
+    joined = text("reason_and", lang).join(phrases)
+    return ReplanReason(text("reason_prefix", lang, phrases=joined), ranked[0].event_id)
 
 
 class ReplanReasonUseCase:
     def __init__(self, deps_factory: DepsFactory = default_planning_deps) -> None:
         self._deps_factory = deps_factory
 
-    def execute(self, events: Sequence[Event]) -> ReplanReason:
+    def execute(
+        self, events: Sequence[Event], lang: Language = DEFAULT_LANGUAGE
+    ) -> ReplanReason:
         with open_deps(self._deps_factory) as deps:
             names = {a.node_id: a.name for a in load_catalog(deps)}
-        return replan_reason(events, names)
+        return replan_reason(events, names, lang)

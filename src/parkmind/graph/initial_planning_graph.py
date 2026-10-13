@@ -55,6 +55,7 @@ from langgraph.types import Command, interrupt
 
 from parkmind.agents.elicit_agent import GuestInfoExtractor
 from parkmind.core.contracts import PARK_TZ, ApprovalStatus, RejectionReason
+from parkmind.core.language import text
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.elicitation_graph import (
     StateNode,
@@ -62,7 +63,12 @@ from parkmind.graph.elicitation_graph import (
     ensure_confirmed,
 )
 from parkmind.graph.state import ParkMindState
-from parkmind.graph.state_helpers import approve_plan, propose_plan_change, reject_plan
+from parkmind.graph.state_helpers import (
+    approve_plan,
+    language_of,
+    propose_plan_change,
+    reject_plan,
+)
 from parkmind.services.use_cases.accessibility_intake import AccessibilityIntakeUseCase
 from parkmind.services.use_cases.build_plan import BuildPlanUseCase
 from parkmind.services.use_cases.check_plan import CheckPlanUseCase
@@ -131,7 +137,7 @@ def _guarded(node: StateNode, *, then: str | None) -> StateNode:
             logger.exception("planning is unavailable")
             return Command(
                 update={
-                    "messages": [AIMessage(content=UNAVAILABLE_MESSAGE)],
+                    "messages": [AIMessage(content=text("unavailable", language_of(state)))],
                     "candidate_plan": None,
                     "check_result": None,
                     "explanation": None,
@@ -238,9 +244,10 @@ def _no_valid_plan(state: ParkMindState) -> dict[str, Any]:
     """Tell the user why nothing was proposed; ``check_result`` stays in state."""
     check = state.get("check_result")
     reasons = [v.message for v in check.violations] if check is not None else []
-    lines = ["I couldn't build a plan that meets every requirement, so nothing was proposed."]
+    lang = language_of(state)
+    lines = [text("no_valid_plan", lang)]
     lines += [f"- {reason}" for reason in reasons]
-    lines.append("You can relax a constraint (for example the must-dos or the departure time) and I'll try again.")
+    lines.append(text("relax_hint", lang))
     return {"messages": [AIMessage(content="\n".join(lines))], "candidate_plan": None}
 
 
@@ -254,7 +261,11 @@ def _make_explain_node(deps_factory: DepsFactory) -> StateNode:
             raise ValueError("a checked candidate plan is required")
         constraints = state.get("constraints")
         guests = constraints.guests if constraints is not None else []
-        return {"explanation": use_case.execute(plan, check, guests=guests)}
+        return {
+            "explanation": use_case.execute(
+                plan, check, guests=guests, lang=language_of(state)
+            )
+        }
 
     return explain
 
@@ -282,7 +293,7 @@ def _propose_plan(
         state["thread_id"],
         plan,
         proposal_id=f"prop_{uuid4().hex[:8]}",
-        reason="Initial plan for the party",
+        reason=text("initial_plan_reason", language_of(state)),
         explanation=state.get("explanation") or "",
         at=clock(),
     )
@@ -368,11 +379,12 @@ def _interrupt_for_approval(
             # Superseded by a significant event while the guests decided (section 9
             # [C18]): the decision is dropped, nothing is activated.
             logger.info("decision on %s not applied: %s", proposal.proposal_id, exc)
-            message = (
-                SUPERSEDED_KEEPS_PLAN_MESSAGE
-                if state.get("current_plan")
-                else SUPERSEDED_MESSAGE
-            )
+            lang = language_of(state)
+            parts = [text("superseded", lang)]
+            if state.get("current_plan"):
+                parts.append(text("keeps_plan", lang))
+            parts.append(text("ask_again", lang))
+            message = " ".join(parts)
             return {
                 "messages": [AIMessage(content=message)],
                 "candidate_plan": None,

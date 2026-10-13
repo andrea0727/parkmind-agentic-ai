@@ -94,14 +94,60 @@ export class ApiError extends Error {
   }
 }
 
+/* The access token lives in sessionStorage: it dies with the tab and is never sent anywhere but /api. */
+const TOKEN_KEY = "pm_token";
+let unauthorized: () => void = () => {};
+
+export const auth = {
+  hasToken: (): boolean => {
+    try {
+      return !!sessionStorage.getItem(TOKEN_KEY);
+    } catch {
+      return false;
+    }
+  },
+  clear: (): void => {
+    try {
+      sessionStorage.removeItem(TOKEN_KEY);
+    } catch {
+      /* storage unavailable */
+    }
+  },
+  /** Called once when the API rejects the token (expired or revoked), so the UI can ask to sign in again. */
+  onUnauthorized: (fn: () => void): void => {
+    unauthorized = fn;
+  },
+  /** False when the server runs with auth disabled (local demo): there is no login to show. */
+  required: async (): Promise<boolean> => {
+    try {
+      const r = await fetch("/api/health");
+      return ((await r.json()) as { auth_required?: boolean }).auth_required !== false;
+    } catch {
+      return true;
+    }
+  },
+  login: async (username: string, password: string): Promise<void> => {
+    const out = await call<{ access_token: string }>("POST", "/api/login", { username, password });
+    sessionStorage.setItem(TOKEN_KEY, out!.access_token);
+  },
+};
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T | null> {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const token = path === "/api/login" ? null : sessionStorage.getItem(TOKEN_KEY);
+  if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(path, {
     method,
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (response.status === 204) return null;
   const data = await response.json().catch(() => ({}));
+  if (response.status === 401 && path !== "/api/login") {
+    auth.clear();
+    unauthorized();
+  }
   if (!response.ok) {
     const detail = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
     throw new ApiError(response.status, detail ?? `HTTP ${response.status}`);
