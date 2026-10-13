@@ -69,13 +69,17 @@ parkmind-agentic-ai/
 ├── notebooks/                     # exploratory only, nothing imported by the app
 ├── scripts/                        # seed_db.py, run_demo_scenario.py, run_baselines.py
 ├── database/                        # alembic.ini + migrations/ (schema owner, P0-12)
-├── ui/                                # Streamlit app
+├── ui/
+│   ├── app.py                         # Streamlit app
+│   └── web/                           # React + Vite demo UI (served by server.py)
 │
+├── server.py                           # HTTP entrypoint: FastAPI API + built React UI on :8000
+├── Dockerfile                          # builds the UI, then runs server.py
 ├── agent.py                            # root entrypoint — exposes the compiled
 │                                        # graph(s) that langgraph.json points to
 ├── langgraph.json
 ├── requirements.txt         → see pyproject.toml (uses Poetry)
-├── docker-compose.yml                   # Postgres only, see docs/decisions/scope.md
+├── docker-compose.yml                   # Postgres + the demo app
 ├── pytest.ini                            # lets pytest find `parkmind.*` without
 │                                         # installing it as a package
 ├── .env.example
@@ -128,9 +132,80 @@ poetry run pytest
 # 4. sanity-check the graphs build
 poetry run python agent.py
 
-# 5. run the UI (once graph/ is wired up)
-poetry run streamlit run ui/app.py
+# 5. run the demo app (API + React UI on :8000), see "Demo app" below
+docker compose up -d --build
 ```
+
+### Demo app (API + React UI)
+
+One container serves the FastAPI API and the built React UI on http://localhost:8000
+(Swagger at `/docs`). It runs **one worker on purpose**: sessions live in memory.
+
+**1. Configure `.env`** (copy from `.env.example`). Required for the app to start:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...                 # or NVIDIA_API_KEY (Anthropic wins if both are set)
+PARKMIND_AUTH_USERS=demo=ChangeMe1234        # name=password[,name2=password2]; 8+ chars, no commas
+PARKMIND_JWT_SECRET=<32+ random chars>       # python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Optional: `PARKMIND_TOKEN_TTL_HOURS` (default 2), `PARKMIND_MESSAGES_PER_USER_DAY` (300),
+`PARKMIND_MESSAGES_GLOBAL_DAY` (2000), `PARKMIND_AUTH_DISABLED=1` (local demo only: no login,
+every route open), `PARKMIND_PLAN_FROM_STORED=1` (plan from the latest stored snapshot),
+`E2E_NOW=HH:MM` (fixed park clock). After editing `.env`: `docker compose up -d app`.
+
+**2. Launch**
+
+```bash
+docker compose up -d --build        # Postgres + app (migrations and seed run on start)
+docker compose logs -f app          # watch it start
+docker compose down                 # stop (add -v to also drop the database volume)
+```
+
+Open http://localhost:8000 and sign in with the user from `PARKMIND_AUTH_USERS`.
+
+**Without Docker** (hot reload for UI work): terminal 1 `docker compose up -d postgres`, then
+`poetry run python server.py`; terminal 2 `cd ui/web && npm ci && npm run dev` and open
+http://localhost:5173 (Vite proxies `/api` to :8000).
+
+**3. Check that it works**
+
+```bash
+curl -s localhost:8000/api/health
+# {"status":"ok","auth_required":true}
+
+TOKEN=$(curl -s -X POST localhost:8000/api/login -H 'content-type: application/json' \
+  -d '{"username":"demo","password":"ChangeMe1234"}' | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+curl -s -o /dev/null -w "%{http_code}\n" -X POST localhost:8000/api/session          # 401: no token
+THREAD=$(curl -s -X POST localhost:8000/api/session -H "Authorization: Bearer $TOKEN" \
+  | python -c "import sys,json; print(json.load(sys.stdin)['thread_id'])")
+curl -s -X POST "localhost:8000/api/message?thread_id=$THREAD" -H "Authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"text":"Somos 2 adultos y un niño de 8 años, queremos salir a las 17:00","lang":"es"}'
+```
+
+The answer is a `Turn` whose `status` says what the app waits for (`needs_answer`,
+`needs_confirmation`, `needs_approval`, `needs_event_confirmation` or `done`). Then `POST /api/constraints/confirm`,
+`GET /api/proposal`, `POST /api/proposal/{id}/approve|reject`, `GET /api/plan`,
+`POST /api/events` and `/api/events/confirm`; all take `?thread_id=` and a Bearer token.
+
+**Limits and errors:** `401` missing/expired token (sign in again, tokens last 2 h by default);
+`404` unknown session, or one that belongs to another user; `409` the call does not fit the
+session state; `429` too many requests or failed sign-ins (read `Retry-After`); `503` park data
+unavailable. Caps per user: 20 messages/min and 300/day, 20 new sessions/hour; global: 2000
+messages/day; 5 failed sign-ins per address+user lock that login for 5 minutes.
+
+**Tests and checks for the app**
+
+```bash
+poetry run pytest tests/integration/test_api.py tests/integration/test_api_security.py
+poetry run pytest                  # everything
+poetry run ruff check . && poetry run mypy && PYTHONPATH=src poetry run lint-imports
+```
+
+(If your shell exports `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`, unset them for the live
+Anthropic tests.)
 
 ### Database
 
@@ -444,6 +519,7 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 | **Plan Synthesis** | ✅ Initial planning graph [P0-30] | ELICIT → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED. Runs on in-process use cases, no MCP server. EDITED approvals [P0-32] are a follow-up. |
 | **Event monitor** | ✅ P0-33 | Snapshot-to-event detector with per-reading freshness, `EventPolicy` (§25 table, confirmation gate, fatigue walking cap), cross-source dedup, supersede on significant events, `scripts/run_monitor.py`. Consumed by the replanning graph [P0-34]. |
 | **MCP capability boundary** | ✅ P0-24..P0-27 | `parkmind-mcp`: 14 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` is not exposed yet. |
+| **Demo app (API + UI)** | ✅ P0-35 / P0-36 | FastAPI layer over the graphs (`/api/*`, Swagger at `/docs`) and a React UI; bearer-token login, per-user session ownership, LLM usage caps, es/en conversation. Open: P0-32 edit path, #88 e2e bugs, guardrails, Langfuse. |
 | **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
 | **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
 | **PostgreSQL Repos** | ✅ Done | Profiles, Plans, Session store (in-memory for accessibility) |
