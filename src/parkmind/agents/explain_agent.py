@@ -5,24 +5,46 @@ The LLM only phrases; it never decides. It receives the payload that
 preference weights, labelled stated or learned -- and returns an
 ``ExplanationDraft``. Its text reaches the guests only if every numeral in it is in
 the payload (``agents/grounding.py``).
+
+``explain_grounded`` is section 40's safety path [C17]: at most two calls -- a
+schema failure or an ungrounded numeral gets one retry, with the errors or the
+numbers listed -- then the deterministic template. A narrator that cannot be
+called (no key, a network error, anything) goes straight to the template, so
+EXPLAIN never fails a plan. Logs carry counts and error types, never the payload
+or the model's text [C19].
 """
 
+import logging
 from collections.abc import Mapping
-from typing import Any, Protocol
+from dataclasses import dataclass
+from typing import Any, Literal, Protocol
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
-from parkmind.agents.explain_prompt import EXPLAIN_SYSTEM_PROMPT
+from parkmind.agents.explain_prompt import EXPLAIN_PROMPT_VERSION, EXPLAIN_SYSTEM_PROMPT
 from parkmind.agents.explain_schema import ExplanationDraft
+from parkmind.agents.grounding import ungrounded_numerals
 from parkmind.config.settings import settings
+from parkmind.services.use_cases.explain_plan import PreparedExplanation
 
 __all__ = [
+    "MAX_ATTEMPTS",
+    "TEMPLATE_VERSION",
     "AnthropicNarrator",
+    "GroundedExplanation",
     "NarratorOutputError",
     "NarratorUnavailableError",
     "PlanNarrator",
+    "explain_grounded",
 ]
+
+logger = logging.getLogger(__name__)
+
+MAX_ATTEMPTS = 2
+"""One call and one retry (section 40)."""
+TEMPLATE_VERSION = "template"
+"""``Provenance.prompt_versions["explain"]`` when the template was used."""
 
 
 class NarratorUnavailableError(RuntimeError):
@@ -87,3 +109,69 @@ class AnthropicNarrator:
         if not isinstance(args, Mapping):
             raise NarratorOutputError("the model returned malformed structured output")
         return args
+
+
+@dataclass(frozen=True)
+class GroundedExplanation:
+    text: str
+    source: Literal["llm", "template"]
+    attempts: int
+    """Calls made to the narrator (0 when it could not be called)."""
+    prompt_version: str
+    """``EXPLAIN_PROMPT_VERSION``, or ``TEMPLATE_VERSION`` for the fallback."""
+
+
+def _template(prepared: PreparedExplanation, attempts: int) -> GroundedExplanation:
+    return GroundedExplanation(
+        prepared.template, "template", attempts, TEMPLATE_VERSION
+    )
+
+
+def _schema_errors(exc: ValidationError) -> str:
+    """The fields that failed, without the values the model wrote."""
+    return "; ".join(
+        f"{'.'.join(str(p) for p in err['loc']) or 'output'}: {err['msg']}"
+        for err in exc.errors(include_input=False)
+    )
+
+
+def explain_grounded(
+    narrator: PlanNarrator | None, prepared: PreparedExplanation
+) -> GroundedExplanation:
+    """The narrator's explanation if it is grounded, else the template."""
+    if narrator is None:
+        return _template(prepared, 0)
+    payload_json = prepared.payload.to_json()
+    hint: str | None = None
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            raw = narrator.narrate(payload_json, hint)
+        except NarratorUnavailableError:
+            logger.info("explain: no narrator available, using the template")
+            return _template(prepared, attempt - 1)
+        except Exception as exc:  # noqa: BLE001 - any failure falls back, never breaks the plan
+            logger.warning(
+                "explain: the narrator failed (%s), using the template",
+                type(exc).__name__,
+            )
+            return _template(prepared, attempt)
+        try:
+            draft = ExplanationDraft.model_validate(raw)
+        except ValidationError as exc:
+            hint = f"The output did not match the schema: {_schema_errors(exc)}"
+            logger.warning("explain: attempt %d did not match the schema", attempt)
+            continue
+        ungrounded = ungrounded_numerals(draft.text, payload_json)
+        if not ungrounded:
+            return GroundedExplanation(
+                draft.text, "llm", attempt, EXPLAIN_PROMPT_VERSION
+            )
+        hint = (
+            "These numbers are not in the payload: "
+            + ", ".join(ungrounded)
+            + ". Use only figures that appear in the payload, exactly as given."
+        )
+        logger.warning(
+            "explain: attempt %d had %d ungrounded numeral(s)", attempt, len(ungrounded)
+        )
+    return _template(prepared, MAX_ATTEMPTS)
