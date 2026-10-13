@@ -4,7 +4,7 @@ import factories
 import pytest
 from planning_support import factory_for, make_deps
 
-from parkmind.core.contracts import CheckResult, ConstraintViolation, RuleId
+from parkmind.core.contracts import CheckResult, ConstraintViolation, RuleId, ExplainRequest
 from parkmind.services.use_cases.explain_plan import (
     ExplainBeforeValidationError,
     ExplainPlanUseCase,
@@ -19,12 +19,17 @@ INVALID = CheckResult(
 )
 
 
-def test_explaining_an_unvalidated_plan_raises():
-    with pytest.raises(ExplainBeforeValidationError):
-        explain_plan(factories.plan(), INVALID, {})
-    with pytest.raises(ExplainBeforeValidationError):
-        ExplainPlanUseCase(factory_for(make_deps())).execute(factories.plan(), INVALID)
+def test_explaining_an_unvalidated_plan_raises(factories) -> None:
+    invalid_check = CheckResult(valid=False, violations=["Rule violation"])
+    use_case = ExplainPlanUseCase()
 
+    req_invalid = ExplainRequest(plan=factories.plan(), check_result=invalid_check)
+    with pytest.raises(ExplainBeforeValidationError):
+        use_case.execute(req_invalid)
+
+    req_none = ExplainRequest(plan=factories.plan(), check_result=None)
+    with pytest.raises(ExplainBeforeValidationError):
+        use_case.execute(req_none)
 
 def test_the_explanation_lists_each_stop_with_its_name_wait_and_walk():
     text = explain_plan(factories.plan(), CheckResult(valid=True), {"a1": "Space Mountain"})
@@ -41,12 +46,20 @@ def test_unmet_must_dos_are_called_out_by_name():
     assert "Could not fit your must-dos today: TRON." in text
 
 
-def test_the_use_case_resolves_names_from_the_catalog():
+def test_the_use_case_resolves_names_from_the_catalog(factories) -> None:
     plan = factories.plan(stops=[factories.stop(node_id="id-tron")])
+    valid_check = CheckResult(valid=True)
+    catalog = {"id-tron": "TRON Lightcycle / Run"}
 
-    text = ExplainPlanUseCase(factory_for(make_deps())).execute(plan, CheckResult(valid=True))
+    req = ExplainRequest(
+        plan=plan,
+        check_result=valid_check,
+        catalog_names=catalog,
+    )
+    use_case = ExplainPlanUseCase()
+    explanation = use_case.execute(req)
 
-    assert "TRON" in text
+    assert "TRON Lightcycle / Run" in explanation.full_text
 
 
 def test_a_meal_without_a_restaurant_reads_as_lunch_not_as_a_placeholder_id():
