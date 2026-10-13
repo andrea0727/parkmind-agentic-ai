@@ -1,4 +1,4 @@
-"""core/llm.py: the model is configured as documented and the payload that reaches the API says so.
+"""agents/llm.py: the model is configured as documented and the payload that reaches the API says so.
 
 Offline: ``requests.Session.post`` is replaced, so nothing leaves the machine. One opt-in
 live smoke test (``RUN_LIVE_LLM=1`` and a real key) checks the key and model really answer.
@@ -12,8 +12,8 @@ from typing import Any
 import pytest
 import requests
 
-from parkmind.core.llm import get_llm
-from parkmind.core.llm_retry import RetryLog, call_with_retries
+from parkmind.agents.llm import get_llm
+from parkmind.agents.llm_retry import RetryLog, call_with_retries
 
 _LIVE_KEY = os.environ.get("NVIDIA_API_KEY")
 _LIVE_MODEL = os.environ.get("PARKMIND_LLM_MODEL")

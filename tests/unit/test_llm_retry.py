@@ -1,6 +1,6 @@
 import pytest
 
-from parkmind.core.llm_retry import RetryLog, call_with_retries, is_transient_error
+from parkmind.agents.llm_retry import RetryLog, call_with_retries, is_transient_error
 
 
 class Timeout(Exception):

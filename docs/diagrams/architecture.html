@@ -193,8 +193,8 @@ const NODES=[
 /* ---------- external llm / obs ---------- */
  {id:'anthropic',x:470,y:50,w:170,h:60,title:'Anthropic',lines:['Claude Haiku 4.5','structured extraction'],status:'external',
   dock:{summary:'LLM provider used by AnthropicExtractor.',notes:['Used only for extraction, never to build, edit or activate a plan']}},
- {id:'nvidia',x:660,y:50,w:170,h:60,title:'NVIDIA NIM',lines:['ChatNVIDIA via core/llm.py','E2E harness only'],status:'external',
-  dock:{summary:'LLM used by the E2E runner, which injects it as the extractor. It is not part of the runtime path.',files:['src/parkmind/core/llm.py','scripts/e2e/harness.py'],notes:['<code>get_llm()</code> has no caller inside <code>src/</code>','Same <code>GuestInfoExtractor</code> port as the Anthropic adapter','The <code>timeout=180</code> / <code>max_tokens=8192</code> limits belong to <code>core/llm.py</code> (E2E harness only), not to the production extractor']}},
+ {id:'nvidia',x:660,y:50,w:170,h:60,title:'NVIDIA NIM',lines:['ChatNVIDIA via agents/llm.py','E2E harness only'],status:'external',
+  dock:{summary:'LLM used by the E2E runner, which injects it as the extractor. It is not part of the runtime path.',files:['src/parkmind/agents/llm.py','scripts/e2e/harness.py'],notes:['<code>get_llm()</code> has no caller inside <code>src/</code>','Same <code>GuestInfoExtractor</code> port as the Anthropic adapter','The <code>timeout=180</code> / <code>max_tokens=8192</code> limits belong to <code>agents/llm.py</code> (E2E harness only), not to the production extractor']}},
  {id:'langfuse',x:850,y:50,w:170,h:60,title:'Langfuse',lines:['declared in pyproject','not wired yet'],status:'target',
   dock:{summary:'Observability is declared as a dependency but unused.'}},
 /* ---------- application layer ---------- */
@@ -473,7 +473,7 @@ const ES={
 "LLM used by the E2E runner, which injects it as the extractor. It is not part of the runtime path.": "LLM usado por el runner E2E, que lo inyecta como extractor. No forma parte del camino en ejecución.",
 "<code>get_llm()</code> has no caller inside <code>src/</code>": "<code>get_llm()</code> no tiene ningún llamador dentro de <code>src/</code>",
 "Same <code>GuestInfoExtractor</code> port as the Anthropic adapter": "El mismo puerto <code>GuestInfoExtractor</code> que el adaptador de Anthropic",
-"The <code>timeout=180</code> / <code>max_tokens=8192</code> limits belong to <code>core/llm.py</code> (E2E harness only), not to the production extractor": "Los límites <code>timeout=180</code> / <code>max_tokens=8192</code> pertenecen a <code>core/llm.py</code> (solo arnés E2E), no al extractor de producción",
+"The <code>timeout=180</code> / <code>max_tokens=8192</code> limits belong to <code>agents/llm.py</code> (E2E harness only), not to the production extractor": "Los límites <code>timeout=180</code> / <code>max_tokens=8192</code> pertenecen a <code>agents/llm.py</code> (solo arnés E2E), no al extractor de producción",
 "declared in pyproject": "declarado en pyproject",
 "not wired yet": "aún sin conectar",
 "Observability is declared as a dependency but unused.": "La observabilidad está declarada como dependencia pero no se usa.",

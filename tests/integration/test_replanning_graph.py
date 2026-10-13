@@ -268,6 +268,30 @@ def test_approving_keeps_the_reported_progress_for_the_new_plan(r) -> None:
     assert (saved.plan_id, saved.completed_stop_ids) == (candidate_id, [done])
 
 
+def test_progress_reported_while_the_proposal_waits_is_kept_on_approval(r) -> None:
+    first, second = r.active.stops[0].node_id, r.active.stops[1].node_id
+    r.deps.execution_states.save(
+        factories.execution_state(
+            plan_id=r.active.plan_id, as_of=NOW, completed_stop_ids=[first]
+        )
+    )
+    r.send(_down(r.stop_node(2)))
+    candidate_id = r.pending()[0].candidate_plan_id
+    assert r.deps.execution_states.get(candidate_id) is None
+    r.deps.execution_states.save(
+        factories.execution_state(
+            plan_id=r.active.plan_id,
+            as_of=NOW + timedelta(minutes=5),
+            completed_stop_ids=[first, second],
+        )
+    )
+
+    r.resume({"decision": "APPROVED"})
+
+    saved = r.deps.execution_states.get(candidate_id)
+    assert saved is not None and saved.completed_stop_ids == [first, second]
+
+
 def test_progress_nobody_reported_is_not_stored_for_the_new_plan(r) -> None:
     r.send(_down(r.stop_node()))
     candidate_id = r.pending()[0].candidate_plan_id

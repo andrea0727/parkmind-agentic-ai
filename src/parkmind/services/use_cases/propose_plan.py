@@ -49,11 +49,9 @@ class ProposePlanUseCase:
         see database/migrations/versions/0001_mvp_schema.py).
 
         A replan passes its ``diff`` against the active plan and the event that
-        triggered it. The progress *reported* for the base plan (completed or skipped
-        stops, walked minutes) is saved for the new plan id in the same transaction, so
-        it survives the plan swap. Progress that was only assumed (an on-schedule party,
-        see ``effective_execution_state``) is deliberately not stored: it is derived
-        again from the new plan and the clock on the next replan.
+        triggered it. Progress is not touched here: the guests may still report some
+        before they decide, so ``ResolveProposalUseCase`` carries the base plan's
+        reported progress over to the new plan id when the proposal is approved.
         """
         proposal = Proposal(
             proposal_id=proposal_id,
@@ -69,14 +67,5 @@ class ProposePlanUseCase:
         with open_deps(self._deps_factory) as deps, deps.transaction():
             deps.proposals.supersede_pending(thread_id, at=at)
             deps.plans.save(thread_id, plan)
-            reported = (
-                deps.execution_states.get(proposal.base_plan_id)
-                if proposal.base_plan_id != plan.plan_id
-                else None
-            )
-            if reported is not None:
-                deps.execution_states.save(
-                    reported.model_copy(update={"plan_id": plan.plan_id})
-                )
             deps.proposals.save(thread_id, proposal)
         return proposal

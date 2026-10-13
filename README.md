@@ -285,9 +285,12 @@ poetry run python scripts/run_monitor.py --no-collect   # detect on what is alre
   `BEHIND_SCHEDULE` is recorded once per late stop, when the delay reaches 15
   minutes, and only while the party's progress is being tracked. That one event is
   final for the stop: if the guests reject or ignore the replan it proposes, the
-  same stop does not raise another one, however late the party gets. Until
-  something records `completed_stop_ids` (P0-34, #48), the event is not raised in
-  production.
+  same stop does not raise another one, however late the party gets. It needs
+  progress *reported* by the party (`completed_stop_ids` or `skipped_stop_ids`);
+  assumed progress never counts. Until something records it (reporting a stop as
+  done: #48, P0-35b), the event is not raised in production. A replan's reported
+  progress is carried over to the new plan when its proposal is approved, so what
+  the guests report while deciding is not lost.
 - **Confirmation first (§25, C10).** A doubtful guest report, or a fatigue report
   for a guest with a walking limit (or whose limit can't be read), is set aside
   until the guests confirm it; the rest of the batch goes on.

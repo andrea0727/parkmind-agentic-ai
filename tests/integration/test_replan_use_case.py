@@ -13,11 +13,12 @@ import pytest
 from planning_support import NOW, factory_for
 from test_replanning_graph import _down, _Replanning
 
-from parkmind.core.contracts import AttractionStatus, StopKind
+from parkmind.core.contracts import ApprovalStatus, AttractionStatus, StopKind
 from parkmind.services.use_cases.load_context import LoadContextUseCase
 from parkmind.services.use_cases.planning_deps import PlanningUnavailableError
 from parkmind.services.use_cases.propose_plan import ProposePlanUseCase
 from parkmind.services.use_cases.replan import ReplanRequest, ReplanUseCase
+from parkmind.services.use_cases.resolve_proposal import ResolveProposalUseCase
 
 
 @pytest.fixture
@@ -139,6 +140,12 @@ def _propose_replan(r: _Replanning, plan: Any) -> None:
     )
 
 
+def _approve_replan(r: _Replanning, plan: Any) -> None:
+    ResolveProposalUseCase(factory_for(r.deps)).execute(
+        "t1", f"prop_{plan.plan_id}", ApprovalStatus.APPROVED, at=NOW
+    )
+
+
 def test_a_second_replan_assumes_the_party_is_still_on_schedule(r) -> None:
     first = _use_case(r).execute(_request(r))
     assert first.result.plan is not None, first.result.fatal_error
@@ -170,6 +177,7 @@ def test_reported_progress_survives_the_plan_swap_and_is_still_trusted(r) -> Non
     first = _use_case(r).execute(_request(r))
     assert first.result.plan is not None, first.result.fatal_error
     _propose_replan(r, first.result.plan)
+    _approve_replan(r, first.result.plan)
 
     second = _use_case(r).execute(
         _request(r, plan=first.result.plan, now=NOW + timedelta(hours=4))
