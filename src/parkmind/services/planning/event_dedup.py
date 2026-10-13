@@ -24,8 +24,10 @@ Two kinds of identity:
   stop and its planned departure (``timestamp - minutes_behind``), and the
   thread holds it once, however long the party stays behind: every repeat would
   supersede the replan proposal the first one asked for. An approved replan
-  moves the departures, so falling behind on the new plan is a new event. The id
-  is ``"BEHIND_SCHEDULE:{stop}@{departure}"``.
+  moves the departures, so falling behind on the new plan is a new event. The
+  detector only emits it from the policy's threshold, so the one event held is
+  always the crossing that replans, never a small delay. The id is
+  ``"BEHIND_SCHEDULE:{stop}@{departure}"``.
 * **Moments** -- every other type. The same (type, subject) within ``window`` of
   one already held is a duplicate; otherwise the id is
   ``"{TYPE}:{subject}:{UTC minute}"``. Subjects: the attraction (wait spike),
