@@ -193,3 +193,27 @@ def test_fixture_label_cases_get_exactly_the_expected_verdict(case):
         mislabelled_preferences(case["output"], labelled, set(labelled) & others)
         == case["label_errors"]
     )
+
+
+# --- review #90: fractions, full-width digits, 12-hour times -----------------------
+
+
+def test_a_vulgar_fraction_is_a_numeral_by_its_value():
+    assert numerals("a ½ hour wait") == {"0.5"}
+    assert ungrounded_numerals("a ½ hour wait", PAYLOAD) == ["0.5"]
+
+
+def test_full_width_digits_are_ordinary_digits():
+    assert numerals("at 14:０５, a ２５ minute wait") == {"14:05", "25"}
+    assert ungrounded_numerals("at 14:０５, a ２５ minute wait", PAYLOAD) == []
+
+
+def test_a_12_hour_time_is_not_grounded_by_the_24_hour_one():
+    payload = '{"arrives": "15:00"}'
+
+    assert ungrounded_numerals("Meet at 3 PM.", payload) == ["3"]
+
+
+def test_grouped_thousands_can_only_be_rejected():
+    """Read as 1 and 500: safe, it never lets a figure through."""
+    assert numerals("1,500 steps") == {"1", "500"}

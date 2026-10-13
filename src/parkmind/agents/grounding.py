@@ -7,13 +7,18 @@ A numeral is a clock time (``14:05``, ``9:05``) or a number (``25``, ``0.8``),
 including digits written against letters (``15min``). Both sides are normalized the
 same way -- ``25`` and ``25.0`` are one numeral, ``09:05`` and ``9:05`` too -- and
 nothing else is allowed: a bare ``14`` is not grounded by ``14:05``, and ``7`` is
-not grounded by ``7.4``. Numbers written in words are not numerals.
+not grounded by ``7.4``. Numbers written in words are not numerals. Text is
+NFKC-normalized first, so full-width digits are ordinary digits, and a vulgar
+fraction or other numeric symbol (``½``, ``²``) counts by its value (``0.5``, ``2``).
+Grouped thousands (``1,500``) and exponents (``1e3``) read as separate numbers:
+that can only reject a figure, never let one through.
 
 ``mislabelled_preferences`` is the second check: a preference weight's figure must
 say where it comes from -- stated or learned -- as section 40 requires.
 """
 
 import re
+import unicodedata
 from collections.abc import Collection, Mapping
 from decimal import Decimal, InvalidOperation
 
@@ -30,8 +35,20 @@ def _number(text: str) -> str:
     return format(value, "f")
 
 
+def _plain(text: str) -> str:
+    """Numeric symbols spelled as their value, then NFKC (full-width digits -> 0-9)."""
+    spelled = "".join(
+        f" {_number(str(unicodedata.numeric(ch)))} "
+        if unicodedata.category(ch) == "No"
+        else ch
+        for ch in text
+    )
+    return unicodedata.normalize("NFKC", spelled)
+
+
 def numerals(text: str) -> set[str]:
     """The normalized clock times and numbers in ``text``."""
+    text = _plain(text)
     found = {f"{int(hours)}:{minutes}" for hours, minutes in _TIME.findall(text)}
     without_times = _TIME.sub(" ", text)
     found.update(_number(match) for match in _NUMBER.findall(without_times))
@@ -59,7 +76,7 @@ def mislabelled_preferences(
     it) cannot be told apart from the number alone and are not checked.
     """
     errors: list[str] = []
-    for sentence in _SENTENCE.split(output):
+    for sentence in _SENTENCE.split(_plain(output)):
         times = [m.span() for m in _TIME.finditer(sentence)]
         labels = [(m.start(), m.group(1).lower()) for m in _LABEL.finditer(sentence)]
         for match in _NUMBER.finditer(sentence):
