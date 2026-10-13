@@ -111,5 +111,26 @@
         "90"
       ]
     }
+  ],
+  "label_cases": [
+    {
+      "name": "labels right, including two weights in one sentence",
+      "output": "Your thrill preference of 0.8 (stated) and a learned 0.33 queue weight (learned) shaped the order.",
+      "label_errors": []
+    },
+    {
+      "name": "a learned weight called stated",
+      "output": "You told us waiting matters: 0.33 (stated).",
+      "label_errors": [
+        "0.33 is learned, not stated"
+      ]
+    },
+    {
+      "name": "a stated weight with no label",
+      "output": "Thrill counts a lot for you (0.8).",
+      "label_errors": [
+        "0.8 needs its label (stated)"
+      ]
+    }
   ]
 }

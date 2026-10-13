@@ -8,9 +8,13 @@ including digits written against letters (``15min``). Both sides are normalized 
 same way -- ``25`` and ``25.0`` are one numeral, ``09:05`` and ``9:05`` too -- and
 nothing else is allowed: a bare ``14`` is not grounded by ``14:05``, and ``7`` is
 not grounded by ``7.4``. Numbers written in words are not numerals.
+
+``mislabelled_preferences`` is the second check: a preference weight's figure must
+say where it comes from -- stated or learned -- as section 40 requires.
 """
 
 import re
+from collections.abc import Collection, Mapping
 from decimal import Decimal, InvalidOperation
 
 _TIME = re.compile(r"(?<!\d)(?<!\d:)(\d{1,2}):(\d{2})(?!\d)(?!:\d)")
@@ -37,3 +41,39 @@ def numerals(text: str) -> set[str]:
 def ungrounded_numerals(output: str, payload: str) -> list[str]:
     """The numerals in ``output`` that ``payload`` does not contain, sorted."""
     return sorted(numerals(output) - numerals(payload))
+
+
+_SENTENCE = re.compile(r"(?<=[.!?;])\s+|\n+")
+_LABEL = re.compile(r"\b(stated|learned)\b", re.IGNORECASE)
+
+
+def mislabelled_preferences(
+    output: str, labelled: Mapping[str, str], ambiguous: Collection[str] = ()
+) -> list[str]:
+    """Preference figures whose stated/learned label is missing or wrong (section 40).
+
+    ``labelled`` maps a weight's normalized value to its source (``stated`` or
+    ``learned``). Wherever the output writes one of those values, the nearest of the
+    words "stated" / "learned" in the same sentence must be that source. Values in
+    ``ambiguous`` (also a stop figure, or two weights of different sources sharing
+    it) cannot be told apart from the number alone and are not checked.
+    """
+    errors: list[str] = []
+    for sentence in _SENTENCE.split(output):
+        times = [m.span() for m in _TIME.finditer(sentence)]
+        labels = [(m.start(), m.group(1).lower()) for m in _LABEL.finditer(sentence)]
+        for match in _NUMBER.finditer(sentence):
+            if any(start <= match.start() < end for start, end in times):
+                continue
+            value = _number(match.group())
+            source = labelled.get(value)
+            if source is None or value in ambiguous:
+                continue
+            nearest = min(
+                labels, key=lambda label: abs(label[0] - match.start()), default=None
+            )
+            if nearest is None:
+                errors.append(f"{value} needs its label ({source})")
+            elif nearest[1] != source:
+                errors.append(f"{value} is {source}, not {nearest[1]}")
+    return errors

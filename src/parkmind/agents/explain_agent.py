@@ -7,8 +7,9 @@ preference weights, labelled stated or learned -- and returns an
 the payload (``agents/grounding.py``).
 
 ``explain_grounded`` is section 40's safety path [C17]: at most two calls -- a
-schema failure or an ungrounded numeral gets one retry, with the errors or the
-numbers listed -- then the deterministic template. A narrator that cannot be
+schema failure, an ungrounded numeral or a preference figure without its right
+stated/learned label gets one retry, with the errors listed -- then the
+deterministic template. A narrator that cannot be
 called (no key, a network error, anything) goes straight to the template, so
 EXPLAIN never fails a plan. Logs carry counts and error types, never the payload
 or the model's text [C19].
@@ -16,7 +17,7 @@ or the model's text [C19].
 
 import logging
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal, Protocol
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -24,9 +25,16 @@ from pydantic import SecretStr, ValidationError
 
 from parkmind.agents.explain_prompt import EXPLAIN_PROMPT_VERSION, EXPLAIN_SYSTEM_PROMPT
 from parkmind.agents.explain_schema import ExplanationDraft
-from parkmind.agents.grounding import ungrounded_numerals
+from parkmind.agents.grounding import (
+    mislabelled_preferences,
+    numerals,
+    ungrounded_numerals,
+)
 from parkmind.config.settings import settings
-from parkmind.services.use_cases.explain_plan import PreparedExplanation
+from parkmind.services.use_cases.explain_plan import (
+    ExplanationPayload,
+    PreparedExplanation,
+)
 
 __all__ = [
     "EXPLAIN_SDK_RETRIES",
@@ -155,6 +163,24 @@ def _schema_errors(exc: ValidationError) -> str:
     )
 
 
+def _preference_labels(payload: ExplanationPayload) -> tuple[dict[str, str], set[str]]:
+    """Each stated/learned weight's figure -> its source, and the figures too ambiguous
+    to check: also a stop figure, or shared by weights of different sources."""
+    others = numerals(replace(payload, preferences=[]).to_json())
+    sources: dict[str, set[str]] = {}
+    for signal in payload.preferences:
+        for value in numerals(str(signal.value)):
+            sources.setdefault(value, set()).add(signal.source)
+    labelled: dict[str, str] = {}
+    ambiguous: set[str] = set()
+    for value, found in sources.items():
+        if value in others or len(found) > 1:
+            ambiguous.add(value)
+        elif (source := next(iter(found))) in ("stated", "learned"):
+            labelled[value] = source
+    return labelled, ambiguous
+
+
 def explain_grounded(
     narrator: PlanNarrator | None, prepared: PreparedExplanation
 ) -> GroundedExplanation:
@@ -162,6 +188,7 @@ def explain_grounded(
     if narrator is None:
         return _template(prepared, 0)
     payload_json = prepared.payload.to_json()
+    labelled, ambiguous = _preference_labels(prepared.payload)
     hint: str | None = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
@@ -182,16 +209,30 @@ def explain_grounded(
             logger.warning("explain: attempt %d did not match the schema", attempt)
             continue
         ungrounded = ungrounded_numerals(draft.text, payload_json)
-        if not ungrounded:
-            return GroundedExplanation(
-                draft.text, "llm", attempt, EXPLAIN_PROMPT_VERSION
+        if ungrounded:
+            hint = (
+                "These numbers are not in the payload: "
+                + ", ".join(ungrounded)
+                + ". Use only figures that appear in the payload, exactly as given."
             )
-        hint = (
-            "These numbers are not in the payload: "
-            + ", ".join(ungrounded)
-            + ". Use only figures that appear in the payload, exactly as given."
-        )
-        logger.warning(
-            "explain: attempt %d had %d ungrounded numeral(s)", attempt, len(ungrounded)
-        )
+            logger.warning(
+                "explain: attempt %d had %d ungrounded numeral(s)",
+                attempt,
+                len(ungrounded),
+            )
+            continue
+        mislabelled = mislabelled_preferences(draft.text, labelled, ambiguous)
+        if mislabelled:
+            hint = (
+                "Label each preference figure by where it comes from: "
+                + "; ".join(mislabelled)
+                + "."
+            )
+            logger.warning(
+                "explain: attempt %d had %d mislabelled preference figure(s)",
+                attempt,
+                len(mislabelled),
+            )
+            continue
+        return GroundedExplanation(draft.text, "llm", attempt, EXPLAIN_PROMPT_VERSION)
     return _template(prepared, MAX_ATTEMPTS)

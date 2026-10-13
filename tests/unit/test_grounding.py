@@ -8,7 +8,11 @@ from pathlib import Path
 import factories
 import pytest
 
-from parkmind.agents.grounding import numerals, ungrounded_numerals
+from parkmind.agents.grounding import (
+    mislabelled_preferences,
+    numerals,
+    ungrounded_numerals,
+)
 from parkmind.core.contracts import CheckResult, PlanDiff
 from parkmind.services.use_cases.explain_plan import (
     explain_plan,
@@ -141,3 +145,51 @@ def test_fixture_outputs_get_exactly_the_expected_verdict(case):
     payload = json.dumps(FIXTURE["payload"], ensure_ascii=False, indent=1)
 
     assert ungrounded_numerals(case["output"], payload) == case["ungrounded"]
+
+
+# --- the stated/learned label check (review #90, point 3) ---------------------------
+
+LABELLED = {"0.8": "stated", "0.33": "learned"}
+
+
+def test_labels_that_match_their_source_pass():
+    text = "Thrill matters to you, 0.8 (stated); waiting weighs 0.33, which we learned."
+
+    assert mislabelled_preferences(text, LABELLED) == []
+
+
+def test_a_wrong_or_missing_label_is_caught():
+    assert mislabelled_preferences("Waiting weighs 0.33 (stated).", LABELLED) == [
+        "0.33 is learned, not stated"
+    ]
+    assert mislabelled_preferences("Thrill weighs 0.8.", LABELLED) == [
+        "0.8 needs its label (stated)"
+    ]
+
+
+def test_an_ambiguous_figure_is_not_checked():
+    """0.8 is also a stop's preference score here: the number alone can't tell which."""
+    assert mislabelled_preferences("Thrill weighs 0.8.", LABELLED, {"0.8"}) == []
+
+
+def test_figures_unrelated_to_preferences_need_no_label():
+    assert mislabelled_preferences("A 20 minute wait at 10:33.", LABELLED) == []
+
+
+LABEL_CASES = FIXTURE["label_cases"]
+
+
+@pytest.mark.parametrize("case", LABEL_CASES, ids=[c["name"] for c in LABEL_CASES])
+def test_fixture_label_cases_get_exactly_the_expected_verdict(case):
+    payload = FIXTURE["payload"]
+    labelled = {
+        str(p["value"]): p["source"]
+        for p in payload["preferences"]
+        if p["source"] in ("stated", "learned")
+    }
+    others = numerals(json.dumps({**payload, "preferences": []}))
+
+    assert (
+        mislabelled_preferences(case["output"], labelled, set(labelled) & others)
+        == case["label_errors"]
+    )

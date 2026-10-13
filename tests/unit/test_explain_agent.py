@@ -113,3 +113,54 @@ def test_logs_carry_neither_the_payload_nor_the_model_text(caplog):
     assert logged
     for secret in ("Space Mountain", "45", INVENTED):
         assert secret not in logged
+
+
+# --- stated/learned labels (review #90, point 3) ------------------------------------
+
+
+def _prepared_with_preferences() -> PreparedExplanation:
+    from parkmind.core.contracts import (
+        EventThresholds,
+        FairnessConfig,
+        GroupObjective,
+        HardConstraintSet,
+        PreferenceSource,
+    )
+
+    objective = GroupObjective(
+        objective_version="t",
+        weights={"affinity:thrill": 0.8, "lambda_queue": 0.33},
+        weight_provenance={
+            "affinity:thrill": PreferenceSource.STATED,
+            "lambda_queue": PreferenceSource.LEARNED,
+        },
+        hard_constraints=HardConstraintSet(),
+        fairness=FairnessConfig(lambda_fairness=0.3, min_satisfaction_floor=0.0),
+        event_thresholds=EventThresholds(),
+    )
+    check = CheckResult(valid=True)
+    return PreparedExplanation(
+        explanation_payload(PLAN, check, NAMES, objective=objective),
+        explain_plan(PLAN, check, NAMES),
+    )
+
+
+def test_a_learned_weight_called_stated_is_retried_then_falls_back():
+    wrong = "Space Mountain first, since waiting matters to you: 0.33 (stated)."
+    narrator = _Scripted({"text": wrong}, {"text": wrong})
+
+    result = explain_grounded(narrator, _prepared_with_preferences())
+
+    assert result.source == "template"
+    assert (
+        narrator.hints[1] is not None
+        and "0.33 is learned, not stated" in narrator.hints[1]
+    )
+
+
+def test_a_correctly_labelled_answer_is_used():
+    right = "Space Mountain first: thrill 0.8 (stated), waiting 0.33 (learned)."
+
+    result = explain_grounded(_Scripted({"text": right}), _prepared_with_preferences())
+
+    assert result.source == "llm"
