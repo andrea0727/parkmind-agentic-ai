@@ -18,10 +18,17 @@ A proposal can stop being PENDING while the guests are still deciding: a
 significant event supersedes it (section 9 [C18], P0-33). Deciding on it then
 raises ``ProposalNoLongerPendingError`` and changes nothing.
 """
-
+from __future__ import annotations
 from datetime import datetime
+from typing import Sequence
 
-from parkmind.core.contracts import ApprovalStatus, Proposal, RejectionReason
+from parkmind.core.contracts import (
+    ApprovalStatus,
+    Proposal,
+    RejectionReason,
+    BehaviorEventType,
+    BehaviorEntry,
+)
 from parkmind.services.ports import InvalidStateTransitionError
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
@@ -51,6 +58,7 @@ class ResolveProposalUseCase:
         status: ApprovalStatus,
         *,
         at: datetime,
+        guest_ids: Sequence[str] = (),
         rejection_reason: RejectionReason | None = None,
     ) -> Proposal:
         with open_deps(self._deps_factory) as deps, deps.transaction():
@@ -69,6 +77,8 @@ class ResolveProposalUseCase:
                 raise ProposalNoLongerPendingError(
                     proposal_id, current.approval_status if current else None
                 ) from exc
+            
+            # Solo activa si es explícitamente APPROVED
             if status is ApprovalStatus.APPROVED:
                 deps.plans.activate(thread_id, proposal.candidate_plan_id, at=at)
                 if proposal.base_plan_id != proposal.candidate_plan_id:
@@ -79,4 +89,28 @@ class ResolveProposalUseCase:
                                 update={"plan_id": proposal.candidate_plan_id}
                             )
                         )
+            
+            # Registrar el evento en el comportamiento (Behavior Log)
+            event_type_map = {
+                ApprovalStatus.APPROVED: BehaviorEventType.PROPOSAL_ACCEPTED,
+                ApprovalStatus.REJECTED: BehaviorEventType.PROPOSAL_REJECTED,
+                ApprovalStatus.EDITED: BehaviorEventType.PROPOSAL_EDITED,
+            }
+            event_type = event_type_map[status]
+
+            # Si no se pasan guest_ids explícitos, usar thread_id como id de sujeto por defecto
+            target_guests = guest_ids if guest_ids else [thread_id]
+
+            for guest_id in target_guests:
+                entry = BehaviorEntry(
+                    entry_id=f"beh_{proposal_id}_{status.value}_{guest_id}",
+                    event_type=event_type,
+                    proposal_id=proposal_id,
+                    plan_id=proposal.candidate_plan_id,
+                    decision=status.value,
+                    rejection_reason=rejection_reason,
+                    timestamp=at,
+                )
+                deps.behavior.append(guest_id, entry)
+
         return proposal

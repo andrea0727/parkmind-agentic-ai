@@ -6,7 +6,7 @@ import factories
 import pytest
 from planning_support import factory_for, make_deps
 
-from parkmind.core.contracts import ApprovalStatus
+from parkmind.core.contracts import ApprovalStatus, BehaviorEventType, RejectionReason
 from parkmind.services.use_cases.resolve_proposal import (
     ProposalNoLongerPendingError,
     ResolveProposalUseCase,
@@ -140,3 +140,47 @@ def test_approving_an_initial_plan_leaves_its_own_progress_alone(deps):
     )
 
     assert deps.execution_states.get("plan_1") == state
+
+def test_resolve_proposal_approve_activates_plan_and_logs_behavior(deps):
+    use_case = ResolveProposalUseCase(factory_for(deps))
+    resolved = use_case.execute(
+        "t1", "prop_1", ApprovalStatus.APPROVED, at=NOW, guest_ids=["guest-1"]
+    )
+
+    assert resolved.approval_status == ApprovalStatus.APPROVED
+    assert deps.plans.get_active("t1") is not None
+
+    entries = deps.behavior.get_by_guest("guest-1")
+    assert len(entries) == 1
+    assert entries[0].event_type == BehaviorEventType.PROPOSAL_ACCEPTED
+
+
+def test_resolve_proposal_reject_stores_reason_and_does_not_activate(deps):
+    use_case = ResolveProposalUseCase(factory_for(deps))
+    resolved = use_case.execute(
+        "t1", "prop_1", ApprovalStatus.REJECTED, at=NOW, 
+        rejection_reason=RejectionReason.TOO_MUCH_WALKING, guest_ids=["guest-1"]
+    )
+
+    assert resolved.approval_status == ApprovalStatus.REJECTED
+    assert resolved.rejection_reason == RejectionReason.TOO_MUCH_WALKING
+    assert deps.plans.get_active("t1") is None
+
+    entries = deps.behavior.get_by_guest("guest-1")
+    assert len(entries) == 1
+    assert entries[0].event_type == BehaviorEventType.PROPOSAL_REJECTED
+    assert entries[0].rejection_reason == RejectionReason.TOO_MUCH_WALKING
+
+
+def test_resolve_proposal_edit_resolves_as_edited_and_does_not_activate(deps):
+    use_case = ResolveProposalUseCase(factory_for(deps))
+    resolved = use_case.execute(
+        "t1", "prop_1", ApprovalStatus.EDITED, at=NOW, guest_ids=["guest-1"]
+    )
+
+    assert resolved.approval_status == ApprovalStatus.EDITED
+    assert deps.plans.get_active("t1") is None
+
+    entries = deps.behavior.get_by_guest("guest-1")
+    assert len(entries) == 1
+    assert entries[0].event_type == BehaviorEventType.PROPOSAL_EDITED
