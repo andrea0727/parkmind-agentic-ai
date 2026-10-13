@@ -20,7 +20,12 @@ from parkmind.core.contracts import (
     RuleId,
 )
 from parkmind.services.use_cases.planner_queries import PlannerQueries
-from parkmind.tools.planner_tools import MAX_FORECASTS, MAX_GUESTS, MAX_STOPS
+from parkmind.tools.planner_tools import (
+    MAX_EVENTS,
+    MAX_FORECASTS,
+    MAX_GUESTS,
+    MAX_STOPS,
+)
 from parkmind.tools.registry import build_registry
 
 PLANNER_TOOLS = {
@@ -636,3 +641,39 @@ def test_a_location_off_the_park_map_is_an_invalid_argument() -> None:
 
     assert _rejected(result) == ["execution_state.current_location_node_id"]
     assert result.structured_content["error"]["retryable"] is False
+
+
+def test_progress_about_stops_the_plan_does_not_have_is_refused() -> None:
+    """Review #89: ``["ghost"]`` would also switch off the on-schedule assumption."""
+    registry = Deps().registry()
+    plan = _built_plan(registry)
+    ghost = factories.execution_state(
+        plan_id=plan["plan_id"], completed_stop_ids=["ghost"]
+    ).model_dump(mode="json")
+
+    result = call_tool(
+        registry,
+        "planner.replan",
+        _args(plan=plan, now=REPLAN_AT.isoformat(), execution_state=ghost),
+    )
+
+    assert "execution_state" in _rejected(result)
+
+
+def test_replan_inputs_are_capped() -> None:
+    registry = Deps().registry()
+    plan = _built_plan(registry)
+    stop = plan["stops"][0]
+    too_long = {**plan, "stops": [stop] * (MAX_STOPS + 1)}
+    report = _down(SPACE_MOUNTAIN)
+
+    assert "plan" in _rejected(
+        call_tool(registry, "planner.replan", _args(plan=too_long))
+    )
+    assert "events" in _rejected(
+        call_tool(
+            registry,
+            "planner.replan",
+            _args(plan=plan, events=[report] * (MAX_EVENTS + 1)),
+        )
+    )

@@ -141,12 +141,19 @@ class ReplanRequest(CheckPlanRequest):
 
     @field_validator("execution_state")
     @classmethod
-    def _same_plan(
+    def _progress_of_this_plan(
         cls, state: PlanExecutionState | None, info: ValidationInfo
     ) -> PlanExecutionState | None:
+        """For the plan that is sent, and only about its stops: an unknown stop id would
+        also switch off the on-schedule assumption without saying so."""
         plan = info.data.get("plan")
-        if state is not None and plan is not None and state.plan_id != plan.plan_id:
+        if state is None or plan is None:
+            return state
+        if state.plan_id != plan.plan_id:
             raise ValueError("execution_state must be for the plan that is sent")
+        stops = {s.node_id for s in plan.stops}
+        if not {*state.completed_stop_ids, *state.skipped_stop_ids} <= stops:
+            raise ValueError("completed and skipped stops must be stops of the plan")
         return state
 
 
