@@ -252,3 +252,44 @@ def test_a_stale_context_is_refreshed_and_the_fresh_one_is_kept_for_state(r, mon
 
     assert calls, "a stale snapshot must be reloaded before a plan is trusted"
     assert outcome.live_context.snapshot_id == "fresh"
+
+
+# -- a caller without the thread (planner.replan, P0-27) ------------------------------
+
+
+def test_progress_sent_inline_replaces_the_stored_one(r) -> None:
+    first, second = (s.node_id for s in r.active.stops[:2])
+    r.deps.execution_states.save(
+        factories.execution_state(
+            plan_id=r.active.plan_id, as_of=NOW, completed_stop_ids=[first]
+        )
+    )
+    sent = factories.execution_state(
+        plan_id=r.active.plan_id, as_of=NOW, completed_stop_ids=[first, second]
+    )
+
+    outcome = _use_case(r).execute(_request(r, execution_state=sent))
+
+    assert outcome.execution_state.completed_stop_ids == [first, second]
+
+
+def test_events_sent_inline_are_applied_and_never_recorded(r) -> None:
+    ahead = [s for s in r.active.stops if s.arrival_time > NOW and s.kind is StopKind.ATTRACTION]
+    closed = ahead[0].node_id
+    event = _down(closed, minutes=1).model_copy(
+        update={"timestamp": r.h.state()["live_context"].retrieved_at + timedelta(minutes=1)}
+    )
+    recorded = r.deps.events.list_for_thread("t1")
+
+    outcome = _use_case(r).execute(_request(r, events=[event]))
+
+    assert outcome.result.valid, outcome.result.fatal_error
+    assert closed not in _attractions(outcome.result.plan, after=NOW)
+    assert r.deps.events.list_for_thread("t1") == recorded
+
+
+def test_progress_for_another_plan_is_refused(r) -> None:
+    other = factories.execution_state(plan_id="someone_elses_plan", completed_stop_ids=[])
+
+    with pytest.raises(ValueError, match="execution_state is for plan"):
+        _request(r, execution_state=other)

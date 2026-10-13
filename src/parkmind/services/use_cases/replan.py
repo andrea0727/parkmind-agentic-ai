@@ -21,12 +21,19 @@ Two things the graph's state cannot hold are derived here from the repositories:
   are frozen, so the replan neither re-sends the party to them nor forgets what they
   walked. ``as_of`` never lies before ``now``. That assumption is made again on every
   replan, from the plan being replanned and the clock: it is never stored, so a later
-  replan never inherits an earlier, stale one (``ProposePlanUseCase`` carries over only
-  what was reported).
+  replan never inherits an earlier, stale one (``ResolveProposalUseCase`` carries over
+  only what was reported, on approval).
 * **Reported availability.** A report the thread recorded after the context's
   snapshot (for example a guest saying a ride is closed) is applied to the context's
   statuses, so the replan and the CHECK that follows see the same attractions as
   unavailable, until a newer snapshot says otherwise.
+
+A caller without the graph's thread -- ``planner.replan`` (P0-27), whose clients
+send the plan, its progress and the events inline (section 31) -- passes them in
+``ReplanRequest.execution_state`` and ``ReplanRequest.events``: the given progress
+replaces the repository's (the on-schedule assumption still applies to it), and the
+given events are applied on top of the ones the thread recorded. The graph leaves
+both at their defaults.
 """
 
 import logging
@@ -112,6 +119,17 @@ class ReplanRequest:
     now: datetime
     rest_first: bool = False
     """A confirmed GUEST_FATIGUE: open the new horizon with a REST stop (section 25)."""
+    execution_state: PlanExecutionState | None = None
+    """The plan's progress, sent by a caller without the thread; ``None``: the repository's."""
+    events: Sequence[Event] = ()
+    """Events to apply on top of the ones the thread recorded (a caller without the thread)."""
+
+    def __post_init__(self) -> None:
+        state = self.execution_state
+        if state is not None and state.plan_id != self.plan.plan_id:
+            raise ValueError(
+                f"execution_state is for plan {state.plan_id}, not {self.plan.plan_id}"
+            )
 
 
 @dataclass(frozen=True)
@@ -148,9 +166,13 @@ class ReplanUseCase:
                 deps, request.thread_id, request.accessibility_ref
             )
             events.extend(deps.events.list_for_thread(request.thread_id))
-            execution_state = effective_execution_state(
-                request.plan, deps.execution_states.get(request.plan.plan_id), request.now
+            events.extend(request.events)
+            stored = (
+                request.execution_state
+                if request.execution_state is not None
+                else deps.execution_states.get(request.plan.plan_id)
             )
+            execution_state = effective_execution_state(request.plan, stored, request.now)
             live_context = with_checks(
                 with_event_statuses(request.live_context, events),
                 party_checks(requirements, catalog, deps.knowledge),
