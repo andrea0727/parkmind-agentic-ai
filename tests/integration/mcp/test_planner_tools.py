@@ -25,12 +25,13 @@ from parkmind.tools.registry import build_registry
 PLANNER_TOOLS = {
     "planner.build_plan",
     "planner.check_plan",
+    "planner.replan",
     "planner.score_preferences",
     "planner.forecast_waits",
 }
 SPACE_MOUNTAIN = "b2260923-9315-40fd-9c6b-44dd811dbe64"
 BIG_THUNDER = "de3309ca-97d5-4211-bffe-739fed47e92f"
-WRITES = {"save", "activate", "resolve", "supersede_pending"}
+WRITES = {"save", "activate", "resolve", "supersede_pending", "record"}
 
 
 def _constraints(**overrides: Any) -> Any:
@@ -272,14 +273,23 @@ def test_no_tool_writes_plans_or_proposals() -> None:
     """Section 27 [C23]: no MCP tool can activate or mutate a plan -- every tool, once."""
     deps = Deps()
     plans, proposals = _Recording(deps.plans), _Recording(deps.proposals)
+    events = _Recording(deps.value.events)
+    states = _Recording(deps.value.execution_states)
     deps.value = deps.value.__class__(
-        **{**deps.value.__dict__, "plans": plans, "proposals": proposals}
+        **{
+            **deps.value.__dict__,
+            "plans": plans,
+            "proposals": proposals,
+            "events": events,
+            "execution_states": states,
+        }
     )
     registry = deps.registry()
     plan = _ok(call_tool(registry, "planner.build_plan", _args()))["data"]["plan"]
     arguments = {
         "planner.build_plan": _args(),
         "planner.check_plan": _args(plan=plan),
+        "planner.replan": _args(plan=plan),
         "planner.score_preferences": _args(),
         "planner.forecast_waits": {"attraction_ids": [SPACE_MOUNTAIN]},
         "data.get_walking_time": {
@@ -295,9 +305,9 @@ def test_no_tool_writes_plans_or_proposals() -> None:
     for name in names:
         _ok(call_tool(registry, name, arguments.get(name)))
 
-    assert len(names) == 14
-    assert not set(plans.calls) & WRITES, plans.calls
-    assert not set(proposals.calls) & WRITES, proposals.calls
+    assert len(names) == 15
+    for repository in (plans, proposals, events, states):
+        assert not set(repository.calls) & WRITES, repository.calls
 
 
 def _rejected(result: Any) -> list[str]:
