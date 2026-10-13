@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { auth } from "../api";
 import { useApp } from "../ctx";
 import { useDebug } from "../debug";
 import { FIXTURE } from "../fixture";
@@ -307,7 +308,7 @@ export function AssistantSheet() {
           <>
             <div className="welcome">
               <div className="em">💬</div>
-              <h4>{s.mode === "live" ? greet : `${greet} ${FIXTURE.guest_profile.display_name}`}</h4>
+              <h4>{s.mode === "live" ? (auth.username() ? `${greet}, ${auth.username()}` : greet) : `${greet} ${FIXTURE.guest_profile.display_name}`}</h4>
               <p>{t("welcome_desc")}</p>
             </div>
             {s.mode !== "live" && (

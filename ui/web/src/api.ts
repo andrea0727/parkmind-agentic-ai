@@ -109,6 +109,18 @@ export const auth = {
       return false;
     }
   },
+  /** Display name of the signed-in user: the JWT subject, capitalised. Null when auth is off or unreadable. */
+  username: (): string | null => {
+    try {
+      const token = sessionStorage.getItem(TOKEN_KEY);
+      if (!token) return null;
+      const body = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+      const sub = (JSON.parse(atob(body)) as { sub?: string }).sub;
+      return sub ? sub.charAt(0).toUpperCase() + sub.slice(1) : null;
+    } catch {
+      return null;
+    }
+  },
   clear: (): void => {
     try {
       sessionStorage.removeItem(TOKEN_KEY);

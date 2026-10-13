@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { auth } from "../api";
 import { useApp } from "../ctx";
 import { debug, useDebug, type ApiCall } from "../debug";
 import { FIXTURE } from "../fixture";
@@ -30,6 +31,11 @@ function LiveNote() {
 function greetWord(t: (k: string) => string) {
   const h = new Date().getHours();
   return h < 12 ? t("hi_morning") : h < 19 ? t("hi_afternoon") : t("hi_evening");
+}
+
+function greetLive(t: (k: string) => string) {
+  const name = auth.username();
+  return name ? `${greetWord(t)}, ${name}` : greetWord(t);
 }
 
 /* ---------------------------------------------------------------- Home */
@@ -65,7 +71,7 @@ export function HomeScreen() {
       </div>
       {live ? (
         <>
-          <h2 className="greet">{greetWord(t)}</h2>
+          <h2 className="greet">{greetLive(t)}</h2>
           <p className="subline">{FIXTURE.plan.park}</p>
         </>
       ) : (
