@@ -4,8 +4,12 @@
 CONTEXT, RESOLVE GROUP, BUILD PLAN (with the section 21 re-solve loop), CHECK --
 by calling the same use cases, and stops there: nothing is proposed, persisted
 or activated (section 27 [C23]: no MCP tool can activate or mutate a plan). The
-result is a *candidate* with its check. ``check_plan``, ``score_preferences``
-and ``forecast_waits`` expose one step each.
+result is a *candidate* with its check. ``replan`` does the same for the rest of
+a day the replanning graph would replan -- LOAD CONTEXT, RESOLVE GROUP (re-run),
+REPLAN with its CHECK of the whole day (the Replanner's final gate) -- from a
+plan, its progress and the events the client sends (section 31), and stops
+before DIFF's proposal. ``check_plan``,
+``score_preferences`` and ``forecast_waits`` expose one step each.
 
 Accessibility is passed by reference only [C19]: ``session_id`` (the SessionStore
 key, the graph's ``thread_id``) and the ``guest_ids`` with requirements on file,
@@ -16,7 +20,10 @@ coverage is incomplete and the check fails closed (rule 11).
 What leaves this use case never carries a requirement value: the checker's
 messages for rules 9 and 10 (walking, rest, heat; ride restrictions) quote the
 guest's limits, so those violations, and a re-solve failure that quotes them,
-are replaced by fixed sentences that keep the rule id and the stop.
+are replaced by fixed sentences that keep the rule id and the stop. A replan whose
+whole day fails the checker joins the checker's messages without their rule
+ids, so that failure keeps only its first sentence; the redacted ``check`` still
+names each rule and stop.
 """
 
 import re
@@ -27,16 +34,23 @@ from datetime import datetime, timedelta
 from parkmind.core.contracts import (
     CheckResult,
     ConstraintViolation,
+    Event,
     GroupObjective,
     GuestProfile,
     LiveContext,
     PartyConstraints,
     Plan,
+    PlanDiff,
+    PlanExecutionState,
     RuleId,
 )
 from parkmind.services.personalization.preference_scorer import PreferenceScores
 from parkmind.services.planning.park_graph import ParkGraph
-from parkmind.services.ports import ContextDataPort, WaitForecast
+from parkmind.services.ports import (
+    ContextDataPort,
+    RoutingNotFoundError,
+    WaitForecast,
+)
 from parkmind.services.use_cases.build_plan import BuildPlanUseCase
 from parkmind.services.use_cases.check_plan import CheckPlanUseCase
 from parkmind.services.use_cases.forecast import build_forecast_service
@@ -50,6 +64,11 @@ from parkmind.services.use_cases.planning_deps import (
     load_park,
     load_requirements,
     open_deps,
+)
+from parkmind.services.use_cases.replan import (
+    ProgressSource,
+    ReplanRequest,
+    ReplanUseCase,
 )
 from parkmind.services.use_cases.score_preferences import ScorePreferencesUseCase
 
@@ -73,6 +92,10 @@ _PRIVATE_FAILURE = re.compile(
     rf"^(Infeasible constraint set: ({'|'.join(r.value for r in _PRIVATE_RULES)})) - .*$",
     re.DOTALL,
 )
+_PRIVATE_DAY_FAILURE = re.compile(
+    r"^(The replanned day does not pass the constraint checker): .*$", re.DOTALL
+)
+"""``Replanner``'s full-day gate: the violations' messages, joined, with no rule id."""
 
 
 def public_violation(violation: ConstraintViolation) -> ConstraintViolation:
@@ -92,7 +115,8 @@ def public_check(result: CheckResult) -> CheckResult:
 def public_failure(failure: str | None) -> str | None:
     if failure is None:
         return None
-    return _PRIVATE_FAILURE.sub(r"\1 (details stay in the guest's session)", failure)
+    redacted = r"\1 (details stay in the guest's session)"
+    return _PRIVATE_DAY_FAILURE.sub(redacted, _PRIVATE_FAILURE.sub(redacted, failure))
 
 
 @dataclass(frozen=True)
@@ -115,6 +139,60 @@ class PlanCandidate:
     """``True`` when the re-solve loop reached a plan the checker passes."""
     failure: str | None
     """Why the re-solve loop found no valid plan (redacted), when it did not."""
+    context: ContextStamp
+
+
+class UnknownLocationError(ValueError):
+    """The location a client sent is not on the park map: its mistake, not an outage."""
+
+    field = "execution_state.current_location_node_id"
+
+
+@dataclass(frozen=True)
+class ReplanProgress:
+    """Which stops the replan kept and where it started from.
+
+    Never the walking minutes [C19]: a stored execution state carries the guest's
+    walked minutes and the fatigue cap ``EventPolicy`` derived from their daily
+    limit, and the two together give the limit back.
+    """
+
+    completed_stop_ids: list[str]
+    skipped_stop_ids: list[str]
+    current_location_node_id: str | None
+    as_of: datetime
+    source: ProgressSource
+    """``sent`` by the client, ``stored`` for the plan, or ``assumed`` on schedule."""
+
+
+def public_progress(
+    state: PlanExecutionState, source: ProgressSource
+) -> ReplanProgress:
+    return ReplanProgress(
+        completed_stop_ids=list(state.completed_stop_ids),
+        skipped_stop_ids=list(state.skipped_stop_ids),
+        current_location_node_id=state.current_location_node_id,
+        as_of=state.as_of,
+        source=source,
+    )
+
+
+@dataclass(frozen=True)
+class ReplanCandidate:
+    plan: Plan | None
+    """The new candidate (completed stops + new horizon), a new plan id; ``None`` if none."""
+    diff: PlanDiff | None
+    """What changed against the plan that was sent."""
+    check: CheckResult | None
+    """The Replanner's whole-day check (completed stops + horizon, walking already done
+    counted), redacted: present when the horizon reached it, also when the day fails, so
+    every violation keeps its rule id and stop. ``None`` when the re-solve loop failed."""
+    valid: bool
+    unmet_must_do: list[str]
+    failure: str | None
+    """Why no valid replan was found (redacted), when none was."""
+    progress: ReplanProgress
+    """The progress the replan started from, without its walking minutes [C19]."""
     context: ContextStamp
 
 
@@ -167,6 +245,7 @@ class PlannerQueries:
         )
         self._build = BuildPlanUseCase(deps_factory)
         self._check = CheckPlanUseCase(deps_factory)
+        self._replan = ReplanUseCase(deps_factory)
 
     def build_plan(
         self,
@@ -210,6 +289,76 @@ class PlannerQueries:
             failure=public_failure(built.failure),
             context=_stamp(built.live_context, loaded.source, now),
         )
+
+    def replan(
+        self,
+        *,
+        session_id: str,
+        plan: Plan,
+        constraints: PartyConstraints,
+        profiles: Sequence[GuestProfile],
+        guest_ids: Sequence[str],
+        now: datetime,
+        execution_state: PlanExecutionState | None = None,
+        events: Sequence[Event] = (),
+        rest_first: bool = False,
+    ) -> ReplanCandidate:
+        """The replanning graph's LOAD CONTEXT -> RESOLVE GROUP -> REPLAN -> CHECK, no proposal.
+
+        Raises ``UnknownLocationError`` when the sent progress places the party on a
+        node the park map does not know (the optimizer would fail walking from it).
+        """
+        location = execution_state.current_location_node_id if execution_state else None
+        if location is not None:
+            self._require_on_map(location, plan)
+        loaded = self._load.execute(session_id, guest_ids, now)
+        context = loaded.for_state()
+        objective = self._build.resolve_group(
+            thread_id=session_id,
+            constraints=constraints,
+            profiles=profiles,
+            accessibility_ref=guest_ids,
+            live_context=context,
+        )
+        outcome = self._replan.execute(
+            ReplanRequest(
+                thread_id=session_id,
+                plan=plan,
+                constraints=constraints,
+                profiles=profiles,
+                accessibility_ref=guest_ids,
+                live_context=context,
+                objective=objective,
+                now=now,
+                rest_first=rest_first,
+                execution_state=execution_state,
+                events=events,
+            )
+        )
+        result = outcome.result
+        return ReplanCandidate(
+            plan=result.plan,
+            diff=result.diff,
+            check=public_check(result.check) if result.check is not None else None,
+            valid=result.valid,
+            unmet_must_do=list(result.unmet_must_do),
+            failure=public_failure(result.fatal_error),
+            progress=public_progress(outcome.execution_state, outcome.progress_source),
+            context=_stamp(outcome.live_context, loaded.source, now),
+        )
+
+    def _require_on_map(self, location: str, plan: Plan) -> None:
+        """``location`` must reach the plan's stops: the replan walks from it."""
+        others = [s.node_id for s in plan.stops if s.node_id != location]
+        if not others:
+            return
+        with open_deps(self._deps_factory) as deps:
+            try:
+                deps.routing.walk_minutes(location, others[0])
+            except RoutingNotFoundError as exc:
+                raise UnknownLocationError(
+                    f"The party's location {location!r} is not on the park map."
+                ) from exc
 
     def check_plan(
         self,

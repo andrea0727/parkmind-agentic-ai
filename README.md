@@ -356,7 +356,7 @@ activates a plan.
 |---|---|
 | `data.*` (P0-25) | `get_live_waits`, `get_attraction_status`, `get_schedule`, `get_showtimes`, `get_weather`, `get_walking_time`, `get_attraction_info` |
 | `knowledge.*` (P0-26) | `search_policies`, `find_similar_attractions`, `check_accessibility` |
-| `planner.*` (P0-27) | `build_plan`, `check_plan`, `score_preferences`, `forecast_waits` (`replan` follows P0-23) |
+| `planner.*` (P0-27) | `build_plan`, `check_plan`, `replan`, `score_preferences`, `forecast_waits` |
 
 ```bash
 # stdio (what an MCP client launches), or streamable HTTP at http://127.0.0.1:8765/mcp
@@ -443,7 +443,7 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 | **Preference Resolution** | ✅ Done | Weighted aggregation from GuestProfile (queue, walking, categories) |
 | **Plan Synthesis** | ✅ Initial planning graph [P0-30] | ELICIT → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED. Runs on in-process use cases, no MCP server. EDITED approvals [P0-32] are a follow-up. |
 | **Event monitor** | ✅ P0-33 | Snapshot-to-event detector with per-reading freshness, `EventPolicy` (§25 table, confirmation gate, fatigue walking cap), cross-source dedup, supersede on significant events, `scripts/run_monitor.py`. Consumed by the replanning graph [P0-34]. |
-| **MCP capability boundary** | ✅ P0-24..P0-27 | `parkmind-mcp`: 14 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` is not exposed yet. |
+| **MCP capability boundary** | ✅ P0-24..P0-27 | `parkmind-mcp`: 15 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` takes the plan, its progress and the events inline (§31), so a client without a stored plan can replan. |
 | **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
 | **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
 | **PostgreSQL Repos** | ✅ Done | Profiles, Plans, Session store (in-memory for accessibility) |
