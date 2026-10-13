@@ -354,6 +354,12 @@ Both planning graphs pause at the same approval interrupt
 {"decision": "EDITED", "edit": {"remove": ["<stop node id>"], "add": ["<attraction node id>"]}}
 ```
 
+The reason is read only with `REJECTED`, and an `edit` is only accepted with
+`EDITED`. Resume by interrupt id (`Command(resume={interrupt.id: value})`): if a run
+fails after the answer was taken (missing park data, say), LangGraph keeps the
+answer and `invoke(None, config)` retries with it. Inside the planning subgraph, a
+plain resume value kept that way would also answer the *next* interrupt.
+
 - **Approve** activates the candidate through `PlanRepository.activate`, which
   atomically requires an `APPROVED` proposal. **Reject** stores the reason category
   and keeps the current plan (if any).
@@ -366,11 +372,20 @@ Both planning graphs pause at the same approval interrupt
   explained and proposed as a new `PENDING` proposal. An edit that does not fit the
   plan (unknown id, a meal stop, a stop already done…) is answered with the same
   interrupt plus an `"error"`, and nothing changes.
+- **An edit that cannot be planned gives back what the guests had.** If no valid
+  plan fits the edit (for example an open attraction added when the day has no
+  room left), the guests are told why, and the plan before the edit, with the
+  constraints before it, is checked again on the fresh data and proposed anew. If it
+  no longer passes either, nothing is proposed, as after any failed check. An
+  attraction that is down is not a failed edit: it is planned as an unmet must-do
+  ("could not fit today").
 - **Behavior log.** Every decision writes one `BehaviorEntry` per guest, in the
   same transaction (§23). The log is keyed by guest, and `g1`, `g2` are only unique
   within a party, so each guest is registered as `"{thread_id}:{guest_id}"`, with
   its role only (no height). A superseded proposal logs nothing, and a decision
-  applied twice is logged once (`entry_id` is the proposal and the decision).
+  applied twice is logged once (`entry_id` is the proposal and the decision). A
+  decision without the party's guests is refused. An edit's `attraction_ids` mixes
+  what was removed and what was added; the direction is a P1-01 follow-up (#51).
 
 ### Explanations (P0-31)
 
