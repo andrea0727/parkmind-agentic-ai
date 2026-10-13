@@ -32,7 +32,8 @@ A caller without the graph's thread -- ``planner.replan`` (P0-27), whose clients
 send the plan, its progress and the events inline (section 31) -- passes them in
 ``ReplanRequest.execution_state`` and ``ReplanRequest.events``: the given progress
 replaces the repository's (the on-schedule assumption still applies to it), and the
-given events are applied on top of the ones the thread recorded. The graph leaves
+given events are applied on top of the ones the thread recorded, whatever their
+time (the recorded ones only when newer than the snapshot). The graph leaves
 both at their defaults.
 """
 
@@ -91,11 +92,20 @@ def effective_execution_state(
     return state.model_copy(update={"as_of": max(state.as_of, now)})
 
 
-def with_event_statuses(context: LiveContext, events: Iterable[Event]) -> LiveContext:
-    """``context`` with the availability reports newer than its snapshot applied."""
+def with_event_statuses(
+    context: LiveContext, events: Iterable[Event], *, newer_only: bool = True
+) -> LiveContext:
+    """``context`` with the availability reports newer than its snapshot applied.
+
+    ``newer_only=False`` applies them whatever their time: the events a caller sends
+    with a replan say what happened for that replan, and a client's clock may lag
+    the snapshot's (a closure stamped a minute early must not be dropped silently).
+    """
     statuses = dict(context.statuses)
     for event in sorted(events, key=lambda e: (e.timestamp, e.event_id)):
-        if event.attraction_id is None or event.timestamp <= context.retrieved_at:
+        if event.attraction_id is None:
+            continue
+        if newer_only and event.timestamp <= context.retrieved_at:
             continue
         if event.type is EventType.ATTRACTION_DOWN:
             statuses[event.attraction_id] = AttractionStatus.DOWN
@@ -161,8 +171,12 @@ class ReplanUseCase:
                 )
             except PlanningUnavailableError as exc:
                 raise ContextReloadError(str(exc)) from exc
-            reloaded.append(with_event_statuses(loaded.for_state(), events))
-            return with_event_statuses(loaded.live_context, events)
+            reloaded.append(with_events(loaded.for_state()))
+            return with_events(loaded.live_context)
+
+        def with_events(context: LiveContext) -> LiveContext:
+            recorded = with_event_statuses(context, events)
+            return with_event_statuses(recorded, request.events, newer_only=False)
 
         with open_deps(self._deps_factory) as deps:
             catalog = load_catalog(deps)
@@ -171,7 +185,6 @@ class ReplanUseCase:
                 deps, request.thread_id, request.accessibility_ref
             )
             events.extend(deps.events.list_for_thread(request.thread_id))
-            events.extend(request.events)
             stored = (
                 request.execution_state
                 if request.execution_state is not None
@@ -187,7 +200,7 @@ class ReplanUseCase:
                 else "stored"
             )
             live_context = with_checks(
-                with_event_statuses(request.live_context, events),
+                with_events(request.live_context),
                 party_checks(requirements, catalog, deps.knowledge),
             )
             park_graph = ParkGraph.from_sources(

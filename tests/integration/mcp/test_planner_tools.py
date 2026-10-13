@@ -595,3 +595,23 @@ def test_replan_never_returns_the_walking_minutes_that_give_a_limit_away() -> No
     text = json.dumps(payload)
     for field in ("walking_minutes_consumed", "remaining_walking_cap_minutes"):
         assert field not in text, field
+
+
+def test_a_closure_stamped_before_the_snapshot_still_counts() -> None:
+    """Review #89 (2): a client clock five minutes behind must not drop the closure."""
+    deps = Deps()
+    registry = deps.registry()
+    plan = _built_plan(registry)
+    closed = next(r for r in _rides(plan, after=REPLAN_AT) if r != SPACE_MOUNTAIN)
+    snapshot_time = deps.collected.live_context.retrieved_at  # type: ignore[union-attr]
+    early = factories.event(
+        event_id="guest-report-early",
+        attraction_id=closed,
+        timestamp=snapshot_time - timedelta(minutes=5),
+    ).model_dump(mode="json")
+
+    data = _replan(registry, plan, events=[early])["data"]
+
+    assert data["valid"] is True, data["failure"]
+    assert closed not in _rides(data["plan"], after=REPLAN_AT)
+    assert closed in data["diff"]["stops_removed"]
