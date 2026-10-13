@@ -4,8 +4,11 @@
 CONTEXT, RESOLVE GROUP, BUILD PLAN (with the section 21 re-solve loop), CHECK --
 by calling the same use cases, and stops there: nothing is proposed, persisted
 or activated (section 27 [C23]: no MCP tool can activate or mutate a plan). The
-result is a *candidate* with its check. ``check_plan``, ``score_preferences``
-and ``forecast_waits`` expose one step each.
+result is a *candidate* with its check. ``replan`` does the same for the rest of
+a day the replanning graph would replan -- LOAD CONTEXT, RESOLVE GROUP (re-run),
+REPLAN, CHECK of the whole day -- from a plan, its progress and the events the
+client sends (section 31), and stops before DIFF's proposal. ``check_plan``,
+``score_preferences`` and ``forecast_waits`` expose one step each.
 
 Accessibility is passed by reference only [C19]: ``session_id`` (the SessionStore
 key, the graph's ``thread_id``) and the ``guest_ids`` with requirements on file,
@@ -16,7 +19,9 @@ coverage is incomplete and the check fails closed (rule 11).
 What leaves this use case never carries a requirement value: the checker's
 messages for rules 9 and 10 (walking, rest, heat; ride restrictions) quote the
 guest's limits, so those violations, and a re-solve failure that quotes them,
-are replaced by fixed sentences that keep the rule id and the stop.
+are replaced by fixed sentences that keep the rule id and the stop. A replan whose
+whole day fails the checker reports the checker's messages without their rule
+ids, so that failure keeps only its first sentence.
 """
 
 import re
@@ -27,11 +32,14 @@ from datetime import datetime, timedelta
 from parkmind.core.contracts import (
     CheckResult,
     ConstraintViolation,
+    Event,
     GroupObjective,
     GuestProfile,
     LiveContext,
     PartyConstraints,
     Plan,
+    PlanDiff,
+    PlanExecutionState,
     RuleId,
 )
 from parkmind.services.personalization.preference_scorer import PreferenceScores
@@ -51,6 +59,7 @@ from parkmind.services.use_cases.planning_deps import (
     load_requirements,
     open_deps,
 )
+from parkmind.services.use_cases.replan import ReplanRequest, ReplanUseCase
 from parkmind.services.use_cases.score_preferences import ScorePreferencesUseCase
 
 _PRIVATE_RULES: dict[RuleId, tuple[str, str]] = {
@@ -73,6 +82,10 @@ _PRIVATE_FAILURE = re.compile(
     rf"^(Infeasible constraint set: ({'|'.join(r.value for r in _PRIVATE_RULES)})) - .*$",
     re.DOTALL,
 )
+_PRIVATE_DAY_FAILURE = re.compile(
+    r"^(The replanned day does not pass the constraint checker): .*$", re.DOTALL
+)
+"""``Replanner``'s full-day gate: the violations' messages, joined, with no rule id."""
 
 
 def public_violation(violation: ConstraintViolation) -> ConstraintViolation:
@@ -92,7 +105,8 @@ def public_check(result: CheckResult) -> CheckResult:
 def public_failure(failure: str | None) -> str | None:
     if failure is None:
         return None
-    return _PRIVATE_FAILURE.sub(r"\1 (details stay in the guest's session)", failure)
+    redacted = r"\1 (details stay in the guest's session)"
+    return _PRIVATE_DAY_FAILURE.sub(redacted, _PRIVATE_FAILURE.sub(redacted, failure))
 
 
 @dataclass(frozen=True)
@@ -115,6 +129,23 @@ class PlanCandidate:
     """``True`` when the re-solve loop reached a plan the checker passes."""
     failure: str | None
     """Why the re-solve loop found no valid plan (redacted), when it did not."""
+    context: ContextStamp
+
+
+@dataclass(frozen=True)
+class ReplanCandidate:
+    plan: Plan | None
+    """The new candidate (completed stops + new horizon), a new plan id; ``None`` if none."""
+    diff: PlanDiff | None
+    """What changed against the plan that was sent."""
+    check: CheckResult | None
+    """The whole day's check (completed stops + horizon, walking already done counted)."""
+    valid: bool
+    unmet_must_do: list[str]
+    failure: str | None
+    """Why no valid replan was found (redacted), when none was."""
+    execution_state: PlanExecutionState
+    """The progress the replan started from: the one sent, or the on-schedule assumption."""
     context: ContextStamp
 
 
@@ -167,6 +198,7 @@ class PlannerQueries:
         )
         self._build = BuildPlanUseCase(deps_factory)
         self._check = CheckPlanUseCase(deps_factory)
+        self._replan = ReplanUseCase(deps_factory)
 
     def build_plan(
         self,
@@ -209,6 +241,68 @@ class PlannerQueries:
             resolved=built.resolved,
             failure=public_failure(built.failure),
             context=_stamp(built.live_context, loaded.source, now),
+        )
+
+    def replan(
+        self,
+        *,
+        session_id: str,
+        plan: Plan,
+        constraints: PartyConstraints,
+        profiles: Sequence[GuestProfile],
+        guest_ids: Sequence[str],
+        now: datetime,
+        execution_state: PlanExecutionState | None = None,
+        events: Sequence[Event] = (),
+        rest_first: bool = False,
+    ) -> ReplanCandidate:
+        """The replanning graph's LOAD CONTEXT -> RESOLVE GROUP -> REPLAN -> CHECK, no proposal."""
+        loaded = self._load.execute(session_id, guest_ids, now)
+        context = loaded.for_state()
+        objective = self._build.resolve_group(
+            thread_id=session_id,
+            constraints=constraints,
+            profiles=profiles,
+            accessibility_ref=guest_ids,
+            live_context=context,
+        )
+        outcome = self._replan.execute(
+            ReplanRequest(
+                thread_id=session_id,
+                plan=plan,
+                constraints=constraints,
+                profiles=profiles,
+                accessibility_ref=guest_ids,
+                live_context=context,
+                objective=objective,
+                now=now,
+                rest_first=rest_first,
+                execution_state=execution_state,
+                events=events,
+            )
+        )
+        result = outcome.result
+        check = (
+            self._check.execute_replan(
+                thread_id=session_id,
+                plan=result.plan,
+                constraints=constraints,
+                accessibility_ref=guest_ids,
+                live_context=outcome.live_context,
+                execution_state=outcome.execution_state,
+            )
+            if result.plan is not None
+            else None
+        )
+        return ReplanCandidate(
+            plan=result.plan,
+            diff=result.diff,
+            check=public_check(check) if check is not None else None,
+            valid=result.valid,
+            unmet_must_do=list(result.unmet_must_do),
+            failure=public_failure(result.fatal_error),
+            execution_state=outcome.execution_state,
+            context=_stamp(outcome.live_context, loaded.source, now),
         )
 
     def check_plan(
