@@ -372,6 +372,30 @@ Both planning graphs pause at the same approval interrupt
   its role only (no height). A superseded proposal logs nothing, and a decision
   applied twice is logged once (`entry_id` is the proposal and the decision).
 
+### Explanations (P0-31)
+
+Both graphs' EXPLAIN step puts a validated plan into words with Claude, and never
+lets it invent a figure (Architecture §40, C17):
+
+- **Payload only.** `ExplainPlanUseCase.prepare` builds what the model may use: the
+  plan by name (times, waits, walks, must-dos, who sits a ride out, by the ride's
+  posted minimum, never a guest's height), the unmet
+  must-dos, a replan's reason and changes, where the park data came from, and the
+  preference weights that drove the plan, each labelled `stated`, `learned` or
+  `default`. The prompt is `agents/explain_prompt.py` (`explain-v1`).
+- **Deterministic grounding.** `agents/grounding.py` extracts every number and clock
+  time from the answer; each must appear in the payload exactly (`25` = `25.0`, but a
+  bare `14` is not grounded by `14:05`, and no rounding). A figure that is a `stated` or
+  `learned` weight must carry that label in its sentence. No LLM judge.
+- **One retry, then the template.** A schema failure, an ungrounded number or a wrong
+  label gets one retry with the errors listed (each request is capped at 20 s); after that, or without an
+  `ANTHROPIC_API_KEY`, the guests read the deterministic template, which only prints
+  figures from the payload. The proposal's provenance records which one wrote it
+  (`prompt_versions["explain"]`: `explain-v1` or `template`).
+- **Model:** `EXPLAIN_MODEL` (defaults to `ELICIT_MODEL`). Tests inject a fake
+  narrator (`tests/explain_support.py`), so they never call Claude, even with a key in
+  `.env`.
+
 ### MCP capability boundary (P0-24..P0-27)
 
 `parkmind-mcp` publishes the same use cases the graph calls in-process as typed
@@ -471,6 +495,7 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 | **LangGraph State v2** | ✅ Done | Typed ParkMindState, state helpers, message reducer |
 | **Preference Resolution** | ✅ Done | Weighted aggregation from GuestProfile (queue, walking, categories) |
 | **Plan Synthesis** | ✅ Initial planning graph [P0-30] | ELICIT → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED. Runs on in-process use cases, no MCP server. APPROVE / EDIT / REJECT [P0-32]: an edit is re-planned, re-checked and proposed again. |
+| **Explanations** | ✅ P0-31 | Claude explains the validated plan from a payload only (plan, diff, provenance, stated/learned preference weights); every numeral is checked against the payload, one retry, then the deterministic template. |
 | **Event monitor** | ✅ P0-33 | Snapshot-to-event detector with per-reading freshness, `EventPolicy` (§25 table, confirmation gate, fatigue walking cap), cross-source dedup, supersede on significant events, `scripts/run_monitor.py`. Consumed by the replanning graph [P0-34]. |
 | **MCP capability boundary** | ✅ P0-24..P0-27 | `parkmind-mcp`: 15 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` takes the plan, its progress and the events inline (§31), so a client without a stored plan can replan. |
 | **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |

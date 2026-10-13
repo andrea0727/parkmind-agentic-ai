@@ -15,6 +15,7 @@ load_dotenv()
 class Settings:
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
     ELICIT_MODEL = os.getenv("ELICIT_MODEL", "claude-haiku-4-5-20251001")
+    EXPLAIN_MODEL = os.getenv("EXPLAIN_MODEL", ELICIT_MODEL)
     DATABASE_URL = os.getenv(
         "DATABASE_URL", "postgresql://parkmind:parkmind@localhost:5432/parkmind"
     )

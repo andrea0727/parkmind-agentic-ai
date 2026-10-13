@@ -7,11 +7,13 @@ first brought to an approved active plan by the initial planning graph, then the
 graph runs on the same thread with the new events as input.
 """
 
+import json
 from datetime import timedelta
 from typing import Any
 
 import factories
 import pytest
+from explain_support import NoNarrator, ScriptedNarrator
 from langgraph.types import Command
 from planning_support import NOW, factory_for
 from test_initial_planning_graph import CONFIG, _Harness
@@ -35,13 +37,18 @@ from parkmind.services.use_cases.planning_deps import PlanningUnavailableError
 class _Replanning:
     """An approved plan on thread t1 plus the replanning graph over the same ports."""
 
-    def __init__(self, monkeypatch: pytest.MonkeyPatch, *, approve: bool = True) -> None:
+    def __init__(
+        self, monkeypatch: pytest.MonkeyPatch, *, approve: bool = True, narrator: Any = None
+    ) -> None:
         self.h = _Harness(monkeypatch)
         self.h.confirm()
         if approve:
             self.h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
         self.graph = rg.build_replanning_graph(
-            self.h.checkpointer, deps_factory=factory_for(self.h.deps), clock=lambda: NOW
+            self.h.checkpointer,
+            deps_factory=factory_for(self.h.deps),
+            clock=lambda: NOW,
+            narrator=narrator or NoNarrator(),
         )
 
     @property
@@ -514,7 +521,7 @@ def test_with_no_active_plan_there_is_nothing_to_replan(monkeypatch) -> None:
 def test_a_thread_that_never_planned_has_nothing_to_replan(monkeypatch) -> None:
     h = _Harness(monkeypatch)
     graph = rg.build_replanning_graph(
-        h.checkpointer, deps_factory=factory_for(h.deps), clock=lambda: NOW
+        h.checkpointer, deps_factory=factory_for(h.deps), clock=lambda: NOW, narrator=NoNarrator()
     )
 
     result = graph.invoke(
@@ -685,3 +692,16 @@ def test_a_stop_already_done_cannot_be_edited_out(r) -> None:
 
     assert _interrupt(result)["error"]
     assert [p.proposal_id for p in r.pending()] == [pending.proposal_id]
+
+
+def test_the_replan_narrator_explains_from_the_reason_and_the_changes(monkeypatch) -> None:
+    """P0-31: an updated plan is explained from why it changed and what changed."""
+    narrator = ScriptedNarrator("Your plan changed because a ride closed.")
+    r = _Replanning(monkeypatch, narrator=narrator)
+
+    r.send(_down(r.stop_node()))
+
+    [proposal] = r.pending()
+    assert proposal.explanation == "Your plan changed because a ride closed."
+    payload = json.loads(narrator.payloads[0])
+    assert payload["reason"] and payload["changes"] is not None
