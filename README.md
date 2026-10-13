@@ -349,15 +349,17 @@ Both graphs' EXPLAIN step puts a validated plan into words with Claude, and neve
 lets it invent a figure (Architecture §40, C17):
 
 - **Payload only.** `ExplainPlanUseCase.prepare` builds what the model may use: the
-  plan by name (times, waits, walks, must-dos, who sits a ride out), the unmet
+  plan by name (times, waits, walks, must-dos, who sits a ride out, by the ride's
+  posted minimum, never a guest's height), the unmet
   must-dos, a replan's reason and changes, where the park data came from, and the
   preference weights that drove the plan, each labelled `stated`, `learned` or
   `default`. The prompt is `agents/explain_prompt.py` (`explain-v1`).
 - **Deterministic grounding.** `agents/grounding.py` extracts every number and clock
   time from the answer; each must appear in the payload exactly (`25` = `25.0`, but a
-  bare `14` is not grounded by `14:05`, and no rounding). No LLM judge.
-- **One retry, then the template.** A schema failure or an ungrounded number gets one
-  retry with the errors or the numbers listed; after that, or without an
+  bare `14` is not grounded by `14:05`, and no rounding). A figure that is a `stated` or
+  `learned` weight must carry that label in its sentence. No LLM judge.
+- **One retry, then the template.** A schema failure, an ungrounded number or a wrong
+  label gets one retry with the errors listed (each request is capped at 20 s); after that, or without an
   `ANTHROPIC_API_KEY`, the guests read the deterministic template, which only prints
   figures from the payload. The proposal's provenance records which one wrote it
   (`prompt_versions["explain"]`: `explain-v1` or `template`).
