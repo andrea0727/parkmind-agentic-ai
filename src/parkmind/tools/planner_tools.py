@@ -1,21 +1,33 @@
 """``planner.*`` tools (P0-27; Architecture section 31).
 
-``build_plan``, ``check_plan``, ``score_preferences``, ``forecast_waits``. Each
-handler is one call to ``PlannerQueries``, which composes the same use cases
-the graph runs; no planner logic lives here. ``replan`` follows P0-23 (#37).
+``build_plan``, ``check_plan``, ``replan``, ``score_preferences``,
+``forecast_waits``. Each handler is one call to ``PlannerQueries``, which
+composes the same use cases the graph runs; no planner logic lives here.
 
 None of these tools proposes, persists or activates a plan (section 27 [C23]):
-``build_plan`` returns a *candidate* and its check, nothing else. Accessibility
-is passed by reference -- ``session_id`` plus ``guest_ids`` -- and read from the
-SessionStore server-side [C19]; no requirement value is accepted or returned.
+``build_plan`` and ``replan`` return a *candidate* and its check, nothing else.
+``replan`` takes the current plan, its progress and the events inline (section
+31), so a client without a stored plan -- the LLM-only baseline (section 44) --
+can replan; ``rest_first`` is the client's to set, since the event policy is not
+run here.
+
+Accessibility is passed by reference -- ``session_id`` plus ``guest_ids`` -- and
+read from the SessionStore server-side [C19]; no requirement value is accepted or
+returned, and ``replan`` returns the progress it started from without its walking
+minutes (with the fatigue cap they would give a limit back). A residual risk
+remains, as for ``check_plan``: a client that varies what it sends (walked minutes,
+stops) and watches which answers fail can narrow a guest's limit down. What bounds
+it is who can call at all: the server has no authentication and serves only this
+machine (README, "Trust model").
 They have no effect on guest, plan or proposal state, so they are read-only; the
 LOAD CONTEXT allowlist still excludes them by namespace (section 8.1).
 
-Inputs are capped well above a real party and day (``MAX_GUESTS``,
-``MAX_STOPS``, ``MAX_FORECASTS``), so one request cannot ask for unbounded work.
+Inputs are capped well above a real party and day (``MAX_GUESTS``, ``MAX_STOPS``,
+``MAX_EVENTS``, ``MAX_FORECASTS``), so one request cannot ask for unbounded work.
 """
 
 from collections.abc import Callable
+from dataclasses import asdict
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
@@ -31,10 +43,13 @@ from pydantic import (
 
 from parkmind.core.contracts import (
     CheckResult,
+    Event,
     FairnessConfig,
     GuestProfile,
     PartyConstraints,
     Plan,
+    PlanDiff,
+    PlanExecutionState,
 )
 from parkmind.services.use_cases.planner_queries import ContextStamp, PlannerQueries
 from parkmind.tools.contracts import ToolProvenance, ToolResult
@@ -46,7 +61,9 @@ FORECAST_SOURCE = "parkmind_forecast"
 MAX_GUESTS = 20
 """Guests per party, ``guest_ids`` and ``profiles`` per request."""
 MAX_STOPS = 60
-"""Stops in a plan sent to ``check_plan`` (a park day is far fewer)."""
+"""Stops in a plan sent to ``check_plan`` or ``replan`` (a park day is far fewer)."""
+MAX_EVENTS = 20
+"""Events sent with one ``replan`` request."""
 MAX_FORECASTS = 500
 """Forecasts per ``forecast_waits`` request: attractions x arrival times."""
 
@@ -105,6 +122,48 @@ class CheckPlanRequest(_PartyRequest):
         return plan
 
 
+class ReplanToolRequest(CheckPlanRequest):
+    """The current plan (``plan``), its progress and what happened (section 31)."""
+
+    profiles: Profiles = Field(default_factory=list)
+    execution_state: PlanExecutionState | None = Field(
+        default=None,
+        description=(
+            "The plan's progress: completed or skipped stops, location, walking done. "
+            "Omit it to use the progress stored for this plan or, with none reported, "
+            "to assume the party is on schedule."
+        ),
+    )
+    events: Annotated[list[Event], Field(max_length=MAX_EVENTS)] = Field(
+        default_factory=list,
+        description=(
+            "What happened since the plan was made, applied on top of the events the "
+            "session recorded: a closure or a reopening changes which rides are available."
+        ),
+    )
+    rest_first: bool = Field(
+        default=False,
+        description="Open the new horizon with a rest (a confirmed guest fatigue report).",
+    )
+
+    @field_validator("execution_state")
+    @classmethod
+    def _progress_of_this_plan(
+        cls, state: PlanExecutionState | None, info: ValidationInfo
+    ) -> PlanExecutionState | None:
+        """For the plan that is sent, and only about its stops: an unknown stop id would
+        also switch off the on-schedule assumption without saying so."""
+        plan = info.data.get("plan")
+        if state is None or plan is None:
+            return state
+        if state.plan_id != plan.plan_id:
+            raise ValueError("execution_state must be for the plan that is sent")
+        stops = {s.node_id for s in plan.stops}
+        if not {*state.completed_stop_ids, *state.skipped_stop_ids} <= stops:
+            raise ValueError("completed and skipped stops must be stops of the plan")
+        return state
+
+
 class ScorePreferencesRequest(_PartyRequest):
     profiles: Profiles = Field(default_factory=list)
     top: int = Field(
@@ -153,6 +212,40 @@ class BuildPlanData(BaseModel):
 
 class CheckPlanData(BaseModel):
     check: CheckResult
+
+
+class ReplanProgressData(BaseModel):
+    """Never the walking minutes: with the fatigue cap they would give a guest's limit [C19]."""
+
+    completed_stop_ids: list[str]
+    skipped_stop_ids: list[str]
+    current_location_node_id: str | None
+    as_of: datetime
+    source: Literal["sent", "stored", "assumed"] = Field(
+        description="Sent by the client, stored for the plan, or assumed on schedule."
+    )
+
+
+class ReplanData(BaseModel):
+    valid: bool = Field(
+        description="True when the replanned day (completed stops + new horizon) passes the checker."
+    )
+    plan: Plan | None = Field(
+        description="The candidate for the rest of the day, a new plan id; null when none was found."
+    )
+    diff: PlanDiff | None = Field(
+        description="What changed against the plan that was sent."
+    )
+    check: CheckResult | None = Field(
+        description="The whole day's check, counting the walking already done."
+    )
+    progress: ReplanProgressData = Field(
+        description="The progress the replan started from: the one sent, the stored one, or an on-schedule assumption."
+    )
+    unmet_must_do: list[str]
+    failure: str | None = Field(
+        description="Why no valid replan was found, when none was."
+    )
 
 
 class AttractionUtility(BaseModel):
@@ -257,6 +350,36 @@ def planner_tools(ctx: ToolContext) -> list[ToolSpec]:
             provenance=_context_provenance(answer.context, "constraint_checker"),
         )
 
+    def replan(request: ReplanToolRequest) -> ToolResult[ReplanData]:
+        candidate = queries.replan(
+            session_id=request.session_id,
+            plan=request.plan,
+            constraints=request.constraints,
+            profiles=request.profiles,
+            guest_ids=request.guest_ids,
+            now=request.now or ctx.clock(),
+            execution_state=request.execution_state,
+            events=request.events,
+            rest_first=request.rest_first,
+        )
+        provenance = (candidate.plan or request.plan).provenance
+        return ToolResult[ReplanData](
+            data=ReplanData(
+                valid=candidate.valid,
+                plan=candidate.plan,
+                diff=candidate.diff,
+                check=candidate.check,
+                progress=ReplanProgressData(**asdict(candidate.progress)),
+                unmet_must_do=candidate.unmet_must_do,
+                failure=candidate.failure,
+            ),
+            provenance=_context_provenance(
+                candidate.context,
+                f"replanner+{provenance.optimizer_strategy}",
+                provenance.objective_version,
+            ),
+        )
+
     def score_preferences(
         request: ScorePreferencesRequest,
     ) -> ToolResult[ScorePreferencesData]:
@@ -342,6 +465,16 @@ def planner_tools(ctx: ToolContext) -> list[ToolSpec]:
             CheckPlanRequest,
             CheckPlanData,
             check_plan,
+        ),
+        spec(
+            "replan",
+            "Replan the rest of the day from a current plan, its progress and what happened "
+            "(closures, reopenings): completed stops are kept, the new horizon is re-solved and "
+            "the whole day is checked against the 11 rules. Returns a candidate and its diff; "
+            "never proposes or activates it.",
+            ReplanToolRequest,
+            ReplanData,
+            replan,
         ),
         spec(
             "score_preferences",

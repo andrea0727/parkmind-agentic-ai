@@ -14,23 +14,30 @@ from planning_support import factory_for
 
 from parkmind.core.contracts import (
     MobilityRequirement,
+    Plan,
     PreferenceSource,
     RideRestriction,
     RuleId,
 )
 from parkmind.services.use_cases.planner_queries import PlannerQueries
-from parkmind.tools.planner_tools import MAX_FORECASTS, MAX_GUESTS, MAX_STOPS
+from parkmind.tools.planner_tools import (
+    MAX_EVENTS,
+    MAX_FORECASTS,
+    MAX_GUESTS,
+    MAX_STOPS,
+)
 from parkmind.tools.registry import build_registry
 
 PLANNER_TOOLS = {
     "planner.build_plan",
     "planner.check_plan",
+    "planner.replan",
     "planner.score_preferences",
     "planner.forecast_waits",
 }
 SPACE_MOUNTAIN = "b2260923-9315-40fd-9c6b-44dd811dbe64"
 BIG_THUNDER = "de3309ca-97d5-4211-bffe-739fed47e92f"
-WRITES = {"save", "activate", "resolve", "supersede_pending"}
+WRITES = {"save", "activate", "resolve", "supersede_pending", "record"}
 
 
 def _constraints(**overrides: Any) -> Any:
@@ -217,6 +224,13 @@ def test_accessibility_never_in_tool_payloads() -> None:
             )
         ),
         _ok(call_tool(registry, "planner.score_preferences", planning)),
+        _ok(
+            call_tool(
+                registry,
+                "planner.replan",
+                {**planning, "plan": built["data"]["plan"]},
+            )
+        ),
     ]
 
     text = json.dumps(responses)
@@ -272,14 +286,23 @@ def test_no_tool_writes_plans_or_proposals() -> None:
     """Section 27 [C23]: no MCP tool can activate or mutate a plan -- every tool, once."""
     deps = Deps()
     plans, proposals = _Recording(deps.plans), _Recording(deps.proposals)
+    events = _Recording(deps.value.events)
+    states = _Recording(deps.value.execution_states)
     deps.value = deps.value.__class__(
-        **{**deps.value.__dict__, "plans": plans, "proposals": proposals}
+        **{
+            **deps.value.__dict__,
+            "plans": plans,
+            "proposals": proposals,
+            "events": events,
+            "execution_states": states,
+        }
     )
     registry = deps.registry()
     plan = _ok(call_tool(registry, "planner.build_plan", _args()))["data"]["plan"]
     arguments = {
         "planner.build_plan": _args(),
         "planner.check_plan": _args(plan=plan),
+        "planner.replan": _args(plan=plan),
         "planner.score_preferences": _args(),
         "planner.forecast_waits": {"attraction_ids": [SPACE_MOUNTAIN]},
         "data.get_walking_time": {
@@ -295,9 +318,9 @@ def test_no_tool_writes_plans_or_proposals() -> None:
     for name in names:
         _ok(call_tool(registry, name, arguments.get(name)))
 
-    assert len(names) == 14
-    assert not set(plans.calls) & WRITES, plans.calls
-    assert not set(proposals.calls) & WRITES, proposals.calls
+    assert len(names) == 15
+    for repository in (plans, proposals, events, states):
+        assert not set(repository.calls) & WRITES, repository.calls
 
 
 def _rejected(result: Any) -> list[str]:
@@ -403,3 +426,254 @@ def test_an_unknown_session_is_answered_like_a_guest_without_records() -> None:
 
     assert rules("no-such-session", "g2") == rules("s1", "g9")
     assert RuleId.DATA_FRESHNESS.value in rules("no-such-session", "g2")
+
+
+# -- planner.replan (section 31) -------------------------------------------------------
+
+REPLAN_AT = NOW + timedelta(minutes=20)
+"""Inside the capture's freshness window, so the context needs no reload."""
+
+
+def _built_plan(registry: Any) -> dict[str, Any]:
+    return _ok(call_tool(registry, "planner.build_plan", _args()))["data"]["plan"]
+
+
+def _replan(registry: Any, plan: dict[str, Any], **overrides: Any) -> dict[str, Any]:
+    return _ok(
+        call_tool(
+            registry,
+            "planner.replan",
+            _args(plan=plan, now=REPLAN_AT.isoformat(), **overrides),
+        )
+    )
+
+
+def _rides(plan: dict[str, Any], *, after: datetime | None = None) -> list[str]:
+    return [
+        s["node_id"]
+        for s in plan["stops"]
+        if s["kind"] == "ATTRACTION"
+        and (after is None or datetime.fromisoformat(s["arrival_time"]) >= after)
+    ]
+
+
+def _down(attraction_id: str) -> dict[str, Any]:
+    return factories.event(
+        event_id="guest-report-1",
+        attraction_id=attraction_id,
+        timestamp=REPLAN_AT - timedelta(minutes=1),
+    ).model_dump(mode="json")
+
+
+def test_replan_end_to_end_avoids_a_closure_sent_inline() -> None:
+    """build_plan -> replan: the ride reported down leaves the new horizon."""
+    deps = Deps()
+    registry = deps.registry()
+    plan = _built_plan(registry)
+    closed = next(r for r in _rides(plan, after=REPLAN_AT) if r != SPACE_MOUNTAIN)
+
+    payload = _replan(registry, plan, events=[_down(closed)])
+
+    data = payload["data"]
+    assert data["valid"] is True, data["failure"]
+    assert data["plan"]["plan_id"] != plan["plan_id"]
+    assert closed not in _rides(data["plan"], after=REPLAN_AT)
+    assert closed in data["diff"]["stops_removed"]
+    assert data["check"]["valid"] is True
+    provenance = payload["provenance"]
+    assert provenance["source"] == "parkmind_planner"
+    assert provenance["snapshot_id"] == deps.collected.snapshot_id  # type: ignore[union-attr]
+    assert provenance["strategy"].startswith("replanner+")
+    assert provenance["age_seconds"] is not None
+
+
+def test_replan_keeps_the_progress_sent_and_starts_after_it() -> None:
+    registry = Deps().registry()
+    plan = _built_plan(registry)
+    done = [s["node_id"] for s in plan["stops"][:2]]
+    progress = factories.execution_state(
+        plan_id=plan["plan_id"],
+        completed_stop_ids=done,
+        as_of=REPLAN_AT,
+        walking_minutes_consumed={},
+        remaining_walking_cap_minutes={},
+    ).model_dump(mode="json")
+
+    data = _replan(registry, plan, execution_state=progress)["data"]
+
+    assert data["valid"] is True, data["failure"]
+    assert data["progress"]["completed_stop_ids"] == done
+    assert data["progress"]["source"] == "sent"
+    stops = data["plan"]["stops"]
+    assert [s["node_id"] for s in stops[:2]] == done
+    assert all(
+        datetime.fromisoformat(s["arrival_time"]) >= REPLAN_AT for s in stops[2:]
+    )
+
+
+def test_replan_with_rest_first_opens_the_new_horizon_with_a_rest() -> None:
+    registry = Deps().registry()
+    plan = _built_plan(registry)
+
+    data = _replan(registry, plan, rest_first=True)["data"]
+
+    assert data["valid"] is True, data["failure"]
+    assert data["progress"]["source"] == "assumed"
+    done = set(data["progress"]["completed_stop_ids"])
+    horizon = [s for s in data["plan"]["stops"] if s["node_id"] not in done]
+    assert horizon[0]["kind"] == "REST"
+
+
+def test_replan_progress_for_another_plan_is_an_invalid_argument() -> None:
+    registry = Deps().registry()
+    plan = _built_plan(registry)
+    other = factories.execution_state(plan_id="another_plan").model_dump(mode="json")
+
+    result = call_tool(
+        registry,
+        "planner.replan",
+        _args(plan=plan, now=REPLAN_AT.isoformat(), execution_state=other),
+    )
+
+    assert "execution_state" in _rejected(result)
+
+
+def test_a_tight_walking_limit_shortens_the_day_instead_of_failing() -> None:
+    """A 7-minute daily walking limit for a guest on file: the horizon is built to
+    fit what is left (the optimizer's walking budget), not failed after the fact."""
+    deps = Deps()
+    registry = deps.registry()
+    plan = _built_plan(registry)
+    _store_requirements(deps)
+
+    data = _replan(registry, plan, guest_ids=["g2"])["data"]
+
+    assert data["valid"] is True, data["failure"]
+    assert data["plan"]["total_walking_minutes"] <= 7
+    assert data["check"]["valid"] is True
+
+
+def test_an_infeasible_replan_says_why_without_the_guests_limits() -> None:
+    """The guest already walked 10 of their 7 daily minutes: no horizon fits, and
+    the failure keeps its reason but not the limit [C19]."""
+    deps = Deps()
+    registry = deps.registry()
+    plan = _built_plan(registry)
+    _store_requirements(deps)
+    progress = factories.execution_state(
+        plan_id=plan["plan_id"],
+        completed_stop_ids=[plan["stops"][0]["node_id"]],
+        as_of=REPLAN_AT,
+        walking_minutes_consumed={"g2": 10.0},
+        remaining_walking_cap_minutes={},
+    ).model_dump(mode="json")
+
+    data = _replan(registry, plan, guest_ids=["g2"], execution_state=progress)["data"]
+
+    assert data["valid"] is False and data["plan"] is None
+    assert "details stay in the guest's session" in data["failure"]
+    for value in ("walking total", "limit of 7", "rest frequency"):
+        assert value not in data["failure"], value
+
+
+def test_replan_never_returns_the_walking_minutes_that_give_a_limit_away() -> None:
+    """Review #89 (1): EventPolicy stores a fatigue cap of ``limit - walked``; walked
+    and cap together would give the guest's 7-minute limit back [C19]."""
+    deps = Deps()
+    registry = deps.registry()
+    plan = _built_plan(registry)
+    _store_requirements(deps)
+    deps.plans.save("s1", Plan.model_validate(plan))
+    deps.value.execution_states.save(
+        factories.execution_state(
+            plan_id=plan["plan_id"],
+            completed_stop_ids=[plan["stops"][0]["node_id"]],
+            as_of=REPLAN_AT,
+            walking_minutes_consumed={"g2": 4.0},
+            remaining_walking_cap_minutes={"g2": 3.0},
+        )
+    )
+
+    payload = _replan(registry, plan, guest_ids=["g2"])
+
+    assert payload["data"]["progress"]["source"] == "stored"
+    text = json.dumps(payload)
+    for field in ("walking_minutes_consumed", "remaining_walking_cap_minutes"):
+        assert field not in text, field
+
+
+def test_a_closure_stamped_before_the_snapshot_still_counts() -> None:
+    """Review #89 (2): a client clock five minutes behind must not drop the closure."""
+    deps = Deps()
+    registry = deps.registry()
+    plan = _built_plan(registry)
+    closed = next(r for r in _rides(plan, after=REPLAN_AT) if r != SPACE_MOUNTAIN)
+    snapshot_time = deps.collected.live_context.retrieved_at  # type: ignore[union-attr]
+    early = factories.event(
+        event_id="guest-report-early",
+        attraction_id=closed,
+        timestamp=snapshot_time - timedelta(minutes=5),
+    ).model_dump(mode="json")
+
+    data = _replan(registry, plan, events=[early])["data"]
+
+    assert data["valid"] is True, data["failure"]
+    assert closed not in _rides(data["plan"], after=REPLAN_AT)
+    assert closed in data["diff"]["stops_removed"]
+
+
+def test_a_location_off_the_park_map_is_an_invalid_argument() -> None:
+    """Review #89 (4): the client's mistake, not an outage to retry."""
+    registry = Deps().registry()
+    plan = _built_plan(registry)
+    lost = factories.execution_state(
+        plan_id=plan["plan_id"],
+        completed_stop_ids=[plan["stops"][0]["node_id"]],
+        current_location_node_id="nowhere",
+        as_of=REPLAN_AT,
+    ).model_dump(mode="json")
+
+    result = call_tool(
+        registry,
+        "planner.replan",
+        _args(plan=plan, now=REPLAN_AT.isoformat(), execution_state=lost),
+    )
+
+    assert _rejected(result) == ["execution_state.current_location_node_id"]
+    assert result.structured_content["error"]["retryable"] is False
+
+
+def test_progress_about_stops_the_plan_does_not_have_is_refused() -> None:
+    """Review #89: ``["ghost"]`` would also switch off the on-schedule assumption."""
+    registry = Deps().registry()
+    plan = _built_plan(registry)
+    ghost = factories.execution_state(
+        plan_id=plan["plan_id"], completed_stop_ids=["ghost"]
+    ).model_dump(mode="json")
+
+    result = call_tool(
+        registry,
+        "planner.replan",
+        _args(plan=plan, now=REPLAN_AT.isoformat(), execution_state=ghost),
+    )
+
+    assert "execution_state" in _rejected(result)
+
+
+def test_replan_inputs_are_capped() -> None:
+    registry = Deps().registry()
+    plan = _built_plan(registry)
+    stop = plan["stops"][0]
+    too_long = {**plan, "stops": [stop] * (MAX_STOPS + 1)}
+    report = _down(SPACE_MOUNTAIN)
+
+    assert "plan" in _rejected(
+        call_tool(registry, "planner.replan", _args(plan=too_long))
+    )
+    assert "events" in _rejected(
+        call_tool(
+            registry,
+            "planner.replan",
+            _args(plan=plan, events=[report] * (MAX_EVENTS + 1)),
+        )
+    )

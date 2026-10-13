@@ -21,19 +21,27 @@ Two things the graph's state cannot hold are derived here from the repositories:
   are frozen, so the replan neither re-sends the party to them nor forgets what they
   walked. ``as_of`` never lies before ``now``. That assumption is made again on every
   replan, from the plan being replanned and the clock: it is never stored, so a later
-  replan never inherits an earlier, stale one (``ProposePlanUseCase`` carries over only
-  what was reported).
+  replan never inherits an earlier, stale one (``ResolveProposalUseCase`` carries over
+  only what was reported, on approval).
 * **Reported availability.** A report the thread recorded after the context's
   snapshot (for example a guest saying a ride is closed) is applied to the context's
   statuses, so the replan and the CHECK that follows see the same attractions as
   unavailable, until a newer snapshot says otherwise.
+
+A caller without the graph's thread -- ``planner.replan`` (P0-27), whose clients
+send the plan, its progress and the events inline (section 31) -- passes them in
+``ReplanRequest.execution_state`` and ``ReplanRequest.events``: the given progress
+replaces the repository's (the on-schedule assumption still applies to it), and the
+given events are applied on top of the ones the thread recorded, whatever their
+time (the recorded ones only when newer than the snapshot). The graph leaves
+both at their defaults.
 """
 
 import logging
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from parkmind.core.contracts import (
     AttractionStatus,
@@ -84,11 +92,20 @@ def effective_execution_state(
     return state.model_copy(update={"as_of": max(state.as_of, now)})
 
 
-def with_event_statuses(context: LiveContext, events: Iterable[Event]) -> LiveContext:
-    """``context`` with the availability reports newer than its snapshot applied."""
+def with_event_statuses(
+    context: LiveContext, events: Iterable[Event], *, newer_only: bool = True
+) -> LiveContext:
+    """``context`` with the availability reports newer than its snapshot applied.
+
+    ``newer_only=False`` applies them whatever their time: the events a caller sends
+    with a replan say what happened for that replan, and a client's clock may lag
+    the snapshot's (a closure stamped a minute early must not be dropped silently).
+    """
     statuses = dict(context.statuses)
     for event in sorted(events, key=lambda e: (e.timestamp, e.event_id)):
-        if event.attraction_id is None or event.timestamp <= context.retrieved_at:
+        if event.attraction_id is None:
+            continue
+        if newer_only and event.timestamp <= context.retrieved_at:
             continue
         if event.type is EventType.ATTRACTION_DOWN:
             statuses[event.attraction_id] = AttractionStatus.DOWN
@@ -112,6 +129,20 @@ class ReplanRequest:
     now: datetime
     rest_first: bool = False
     """A confirmed GUEST_FATIGUE: open the new horizon with a REST stop (section 25)."""
+    execution_state: PlanExecutionState | None = None
+    """The plan's progress, sent by a caller without the thread; ``None``: the repository's."""
+    events: Sequence[Event] = ()
+    """Events to apply on top of the ones the thread recorded (a caller without the thread)."""
+
+    def __post_init__(self) -> None:
+        state = self.execution_state
+        if state is not None and state.plan_id != self.plan.plan_id:
+            raise ValueError(
+                f"execution_state is for plan {state.plan_id}, not {self.plan.plan_id}"
+            )
+
+
+ProgressSource = Literal["sent", "stored", "assumed"]
 
 
 @dataclass(frozen=True)
@@ -121,6 +152,8 @@ class ReplanOutcome:
     """What to keep in state: no per-guest accessibility results [C19]."""
     execution_state: PlanExecutionState
     """The progress the replan started from (see the module docstring); the CHECK uses it too."""
+    progress_source: ProgressSource = "stored"
+    """Where that progress came from: the caller, the repository, or the on-schedule assumption."""
 
 
 class ReplanUseCase:
@@ -138,8 +171,12 @@ class ReplanUseCase:
                 )
             except PlanningUnavailableError as exc:
                 raise ContextReloadError(str(exc)) from exc
-            reloaded.append(with_event_statuses(loaded.for_state(), events))
-            return with_event_statuses(loaded.live_context, events)
+            reloaded.append(with_events(loaded.for_state()))
+            return with_events(loaded.live_context)
+
+        def with_events(context: LiveContext) -> LiveContext:
+            recorded = with_event_statuses(context, events)
+            return with_event_statuses(recorded, request.events, newer_only=False)
 
         with open_deps(self._deps_factory) as deps:
             catalog = load_catalog(deps)
@@ -148,11 +185,22 @@ class ReplanUseCase:
                 deps, request.thread_id, request.accessibility_ref
             )
             events.extend(deps.events.list_for_thread(request.thread_id))
-            execution_state = effective_execution_state(
-                request.plan, deps.execution_states.get(request.plan.plan_id), request.now
+            stored = (
+                request.execution_state
+                if request.execution_state is not None
+                else deps.execution_states.get(request.plan.plan_id)
+            )
+            execution_state = effective_execution_state(request.plan, stored, request.now)
+            progress_source: ProgressSource = (
+                "assumed"
+                if stored is None
+                or not (stored.completed_stop_ids or stored.skipped_stop_ids)
+                else "sent"
+                if request.execution_state is not None
+                else "stored"
             )
             live_context = with_checks(
-                with_event_statuses(request.live_context, events),
+                with_events(request.live_context),
                 party_checks(requirements, catalog, deps.knowledge),
             )
             park_graph = ParkGraph.from_sources(
@@ -195,7 +243,7 @@ class ReplanUseCase:
             )
         if not result.valid:
             logger.info("replan of %s found no valid plan", request.plan.plan_id)
-        return ReplanOutcome(result, state_context, execution_state)
+        return ReplanOutcome(result, state_context, execution_state, progress_source)
 
 
 __all__: list[Any] = [
