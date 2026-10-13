@@ -81,6 +81,16 @@ def test_the_monitor_seeing_a_closure_after_a_wrong_user_report_is_a_new_episode
     assert [e.event_id for e in real] == ["ATTRACTION_DOWN:tron:2"]
 
 
+def test_a_provider_slower_than_the_guest_is_still_the_same_closure():
+    """Review #86 (S1): the guest reports first, and ThemeParks shows the
+    closure 31 or 45 minutes later. That is the user's episode, not a second
+    HIGH event that would supersede again."""
+    history, _ = _record([], [_down(EventSource.USER)])
+
+    for minutes in (31, 45, 120):
+        assert deduplicate([_down(EventSource.MONITOR, minutes=minutes)], history) == []
+
+
 def test_a_missed_available_does_not_hide_the_next_closure():
     history, _ = _record([], [_down(EventSource.MONITOR)])
     # The AVAILABLE in between was never recorded (no fresh snapshot).
