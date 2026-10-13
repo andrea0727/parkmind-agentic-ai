@@ -54,7 +54,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from parkmind.agents.elicit_agent import GuestInfoExtractor
-from parkmind.core.contracts import PARK_TZ, ApprovalStatus, RejectionReason
+from parkmind.core.contracts import PARK_TZ, ApprovalStatus, RejectionReason, Plan
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.elicitation_graph import (
     StateNode,
@@ -292,23 +292,32 @@ def _propose_plan(
 _NOT_DECIDABLE = frozenset({ApprovalStatus.PENDING, ApprovalStatus.SUPERSEDED})
 
 
-def _parse_approval(value: Any) -> tuple[ApprovalStatus, RejectionReason | None] | str:
+def _parse_approval(value: Any) -> tuple[ApprovalStatus, RejectionReason | None, Plan | dict[str, Any] | None] | str:
     """The decision and the rejection reason given, or why the resume value is not valid."""
     if not isinstance(value, Mapping):
         return "the decision must be a mapping with a 'decision' key"
     try:
         status = ApprovalStatus(value.get("decision"))
     except ValueError:
-        return "'decision' must be APPROVED or REJECTED"
-    if status is ApprovalStatus.EDITED:
-        return "EDITED decisions are not supported yet (P0-32); use APPROVED or REJECTED"
+        return "'decision' must be APPROVED, REJECTED, or EDITED"
+    
     if status in _NOT_DECIDABLE:
-        return "'decision' must be APPROVED or REJECTED"
+        return "'decision' must be APPROVED, REJECTED, or EDITED"
+    
     raw_reason = value.get("rejection_reason")
+    edited_plan = value.get("edited_plan")
+
+    if status is ApprovalStatus.EDITED and not edited_plan:
+        return "an 'edited_plan' must be provided when the decision is EDITED"
+
+    if status is not ApprovalStatus.REJECTED and raw_reason:
+        return "'rejection_reason' should only be provided when decision is REJECTED"
+
     if raw_reason in (None, ""):
-        return status, None
+        return status, None, edited_plan
+    
     try:
-        return status, RejectionReason(raw_reason)
+        return status, RejectionReason(raw_reason), edited_plan
     except ValueError:
         return "'rejection_reason' is not a known reason"
 
@@ -318,7 +327,7 @@ def _interrupt_for_approval(
     *,
     deps_factory: DepsFactory = default_planning_deps,
     clock: Clock = park_clock,
-) -> ParkMindState:
+) -> ParkMindState | Command[Any]:
     """Pause for a human decision, then resolve the proposal accordingly.
 
     Nothing here before interrupt() may have a side effect: LangGraph
@@ -328,9 +337,11 @@ def _interrupt_for_approval(
     services/ports/plan_repository.py).
 
     Expects the resume value to be a mapping with a ``"decision"`` key set to
-    ``APPROVED`` or ``REJECTED`` and, for a rejection, an optional
-    ``"rejection_reason"`` RejectionReason value. Anything else is answered with the
-    same interrupt carrying an ``"error"``; the decision is only applied once valid.
+    ``APPROVED``, ``REJECTED``, or ``EDITED``.
+    - REJECTED requires an optional ``"rejection_reason"``.
+    - EDITED requires an ``"edited_plan"``.
+    Anything else is answered with the same interrupt carrying an ``"error"``; 
+    the decision is only applied once valid.
 
     A proposal superseded while the guests were deciding (P0-33) is not decided:
     the guests are told and asked to request a new plan, the candidate and the
@@ -351,9 +362,13 @@ def _interrupt_for_approval(
         if not isinstance(parsed, str):
             break
         payload = {**payload, "error": parsed}
-    status, given_reason = parsed
+    
+    status, given_reason, edited_plan_data = parsed
     approved = status is ApprovalStatus.APPROVED
-    rejection_reason = None if approved else given_reason or RejectionReason.OTHER
+    rejection_reason = None if approved or status is ApprovalStatus.EDITED else given_reason or RejectionReason.OTHER
+    
+    constraints = state.get("constraints")
+    guest_ids = constraints.guests if constraints is not None else []
 
     try:
         ResolveProposalUseCase(deps_factory).execute(
@@ -361,6 +376,7 @@ def _interrupt_for_approval(
             proposal.proposal_id,
             status,
             at=clock(),
+            guest_ids=guest_ids,
             rejection_reason=rejection_reason,
         )
     except ProposalNoLongerPendingError as exc:
@@ -373,17 +389,43 @@ def _interrupt_for_approval(
                 if state.get("current_plan")
                 else SUPERSEDED_MESSAGE
             )
-            return {
-                "messages": [AIMessage(content=message)],
-                "candidate_plan": None,
-                "proposal": None,
-                "approval": None,
-            }
+            return Command(
+                update={
+                    "messages": [AIMessage(content=message)],
+                    "candidate_plan": None,
+                    "proposal": None,
+                    "approval": None,
+                },
+                goto=END
+            )
         # The same decision was already applied (a re-run after it was stored).
 
-    if rejection_reason is None:
-        return approve_plan(state)
-    return reject_plan(state, rejection_reason)
+    if status is ApprovalStatus.APPROVED:
+        return Command(update=approve_plan(state), goto=END)
+    
+    if status is ApprovalStatus.REJECTED:
+        return Command(update=reject_plan(state, rejection_reason), goto=END)
+
+    if status is ApprovalStatus.EDITED:
+        if isinstance(edited_plan_data, dict):
+            new_plan = Plan(**edited_plan_data)
+        else:
+            new_plan = edited_plan_data
+            
+        from uuid import uuid4
+        if new_plan.plan_id == plan.plan_id:
+            new_plan = new_plan.model_copy(update={"plan_id": f"plan_{uuid4().hex[:8]}"})
+
+        update_dict = {
+            "candidate_plan": new_plan,
+            "check_result": None,
+            "explanation": None,
+            "proposal": None,
+            "approval": "EDITED"
+        }
+        return Command(update=update_dict, goto="check_plan")
+
+    return Command(update={}, goto=END)
 
 
 def build_planning_stage(
