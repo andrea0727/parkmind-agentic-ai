@@ -13,8 +13,8 @@ of section 40's contract:
   ``default`` [C17]. Names, never node ids (an id's digits would let numbers through
   the grounding check), and every figure already rounded the way it is shown;
 * the **template** -- the deterministic text, the fallback when the LLM's text is
-  not grounded. It prints only figures that are in the payload, so the fallback
-  always passes the same check.
+  not grounded. It prints only figures that are in the payload, plus the guests'
+  own heights, which it shows them but which never go to the LLM.
 """
 
 import json
@@ -43,9 +43,14 @@ class ExplainBeforeValidationError(RuntimeError):
     """An explanation was requested for a plan the checker has not passed."""
 
 
-def _guest_label(guest: Guest) -> str:
+def _guest_name(guest: Guest) -> str:
     number = guest.guest_id.removeprefix("g")
-    label = f"Guest {number}" if number.isdigit() else guest.guest_id
+    return f"Guest {number}" if number.isdigit() else guest.guest_id
+
+
+def _guest_label(guest: Guest) -> str:
+    """The template's label: the guests see their own height (``Guest 2 (110 cm)``)."""
+    label = _guest_name(guest)
     return f"{label} ({guest.height_cm:g} cm)" if guest.height_cm is not None else label
 
 
@@ -153,8 +158,10 @@ def explain_replan(
 @dataclass(frozen=True)
 class GuestSittingOut:
     guest: str
-    """The guest's label as the template shows it (``Guest 2 (110 cm)``)."""
+    """``Guest 2`` -- never the guest's height: the narrator does not need a child's
+    height to say they sit a ride out (section 12, data minimization)."""
     minimum_height_cm: int
+    """The ride's posted minimum: park data, not the guest's."""
 
 
 @dataclass(frozen=True)
@@ -237,7 +244,7 @@ def explanation_payload(
     names = {**names, MEAL_VENUE_TBD: "Lunch (restaurant to be chosen, near your previous stop)"}
     out_by_stop = {
         node_id: [
-            GuestSittingOut(guest=_guest_label(guest), minimum_height_cm=limit)
+            GuestSittingOut(guest=_guest_name(guest), minimum_height_cm=limit)
             for guest in skipping
         ]
         for node_id, limit, skipping in _sitting_out(plan, guests, height_limits or {})

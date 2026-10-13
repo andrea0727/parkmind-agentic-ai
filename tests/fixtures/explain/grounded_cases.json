@@ -2,52 +2,114 @@
   "about": "P0-31 Done-when: hand-written EXPLAIN outputs against one payload, each with the numerals the deterministic check must reject (section 40 [C17]).",
   "payload": {
     "stops": [
-      {"name": "Space Mountain", "kind": "ATTRACTION", "arrives": "09:05", "leaves": "09:52", "wait_minutes": 27, "walk_minutes": 3, "must_do": true, "preference_score": 0.81, "sitting_out": [{"guest": "Guest 2 (90 cm)", "minimum_height_cm": 112}]},
-      {"name": "Big Thunder Mountain", "kind": "ATTRACTION", "arrives": "09:57", "leaves": "10:35", "wait_minutes": 13, "walk_minutes": 4, "must_do": false, "preference_score": 0.64, "sitting_out": []}
+      {
+        "name": "Space Mountain",
+        "kind": "ATTRACTION",
+        "arrives": "09:05",
+        "leaves": "09:52",
+        "wait_minutes": 27,
+        "walk_minutes": 3,
+        "must_do": true,
+        "preference_score": 0.81,
+        "sitting_out": [
+          {
+            "guest": "Guest 2",
+            "minimum_height_cm": 112
+          }
+        ]
+      },
+      {
+        "name": "Big Thunder Mountain",
+        "kind": "ATTRACTION",
+        "arrives": "09:57",
+        "leaves": "10:35",
+        "wait_minutes": 13,
+        "walk_minutes": 4,
+        "must_do": false,
+        "preference_score": 0.64,
+        "sitting_out": []
+      }
     ],
     "total_stops": 2,
     "total_wait_minutes": 40,
     "total_walking_minutes": 8,
-    "must_do_in_plan": ["Space Mountain"],
-    "unmet_must_do": ["TRON"],
-    "preferences": [
-      {"weight": "affinity:thrill", "value": 0.8, "source": "stated"},
-      {"weight": "lambda_queue", "value": 0.33, "source": "learned"}
+    "must_do_in_plan": [
+      "Space Mountain"
     ],
-    "data": {"park_data_read_at": "08:58", "sources": ["themeparks"], "wait_forecast": "api_forecast", "planner": "greedy_insertion"},
+    "unmet_must_do": [
+      "TRON"
+    ],
+    "preferences": [
+      {
+        "weight": "affinity:thrill",
+        "value": 0.8,
+        "source": "stated"
+      },
+      {
+        "weight": "lambda_queue",
+        "value": 0.33,
+        "source": "learned"
+      }
+    ],
+    "data": {
+      "park_data_read_at": "08:58",
+      "sources": [
+        "themeparks"
+      ],
+      "wait_forecast": "api_forecast",
+      "planner": "greedy_insertion"
+    },
     "reason": null,
     "changes": null
   },
   "cases": [
     {
       "name": "grounded: times, waits, labelled preferences and the unmet must-do",
-      "output": "Space Mountain comes first at 09:05, your must-do, with a 27 minute wait; Guest 2 (90 cm) sits it out (minimum 112 cm). Your thrill preference of 0.8 (stated) and a learned 0.33 queue weight (learned) put Big Thunder Mountain next at 9:57 with a 13 minute wait. In all: 2 stops, 40 minutes of waiting, 8 of walking. TRON could not fit today.",
+      "output": "Space Mountain comes first at 09:05, your must-do, with a 27 minute wait; Guest 2 sits it out (minimum 112 cm). Your thrill preference of 0.8 (stated) and a learned 0.33 queue weight (learned) put Big Thunder Mountain next at 9:57 with a 13 minute wait. In all: 2 stops, 40 minutes of waiting, 8 of walking. TRON could not fit today.",
       "ungrounded": []
     },
     {
       "name": "an invented wait",
       "output": "Space Mountain at 09:05 has a 35 minute wait.",
-      "ungrounded": ["35"]
+      "ungrounded": [
+        "35"
+      ]
     },
     {
       "name": "a computed sum (27 + 13)",
       "output": "Expect 40 minutes of waiting: 27 plus 13, so about 41 with the walk.",
-      "ungrounded": ["41"]
+      "ungrounded": [
+        "41"
+      ]
     },
     {
       "name": "a converted figure (0.8 as a percentage)",
       "output": "You told us you love thrills (80% match).",
-      "ungrounded": ["80"]
+      "ungrounded": [
+        "80"
+      ]
     },
     {
       "name": "a bare hour and an invented time",
       "output": "Head over around 9 and be done by 11:00.",
-      "ungrounded": ["11:00", "9"]
+      "ungrounded": [
+        "11:00",
+        "9"
+      ]
     },
     {
       "name": "a precise figure rounded",
       "output": "Space Mountain scores about 0.8 for you; it ranks 1st.",
-      "ungrounded": ["1"]
+      "ungrounded": [
+        "1"
+      ]
+    },
+    {
+      "name": "a guest's height (never in the payload)",
+      "output": "Guest 2 (90 cm) is too short for Space Mountain (minimum 112 cm).",
+      "ungrounded": [
+        "90"
+      ]
     }
   ]
 }

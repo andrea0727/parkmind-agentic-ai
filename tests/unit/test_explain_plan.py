@@ -212,7 +212,8 @@ def test_the_payload_shows_figures_as_the_template_prints_them_and_names_not_ids
     assert "a1" not in payload.to_json()
 
 
-def test_who_sits_out_a_ride_is_in_the_payload_with_the_height_the_template_quotes():
+def test_who_sits_out_a_ride_is_in_the_payload_but_never_the_guests_height():
+    """Review #90 (4): the narrator gets the ride's minimum, not a child's height."""
     payload = _payload(
         plan=_restricted_plan(["g1"]),
         guests=[ADULT, CHILD],
@@ -221,8 +222,9 @@ def test_who_sits_out_a_ride_is_in_the_payload_with_the_height_the_template_quot
 
     [facts] = payload.stops
     assert [(o.guest, o.minimum_height_cm) for o in facts.sitting_out] == [
-        ("Guest 2 (90 cm)", 112)
+        ("Guest 2", 112)
     ]
+    assert "90" not in payload.to_json() and "175" not in payload.to_json()
 
 
 def test_a_replan_payload_carries_its_reason_and_the_named_changes():

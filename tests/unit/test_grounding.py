@@ -111,7 +111,11 @@ def test_the_template_never_says_a_figure_its_payload_lacks(replan: bool):
         text = explain_plan(plan, check, NAMES, **common)
         payload = explanation_payload(plan, check, NAMES, must_do=["a1"], **common)
 
-    assert ungrounded_numerals(text, payload.to_json()) == []
+    # The template also shows the guests their own heights, which the LLM never gets.
+    heights = " ".join(f"{g.height_cm:g}" for g in (ADULT, CHILD))
+    assert ungrounded_numerals(text, payload.to_json() + " " + heights) == []
+    # ...and only that: the child who sits Space Mountain out.
+    assert ungrounded_numerals(text, payload.to_json()) == ["90"]
 
 
 def test_a_colon_after_a_time_is_punctuation_but_seconds_are_not_a_time():
@@ -122,8 +126,12 @@ def test_a_colon_after_a_time_is_punctuation_but_seconds_are_not_a_time():
 # --- the fixture behind the Done-when -----------------------------------------------
 
 FIXTURE = json.loads(
-    (Path(__file__).resolve().parents[1] / "fixtures" / "explain" / "grounded_cases.json")
-    .read_text(encoding="utf-8")
+    (
+        Path(__file__).resolve().parents[1]
+        / "fixtures"
+        / "explain"
+        / "grounded_cases.json"
+    ).read_text(encoding="utf-8")
 )
 CASES = FIXTURE["cases"]
 
