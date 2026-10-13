@@ -420,7 +420,12 @@ def build_planning_stage(
     clock: Clock = park_clock,
     narrator: PlanNarrator | None = None,
 ) -> Any:
-    """LOAD CONTEXT -> RESOLVE GROUP -> BUILD PLAN -> CHECK -> EXPLAIN -> PROPOSE -> APPROVAL."""
+    """LOAD CONTEXT -> RESOLVE GROUP -> BUILD PLAN -> CHECK -> EXPLAIN -> PROPOSE -> APPROVAL.
+
+    Built on its own, the stage's EXPLAIN uses the template unless a ``narrator`` is
+    given; ``build_initial_planning_graph``, the graph the app runs, passes Claude by
+    default.
+    """
     graph = StateGraph(ParkMindState)
 
     def propose_plan(state: ParkMindState) -> ParkMindState:

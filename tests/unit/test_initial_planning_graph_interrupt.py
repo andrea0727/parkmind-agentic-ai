@@ -11,6 +11,7 @@ payload, and which state helper runs on which decision.
 
 import factories
 import pytest
+from explain_support import NoNarrator
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
@@ -186,5 +187,7 @@ def test_resuming_with_rejected_discards_candidate_without_activating(monkeypatc
 
 
 def test_build_initial_planning_graph_uses_checkpoint_safe_serde():
-    compiled = ipg.build_initial_planning_graph(checkpointer=MemorySaver())
+    compiled = ipg.build_initial_planning_graph(
+        checkpointer=MemorySaver(), narrator=NoNarrator()
+    )
     assert compiled is not None

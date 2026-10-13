@@ -43,6 +43,12 @@ class ExplainBeforeValidationError(RuntimeError):
     """An explanation was requested for a plan the checker has not passed."""
 
 
+def _require_valid(check_result: CheckResult) -> None:
+    """Explanation comes only after validation (section 40)."""
+    if not check_result.valid:
+        raise ExplainBeforeValidationError("a plan is explained only after it passed the checker")
+
+
 def _guest_name(guest: Guest) -> str:
     number = guest.guest_id.removeprefix("g")
     return f"Guest {number}" if number.isdigit() else guest.guest_id
@@ -103,8 +109,7 @@ def explain_plan(
     guests: Sequence[Guest] = (),
     height_limits: Mapping[str, int] | None = None,
 ) -> str:
-    if not check_result.valid:
-        raise ExplainBeforeValidationError("a plan is explained only after it passed the checker")
+    _require_valid(check_result)
     names = {**names, MEAL_VENUE_TBD: "Lunch (restaurant to be chosen, near your previous stop)"}
     lines = [
         f"{stop.arrival_time.astimezone(PARK_TZ):%H:%M} "
@@ -152,7 +157,8 @@ def explain_replan(
     if not changes:
         changes.append("No stops changed; only times shifted.")
     body = explain_plan(plan, check_result, names, guests=guests, height_limits=height_limits)
-    return "\n".join([reason, *changes, "", body])
+    lead = [reason] if reason else []
+    return "\n".join([*lead, *changes, "", body])
 
 
 @dataclass(frozen=True)
@@ -239,8 +245,7 @@ def explanation_payload(
     reason: str | None = None,
     diff: PlanDiff | None = None,
 ) -> ExplanationPayload:
-    if not check_result.valid:
-        raise ExplainBeforeValidationError("a plan is explained only after it passed the checker")
+    _require_valid(check_result)
     names = {**names, MEAL_VENUE_TBD: "Lunch (restaurant to be chosen, near your previous stop)"}
     out_by_stop = {
         node_id: [
@@ -342,10 +347,7 @@ class ExplainPlanUseCase:
 
         A replan passes its ``reason`` and ``diff``; both halves then lead with them.
         """
-        if not check_result.valid:
-            raise ExplainBeforeValidationError(
-                "a plan is explained only after it passed the checker"
-            )
+        _require_valid(check_result)
         names, limits = _catalog_facts(self._deps_factory)
         payload = explanation_payload(
             plan,

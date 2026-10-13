@@ -255,3 +255,15 @@ def test_prepare_gives_the_payload_and_the_template_from_one_catalog_read():
 
     assert prepared.payload.stops[0].name == "TRON"
     assert "TRON" in prepared.template
+
+
+def test_a_replan_with_no_reason_does_not_open_with_a_blank_line():
+    """Review #90: an empty reason used to leave an empty first line."""
+    from parkmind.services.use_cases.explain_plan import explain_replan
+
+    text = explain_replan(
+        factories.plan(), CheckResult(valid=True), {"a1": "Space Mountain"},
+        reason="", diff=PlanDiff(stops_added=["a1"]),
+    )
+
+    assert text.startswith("Added: Space Mountain.")
