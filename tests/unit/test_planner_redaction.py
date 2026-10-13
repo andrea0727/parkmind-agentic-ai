@@ -152,3 +152,25 @@ def _day_failure(rule: RuleId) -> str:
     )
     assert result.valid is False and result.fatal_error
     return result.fatal_error
+
+
+@pytest.mark.parametrize(
+    "rule", (RuleId.AVOID, RuleId.MUST_DO, *PRIVATE), ids=lambda r: r.value
+)
+def test_a_failed_day_keeps_every_rule_id_and_stop_in_its_check(rule: RuleId) -> None:
+    """Review #89 (3): the failure text loses the rule ids, so the Replanner hands back
+    its whole-day check; redacted, every violation still names its rule and stop."""
+    result = Replanner(_DayFailsCheck(rule), park_graph=None).replan(  # type: ignore[arg-type]
+        current_plan=factories.plan(),
+        execution_state=factories.execution_state(completed_stop_ids=[]),
+        context=factories.live_context(),
+        constraints=factories.party_constraints(),
+        utilities={},
+        park=factories.park(),
+        catalog=[],
+    )
+
+    assert result.check is not None
+    [violation] = public_check(result.check).violations
+    assert (violation.rule, violation.stop_id) == (rule, "stop-3")
+    assert (SECRET in violation.message) is (rule not in PRIVATE)

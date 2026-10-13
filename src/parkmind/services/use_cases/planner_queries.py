@@ -6,8 +6,9 @@ by calling the same use cases, and stops there: nothing is proposed, persisted
 or activated (section 27 [C23]: no MCP tool can activate or mutate a plan). The
 result is a *candidate* with its check. ``replan`` does the same for the rest of
 a day the replanning graph would replan -- LOAD CONTEXT, RESOLVE GROUP (re-run),
-REPLAN, CHECK of the whole day -- from a plan, its progress and the events the
-client sends (section 31), and stops before DIFF's proposal. ``check_plan``,
+REPLAN with its CHECK of the whole day (the Replanner's final gate) -- from a
+plan, its progress and the events the client sends (section 31), and stops
+before DIFF's proposal. ``check_plan``,
 ``score_preferences`` and ``forecast_waits`` expose one step each.
 
 Accessibility is passed by reference only [C19]: ``session_id`` (the SessionStore
@@ -20,8 +21,9 @@ What leaves this use case never carries a requirement value: the checker's
 messages for rules 9 and 10 (walking, rest, heat; ride restrictions) quote the
 guest's limits, so those violations, and a re-solve failure that quotes them,
 are replaced by fixed sentences that keep the rule id and the stop. A replan whose
-whole day fails the checker reports the checker's messages without their rule
-ids, so that failure keeps only its first sentence.
+whole day fails the checker joins the checker's messages without their rule
+ids, so that failure keeps only its first sentence; the redacted ``check`` still
+names each rule and stop.
 """
 
 import re
@@ -172,7 +174,9 @@ class ReplanCandidate:
     diff: PlanDiff | None
     """What changed against the plan that was sent."""
     check: CheckResult | None
-    """The whole day's check (completed stops + horizon, walking already done counted)."""
+    """The Replanner's whole-day check (completed stops + horizon, walking already done
+    counted), redacted: present when the horizon reached it, also when the day fails, so
+    every violation keeps its rule id and stop. ``None`` when the re-solve loop failed."""
     valid: bool
     unmet_must_do: list[str]
     failure: str | None
@@ -315,22 +319,10 @@ class PlannerQueries:
             )
         )
         result = outcome.result
-        check = (
-            self._check.execute_replan(
-                thread_id=session_id,
-                plan=result.plan,
-                constraints=constraints,
-                accessibility_ref=guest_ids,
-                live_context=outcome.live_context,
-                execution_state=outcome.execution_state,
-            )
-            if result.plan is not None
-            else None
-        )
         return ReplanCandidate(
             plan=result.plan,
             diff=result.diff,
-            check=public_check(check) if check is not None else None,
+            check=public_check(result.check) if result.check is not None else None,
             valid=result.valid,
             unmet_must_do=list(result.unmet_must_do),
             failure=public_failure(result.fatal_error),

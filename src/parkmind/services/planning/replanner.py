@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from parkmind.core.contracts import (
     AccessibilityRequirements,
     Attraction,
+    CheckResult,
     GroupObjective,
     LiveContext,
     Park,
@@ -40,6 +41,9 @@ class ReplanResult:
     diff: PlanDiffModel | None
     unmet_must_do: list[str]
     fatal_error: str | None = None
+    check: CheckResult | None = None
+    """The whole day's check (the final gate), when the horizon got that far: its
+    violations keep their rule ids and stops, which ``fatal_error`` joins into text."""
 
 
 class Replanner:
@@ -179,6 +183,7 @@ class Replanner:
                 diff=None,
                 unmet_must_do=[],
                 fatal_error=f"The replanned day does not pass the constraint checker: {reasons}",
+                check=full_check,
             )
 
         # 6. Calculate the delta for the UI / Concierge (P0-22)
@@ -189,4 +194,5 @@ class Replanner:
             plan=new_plan,
             diff=diff,
             unmet_must_do=resolve_result.unmet_must_do,
+            check=full_check,
         )
