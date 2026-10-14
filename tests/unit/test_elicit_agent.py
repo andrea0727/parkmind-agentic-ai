@@ -453,8 +453,6 @@ def test_an_unreachable_model_is_a_flagged_message_not_a_raw_error() -> None:
 
 
 def test_a_failing_model_call_is_reported_as_unavailable_without_the_connection_details() -> None:
-    from parkmind.agents.elicit_agent import AnthropicExtractor
-
     class Down:
         def invoke(self, *_: object) -> object:
             raise ConnectionError("https://user:secret@llm.internal:443 refused")

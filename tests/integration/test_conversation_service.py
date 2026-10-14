@@ -17,7 +17,10 @@ from parkmind.core.conversation import (
     UnknownAttractionError,
     UnknownThreadError,
 )
-from parkmind.services.use_cases.planning_deps import PlanningUnavailableError, load_catalog
+from parkmind.services.use_cases.planning_deps import (
+    PlanningUnavailableError,
+    load_catalog,
+)
 
 CONFIRM = HardConstraintAnswer(confirmed=True, consent=True)
 

@@ -66,7 +66,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 from pydantic import ValidationError
 
-from parkmind.agents.elicit_agent import GuestInfoExtractor
+from parkmind.agents.elicit_agent import ELICIT_PROMPT_VERSION, GuestInfoExtractor
 from parkmind.agents.explain_agent import (
     AnthropicNarrator,
     PlanNarrator,
@@ -396,7 +396,11 @@ def _make_explain_node(
         )
         # The narrator writes English only; other languages get the localized template.
         active = narrator if lang == DEFAULT_LANGUAGE else None
-        return explained(plan, explain_grounded(active, prepared))
+        return explained(
+            plan,
+            explain_grounded(active, prepared),
+            {"elicit": ELICIT_PROMPT_VERSION},
+        )
 
     return explain
 

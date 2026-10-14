@@ -428,7 +428,8 @@ def test_check_replan_does_not_hold_a_closure_against_a_stop_already_completed(
 def test_check_offsets_the_walking_limits_by_what_was_already_walked(
     park, catalog, context
 ) -> None:
-    horizon_only = _plan_with_completed(15.0).model_copy(update={"total_walking_minutes": 15.0})
+    full = _plan_with_horizon(0.0, 15.0)
+    horizon_only = full.model_copy(update={"stops": full.stops[1:], "total_walking_minutes": 15.0})
     reqs = [AccessibilityRequirements(guest_id="g1", daily_walking_limit_minutes=20, consent=True)]
     args = (_constraints(park), reqs, {a.node_id: a for a in catalog}, park, context, AS_OF)
 

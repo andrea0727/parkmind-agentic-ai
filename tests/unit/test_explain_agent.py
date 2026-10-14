@@ -1,8 +1,8 @@
 """EXPLAIN's safety path (section 40 [C17], P0-31): grounded LLM text or the template."""
 
 import logging
-from dataclasses import replace
 from collections.abc import Mapping
+from dataclasses import replace
 from typing import Any
 
 import factories
