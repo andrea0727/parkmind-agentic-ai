@@ -35,7 +35,9 @@ Two kinds of identity:
   one already held is a duplicate; otherwise the id is
   ``"{TYPE}:{subject}:{UTC minute}"``. Subjects: the attraction (wait spike),
   the first affected hour (rain), the guest (fatigue), the location
-  (relocation).
+  (relocation). One exception: a wait spike at least ``SPIKE_ESCALATION_MINUTES``
+  larger than the one held is a new moment, so a queue that keeps growing is
+  not hidden behind its first, small spike.
 
 Pure: the thread's history is passed in, ``now`` is never read.
 """
@@ -50,6 +52,9 @@ EPISODIC = frozenset({EventType.ATTRACTION_DOWN, EventType.ATTRACTION_AVAILABLE}
 
 USER_EPISODE_WINDOW = timedelta(hours=2)
 """How long the provider may lag behind a guest's report of the same closure."""
+
+SPIKE_ESCALATION_MINUTES = 10.0
+"""How much larger a wait spike must be than the one held to count as a new one."""
 
 
 def deduplicate(
@@ -145,7 +150,17 @@ def _moment_id(candidate: Event, seen: list[Event], window: timedelta) -> str | 
             earlier.type is candidate.type
             and subject(earlier) == key
             and abs(candidate.timestamp - earlier.timestamp) <= window
+            and not _escalates(candidate, earlier)
         ):
             return None
     minute = candidate.timestamp.astimezone(UTC).strftime("%Y%m%dT%H%MZ")
     return f"{candidate.type.value}:{key}:{minute}"
+
+
+def _escalates(candidate: Event, held: Event) -> bool:
+    """A wait spike that outgrows the one held by ``SPIKE_ESCALATION_MINUTES``."""
+    if candidate.type is not EventType.WAIT_SPIKE:
+        return False
+    if candidate.delta_minutes is None or held.delta_minutes is None:
+        return False
+    return candidate.delta_minutes >= held.delta_minutes + SPIKE_ESCALATION_MINUTES
