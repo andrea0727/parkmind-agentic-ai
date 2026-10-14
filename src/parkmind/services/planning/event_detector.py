@@ -12,9 +12,14 @@ What counts as a change:
   ``ATTRACTION_AVAILABLE`` [C23]: the reverse. A status missing from the
   previous snapshot is unknown, so it is never a transition.
 * ``WAIT_SPIKE``: an OPERATING posted wait that rose by at least
-  ``spike_floor_minutes``. The floor is the lowest ``queue_spike`` threshold
-  any party can have; whether the spike matters to *this* party is the
-  policy's call (section 25, profile-aware thresholds).
+  ``spike_floor_minutes`` over the lowest OPERATING wait the attraction posted in
+  the ``baseline_window`` before the current snapshot (the previous snapshot and
+  the ``earlier`` ones the caller passes). Comparing two snapshots only would
+  miss a ramp of +9 per cycle that adds up to +36 within half an hour. The
+  floor is the lowest ``queue_spike`` threshold any party can have; whether the
+  spike matters to *this* party is the policy's call (section 25,
+  profile-aware thresholds). A drop followed by a rise counts as a rise from
+  the low point.
 * ``RAIN_INCOMING``: look-ahead hours whose precipitation probability crossed
   ``rain_probability`` since the previous snapshot: the hour is in the
   previous forecast, below the threshold. An hour the previous snapshot did not
@@ -42,7 +47,7 @@ Event ids here are provisional and deterministic; ``event_dedup`` assigns the
 cross-source id before anything is recorded.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -78,6 +83,8 @@ class DetectorConfig:
     """The longest time between two snapshots that still makes them consecutive."""
     spike_floor_minutes: float = 10.0
     """The lowest ``EventThresholds.queue_spike_minutes`` the resolver produces."""
+    baseline_window: timedelta = FRESHNESS_WINDOW
+    """How far back a wait counts as the baseline a spike is measured from."""
     rain_probability: float = 0.5
     rain_lookahead: timedelta = timedelta(hours=3)
 
@@ -91,14 +98,17 @@ def detect_events(
     *,
     now: datetime,
     reading_times: Mapping[str, datetime | None],
+    earlier: Sequence[LiveContext] = (),
     config: DetectorConfig = DEFAULT_DETECTOR_CONFIG,
 ) -> list[Event]:
     """Candidate events between two consecutive snapshots, in a stable order.
 
     ``reading_times`` maps attraction id -> the provider's reading time in
-    ``current`` (``None`` or absent: unknown). Empty when there is no previous
-    snapshot to compare with, when the snapshots are out of order or more than
-    ``max_gap`` apart, or when ``current`` is not fresh at ``now``.
+    ``current`` (``None`` or absent: unknown). ``earlier`` are the snapshots
+    before ``previous`` (any order): only their waits are read, as the baseline
+    of ``WAIT_SPIKE``. Empty when there is no previous snapshot to compare
+    with, when the snapshots are out of order or more than ``max_gap`` apart,
+    or when ``current`` is not fresh at ``now``.
     """
     _require_aware(now, "now")
     if previous is None or previous.retrieved_at >= current.retrieved_at:
@@ -114,7 +124,7 @@ def detect_events(
 
     events = [
         *_status_events(previous, current, is_new),
-        *_wait_spikes(previous, current, is_new, config),
+        *_wait_spikes(previous, earlier, current, is_new, config),
         *_rain(previous, current, now, config),
     ]
     return sorted(events, key=_order)
@@ -201,17 +211,33 @@ def _status_events(
 
 def _wait_spikes(
     previous: LiveContext,
+    earlier: Sequence[LiveContext],
     current: LiveContext,
     is_new: IsNew,
     config: DetectorConfig,
 ) -> list[Event]:
+    since = current.retrieved_at - config.baseline_window
+    baseline = [
+        s.waits
+        for s in earlier
+        if since <= s.retrieved_at < previous.retrieved_at
+    ]
     events: list[Event] = []
     for attraction_id in sorted(current.waits):
         after = current.waits[attraction_id]
         before = previous.waits.get(attraction_id)
         if before is None or not _both_operating(before.status, after.status):
             continue
-        delta = after.wait_minutes - before.wait_minutes
+        lowest = min(
+            [before.wait_minutes]
+            + [
+                w.wait_minutes
+                for waits in baseline
+                if (w := waits.get(attraction_id)) is not None
+                and w.status is AttractionStatus.OPERATING
+            ]
+        )
+        delta = after.wait_minutes - lowest
         if delta < config.spike_floor_minutes or not is_new(attraction_id):
             continue
         events.append(

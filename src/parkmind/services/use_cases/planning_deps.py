@@ -116,9 +116,9 @@ DepsFactory = Callable[[], AbstractContextManager[PlanningDeps]]
 
 
 @contextmanager
-def default_planning_deps(database_url: str | None = None) -> Iterator[PlanningDeps]:
+def default_planning_deps() -> Iterator[PlanningDeps]:
     with ExitStack() as stack:
-        conn = stack.enter_context(connect(database_url))
+        conn = stack.enter_context(connect())
         parks = stack.enter_context(ThemeParksClient(MAGIC_KINGDOM_PARK_ID))
         weather = stack.enter_context(OpenMeteoClient())
         snapshots = PostgresSnapshotRepository(conn)

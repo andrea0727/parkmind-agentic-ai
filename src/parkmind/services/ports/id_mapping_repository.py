@@ -7,6 +7,7 @@ wherever the port takes a ``str``. The model around this port lives in
 ``services.use_cases.id_resolution``.
 """
 
+from collections.abc import Iterable
 from datetime import datetime
 from enum import StrEnum
 from typing import Protocol
@@ -43,6 +44,15 @@ class IdMappingRepository(Protocol):
     def resolve(
         self, provider: str, provider_id: str, entity_kind: str
     ) -> str | None: ...
+
+    def resolve_many(
+        self, provider: str, keys: Iterable[tuple[str, str]]
+    ) -> dict[tuple[str, str], str]:
+        """``resolve`` for many ``(provider_id, entity_kind)`` keys at once.
+
+        Only the mapped keys are in the result.
+        """
+        ...
 
     def provider_ids_for(self, internal_id: str) -> list[tuple[str, str, str]]:
         """``(provider, provider_id, entity_kind)`` triples for an internal id."""

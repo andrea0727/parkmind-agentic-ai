@@ -52,11 +52,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--dry-run", action="store_true", help="list the snapshots, change nothing"
     )
-    parser.add_argument("--database-url", default=None, help="defaults to DATABASE_URL")
     args = parser.parse_args(argv)
 
     try:
-        with connect(args.database_url) as conn:
+        with connect() as conn:
             snapshots = PostgresSnapshotRepository(conn)
             if args.snapshot_id:
                 ids = list(args.snapshot_id)

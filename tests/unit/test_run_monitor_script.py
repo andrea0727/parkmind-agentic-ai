@@ -58,17 +58,9 @@ def test_the_interval_has_a_floor(script):
         script.main(["--loop", "--interval", "10"])
 
 
-def test_the_database_url_reaches_detection(script, monkeypatch):
-    """Review #86 (S5): ``--database-url`` is not only for the collector."""
-    deps = _deps([(NOW, None)])
-    seen: list[str | None] = []
+def test_the_database_url_is_not_a_command_line_flag(script, capsys):
+    """The password would end up in shell history and ``ps``: ``DATABASE_URL`` only."""
+    with pytest.raises(SystemExit):
+        script.main(["--no-collect", "--database-url", "postgresql://u:secret@h/db"])
 
-    def fake_default(database_url=None):
-        seen.append(database_url)
-        return factory_for(deps)()
-
-    monkeypatch.setattr(script, "default_planning_deps", fake_default)
-
-    code = script.main(["--no-collect", "--database-url", "postgresql://elsewhere"])
-
-    assert code == 0 and seen == ["postgresql://elsewhere"]
+    assert "unrecognized arguments" in capsys.readouterr().err
