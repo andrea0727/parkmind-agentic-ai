@@ -430,6 +430,16 @@ def create_app(
     def provisional_plan(thread_id: ThreadId) -> TurnOut:
         return present.turn(conversation.provisional(thread_id))
 
+    @app.post(
+        "/api/provisional/refresh",
+        tags=["plan"],
+        response_model=TurnOut,
+        responses=_ERRORS,
+        dependencies=[Metered],
+    )
+    def refresh_provisional_plan(thread_id: ThreadId) -> TurnOut:
+        return present.turn(conversation.refresh_provisional(thread_id))
+
     if ui_dir is not None:
         app.mount("/", StaticFiles(directory=ui_dir, html=True), name="ui")
     return app

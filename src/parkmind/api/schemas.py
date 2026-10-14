@@ -169,6 +169,11 @@ class HeldEventOut(BaseModel):
     confidence: float
 
 
+class ProvisionalOut(BaseModel):
+    plan: PlanOut
+    opens_at: datetime
+
+
 class TurnOut(BaseModel):
     thread_id: str
     status: TurnStatus
@@ -180,6 +185,7 @@ class TurnOut(BaseModel):
     held_events: list[HeldEventOut]
     error: str | None
     provisional_offer: bool = False
+    provisional: ProvisionalOut | None = None
 
 
 class HealthOut(BaseModel):

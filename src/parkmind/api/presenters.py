@@ -13,6 +13,7 @@ from parkmind.api.schemas import (
     PlanOut,
     ProposalOut,
     ProvenanceOut,
+    ProvisionalOut,
     StopOut,
     TurnOut,
 )
@@ -163,4 +164,9 @@ class Presenter:
             ],
             error=turn.error,
             provisional_offer=turn.provisional_offer,
+            provisional=None
+            if turn.provisional_plan is None or turn.provisional_opens is None
+            else ProvisionalOut(
+                plan=self.plan(turn.provisional_plan), opens_at=turn.provisional_opens
+            ),
         )

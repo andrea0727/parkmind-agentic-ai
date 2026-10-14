@@ -12,7 +12,7 @@ process (``default_checkpointer`` is in-memory), which is why the API runs one w
 
 import threading
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Literal
 from uuid import uuid4
@@ -21,6 +21,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command
 
 from parkmind.core.contracts import (
+    PARK_TZ,
     ApprovalStatus,
     Event,
     Plan,
@@ -41,6 +42,7 @@ from parkmind.core.language import DEFAULT_LANGUAGE, Language, as_language, text
 from parkmind.graph.initial_planning_graph import APPROVAL_INTERRUPT_KIND, park_clock
 from parkmind.graph.replanning_graph import EVENT_CONFIRMATION_INTERRUPT_KIND
 from parkmind.services.use_cases.active_plan import ActivePlanUseCase
+from parkmind.services.use_cases.park_status import ParkStatusUseCase
 from parkmind.services.use_cases.pending_proposal import PendingProposalUseCase
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
@@ -48,7 +50,7 @@ from parkmind.services.use_cases.planning_deps import (
     load_catalog,
     open_deps,
 )
-from parkmind.services.use_cases.provisional_plan import ProvisionalPlanUseCase
+from parkmind.services.use_cases.provisional_plan import ProvisionalPlanUseCase, retimed
 from parkmind.services.use_cases.resolve_attraction_names import suggest_attractions
 
 MISSING_INFORMATION_KIND = "missing_information"
@@ -67,6 +69,7 @@ class _Thread:
     language_hinted: bool = False
     language: Language = DEFAULT_LANGUAGE
     saved_party: str | None = None
+    provisional_opens: datetime | None = None
 
 
 def _new_thread_id() -> str:
@@ -90,6 +93,7 @@ class ConversationService:
         self._deps_factory = deps_factory
         self._clock = clock
         self._provisional = ProvisionalPlanUseCase(deps_factory)
+        self._park_status = ParkStatusUseCase(deps_factory)
         self._pending = PendingProposalUseCase(deps_factory)
         self._active = ActivePlanUseCase(deps_factory)
         self._new_thread_id = new_thread_id
@@ -122,6 +126,7 @@ class ConversationService:
             turn = self._run(thread_id, thread, "initial", payload)
             if hinting:
                 thread.language_hinted = True
+                turn = self._with_closed_notice(thread, turn)
             return turn
 
     def confirm_constraints(self, thread_id: str, answer: HardConstraintAnswer) -> Turn:
@@ -186,7 +191,45 @@ class ConversationService:
                 now=self._clock(),
                 lang=lang,
             )
-            return Turn(thread_id, TurnStatus.DONE, messages=(preview.text,))
+            if preview.plan is not None:
+                thread.provisional_opens = preview.opens_at
+            return Turn(
+                thread_id,
+                TurnStatus.DONE,
+                messages=(preview.text,),
+                provisional_plan=preview.plan,
+                provisional_opens=preview.opens_at if preview.plan is not None else None,
+            )
+
+    def refresh_provisional(self, thread_id: str) -> Turn:
+        thread = self._thread(thread_id)
+        with thread.lock:
+            self._require_nothing_pending(thread)
+            opens = thread.provisional_opens
+            if opens is None:
+                raise NotExpectedError("there is no provisional plan to refresh")
+            now = self._clock()
+            status = self._park_status.execute(now)
+            if status is None or status.closed or now < opens or now < status.opening_time:
+                raise NotExpectedError("the park has not opened yet")
+            config: Any = {"configurable": {"thread_id": thread_id}}
+            values = self._graphs["initial"].get_state(config).values or {}
+            constraints = values.get("constraints")
+            if constraints is None or not values.get("constraints_valid"):
+                raise NotExpectedError("there is no confirmed request to plan")
+            self._graphs["initial"].update_state(
+                config,
+                {"constraints": retimed(constraints, now.astimezone(PARK_TZ).date())},
+                as_node="validate_constraints",
+            )
+            turn = self._run(thread_id, thread, "initial", None)
+            if turn.provisional_offer:
+                return turn
+            thread.provisional_opens = None
+            if turn.status is TurnStatus.NEEDS_APPROVAL:
+                notice = text("park_opened_refresh", thread.language)
+                return replace(turn, messages=(notice, *turn.messages))
+            return turn
 
     def report_events(self, thread_id: str, events: Sequence[Event]) -> Turn:
         thread = self._thread(thread_id)
@@ -224,6 +267,16 @@ class ConversationService:
     def active_plan(self, thread_id: str) -> Plan | None:
         self._thread(thread_id)
         return self._active.execute(thread_id)
+
+    def _with_closed_notice(self, thread: _Thread, turn: Turn) -> Turn:
+        """The first reply of a closed day says so, instead of only asking about the party."""
+        if turn.status is not TurnStatus.NEEDS_ANSWER:
+            return turn
+        status = self._park_status.execute(self._clock())
+        if status is None or not status.closed:
+            return turn
+        notice = text("park_closed_heads_up", thread.language, closing=status.closing_label())
+        return replace(turn, messages=(notice, *turn.messages))
 
     def _thread(self, thread_id: str) -> _Thread:
         with self._registry_lock:

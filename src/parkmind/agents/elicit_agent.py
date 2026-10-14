@@ -14,13 +14,14 @@ still missing. It never decides what the checker enforces:
 
 import re
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time
 from typing import Any, Protocol
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import SecretStr, ValidationError
 
+from parkmind.agents.clock_answer import parse_clock
 from parkmind.agents.elicit_prompt import ELICIT_PROMPT_VERSION, ELICIT_SYSTEM_PROMPT
 from parkmind.agents.elicit_schema import ElicitationExtraction, normalize_name
 from parkmind.config.settings import settings
@@ -579,6 +580,26 @@ def _staged(extraction: ElicitationExtraction) -> list[StagedAccessibility]:
     ]
 
 
+def _asked_for_departure(state: ParkMindState) -> bool:
+    messages = state.get("messages", [])
+    last = messages[-2] if len(messages) >= 2 else None
+    asked = getattr(last, "additional_kwargs", {}).get("missing_information") or ()
+    return getattr(last, "type", None) == "ai" and "departure_time" in asked
+
+
+def _with_clock_answer(
+    outcome: ExtractionOutcome, state: ParkMindState, answer: str
+) -> ExtractionOutcome:
+    """A short reply to "what time do you leave?" is read here: the extractor never sees the question."""
+    extraction = outcome.extraction
+    if extraction is None or not _asked_for_departure(state):
+        return outcome
+    hhmm = parse_clock(answer)
+    if hhmm is None:
+        return outcome
+    return replace(outcome, extraction=extraction.model_copy(update={"departure_time": hhmm}))
+
+
 def make_elicit_node(
     extractor: GuestInfoExtractor,
     intake: AccessibilityIntakeUseCase,
@@ -612,6 +633,7 @@ def make_elicit_node(
         intake.discard(session_id)
 
         outcome = extract_with_recovery(extractor, texts, max_attempts=max_attempts)
+        outcome = _with_clock_answer(outcome, state, texts[-1])
         resolution = NameResolution()
         if outcome.extraction is None:
             missing = ["unreadable_response"]

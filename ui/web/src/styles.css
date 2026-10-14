@@ -99,6 +99,7 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
 .screen-head h2{font-size:27px;font-weight:800;letter-spacing:-.03em;margin:0}
 .screen-head p{margin:3px 0 0;font-size:13.5px;color:var(--muted);font-weight:500}
 .status-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;background:#E2F4F2;color:#0A6B66;margin-top:10px}
+.prov-note{display:flex;flex-direction:column;gap:8px;align-items:flex-start;margin:0 0 12px;padding:10px 12px;border-radius:10px;background:#FFF3D6;color:#7A5200;font-size:13px;font-weight:600;line-height:1.4}
 .status-chip::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--lagoon)}
 
 .stop{display:grid;grid-template-columns:50px 16px 1fr;gap:4px}

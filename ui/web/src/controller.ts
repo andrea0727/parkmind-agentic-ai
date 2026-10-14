@@ -36,7 +36,8 @@ export interface State {
   threadId: string | null;
   parkClosedAt: string | null;
   plan: PlanEvent[];
-  planStatus: "valid" | "updated";
+  planStatus: "valid" | "updated" | "provisional";
+  provisionalOpensAt: number | null;
   proposal: ProposalView | null;
   proposalState: ProposalState;
   screen: Screen;
@@ -101,6 +102,7 @@ function initial(): State {
     parkClosedAt: null,
     plan: structuredClone(FIXTURE.plan.events),
     planStatus: "valid",
+    provisionalOpensAt: null,
     proposal: structuredClone(FIXTURE.proposal),
     proposalState: "pending",
     screen: "home",
@@ -297,7 +299,7 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
       } else {
         events = applyDiff(st.plan, p);
       }
-      upd(() => ({ plan: events, proposalState: "applied", planStatus: "updated", psheet: false, nsheet: false, sheet: false, sessbar: false, screen: "plan" }));
+      upd(() => ({ plan: events, proposalState: "applied", planStatus: "updated", provisionalOpensAt: null, psheet: false, nsheet: false, sheet: false, sessbar: false, screen: "plan" }));
       notify(
         {
           id: `plan:${p.proposal_id}`,
@@ -542,15 +544,47 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
         const turn = await api.provisional(st.threadId);
         drop(ty);
         push({ k: "bot", text: turn.messages.join("\n\n") });
+        if (turn.provisional)
+          upd(() => ({
+            plan: planFromApi(turn.provisional!.plan),
+            planStatus: "provisional",
+            provisionalOpensAt: Date.parse(turn.provisional!.opens_at),
+            psheet: false, nsheet: false, sheet: false, sessbar: false, screen: "plan",
+          }));
       } catch (e) {
         drop(ty);
         failBubble(e);
       }
     },
-    [drop, push, failBubble],
+    [drop, push, failBubble, upd],
   );
 
-  /* ---------------- notifications ---------------- */
+  /* The provisional plan refreshes itself once the park opens: the planner re-plans with live data and proposes it. */
+  const refreshing = useRef(false);
+  useEffect(() => {
+    if (s.mode !== "live" || !s.threadId || s.provisionalOpensAt == null) return;
+    const threadId = s.threadId;
+    const tick = async () => {
+      const opensAt = ref.current.provisionalOpensAt;
+      if (refreshing.current || opensAt == null || Date.now() < opensAt) return;
+      refreshing.current = true;
+      try {
+        const turn = await api.refreshProvisional(threadId);
+        if (ref.current.threadId !== threadId) return;
+        if (turn.provisional_offer) return;
+        upd(() => ({ provisionalOpensAt: null }));
+        await deliverTurnRef.current(turn);
+        notify({ id: `prov:${opensAt}`, icon: "🎢", titleKey: "n_prov_t", bodyKey: "n_prov_b" });
+      } catch {
+        /* not open yet or busy: retried on the next tick */
+      } finally {
+        refreshing.current = false;
+      }
+    };
+    void tick();
+    const timer = window.setInterval(() => void tick(), 30000);
+    return () => window.clearInterval(timer);
+  }, [s.mode, s.threadId, s.provisionalOpensAt, upd, notify]);
   const markRead = useCallback(
     (id: string) => upd((st) => ({ read: st.read.includes(id) ? st.read : [...st.read, id] })),
     [upd],

@@ -154,9 +154,37 @@ export function PlanScreen() {
         <h2>{t("my_plan")}</h2>
         <p>{FIXTURE.plan.park} · <span>{s.plan.length}</span> <span>{t("stops_exit")}</span></p>
         {s.plan.length > 0 && (
-          <span className="status-chip">{s.proposalState === "applied" ? t("plan_updated") : t("plan_valid")}</span>
+          <span className="status-chip">
+            {s.planStatus === "provisional"
+              ? t("plan_provisional_chip")
+              : s.proposalState === "applied"
+                ? t("plan_updated")
+                : t("plan_valid")}
+          </span>
         )}
       </div>
+      {s.planStatus === "provisional" && s.plan.length > 0 && (
+        <div className="prov-note" role="status">
+          {s.provisionalOpensAt != null ? (
+            <span>
+              {t("plan_provisional_note", {
+                time: new Date(s.provisionalOpensAt).toLocaleTimeString("en-GB", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  timeZone: "America/New_York",
+                }),
+              })}
+            </span>
+          ) : (
+            <>
+              <span>{t("plan_provisional_ready")}</span>
+              {s.proposal && s.proposalState === "pending" && (
+                <button type="button" className="rc-add" onClick={c.actions.openProposal}>{t("review")}</button>
+              )}
+            </>
+          )}
+        </div>
+      )}
       {s.plan.length === 0 ? (
         <div className="empty">
           <b>{t("no_plan")}</b>

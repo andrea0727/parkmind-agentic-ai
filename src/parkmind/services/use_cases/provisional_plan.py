@@ -47,6 +47,8 @@ class ProvisionalPlan:
     plan: Plan | None
     """``None`` when no plan could be built; ``text`` then says so."""
     target_date: date
+    opens_at: datetime | None = None
+    """When the park opens on ``target_date``; ``None`` when no plan could be built."""
 
 
 def _on_date(moment: datetime, day: date) -> datetime:
@@ -54,7 +56,7 @@ def _on_date(moment: datetime, day: date) -> datetime:
     return local.replace(year=day.year, month=day.month, day=day.day)
 
 
-def _retimed(constraints: PartyConstraints, day: date) -> PartyConstraints:
+def retimed(constraints: PartyConstraints, day: date) -> PartyConstraints:
     update: dict[str, object] = {"departure_time": _on_date(constraints.departure_time, day)}
     window = constraints.lunch_window
     if window is not None:
@@ -100,7 +102,7 @@ class ProvisionalPlanUseCase:
                 accessibility_checks_complete=True,
             ),
         )
-        planned = _retimed(constraints, target)
+        planned = retimed(constraints, target)
         builder = BuildPlanUseCase(self._deps_factory)
         objective = builder.resolve_group(
             thread_id=thread_id,
@@ -139,4 +141,4 @@ class ProvisionalPlanUseCase:
                 text("provisional_footer", lang, solo=solo),
             ]
         )
-        return ProvisionalPlan(body, built.plan, target)
+        return ProvisionalPlan(body, built.plan, target, opening)

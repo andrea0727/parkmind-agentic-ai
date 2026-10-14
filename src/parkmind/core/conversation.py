@@ -7,6 +7,7 @@ what the planner needs next as a ``Turn``.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import Protocol
 
@@ -73,6 +74,9 @@ class Turn:
     error: str | None = None
     provisional_offer: bool = False
     """The park is closed; ``Conversation.provisional`` can preview tomorrow."""
+    provisional_plan: Plan | None = None
+    provisional_opens: datetime | None = None
+    """The preview and when the park opens: it is refreshed from then on."""
 
 @dataclass(frozen=True)
 class HardConstraintAnswer:
@@ -115,7 +119,13 @@ class Conversation(Protocol):
     def provisional(self, thread_id: str) -> Turn:
         """A preview plan for the next park day, built from the confirmed request.
 
-        Never proposed or saved; the guests ask again once the park opens."""
+        Never proposed or saved; ``refresh_provisional`` replaces it once the park opens."""
+        ...
+
+    def refresh_provisional(self, thread_id: str) -> Turn:
+        """Once the park has opened: plan the request again with live data.
+
+        The result is a normal proposal for the guests to approve."""
         ...
 
     def report_events(self, thread_id: str, events: Sequence[Event]) -> Turn: ...

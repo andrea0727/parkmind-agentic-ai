@@ -1,7 +1,8 @@
 """A ConversationService over the in-memory ports, for the service and API tests."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from elicit_support import FakeExtractor, make_intake, make_names, scenario
@@ -32,7 +33,9 @@ class Rig:
     extractor: FakeExtractor
 
 
-def make_rig(*extractions: Any) -> Rig:
+def make_rig(*extractions: Any, clock: Callable[[], datetime] | None = None) -> Rig:
+    """``clock`` replaces the fixed ``NOW`` in the graphs and the service."""
+    now = clock or (lambda: NOW)
     intake, sessions = make_intake()
     snapshots = InMemorySnapshotRepository()
     seed_snapshot(snapshots, snapshot_context(retrieved_at=NOW - timedelta(minutes=5)))
@@ -44,11 +47,16 @@ def make_rig(*extractions: Any) -> Rig:
         intake,
         checkpointer,
         deps_factory=factory_for(deps),
-        clock=lambda: NOW,
+        clock=now,
         names=make_names(),
     )
     replanning = rg.build_replanning_graph(
-        checkpointer, deps_factory=factory_for(deps), clock=lambda: NOW
+        checkpointer, deps_factory=factory_for(deps), clock=now
     )
-    service = ConversationService(initial, replanning, deps_factory=factory_for(deps))
+    service = ConversationService(
+        initial,
+        replanning,
+        deps_factory=factory_for(deps),
+        **({} if clock is None else {"clock": clock}),
+    )
     return Rig(service, deps, extractor)

@@ -277,6 +277,28 @@ _CATALOG: dict[str, dict[Language, str]] = {
             "parque abra."
         ),
     },
+    "park_closed_heads_up": {
+        "en": (
+            "Heads up: the park is closed right now (it closed at {closing}, park time), so "
+            "there is no live plan today. I can still get a provisional plan ready for "
+            "tomorrow once I know who is coming."
+        ),
+        "es": (
+            "Ojo: el parque está cerrado en este momento (cerró a las {closing}, hora del "
+            "parque), así que hoy no hay plan en vivo. Igual puedo dejar listo un plan "
+            "provisional para mañana en cuanto sepa quiénes van."
+        ),
+    },
+    "park_opened_refresh": {
+        "en": (
+            "The park has opened, so I planned your provisional plan again with live data. "
+            "Review the changes and approve it to make it your plan."
+        ),
+        "es": (
+            "El parque ya abrió, así que volví a armar tu plan provisional con datos en vivo. "
+            "Revisa los cambios y apruébalo para dejarlo como tu plan."
+        ),
+    },
     "provisional_header": {
         "en": (
             "Provisional plan for tomorrow (the park opens at {opening}, park time). It uses "

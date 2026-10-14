@@ -87,6 +87,7 @@ export interface Turn {
   held_events: HeldEvent[];
   error: string | null;
   provisional_offer: boolean;
+  provisional?: { plan: Plan; opens_at: string } | null;
 }
 
 export class ApiError extends Error {
@@ -206,6 +207,7 @@ export const api = {
   reportEvent: async (t: string, event: Record<string, unknown>) =>
     (await call<Turn>("POST", `/api/events?${q(t)}`, event))!,
   provisional: async (t: string) => (await call<Turn>("POST", `/api/provisional?${q(t)}`))!,
+  refreshProvisional: async (t: string) => (await call<Turn>("POST", `/api/provisional/refresh?${q(t)}`))!,
   confirmEvents: async (t: string, confirmed: boolean) =>
     (await call<Turn>("POST", `/api/events/confirm?${q(t)}`, { confirmed }))!,
 };

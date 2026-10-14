@@ -128,7 +128,7 @@ def build_app():
         if o
     ]
     return create_app(
-        ConversationService(initial, replanning, deps_factory=deps_factory),
+        ConversationService(initial, replanning, deps_factory=deps_factory, clock=clock),
         DescribePlanUseCase(deps_factory),
         park_status=ParkStatusUseCase(deps_factory),
         clock=clock,
