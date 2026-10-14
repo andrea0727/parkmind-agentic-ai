@@ -70,9 +70,9 @@ def _masked(value: Any, *, depth: int) -> Any:
         return MASKED if _GUEST_BLOCK in value else value
     if isinstance(value, (bool, int, float)) or value is None:
         return value
-    if _is_message(value):
-        return _masked_message(value)
-    if isinstance(value, BaseModel):
+    if isinstance(
+        value, BaseModel
+    ):  # a LangChain message too: it dumps to a message dict
         return _masked(value.model_dump(mode="json"), depth=deeper)
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return _masked(
@@ -92,23 +92,8 @@ def _masked(value: Any, *, depth: int) -> Any:
     return f"<{type(value).__name__}>"
 
 
-def _is_message(value: Any) -> bool:
-    from langchain_core.messages import BaseMessage
-
-    return isinstance(value, BaseMessage)
-
-
-def _masked_message(message: Any) -> dict[str, Any]:
-    kept = {"type": message.type}
-    if getattr(message, "name", None):
-        kept["name"] = message.name
-    if getattr(message, "id", None):
-        kept["id"] = message.id
-    return kept
-
-
 def _looks_like_message(value: Mapping[str, Any]) -> bool:
-    """A message in dict form: the handler's ``{"role", "content"}``, or a dump."""
+    """A message as a dict: the handler's ``{"role", "content"}``, or a dumped message."""
     return "content" in value and ("role" in value or "type" in value)
 
 
