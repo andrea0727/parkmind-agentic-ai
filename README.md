@@ -241,6 +241,48 @@ FORCE=1 poetry run python scripts/e2e/capture.py         # re-capture everything
 poetry run python scripts/e2e/build_report.py            # docs/e2e/raw -> docs/e2e/REPORT.md (no credentials)
 ```
 
+### Observability: Langfuse (local)
+
+Traces go to a **self-hosted** Langfuse (ADR 0003). Tracing is off by default and masked
+when on: every input, output and metadata value passes `mask_for_trace`
+(`services/clients/observability/langfuse_tracing.py`) before it leaves the process, so the
+chat text (guests' and AI replies), corrections, guest labels, explanations and every
+accessibility field read `[masked]` [C19]. Constraints, plans, events and ids stay readable.
+A canary test (`tests/integration/test_langfuse_canary.py`) runs a real graph and checks
+every exported span.
+
+```bash
+docker compose -f docker-compose.langfuse.yml up -d   # Langfuse v4 at http://localhost:3000
+```
+
+The stack creates the project `parkmind-local` and its keys on first start. Sign in with
+`dev@parkmind.local` / `parkmind-local`. Then, in `.env`:
+
+```bash
+PARKMIND_TRACING=langfuse
+LANGFUSE_PUBLIC_KEY=pk-lf-parkmind-local
+LANGFUSE_SECRET_KEY=sk-lf-parkmind-local
+LANGFUSE_BASE_URL=http://localhost:3000
+```
+
+```bash
+poetry run python scripts/langfuse_smoke.py        # one conversation, offline (fake chat model)
+poetry run python scripts/langfuse_smoke.py --llm  # the same with Claude (ANTHROPIC_API_KEY)
+poetry run python server.py                        # or use the app: every API turn is traced
+docker compose -f docker-compose.langfuse.yml down # stop it (add -v to delete the traces)
+```
+
+What you see: one **session** per thread, a **trace** per API turn (tagged `initial` or
+`replanning`), a span per graph node, and a **generation** per LLM call with its messages
+reduced to their roles.
+
+- `PARKMIND_TRACING=langfuse` with a key or the URL missing refuses to start.
+- LangSmith tracing (`LANGSMITH_TRACING=true`) is still refused: its tracer is added by
+  `langchain-core` and never passes through the mask.
+- The stack's secrets are local defaults. Don't expose it beyond localhost, and don't send real
+  guest data to a cloud project: P1-18 still has to add the trace metadata (plan, snapshot,
+  prompt and model versions), failure correlation and the §42 scores.
+
 ### Database
 
 - **Schema:** hand-written SQL migrations in `database/migrations/versions/`,
@@ -633,6 +675,7 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 | **Event monitor** | ✅ P0-33 | Snapshot-to-event detector with per-reading freshness, `EventPolicy` (§25 table, confirmation gate, fatigue walking cap), cross-source dedup, supersede on significant events, `scripts/run_monitor.py`. Consumed by the replanning graph [P0-34]. |
 | **MCP capability boundary** | ✅ P0-24..P0-27 | `parkmind-mcp`: 15 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` takes the plan, its progress and the events inline (§31), so a client without a stored plan can replan. |
 | **Demo app (API + UI)** | ✅ P0-35 / P0-36 | FastAPI layer over the graphs (`/api/*`, Swagger at `/docs`) and a React UI; bearer-token login, per-user session ownership, LLM usage caps, es/en conversation. Open: P0-32 edit path, #88 e2e bugs, guardrails, Langfuse. |
+| **Observability** | 🟡 P1-18 core (PR #93) | Masked Langfuse tracing of every API graph run, opt-in (`PARKMIND_TRACING=langfuse`); local stack in `docker-compose.langfuse.yml`; C19 canary over exported spans. Metadata, failure correlation and scores remain (P1-18) |
 | **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
 | **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
 | **PostgreSQL Repos** | ✅ Done | Profiles, Plans, Session store (in-memory for accessibility) |

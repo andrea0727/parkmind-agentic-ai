@@ -40,32 +40,34 @@ Sources: official documentation and pricing pages, read 2026-10-13. Prices chang
 2. **LangSmith is optional for local development only, never with real guest data.**
    - Studio (`langgraph dev`) works with tracing off.
    - LangSmith's pytest/evaluation tooling may be used for **offline** evaluation on fixture scenarios only (`tests/fixtures/elicit/scenarios.json` and the e2e scenarios). It is opt-in per developer.
-3. **Tracing is refused until masking exists.** Until P1-18 wires a tested C19 masking hook, no graph is built, and so the API server (`server.py`) does not start, while LangSmith tracing is switched on through the environment (`config.tracing.tracing_guard`). `.env.example` sets `LANGSMITH_TRACING=false` with a comment.
-   - The guard checks LangSmith's switches only. Those are the ones that trace with no code: `langchain-core` installs the tracer by itself.
-   - Langfuse traces only through a `CallbackHandler` that our code passes in, and nothing passes one yet. P1-18 adds it together with the masking, so Langfuse keys in `.env` alone send nothing.
-4. **P1-18 must land with one redaction function and its test:**
-   - the function drops `HumanMessage` content and the elicit prompt's guest block, and keeps the typed outputs (`PartyConstraints`, `Event`, plan ids, check results);
-   - it is installed through `Langfuse(mask=… / mask_otel_spans=…)`;
-   - a canary test runs a graph with a unique string in a guest turn and asserts it never reaches the exporter.
+3. **LangSmith tracing is refused.** No graph is built, and so the API server (`server.py`) does not start, while LangSmith tracing is switched on through the environment (`config.tracing.tracing_guard`). Those switches trace with no code (`langchain-core` installs the tracer by itself), and that tracer never passes through our mask. `.env.example` sets `LANGSMITH_TRACING=false` with a comment.
+4. **Langfuse traces only masked, and only when switched on** (delivered in PR #93, the masked core of P1-18):
+   - **Opt-in:** `PARKMIND_TRACING=langfuse` plus `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and `LANGFUSE_BASE_URL`. A missing setting refuses to start. Langfuse keys alone send nothing.
+   - **Masking:** one function, `mask_for_trace` (`services/clients/observability/langfuse_tracing.py`), installed with `Langfuse(mask=…)`. The SDK runs it over every input, output and metadata value it records, the LangChain handler's included. It is strict (decided 2026-10-14):
+     - every chat message keeps only its role, type, name and id;
+     - corrections, `Guest.label`, the confirmation echo, explanations and every accessibility field are masked wherever they appear;
+     - the elicit prompt's guest block is masked if it appears as a string.
 
-   The same function can back LangSmith's `hide_inputs` / `hide_outputs` if a developer turns LangSmith on.
-
-   **Where the handler goes:** every API turn runs through one call, `ConversationService._run` → `invoke(graph_input, config=config)` (`graph/conversation.py`). P1-18 adds the `CallbackHandler` to that `config`, with `thread_id` as the Langfuse session. LangChain passes the config down to every node and LLM call inside the graph.
-5. **Housekeeping for P1-18:** raise the `langfuse` floor to `^4` (the lock already pins 4.15.3); `>=2.0` suggests an API the code would not use.
+     Typed outputs (constraints, plans, events, check results, ids) are traced as they are.
+   - **Canary:** `tests/integration/test_langfuse_canary.py` runs the real elicitation graph and the real extractor (only the chat model is faked) through the real handler, exporting to memory. It asserts that no guest word, correction, label or accessibility value reaches any exported span, and that the graph, its nodes and the LLM generation were traced. It was also checked against a running Langfuse v4 (`scripts/langfuse_smoke.py`).
+   - **Where the handler goes:** `ConversationService._run` → `invoke(graph_input, config=config)` (`graph/conversation.py`), the one call every API turn goes through. `server.py` passes the handler in, with `thread_id` as the Langfuse session and the graph as a tag. LangChain passes the config down to every node and LLM call.
+   - **Local stack:** `docker-compose.langfuse.yml` (Langfuse v4, self-hosted, local only; README "Observability").
+   - **Dependencies:** the `langfuse` floor is `^4.15`, and `langchain` (^1) is added, because Langfuse's LangChain handler imports it to check its version.
+5. **What P1-18 still owes:** the trace metadata §42 lists (plan, snapshot, strategy, constraints, prompt and model versions), failure correlation, the §42 scores, and the tool-selection spans of the agentic context loader (P1-22).
 
 ## Consequences
 
 - **Gains:**
-  - No accidental leak is possible today: the guard fails closed.
+  - No accidental leak is possible: LangSmith's zero-code tracing is refused, and Langfuse only ever exports masked data, which a canary test pins.
   - The baseline's choice stands, now justified on C19, cost and team size.
   - Studio and LangSmith evaluation stay available for local work on fixtures.
 - **Costs:**
   - Self-hosting Langfuse is one more service to run (Docker Compose next to Postgres).
   - We give up LangSmith's zero-code tracing and its hosted evaluators for production traffic.
-  - The masking is ours to write and test either way.
+  - The masking is ours to maintain: a new place that carries guest text must be added to `mask_for_trace`, or the canary must catch it.
 - **Revisit if:**
   - the project moves to a LangSmith Enterprise / self-hosted deployment;
-  - Langfuse's `CallbackHandler` masking proves unreliable in the P1-18 canary test.
+  - Langfuse's `CallbackHandler` stops passing what it records through `mask` (the canary test would fail).
 
 ## References
 
