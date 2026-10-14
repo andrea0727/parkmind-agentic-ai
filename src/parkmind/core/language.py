@@ -115,6 +115,66 @@ _CATALOG: dict[str, dict[Language, str]] = {
             "¿Cuánto mides, en cm (entre 50 y 250)?"
         ),
     },
+    "q_unverified_departure": {
+        "en": (
+            "I couldn't match the departure time I understood to what you wrote. "
+            "What time do you plan to leave the park?"
+        ),
+        "es": (
+            "No pude relacionar la hora de salida que entendí con lo que escribieron. "
+            "¿A qué hora piensan salir del parque?"
+        ),
+    },
+    "q_unverified_departure_solo": {
+        "en": (
+            "I couldn't match the departure time I understood to what you wrote. "
+            "What time do you plan to leave the park?"
+        ),
+        "es": (
+            "No pude relacionar la hora de salida que entendí con lo que escribiste. "
+            "¿A qué hora piensas salir del parque?"
+        ),
+    },
+    "q_unverified_lunch": {
+        "en": (
+            "I couldn't match the lunch window I understood to what you wrote. "
+            "Between what times would you like to have lunch?"
+        ),
+        "es": (
+            "No pude relacionar el horario de almuerzo que entendí con lo que escribieron. "
+            "¿Entre qué horas quieren almorzar?"
+        ),
+    },
+    "q_unverified_lunch_solo": {
+        "en": (
+            "I couldn't match the lunch window I understood to what you wrote. "
+            "Between what times would you like to have lunch?"
+        ),
+        "es": (
+            "No pude relacionar el horario de almuerzo que entendí con lo que escribiste. "
+            "¿Entre qué horas quieres almorzar?"
+        ),
+    },
+    "q_unverified_walking_budget": {
+        "en": (
+            "I couldn't match the walking limit I understood to what you wrote. "
+            "How many minutes in total can your party walk?"
+        ),
+        "es": (
+            "No pude relacionar el límite de caminata que entendí con lo que escribieron. "
+            "¿Cuántos minutos en total puede caminar su grupo?"
+        ),
+    },
+    "q_unverified_walking_budget_solo": {
+        "en": (
+            "I couldn't match the walking limit I understood to what you wrote. "
+            "How many minutes in total can you walk?"
+        ),
+        "es": (
+            "No pude relacionar el límite de caminata que entendí con lo que escribiste. "
+            "¿Cuántos minutos en total puedes caminar?"
+        ),
+    },
     "q_conflicting_attraction": {
         "en": (
             "'{name}' is on both your must-do and your avoid list. "

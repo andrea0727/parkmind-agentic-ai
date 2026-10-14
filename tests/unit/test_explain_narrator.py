@@ -78,7 +78,7 @@ def test_every_request_is_bounded_in_time_and_retries(fake_chat):
     AnthropicNarrator(api_key="k").narrate("{}")
 
     assert fake_chat.built["timeout"] == EXPLAIN_TIMEOUT_SECONDS
-    assert fake_chat.built["max_retries"] == EXPLAIN_SDK_RETRIES
+    assert fake_chat.built["max_retries"] == 0  # retried by the counted loop [G12]
     assert fake_chat.built["temperature"] == 0
 
 

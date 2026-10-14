@@ -398,7 +398,7 @@ def _make_explain_node(
         active = narrator if lang == DEFAULT_LANGUAGE else None
         return explained(
             plan,
-            explain_grounded(active, prepared),
+            explain_grounded(active, prepared, thread_id=state["thread_id"]),
             {"elicit": ELICIT_PROMPT_VERSION},
         )
 

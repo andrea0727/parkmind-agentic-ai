@@ -29,15 +29,17 @@ tests.
 
 import logging
 import math
+import os
 import threading
 from collections.abc import AsyncIterator, Iterator, Sequence
-from contextlib import ExitStack, asynccontextmanager, contextmanager
+from contextlib import AsyncExitStack, ExitStack, asynccontextmanager, contextmanager
 from datetime import date, datetime
 from typing import Any
 
 import anyio
 from anyio.from_thread import BlockingPortal, start_blocking_portal
 from mcp import Client
+from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 from pydantic import ValidationError
 
 from parkmind.core.contracts import (
@@ -55,6 +57,8 @@ from parkmind.services.ports import (
     FromSnapshotRef,
     SnapshotRef,
 )
+
+MCP_TOKEN_ENV = "PARKMIND_MCP_TOKEN"
 
 logger = logging.getLogger(__name__)
 
@@ -198,6 +202,15 @@ class McpContextData:
             raise ContextTransportError(f"{tool} returned no structured result")
         return content["data"], content.get("provenance") or {}
 
+    def _transport(self, stack: AsyncExitStack) -> Any:
+        """The server as given; a URL gets the bearer token when ``PARKMIND_MCP_TOKEN`` is set [G14]."""
+        token = os.environ.get(MCP_TOKEN_ENV, "").strip()
+        if not (token and isinstance(self._server, str)):
+            return self._server
+        http = create_mcp_http_client(headers={"Authorization": f"Bearer {token}"})
+        stack.push_async_callback(http.aclose)
+        return streamable_http_client(self._server, http_client=http)
+
     @asynccontextmanager
     async def _connected(self) -> AsyncIterator[Client]:
         """The session, opened and closed within the deadline (lifted while it is used).
@@ -209,9 +222,10 @@ class McpContextData:
         with anyio.CancelScope(
             deadline=anyio.current_time() + self._timeout
         ) as deadline:
-            async with Client(
-                self._server, read_timeout_seconds=self._timeout
-            ) as client:
+            async with AsyncExitStack() as stack:
+                client = await stack.enter_async_context(
+                    Client(self._transport(stack), read_timeout_seconds=self._timeout)
+                )
                 deadline.deadline = math.inf
                 try:
                     yield client

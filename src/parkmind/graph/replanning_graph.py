@@ -419,7 +419,9 @@ def _make_explain_node(deps_factory: DepsFactory, narrator: PlanNarrator | None)
         )
         # The narrator writes English only; other languages get the localized template.
         active = narrator if lang == DEFAULT_LANGUAGE else None
-        return explained(plan, explain_grounded(active, prepared))
+        return explained(
+            plan, explain_grounded(active, prepared, thread_id=state["thread_id"])
+        )
 
     return explain
 

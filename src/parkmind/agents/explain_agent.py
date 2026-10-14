@@ -32,6 +32,12 @@ from parkmind.agents.grounding import (
     numerals,
     ungrounded_numerals,
 )
+from parkmind.agents.llm_budget import (
+    LlmBudgetExhaustedError,
+    LlmCallBudget,
+    bound_to_thread,
+    invoke_counted,
+)
 from parkmind.config.settings import settings
 from parkmind.services.use_cases.explain_plan import (
     ExplanationPayload,
@@ -96,11 +102,13 @@ class AnthropicNarrator:
         *,
         timeout: float = EXPLAIN_TIMEOUT_SECONDS,
         max_retries: int = EXPLAIN_SDK_RETRIES,
+        budget: LlmCallBudget | None = None,
     ) -> None:
         self._model = model or settings.EXPLAIN_MODEL
         self._api_key = api_key if api_key is not None else settings.ANTHROPIC_API_KEY
         self._timeout = timeout
         self._max_retries = max_retries
+        self._budget = budget
         self._llm: Any = None
 
     def _runnable(self) -> Any:
@@ -115,7 +123,7 @@ class AnthropicNarrator:
                 temperature=0,
                 max_tokens_to_sample=1500,
                 timeout=self._timeout,
-                max_retries=self._max_retries,
+                max_retries=0,  # retried in invoke_counted, so every call is counted [G12]
                 stop=None,
             )
             self._llm = chat.bind_tools(
@@ -132,8 +140,11 @@ class AnthropicNarrator:
                 "\n\nYour previous explanation was rejected. Fix exactly this and "
                 f"return the full corrected explanation:\n{repair_hint}"
             )
-        response = self._runnable().invoke(
-            [SystemMessage(EXPLAIN_SYSTEM_PROMPT), HumanMessage(content)]
+        response = invoke_counted(
+            self._runnable(),
+            [SystemMessage(EXPLAIN_SYSTEM_PROMPT), HumanMessage(content)],
+            retries=self._max_retries,
+            budget=self._budget,
         )
         calls = getattr(response, "tool_calls", None) or []
         if not calls:
@@ -193,11 +204,25 @@ def _preference_labels(payload: ExplanationPayload) -> tuple[dict[str, str], set
 
 
 def explain_grounded(
-    narrator: PlanNarrator | None, prepared: PreparedExplanation
+    narrator: PlanNarrator | None,
+    prepared: PreparedExplanation,
+    *,
+    thread_id: str | None = None,
 ) -> GroundedExplanation:
-    """The narrator's explanation if it is grounded, else the template."""
+    """The narrator's explanation if it is grounded, else the template.
+
+    The narrator's calls are charged to ``thread_id``'s LLM budget [G12]; once it
+    is spent the template stands in.
+    """
     if narrator is None:
         return _template(prepared, 0)
+    with bound_to_thread(thread_id):
+        return _narrate_grounded(narrator, prepared)
+
+
+def _narrate_grounded(
+    narrator: PlanNarrator, prepared: PreparedExplanation
+) -> GroundedExplanation:
     payload_json = prepared.payload.to_json()
     labelled, ambiguous = _preference_labels(prepared.payload)
     hint: str | None = None
@@ -206,6 +231,11 @@ def explain_grounded(
             raw = narrator.narrate(payload_json, hint)
         except NarratorUnavailableError:
             logger.info("explain: no narrator available, using the template")
+            return _template(prepared, attempt - 1)
+        except LlmBudgetExhaustedError:
+            logger.warning(
+                "explain: the thread's LLM budget is spent, using the template"
+            )
             return _template(prepared, attempt - 1)
         except Exception as exc:  # noqa: BLE001 - any failure falls back, never breaks the plan
             logger.warning(

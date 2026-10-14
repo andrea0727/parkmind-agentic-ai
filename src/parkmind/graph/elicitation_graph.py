@@ -32,7 +32,8 @@ Nothing before an ``interrupt()`` has a side effect: LangGraph re-runs a node
 from the top on resume.
 """
 
-from typing import Any, Protocol
+from collections.abc import Mapping
+from typing import Any, NamedTuple, Protocol
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
@@ -51,6 +52,7 @@ from parkmind.graph.state_helpers import solo_of
 from parkmind.services.use_cases.accessibility_intake import (
     DEFAULT_RETENTION,
     AccessibilityIntakeUseCase,
+    RetentionPolicy,
 )
 from parkmind.services.use_cases.resolve_attraction_names import AttractionNameResolver
 
@@ -59,6 +61,35 @@ _RETENTION_POLICIES = ("session_only", "persisted")
 
 class StateNode(Protocol):
     def __call__(self, state: ParkMindState) -> Any: ...
+
+
+class _Decision(NamedTuple):
+    confirmed: bool
+    consent: bool
+    retention: RetentionPolicy
+    correction: str
+
+
+def _parse_confirmation(value: Any) -> _Decision | str:
+    """The human's decision, or why the resume value is not valid."""
+    if not isinstance(value, Mapping):
+        return "the decision must be a mapping with a 'confirmed' key"
+    confirmed = value.get("confirmed")
+    if not isinstance(confirmed, bool):
+        return "'confirmed' must be true or false"
+    consent = value.get("consent")
+    if consent is not None and not isinstance(consent, bool):
+        return "'consent' must be true or false"
+    correction = value.get("correction")
+    if correction is not None and not isinstance(correction, str):
+        return "'correction' must be text"
+    retention: RetentionPolicy = DEFAULT_RETENTION
+    raw_retention = value.get("retention_policy")
+    if raw_retention in _RETENTION_POLICIES:
+        retention = raw_retention
+    elif confirmed and raw_retention:
+        return "'retention_policy' must be 'session_only' or 'persisted'"
+    return _Decision(confirmed, bool(consent), retention, (correction or "").strip())
 
 
 class UnconfirmedHardConstraintsError(RuntimeError):
@@ -86,7 +117,9 @@ def _route_after_extraction(state: ParkMindState) -> str:
     if state.get("constraints") is not None:
         return "confirm_hard_constraints"
     messages = state.get("messages") or []
-    if messages and getattr(messages[-1], "additional_kwargs", {}).get(UNAVAILABLE_FLAG):
+    if messages and getattr(messages[-1], "additional_kwargs", {}).get(
+        UNAVAILABLE_FLAG
+    ):
         return END
     # An AI message is a question waiting for an answer; a human message is new input.
     return "ask_missing" if _last_message_type(state) == "ai" else "elicit"
@@ -116,7 +149,9 @@ def _make_confirm_node(
             return {}
 
         constraints = state.get("constraints")
-        labels = {g.guest_id: g.label for g in constraints.guests} if constraints else {}
+        labels = (
+            {g.guest_id: g.label for g in constraints.guests} if constraints else {}
+        )
         confirmation = intake.confirmation(pending, lang, solo=solo, labels=labels)
         accessibility_ids = list(confirmation.accessibility_guests)
         payload: dict[str, Any] = {
@@ -126,21 +161,27 @@ def _make_confirm_node(
             "accessibility_guests": accessibility_ids,
         }
 
-        decision = interrupt(payload)
+        # A malformed value is asked again with an "error" instead of failing the run.
         # Accessibility data can only be used with consent; keep asking until the
         # human consents or says the constraint is wrong.
-        while (
-            accessibility_ids
-            and decision.get("confirmed")
-            and not decision.get("consent")
-        ):
-            decision = interrupt({**payload, "reason": "consent_required"})
+        while True:
+            parsed = _parse_confirmation(interrupt(payload))
+            if isinstance(parsed, str):
+                payload = {**payload, "error": parsed}
+                continue
+            if accessibility_ids and parsed.confirmed and not parsed.consent:
+                payload = {
+                    **{k: v for k, v in payload.items() if k != "error"},
+                    "reason": "consent_required",
+                }
+                continue
+            break
+        decision = parsed
 
-        if not decision.get("confirmed"):
+        if not decision.confirmed:
             intake.discard(session_id)
-            correction = str(decision.get("correction") or "").strip()
-            if correction:
-                new_message: Any = HumanMessage(content=correction)
+            if decision.correction:
+                new_message: Any = HumanMessage(content=decision.correction)
             else:
                 new_message = AIMessage(
                     content=text("what_to_change", lang),
@@ -153,10 +194,9 @@ def _make_confirm_node(
                 "messages": [new_message],
             }
 
-        retention = decision.get("retention_policy") or DEFAULT_RETENTION
-        if retention not in _RETENTION_POLICIES:
-            raise ValueError(f"unknown retention_policy {retention!r}")
-        committed = intake.commit(session_id, consent=True, retention_policy=retention)
+        committed = intake.commit(
+            session_id, consent=True, retention_policy=decision.retention
+        )
         if committed != accessibility_ids:
             # The staged flags are gone (e.g. process restart). Never proceed
             # without them: re-extract from the conversation and ask again.

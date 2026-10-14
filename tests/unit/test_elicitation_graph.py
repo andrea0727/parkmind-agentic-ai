@@ -134,13 +134,11 @@ def test_rejecting_the_echo_drops_the_proposal_and_reextracts_with_the_correctio
     graph, intake, store, downstream, _ = _graph(extractor)
     _start(graph, *COMPLETE["messages"])
 
-    result = _resume(
-        graph,
-        {"confirmed": False, "correction": "No wait, my husband uses a wheelchair."},
-    )
+    correction = "No wait, my husband uses a wheelchair. We have to be out by 5 PM."
+    result = _resume(graph, {"confirmed": False, "correction": correction})
 
     assert _interrupt_value(result)["kind"] == "hard_constraint_confirmation"
-    assert extractor.calls[1][0][-1] == "No wait, my husband uses a wheelchair."
+    assert extractor.calls[1][0][-1] == correction
     assert downstream.seen == [] and store.puts == 0
     assert intake.pending_guest_ids("t1") == [
         "g2"
@@ -342,16 +340,50 @@ def test_retention_policy_is_taken_from_the_human_decision() -> None:
     assert record is not None and record.retention_policy == "persisted"
 
 
-def test_unknown_retention_policy_is_rejected() -> None:
+def test_unknown_retention_policy_is_asked_again() -> None:
     graph, _, store, downstream, _ = _graph(FakeExtractor(COMPLETE["extraction"]))
     _start(graph, *COMPLETE["messages"])
 
-    with pytest.raises(ValueError, match="retention_policy"):
-        _resume(
-            graph, {"confirmed": True, "consent": True, "retention_policy": "forever"}
-        )
+    result = _resume(
+        graph, {"confirmed": True, "consent": True, "retention_policy": "forever"}
+    )
 
+    assert "retention_policy" in _interrupt_value(result)["error"]
     assert store.puts == 0 and downstream.seen == []
+
+    _resume(graph, CONFIRM)
+
+    assert len(downstream.seen) == 1
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "yes",
+        True,
+        ["confirmed"],
+        {"unrelated": 1},
+        {"confirmed": "yes"},
+        {"confirmed": 1},
+        {"confirmed": True, "consent": "yes"},
+        {"confirmed": False, "correction": 42},
+    ],
+)
+def test_a_malformed_confirmation_is_asked_again_and_changes_nothing(bad: Any) -> None:
+    graph, intake, store, downstream, _ = _graph(FakeExtractor(COMPLETE["extraction"]))
+    _start(graph, *COMPLETE["messages"])
+
+    result = _resume(graph, bad)
+
+    payload = _interrupt_value(result)
+    assert payload["kind"] == "hard_constraint_confirmation"
+    assert payload["error"]
+    assert store.puts == 0 and downstream.seen == []
+    assert intake.pending_guest_ids("t1") == ["g2"]
+
+    _resume(graph, CONFIRM)
+
+    assert len(downstream.seen) == 1
 
 
 def test_lost_staging_never_lets_unconfirmed_accessibility_through() -> None:

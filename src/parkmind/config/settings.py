@@ -20,6 +20,9 @@ class Settings:
     # (the attempt loop already retries once, so 0 by default).
     EXPLAIN_TIMEOUT_SECONDS = float(os.getenv("EXPLAIN_TIMEOUT_SECONDS", "20"))
     EXPLAIN_SDK_RETRIES = int(os.getenv("EXPLAIN_SDK_RETRIES", "0"))
+    # G12: LLM calls (retries included) one thread may make; past it the agents use
+    # their deterministic path (elicit asks again, explain writes the template).
+    LLM_CALLS_PER_THREAD = max(1, int(os.getenv("PARKMIND_LLM_CALLS_PER_THREAD", "40")))
     DATABASE_URL = os.getenv(
         "DATABASE_URL", "postgresql://parkmind:parkmind@localhost:5432/parkmind"
     )
