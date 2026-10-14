@@ -8,6 +8,7 @@ import contextlib
 import json
 import os
 import re
+import signal
 import sys
 import time
 import uuid
@@ -20,6 +21,32 @@ from langgraph.types import Command
 
 from parkmind.graph import initial_planning_graph as ipg
 from parkmind.graph.checkpointing import default_checkpointer
+
+TIMEOUT_SECONDS = float(os.environ.get("SCENARIO_TIMEOUT_SECONDS", "300"))
+
+
+class ScenarioTimeoutError(BaseException):
+    """The scenario used up its total time (LLM and database calls included).
+
+    A ``BaseException`` so that no ``except Exception`` along the way can swallow it.
+    """
+
+
+@contextlib.contextmanager
+def time_limit(seconds: float) -> Any:
+    """Raise ``ScenarioTimeoutError`` in the main thread once ``seconds`` have passed."""
+
+    def expired(signum: int, frame: Any) -> None:
+        raise ScenarioTimeoutError(f"the scenario did not finish in {seconds:g}s")
+
+    previous = signal.signal(signal.SIGALRM, expired)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+
 
 SECRET = re.compile(r"(postgres(?:ql)?://[^:\s]+:)[^@\s]+@")
 
@@ -72,6 +99,14 @@ def interrupt_view(res: dict[str, Any]) -> dict[str, Any] | None:
     return {"kind": val.get("kind"), "payload": jsonable({k: v for k, v in val.items() if k != "candidate_plan"})}
 
 
+def llm_attempts() -> list[dict[str, Any]]:
+    """Every extractor call of the run, the failed ones too, with the repair hint it got."""
+    return [
+        {"attempt": i, "repair_hint": c["hint"], "error": c.get("error"), "args": jsonable(c["calls"][0]["args"]) if c["calls"] else None}
+        for i, c in enumerate(h.LLM_CALLS, start=1)
+    ]
+
+
 def attraction_rows(url: str) -> int | None:
     import psycopg
 
@@ -100,11 +135,13 @@ def run_once(name: str, scenario: dict[str, Any]) -> dict[str, Any]:
     rows_before = attraction_rows(sc.EDGE_URL) if name == "happy_catalogo_vacio" else None
     t0 = time.time()
     try:
-        with cm:
+        with cm, time_limit(TIMEOUT_SECONDS):
             res = graph.invoke({"thread_id": thread, "messages": [HumanMessage(content=m) for m in scenario["msgs"]]}, config=config)
             out["llm_calls"] = len(h.LLM_CALLS)
-            if h.LLM_CALLS:
-                a = h.LLM_CALLS[0]["calls"][0]["args"] if h.LLM_CALLS[0]["calls"] else {}
+            out["llm_attempts"] = llm_attempts()
+            answered = [c for c in h.LLM_CALLS if c["calls"]]
+            if answered:
+                a = answered[-1]["calls"][0]["args"]
                 out["extracted"] = {k: a.get(k) for k in ("party_size", "must_do", "avoid", "departure_time", "lunch_window")}
                 out["extracted"]["heights"] = [g.get("height_cm") for g in a.get("guests", [])]
                 out["extracted"]["n_guests"] = len(a.get("guests", []))
@@ -126,8 +163,10 @@ def run_once(name: str, scenario: dict[str, Any]) -> dict[str, Any]:
                     out["approval"] = jsonable(st.get("approval"))
                     out["plan_active"] = st.get("current_plan") is not None
                     out["interrupt3"] = interrupt_view(res)
-    except Exception as exc:  # noqa: BLE001
+    except (Exception, ScenarioTimeoutError) as exc:  # noqa: BLE001
         out["exception"] = {"type": type(exc).__name__, "message": scrub(str(exc))[:500]}
+        out["llm_calls"] = len(h.LLM_CALLS)
+        out["llm_attempts"] = llm_attempts()
     if rows_before is not None:
         out["attraction_rows"] = {"before": rows_before, "after": attraction_rows(sc.EDGE_URL)}
     out["seconds"] = round(time.time() - t0, 1)

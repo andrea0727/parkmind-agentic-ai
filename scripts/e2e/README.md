@@ -19,6 +19,7 @@ Each full run makes real LLM calls (about 35, roughly 15 minutes). Results depen
 python scripts/e2e/capture.py                      # all 33, skipping ones already in docs/e2e/raw/
 python scripts/e2e/capture.py espanol grupo_de_1   # only these
 FORCE=1 python scripts/e2e/capture.py              # re-capture everything
+SCENARIO_TIMEOUT_SECONDS=600 python scripts/e2e/capture.py   # total time allowed per scenario (default 300); one that runs out is saved as a ScenarioTimeoutError
 python scripts/e2e/build_report.py                 # no credentials needed: docs/e2e/raw -> docs/e2e/REPORT.md (raw/ is git-ignored; run capture.py first)
 ```
 
