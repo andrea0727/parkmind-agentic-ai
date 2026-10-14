@@ -153,7 +153,7 @@ def reading_times(
     provider gave no time. This is what per-reading freshness reads (P0-33): the
     normalized ``LiveContext`` keeps no reading times, the raw payload does (C21).
 
-    Read-only: ids are looked up with ``id_mappings.resolve`` and no sighting is
+    Read-only: ids are looked up with one ``id_mappings.resolve_many`` and no sighting is
     recorded (``IdResolver`` records one; a monitor re-reading old snapshots must
     not). An unmapped id of the anchor provider is its own internal id, as in
     ``IdResolver``; two provider ids landing on one internal id are both left
@@ -168,10 +168,12 @@ def reading_times(
     except ThemeParksClientError as exc:
         raise RawSnapshotError(f"unreadable live payload: {exc}") from None
     times: dict[str, list[datetime | None]] = {}
+    mapped = id_mappings.resolve_many(
+        ANCHOR_PROVIDER.value,
+        [(provider_id, entity.kind) for provider_id, entity in live.entities.items()],
+    )
     for provider_id, entity in live.entities.items():
-        internal_id = id_mappings.resolve(
-            ANCHOR_PROVIDER.value, provider_id, entity.kind
-        )
+        internal_id = mapped.get((provider_id, str(entity.kind)))
         times.setdefault(internal_id or provider_id, []).append(entity.observed_at)
     return {
         internal_id: seen[0] for internal_id, seen in times.items() if len(seen) == 1

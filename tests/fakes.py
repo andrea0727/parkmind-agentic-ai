@@ -6,7 +6,7 @@ tests/integration/postgres/ runs the same use cases against the real adapters.
 Only ports are faked -- never the core.
 """
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import datetime
 from typing import Any
 
@@ -74,6 +74,7 @@ class InMemoryBehaviorLogRepository:
 class InMemoryIdMappingRepository:
     def __init__(self) -> None:
         self.rows: dict[tuple[str, str, str], str] = {}
+        self.resolve_many_calls = 0
 
     def record(
         self,
@@ -90,6 +91,17 @@ class InMemoryIdMappingRepository:
 
     def resolve(self, provider: str, provider_id: str, entity_kind: str) -> str | None:
         return self.rows.get((provider, provider_id, str(entity_kind)))
+
+    def resolve_many(
+        self, provider: str, keys: Iterable[tuple[str, str]]
+    ) -> dict[tuple[str, str], str]:
+        self.resolve_many_calls += 1
+        found = {
+            (provider_id, str(kind)): self.rows[(provider, provider_id, str(kind))]
+            for provider_id, kind in keys
+            if (provider, provider_id, str(kind)) in self.rows
+        }
+        return found
 
     def provider_ids_for(self, internal_id: str) -> list[tuple[str, str, str]]:
         return sorted(k for k, v in self.rows.items() if v == internal_id)

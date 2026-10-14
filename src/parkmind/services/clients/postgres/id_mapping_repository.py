@@ -1,5 +1,6 @@
 """PostgreSQL adapter for ``IdMappingRepository`` (storage only; P0-10 owns the model)."""
 
+from collections.abc import Iterable
 from datetime import datetime
 
 from parkmind.services.clients.postgres.connection import PostgresRepositoryBase
@@ -57,6 +58,28 @@ class PostgresIdMappingRepository(PostgresRepositoryBase):
             )
             row = cur.fetchone()
         return None if row is None else str(row["internal_id"])
+
+    def resolve_many(
+        self, provider: str, keys: Iterable[tuple[str, str]]
+    ) -> dict[tuple[str, str], str]:
+        wanted = [(str(provider_id), str(kind)) for provider_id, kind in keys]
+        if not wanted:
+            return {}
+        with self._tx() as cur:
+            cur.execute(
+                """
+                SELECT m.provider_id, m.entity_kind, m.internal_id
+                FROM id_mapping m
+                JOIN unnest(%s::text[], %s::text[]) AS k(provider_id, entity_kind)
+                  ON m.provider_id = k.provider_id AND m.entity_kind = k.entity_kind
+                WHERE m.provider = %s
+                """,
+                ([p for p, _ in wanted], [k for _, k in wanted], provider),
+            )
+            rows = cur.fetchall()
+        return {
+            (r["provider_id"], r["entity_kind"]): str(r["internal_id"]) for r in rows
+        }
 
     def provider_ids_for(self, internal_id: str) -> list[tuple[str, str, str]]:
         with self._tx() as cur:
