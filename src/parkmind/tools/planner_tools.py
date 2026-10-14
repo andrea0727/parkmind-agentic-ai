@@ -130,8 +130,9 @@ class ReplanToolRequest(CheckPlanRequest):
         default=None,
         description=(
             "The plan's progress: completed or skipped stops, location, walking done. "
-            "Omit it to use the progress stored for this plan or, with none reported, "
-            "to assume the party is on schedule."
+            "Omit it to use the progress stored for this plan. Either way, a stop that "
+            "has already ended and isn't listed is assumed done (an on-schedule party): "
+            "list a stop that wasn't done as skipped."
         ),
     )
     events: Annotated[list[Event], Field(max_length=MAX_EVENTS)] = Field(
@@ -151,8 +152,8 @@ class ReplanToolRequest(CheckPlanRequest):
     def _progress_of_this_plan(
         cls, state: PlanExecutionState | None, info: ValidationInfo
     ) -> PlanExecutionState | None:
-        """For the plan that is sent, and only about its stops: an unknown stop id would
-        also switch off the on-schedule assumption without saying so."""
+        """For the plan that is sent, and only about its stops: an unknown stop id is a
+        client mistake, refused instead of silently ignored."""
         plan = info.data.get("plan")
         if state is None or plan is None:
             return state
