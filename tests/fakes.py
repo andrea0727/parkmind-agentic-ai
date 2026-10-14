@@ -65,7 +65,9 @@ class InMemoryBehaviorLogRepository:
         return True
 
     def get(self, guest_id: str) -> BehaviorLog:
-        entries = sorted(self.rows.get(guest_id, []), key=lambda e: (e.timestamp, e.entry_id))
+        entries = sorted(
+            self.rows.get(guest_id, []), key=lambda e: (e.timestamp, e.entry_id)
+        )
         return BehaviorLog(guest_id=guest_id, entries=entries)
 
 
@@ -191,7 +193,8 @@ class InMemoryPlanRepository:
         if plan_id not in self.plans:
             raise NotFoundError("plan does not exist")
         approved = any(
-            p.candidate_plan_id == plan_id and p.approval_status is ApprovalStatus.APPROVED
+            p.candidate_plan_id == plan_id
+            and p.approval_status is ApprovalStatus.APPROVED
             for t, p in self._proposals.rows.values()
             if t == thread_id
         )
@@ -214,7 +217,9 @@ class InMemoryProposalRepository:
         if proposal.proposal_id in self.rows:
             return
         if self.list_pending(thread_id):
-            raise PendingProposalExistsError("the thread already holds a PENDING proposal")
+            raise PendingProposalExistsError(
+                "the thread already holds a PENDING proposal"
+            )
         self.rows[proposal.proposal_id] = (thread_id, proposal)
 
     def get(self, proposal_id: str) -> Proposal | None:
@@ -240,7 +245,10 @@ class InMemoryProposalRepository:
         if row is None:
             raise NotFoundError("proposal does not exist")
         thread_id, proposal = row
-        if proposal.approval_status is not ApprovalStatus.PENDING or status is ApprovalStatus.PENDING:
+        if (
+            proposal.approval_status is not ApprovalStatus.PENDING
+            or status is ApprovalStatus.PENDING
+        ):
             raise InvalidStateTransitionError("only a PENDING proposal can be resolved")
         resolved = proposal.model_copy(
             update={"approval_status": status, "rejection_reason": rejection_reason}
@@ -268,7 +276,9 @@ class InMemoryEventRepository:
         self.rows[key] = event
         return True
 
-    def list_for_thread(self, thread_id: str, *, since: datetime | None = None) -> list[Event]:
+    def list_for_thread(
+        self, thread_id: str, *, since: datetime | None = None
+    ) -> list[Event]:
         events = [
             e
             for (t, _), e in self.rows.items()

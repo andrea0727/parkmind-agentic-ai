@@ -63,7 +63,9 @@ from parkmind.services.use_cases.session_memory import session_store
 
 logger = logging.getLogger(__name__)
 
-MAGIC_KINGDOM_PARK_ID = "75ea578a-adc8-4116-a54d-dccb60765ef9"  # ThemeParks Wiki entity id
+MAGIC_KINGDOM_PARK_ID = (
+    "75ea578a-adc8-4116-a54d-dccb60765ef9"  # ThemeParks Wiki entity id
+)
 
 
 class PlanningUnavailableError(RuntimeError):
@@ -172,10 +174,14 @@ def load_catalog(deps: PlanningDeps) -> list[Attraction]:
     if catalog:
         return catalog
     if deps.park_data is None:
-        raise ContextUnavailableError(f"no attraction catalog for park {deps.park_id!r}")
+        raise ContextUnavailableError(
+            f"no attraction catalog for park {deps.park_id!r}"
+        )
     catalog = deps.park_data.get_catalog()
     if not catalog:
-        raise ContextUnavailableError(f"the provider returned no catalog for park {deps.park_id!r}")
+        raise ContextUnavailableError(
+            f"the provider returned no catalog for park {deps.park_id!r}"
+        )
     deps.attractions.save_catalog(deps.park_id, catalog)
     return catalog
 
@@ -194,7 +200,9 @@ def load_schedule(deps: PlanningDeps, on_date: date) -> Park:
     if park is not None:
         return park
     if deps.park_data is None:
-        raise ContextUnavailableError(f"no schedule for park {deps.park_id!r} on {on_date}")
+        raise ContextUnavailableError(
+            f"no schedule for park {deps.park_id!r} on {on_date}"
+        )
     park = deps.park_data.get_schedule(on_date)
     deps.attractions.save_schedule(park)
     return park
@@ -226,7 +234,9 @@ class _DeferredAttractionRepository:
             with open_deps(self._deps_factory) as deps:
                 return load_catalog(deps)
         except PlanningUnavailableError:
-            logger.warning("attraction names cannot be resolved: no catalog", exc_info=True)
+            logger.warning(
+                "attraction names cannot be resolved: no catalog", exc_info=True
+            )
             return []
 
 
