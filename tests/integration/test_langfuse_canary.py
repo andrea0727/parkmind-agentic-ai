@@ -24,14 +24,18 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from parkmind.agents.elicit_agent import AnthropicExtractor
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.elicitation_graph import build_elicitation_graph
-from parkmind.services.clients.observability.langfuse_tracing import mask_for_trace
+from parkmind.services.clients.observability.langfuse_tracing import (
+    _masked_handler_class,
+    mask_for_trace,
+)
 
 COMPLETE = scenario("wiki_example_complete")
 GUEST_WORDS = "zebracanary"
 CORRECTION = "zebracorrection"
 LABEL = "Zebrina"
 ACCESSIBILITY_VALUES = ("LIMITED_WALKING", "mobility_requirements")
-PUBLIC_KEY = "pk-canary"
+UNKNOWN_RIDE = "Zebracoaster Pirates"
+PLAIN_RESUME = "zebraresume is what I meant"
 
 
 class _ToolCallingFake(GenericFakeChatModel):
@@ -47,22 +51,10 @@ def _extraction() -> dict[str, Any]:
     return extraction
 
 
-@pytest.fixture
-def exported(monkeypatch):
-    exporter = InMemorySpanExporter()
-    client = Langfuse(
-        public_key=PUBLIC_KEY,
-        secret_key="sk-canary",
-        base_url="http://localhost:1",
-        mask=mask_for_trace,
-        span_exporter=exporter,
-        tracer_provider=TracerProvider(),
-    )
+def _install_chat_model(monkeypatch, extraction: dict[str, Any]) -> None:
     reply = AIMessage(
         content="",
-        tool_calls=[
-            {"name": "ElicitationExtraction", "args": _extraction(), "id": "c1"}
-        ],
+        tool_calls=[{"name": "ElicitationExtraction", "args": extraction, "id": "c1"}],
     )
     import langchain_anthropic
 
@@ -71,7 +63,22 @@ def exported(monkeypatch):
         "ChatAnthropic",
         lambda **_: _ToolCallingFake(messages=itertools.repeat(reply)),
     )
-    yield exporter, client
+
+
+@pytest.fixture
+def exported(monkeypatch, request):
+    exporter = InMemorySpanExporter()
+    public_key = f"pk-canary-{request.node.name}"
+    client = Langfuse(
+        public_key=public_key,
+        secret_key="sk-canary",
+        base_url="http://localhost:1",
+        mask=mask_for_trace,
+        span_exporter=exporter,
+        tracer_provider=TracerProvider(),
+    )
+    _install_chat_model(monkeypatch, _extraction())
+    yield exporter, client, public_key
     client.shutdown()
 
 
@@ -92,7 +99,7 @@ def _span_text(exporter: InMemorySpanExporter) -> tuple[list[Any], str]:
 
 
 def test_a_traced_conversation_exports_none_of_the_guests_words(exported):
-    exporter, client = exported
+    exporter, client, public_key = exported
     intake, _ = make_intake()
     graph = build_elicitation_graph(
         AnthropicExtractor(api_key="k"),
@@ -103,7 +110,7 @@ def test_a_traced_conversation_exports_none_of_the_guests_words(exported):
     )
     config: Any = {
         "configurable": {"thread_id": "t1"},
-        "callbacks": [CallbackHandler(public_key=PUBLIC_KEY)],
+        "callbacks": [CallbackHandler(public_key=public_key)],
         "metadata": {"langfuse_session_id": "t1", "langfuse_tags": ["initial"]},
     }
     messages = [*COMPLETE["messages"], f"I'm {LABEL}, and {GUEST_WORDS} matters."]
@@ -134,3 +141,63 @@ def test_a_traced_conversation_exports_none_of_the_guests_words(exported):
         *ACCESSIBILITY_VALUES,
     ):
         assert secret not in text, f"{secret!r} reached an exported span"
+
+
+def _unknown_attraction_trace(
+    exporter: InMemorySpanExporter, client: Langfuse, handler: Any
+) -> str:
+    """Run until the graph asks about an unknown must-do, answer in plain text, export."""
+    intake, _ = make_intake()
+    graph = build_elicitation_graph(
+        AnthropicExtractor(api_key="k"),
+        intake,
+        default_checkpointer(),
+        lambda state: {},
+        names=make_names(),
+    )
+    config: Any = {"configurable": {"thread_id": "t2"}, "callbacks": [handler]}
+    first = graph.invoke(
+        {
+            "thread_id": "t2",
+            "messages": [HumanMessage(content=m) for m in COMPLETE["messages"]],
+        },
+        config=config,
+    )
+    assert first["__interrupt__"][0].value["missing"] == [
+        f"unknown_attraction:{UNKNOWN_RIDE}"
+    ]
+    graph.invoke(Command(resume=PLAIN_RESUME), config=config)
+    client.flush()
+    return _span_text(exporter)[1]
+
+
+@pytest.fixture
+def exported_unknown_must_do(monkeypatch, exported):
+    _install_chat_model(monkeypatch, {**_extraction(), "must_do": [UNKNOWN_RIDE]})
+    return exported
+
+
+def test_an_unknown_must_do_and_a_plain_text_answer_never_reach_a_span(
+    exported_unknown_must_do,
+):
+    exporter, client, public_key = exported_unknown_must_do
+    handler = _masked_handler_class()(public_key=public_key)
+
+    text = _unknown_attraction_trace(exporter, client, handler)
+
+    assert "Interrupt" in text, "the paused run's error status should be traced by type"
+    assert "Zebracoaster" not in text, "the guests' attraction name reached a span"
+    assert "zebraresume" not in text, "the plain-text answer reached a span"
+
+
+def test_the_sdks_plain_handler_leaks_the_unknown_name_in_an_error_status(
+    exported_unknown_must_do,
+):
+    """Why ``_masked_handler_class`` exists: the same run fails with the SDK's own handler."""
+    exporter, client, public_key = exported_unknown_must_do
+
+    text = _unknown_attraction_trace(
+        exporter, client, CallbackHandler(public_key=public_key)
+    )
+
+    assert "Zebracoaster" in text

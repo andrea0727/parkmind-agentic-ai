@@ -7,6 +7,7 @@ first brought to an approved active plan by the initial planning graph, then the
 graph runs on the same thread with the new events as input.
 """
 
+import itertools
 import json
 from datetime import timedelta
 from typing import Any
@@ -466,6 +467,29 @@ def test_confirmed_fatigue_proposes_a_plan_that_opens_with_a_rest(r) -> None:
     horizon = [s for s in candidate.stops if s.arrival_time >= NOW]
     assert horizon[0].kind is StopKind.REST
     assert r.active.plan_id != candidate.plan_id
+
+
+def test_a_rest_first_replan_passes_its_check_while_the_clock_keeps_advancing(
+    r,
+) -> None:
+    """The check reads the progress report's time, not the clock: a clock that moves on
+    between BUILD and CHECK must not make the rest-first plan start in the past."""
+    ticks = iter(NOW + timedelta(minutes=2 * i) for i in itertools.count())
+    r.graph = rg.build_replanning_graph(
+        r.h.checkpointer,
+        deps_factory=factory_for(r.deps),
+        clock=lambda: next(ticks),
+        narrator=NoNarrator(),
+    )
+
+    result = r.send(_unsure_fatigue(r))
+    assert _interrupt(result)["kind"] == rg.EVENT_CONFIRMATION_INTERRUPT_KIND
+    result = r.resume({"confirmed": True})
+
+    assert _interrupt(result)["kind"] == "plan_approval"
+    candidate = r.deps.plans.get(r.pending()[0].candidate_plan_id)
+    first_ahead = next(s for s in candidate.stops if s.arrival_time >= NOW)
+    assert first_ahead.kind is StopKind.REST
 
 
 # --- event confirmation --------------------------------------------------------------------------

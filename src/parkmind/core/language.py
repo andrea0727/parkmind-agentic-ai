@@ -161,14 +161,14 @@ _CATALOG: dict[str, dict[Language, str]] = {
             "Debe haber un adulto responsable en el grupo antes de aprobar un plan."
         ),
     },
-    "shows_not_plannable": {
+    "show_not_fitted": {
         "en": (
-            "Parades and fireworks run at fixed showtimes, so they can't be planned as "
-            "stops. Plan your rides without them and watch the show when it starts."
+            "I couldn't fit a show at its showtime into the plan. Try another departure "
+            "time, or plan your rides without it and watch the show when it starts."
         ),
         "es": (
-            "Los desfiles y los fuegos artificiales tienen horario fijo, así que no se pueden "
-            "planear como paradas. Planeen sus atracciones sin ellos y vean el show cuando empiece."
+            "No logré encajar un show a su hora en el plan. Prueben con otra hora de "
+            "salida, o planeen sus atracciones sin él y vean el show cuando empiece."
         ),
     },
     "q_unverified_departure": {

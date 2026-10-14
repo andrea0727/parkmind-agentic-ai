@@ -380,8 +380,10 @@ def _no_valid_plan(state: ParkMindState) -> Command[Any]:
     lang = language_of(state)
     lines = [text("no_valid_plan", lang)]
     lines += reasons
-    if check is not None and any(v.rule is RuleId.SHOW_ARRIVAL for v in check.violations):
-        lines.append(text("shows_not_plannable", lang))
+    if check is not None and any(
+        v.rule is RuleId.SHOW_ARRIVAL for v in check.violations
+    ):
+        lines.append(text("show_not_fitted", lang))
     lines.append(text("relax_hint", lang, solo=solo_of(state)))
     return Command(
         update={
@@ -418,7 +420,6 @@ def _make_explain_node(
         return explained(
             plan,
             explain_grounded(active, prepared, thread_id=state["thread_id"]),
-            {"elicit": ELICIT_PROMPT_VERSION},
         )
 
     return explain

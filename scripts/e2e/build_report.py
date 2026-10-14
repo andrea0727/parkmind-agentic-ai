@@ -167,8 +167,8 @@ def j_show(r: dict[str, Any]) -> tuple[str, str]:
     if (c := crashed(r)):
         return c
     message = facts(r).get("last_ai", "")
-    if "fixed showtimes" in message:
-        return ok("No plan, and the guests were told that shows have fixed showtimes and cannot be planned as stops")
+    if "couldn't fit a show" in message:
+        return ok("No plan, and the guests were told the show could not be fitted at its showtime")
     return bad("SHOW", f"interrupt={kind(r)} active={active(r)} last_ai={message[:120]}")
 
 
@@ -314,7 +314,7 @@ M: dict[str, tuple[Any, ...]] = {
     "almuerzo_de_madrugada": (27, "Lunch window at 3-4 AM", "Constraints and feasibility", "normal", "Lunch 3 AM to 4 AM", "The plan is rejected with a reason before anything is proposed", j_stops_at_check("LUNCH_WINDOW"), ""),
     "almuerzo_tras_la_salida": (28, "Lunch after the departure time", "Constraints and feasibility", "normal", "Lunch 1-2 PM, leave at 11 AM", "The contradiction is detected", j_stops_at_check("LUNCH_WINDOW"), ""),
     "altura_absurda": (29, "Absurd heights", "Safety: heights", "critical", "'One is 400 cm and the other 20 cm'", "The values are validated or rejected, never silently changed", j_altura, "The extractor output replaced the values, so the original numbers never reached schema validation."),
-    "show_como_mustdo": (30, "Shows as must-do", "Constraints and feasibility", "normal", "Parade and fireworks as must-do", "A clear limitation: shows have fixed showtimes and are not plannable stops", j_show, ""),
+    "show_como_mustdo": (30, "Shows as must-do", "Constraints and feasibility", "normal", "Parade and fireworks as must-do", "An honest message: the show could not be fitted at its showtime", j_show, ""),
     "horas_contradictorias": (31, "Contradictory departure times", "Elicitation and validation", "normal", "'6 PM', then '10 PM. No wait, 8 PM.'", "The latest statement wins", j_horas, ""),
     "presupuesto_caminata_minimo": (32, "Tiny walking budget", "Constraints and feasibility", "normal", "10 minutes of walking for three must-dos", "The plan stays within budget or the failure is reported", j_stops_at_check("WALKING_BUDGET"), ""),
     "evitar_casi_todo": (33, "Avoiding almost everything", "Constraints and feasibility", "normal", "12 avoided rides", "A plan built from what remains, with no avoided ride", j_avoid(["Space Mountain", "TRON", "Big Thunder", "Haunted Mansion", "Pirates", "Jungle Cruise", "Buzz", "Peter Pan", "Tiana", "Seven Dwarfs", "Pooh", "Mad Tea"]), ""),
@@ -443,7 +443,7 @@ DOCS: dict[str, tuple[str, str, list[str], str]] = {
     "show_como_mustdo": ("Guests ask for the parade and fireworks as must-dos",
         "Limits: shows run at fixed times and are not rides; the app should explain how it handles them.",
         ["Guests (2 adults) say they definitely want the Festival of Fantasy Parade and Happily Ever After fireworks, leave at 11 PM", "Look at what the app does next"],
-        "The guests get a clear explanation that shows have fixed showtimes and cannot be planned as stops."),
+        "The guests are told the show could not be fitted at its showtime and are offered another departure time."),
     "horas_contradictorias": ("Guests change their departure time several times",
         "Extraction: when the guests correct themselves, the latest statement must win.",
         ["Guests say they leave at 6 PM", "They then say 'actually 10 PM... no wait, 8 PM'", "Read the departure time the app extracted"],

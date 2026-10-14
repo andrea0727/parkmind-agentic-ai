@@ -1084,14 +1084,16 @@ def test_the_plan_records_which_elicit_prompt_read_the_constraints(monkeypatch):
     )
 
 
-def _fail_check_with(monkeypatch: pytest.MonkeyPatch, rule: RuleId, message: str) -> None:
+def _fail_check_with(
+    monkeypatch: pytest.MonkeyPatch, rule: RuleId, message: str
+) -> None:
     result = CheckResult(
         valid=False, violations=[ConstraintViolation(rule=rule, message=message)]
     )
     monkeypatch.setattr(ipg.CheckPlanUseCase, "execute", lambda *a, **k: result)
 
 
-def test_an_empty_plan_for_a_show_must_do_explains_that_shows_have_fixed_showtimes(
+def test_a_failed_show_arrival_says_the_show_could_not_be_fitted_not_that_shows_cannot_be_planned(
     monkeypatch,
 ):
     _fail_check_with(
@@ -1106,8 +1108,8 @@ def test_an_empty_plan_for_a_show_must_do_explains_that_shows_have_fixed_showtim
     message = h.state()["messages"][-1].content
     assert "__interrupt__" not in result
     assert "No scheduled showtime for id-parade" in message
-    assert "fixed showtimes" in message
-    assert "can't be planned as stops" in message
+    assert "couldn't fit a show at its showtime" in message
+    assert "can't be planned" not in message
     assert h.state().get("proposal") is None
 
 
@@ -1117,7 +1119,7 @@ def test_the_show_explanation_is_only_given_for_show_violations(monkeypatch):
 
     h.confirm()
 
-    assert "fixed showtimes" not in h.state()["messages"][-1].content
+    assert "couldn't fit a show" not in h.state()["messages"][-1].content
 
 
 def _only_children() -> dict[str, Any]:

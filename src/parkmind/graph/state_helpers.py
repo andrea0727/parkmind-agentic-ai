@@ -117,8 +117,8 @@ def explained(
     """EXPLAIN's state update: the text, and which prompts wrote it in the plan's provenance.
 
     ``prompt_versions["explain"]`` is ``explain-v1`` for grounded LLM text and
-    ``template`` for the fallback; ``prompt_versions`` adds the other prompts behind the
-    plan (the initial graph records ``elicit``). It all travels to the proposal.
+    ``template`` for the fallback; ``prompt_versions`` adds other prompts behind the
+    plan. It all travels to the proposal.
     """
     provenance = plan.provenance
     versions = {
