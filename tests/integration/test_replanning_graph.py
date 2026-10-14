@@ -786,3 +786,17 @@ def test_a_replan_keeps_the_elicit_prompt_version_of_the_plan_it_replaces(r) -> 
 
     [proposal] = r.pending()
     assert proposal.provenance.prompt_versions["elicit"] == ipg.ELICIT_PROMPT_VERSION
+
+
+def test_a_replan_after_a_new_elicit_prompt_keeps_the_version_that_read_the_constraints(
+    r, monkeypatch
+) -> None:
+    """The constraints were read by the prompt of the plan being replaced, not by
+    whichever prompt is deployed when the replan runs."""
+    original = ipg.ELICIT_PROMPT_VERSION
+    monkeypatch.setattr(ipg, "ELICIT_PROMPT_VERSION", "elicit-next")
+
+    r.send(_down(r.stop_node()))
+
+    [proposal] = r.pending()
+    assert proposal.provenance.prompt_versions["elicit"] == original
