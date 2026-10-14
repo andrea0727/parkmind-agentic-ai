@@ -39,6 +39,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
 from parkmind.agents.elicit_agent import (
+    UNAVAILABLE_FLAG,
     AnthropicExtractor,
     GuestInfoExtractor,
     make_elicit_node,
@@ -84,6 +85,9 @@ def _last_message_type(state: ParkMindState) -> str | None:
 def _route_after_extraction(state: ParkMindState) -> str:
     if state.get("constraints") is not None:
         return "confirm_hard_constraints"
+    messages = state.get("messages") or []
+    if messages and getattr(messages[-1], "additional_kwargs", {}).get(UNAVAILABLE_FLAG):
+        return END
     # An AI message is a question waiting for an answer; a human message is new input.
     return "ask_missing" if _last_message_type(state) == "ai" else "elicit"
 
@@ -233,7 +237,7 @@ def build_elicitation_graph(
     graph.add_conditional_edges(
         "elicit",
         _route_after_extraction,
-        ["ask_missing", "confirm_hard_constraints", "elicit"],
+        ["ask_missing", "confirm_hard_constraints", "elicit", END],
     )
     graph.add_edge("ask_missing", "elicit")
     graph.add_conditional_edges(

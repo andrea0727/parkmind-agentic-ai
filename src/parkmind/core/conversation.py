@@ -48,6 +48,10 @@ class StaleProposalError(ConversationError):
     """The decision names a proposal that is no longer the one waiting for the guests."""
 
 
+class ServiceUnavailableError(Exception):
+    """A service the planner needs is down; the message is safe to show the guests."""
+
+
 @dataclass(frozen=True)
 class ConfirmationRequest:
     """Hard constraints the guests must confirm before anything is planned."""

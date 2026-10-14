@@ -12,6 +12,7 @@ still missing. It never decides what the checker enforces:
   written to state, and never stored as soft preferences [C15, C19].
 """
 
+import logging
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -52,6 +53,7 @@ from parkmind.services.use_cases.confirmation_echo import (
     ACCESSIBILITY_PREFIX,
     HEIGHT_PREFIX,
 )
+from parkmind.services.use_cases.planning_deps import PlanningUnavailableError
 from parkmind.services.use_cases.resolve_attraction_names import (
     AttractionNameResolver,
     NameResolution,
@@ -63,6 +65,7 @@ __all__ = [
     "ElicitNode",
     "ExtractionOutcome",
     "ExtractorOutputError",
+    "ExtractorUnavailableError",
     "GuestInfoExtractor",
     "build_guest_profiles",
     "build_party_constraints",
@@ -74,6 +77,8 @@ __all__ = [
     "pending_confirmations",
     "unresolved_names",
 ]
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_ATTEMPTS = 2
 _DEFAULT_TOLERANCE = 0.5
@@ -92,6 +97,10 @@ class ElicitNode(Protocol):
 
 class ExtractorOutputError(ValueError):
     """The extractor returned no usable structured output (retried like a schema failure)."""
+
+
+class ExtractorUnavailableError(RuntimeError):
+    """The model could not be reached (not a bad answer): retrying the same call will not help."""
 
 
 class GuestInfoExtractor(Protocol):
@@ -165,9 +174,12 @@ class AnthropicExtractor:
                 "\n\nYour previous output was rejected by validation. Fix exactly these "
                 f"problems and return the full corrected output:\n{repair_hint}"
             )
-        response = self._runnable().invoke(
-            [SystemMessage(ELICIT_SYSTEM_PROMPT), HumanMessage(content)]
-        )
+        try:
+            response = self._runnable().invoke(
+                [SystemMessage(ELICIT_SYSTEM_PROMPT), HumanMessage(content)]
+            )
+        except Exception as exc:
+            raise ExtractorUnavailableError(type(exc).__name__) from exc
         calls = getattr(response, "tool_calls", None) or []
         if not calls:
             raise ExtractorOutputError("the model returned no structured output")
@@ -561,6 +573,22 @@ def _with_clock_answer(
     return replace(outcome, extraction=extraction.model_copy(update={"departure_time": hhmm}))
 
 
+UNAVAILABLE_FLAG = "unavailable"
+
+
+def _unavailable(key: str, lang: Language) -> dict[str, Any]:
+    """End the turn with a plain message: a service is down, so there is nothing to ask."""
+    return {
+        "language": lang,
+        "constraints": None,
+        "constraints_valid": False,
+        "pending_hard_constraint_confirmation": None,
+        "messages": [
+            AIMessage(content=text(key, lang), additional_kwargs={UNAVAILABLE_FLAG: True})
+        ],
+    }
+
+
 def make_elicit_node(
     extractor: GuestInfoExtractor,
     intake: AccessibilityIntakeUseCase,
@@ -593,15 +621,23 @@ def make_elicit_node(
         # Anything staged by an earlier pass is stale: this extraction replaces it.
         intake.discard(session_id)
 
-        outcome = extract_with_recovery(extractor, texts, max_attempts=max_attempts)
+        try:
+            outcome = extract_with_recovery(extractor, texts, max_attempts=max_attempts)
+        except ExtractorUnavailableError:
+            logger.exception("the extractor is unavailable")
+            return _unavailable("assistant_unavailable", lang)
         outcome = _with_clock_answer(outcome, state, texts[-1])
         resolution = NameResolution()
         if outcome.extraction is None:
             missing = ["unreadable_response"]
         else:
-            resolution = names.resolve(
-                [*outcome.extraction.must_do, *outcome.extraction.avoid]
-            )
+            try:
+                resolution = names.resolve(
+                    [*outcome.extraction.must_do, *outcome.extraction.avoid]
+                )
+            except PlanningUnavailableError:
+                logger.exception("attraction names cannot be resolved")
+                return _unavailable("unavailable", lang)
             missing = (
                 missing_information(outcome.extraction)
                 + ungrounded_heights(outcome.extraction, texts)

@@ -249,6 +249,26 @@ _CATALOG: dict[str, dict[Language, str]] = {
             "No se propuso nada. Intenta de nuevo en unos minutos."
         ),
     },
+    "assistant_unavailable": {
+        "en": (
+            "I'm having trouble understanding messages right now, so nothing was planned. "
+            "Please try again in a few minutes."
+        ),
+        "es": (
+            "Tengo problemas para entender mensajes en este momento, así que no se planeó "
+            "nada. Intenten de nuevo en unos minutos."
+        ),
+    },
+    "assistant_unavailable_solo": {
+        "en": (
+            "I'm having trouble understanding messages right now, so nothing was planned. "
+            "Please try again in a few minutes."
+        ),
+        "es": (
+            "Tengo problemas para entender mensajes en este momento, así que no se planeó "
+            "nada. Intenta de nuevo en unos minutos."
+        ),
+    },
     "park_closed": {
         "en": (
             "The park has already closed for today (it closed at {closing}, park time), so "
