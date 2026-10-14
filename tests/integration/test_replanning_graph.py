@@ -779,3 +779,10 @@ def test_nothing_is_proposed_for_a_party_without_guests(r) -> None:
         rg._propose_replan(state, deps_factory=factory_for(r.deps), clock=lambda: NOW)
 
     assert len(r.proposals) == before
+
+
+def test_a_replan_keeps_the_elicit_prompt_version_of_the_plan_it_replaces(r) -> None:
+    r.send(_down(r.stop_node()))
+
+    [proposal] = r.pending()
+    assert proposal.provenance.prompt_versions["elicit"] == ipg.ELICIT_PROMPT_VERSION
