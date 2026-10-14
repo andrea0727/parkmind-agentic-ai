@@ -1,9 +1,9 @@
-# Agent graph flow (ParkMind)
+# Agent workflow (ParkMind)
 
 Static companion to the interactive pages. Open them in a browser:
 
-- [`agent-graph.html`](agent-graph.html): the animated agent graph. replayable scenarios, step-by-step, with a live state panel.
-- [`architecture.html`](architecture.html): the animated architecture stack, with flows, boundaries, implementation status and a "Safety & control" overlay showing which components enforce each control.
+- [`agent-workflow.html`](agent-workflow.html): the animated agent graph. replayable scenarios, step-by-step, with a live state panel.
+- [`system-architecture.html`](system-architecture.html): the animated architecture stack, with flows, boundaries, implementation status and a "Safety & control" overlay showing which components enforce each control.
 
 Green = implemented, dashed yellow = target / stub.
 

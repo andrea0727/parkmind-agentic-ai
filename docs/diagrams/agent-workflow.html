@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ParkMind · Agent graph (interactive)</title>
+<title>ParkMind · Agent workflow (interactive)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -122,11 +122,11 @@ svg text{font-family:'Plus Jakarta Sans',system-ui,sans-serif;fill:var(--ink)}
 </head>
 <body>
 <header>
-  <h1>ParkMind <small data-i18n>Agent graph · how the agent works</small></h1>
+  <h1>ParkMind <small data-i18n>Agent workflow · business logic</small></h1>
   <span class="spacer"></span>
   <button class="btn" id="theme" data-i18n>Theme</button>
   <button class="btn" id="lang" aria-label="Language / Idioma"></button>
-  <a class="btn primary" href="architecture.html" data-i18n>← Architecture</a>
+  <a class="btn primary" href="system-architecture.html" data-i18n>← System architecture</a>
 </header>
 <div class="toolbar">
   <label for="scn" data-i18n>Scenario</label><select id="scn"></select>
@@ -536,9 +536,9 @@ const ES={
 "requires_replan": "requires_replan",
 "fails": "falla",
 "Re-run so eligible sets are computed with the fresh context": "Se re-ejecuta para calcular los conjuntos elegibles con el contexto fresco",
-"Agent graph · how the agent works": "Grafo del agente · cómo funciona el agente",
+"Agent workflow · business logic": "Flujo del agente · lógica de negocio",
 "Theme": "Tema",
-"← Architecture": "← Arquitectura",
+"← System architecture": "← Arquitectura del sistema",
 "Scenario": "Escenario",
 "Speed": "Velocidad",
 "◀ Prev": "◀ Anterior",

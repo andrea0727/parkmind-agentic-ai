@@ -68,7 +68,7 @@ parkmind-agentic-ai/
 ├── docs/
 │   ├── evaluation/               # methodology behind the metrics
 │   ├── e2e/                      # live-run scenarios (SCENARIOS.md) and last report
-│   ├── diagrams/                 # architecture.html
+│   ├── diagrams/                 # system-architecture.html, agent-workflow.html
 │   └── context/, decisions/
 │
 ├── notebooks/                     # exploratory only, nothing imported by the app
