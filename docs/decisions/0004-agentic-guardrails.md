@@ -81,7 +81,7 @@ This ADR lists what enforces that rule today, why each guardrail is enough for w
 | G9 | The hard-constraint confirmation resume value isn't validated (`decision.get` on a non-dict raises) | Parse it like the approval and event confirmations, re-asking with an `error` |
 | — | Elicit client: PR #91 bounded it (`timeout=60`, `max_retries=2`), but a transport or API error still raises through the graph | Catch it in the elicit node and tell the guests to retry; log the error type only |
 
-**Follow-ups** (own issues):
+**Follow-ups** (tracked in issue #88, section 9):
 - **G12:** a per-session or per-thread LLM call budget. PR #91's API limits per user; the graph has no limit.
 - **G13:** ground departure, lunch window and walking budget like heights (today they are only confirmed).
 - **Interpret, when it lands:** don't trust a model-reported `confidence`, and widen which event types count as hard-constraint-adjacent.
@@ -114,7 +114,7 @@ Observability is split with P1-18. P1-22 provides the typed trace, the provenanc
 
 ## Decision
 
-Keep the structural guardrails (agency, AST, import contracts, confirmation interrupts) as the primary defense, because they don't depend on the model behaving. G1, G6, G7, G8, G10 and G11 are closed. G5 needs a decision before the Postgres checkpointer is wired. Phase B is the next PR. G12–G14 get their own issues. P1-22 lands with L1–L10.
+Keep the structural guardrails (agency, AST, import contracts, confirmation interrupts) as the primary defense, because they don't depend on the model behaving. G1, G6, G7, G8, G10 and G11 are closed. G5 needs a decision before the Postgres checkpointer is wired. Phase B is the next PR. G12–G14 and the interpret item are tracked in issue #88, section 9. P1-22 lands with L1–L10.
 
 ## Consequences
 
