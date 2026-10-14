@@ -12,8 +12,8 @@ without a human confirming it. ``elicit`` only *proposes* (``constraints_valid``
 stays False and ``pending_hard_constraint_confirmation`` lists what is
 unconfirmed); only the resumed, human-driven ``confirm_hard_constraints`` clears
 the list, and ``validate_constraints`` is the only writer of
-``constraints_valid=True``. ``downstream`` -- where P0-30 plugs in load_context
-and the checker -- starts with ``ensure_confirmed``, so it fails loudly if that
+``constraints_valid=True``. ``downstream`` -- load_context and the checker --
+starts with ``ensure_confirmed``, so it fails loudly if that
 ever stops being true.
 
 Privacy [C19]: interrupt payloads and the pending list are checkpointed, so for
@@ -241,7 +241,7 @@ def _after_confirmation(state: ParkMindState) -> str:
 
 
 def _proceed(state: ParkMindState) -> dict[str, Any]:
-    """Placeholder for load_context -> checker [P0-30]; refuses unconfirmed input."""
+    """Placeholder for load_context -> checker; refuses unconfirmed input."""
     ensure_confirmed(state)
     return {}
 
@@ -260,7 +260,7 @@ def build_elicitation_graph(
     ``node_id``s; the confirmed ``constraints.must_do``/``avoid`` hold ids.
 
     ``downstream`` runs only once constraints are confirmed and valid; give it
-    the next stage of the initial planning graph [P0-30]. It should call
+    the next stage of the initial planning graph. It should call
     ``ensure_confirmed`` first.
 
     Refuses to build with tracing switched on in the environment (``tracing_guard``).

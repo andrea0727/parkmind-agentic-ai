@@ -1,12 +1,12 @@
-"""The MCP capability boundary stays a boundary (P0-24, P0-27; Architecture section 27 [C22, C23]).
+"""The MCP capability boundary stays a boundary (Architecture section 27 [C22, C23]).
 
 * Delegation: ``tools/`` reaches the system only through use cases and the
   section 33 contracts, so no business logic can grow behind the transport
-  (P0-24: "Server code delegates to application use-cases"; P0-27: "No planner
+  ("Server code delegates to application use-cases"; "No planner
   logic is duplicated inside MCP handlers"). import-linter already forbids the
   core packages; this also keeps ports, clients and the graph out.
 * No activation: neither the tools nor the use cases behind them can reach the
-  proposal, persistence or activation paths (P0-24: "No MCP tool can activate or
+  proposal, persistence or activation paths ("No MCP tool can activate or
   mutate the active plan").
 
 AST-based, so a docstring that names a forbidden module is not an import.

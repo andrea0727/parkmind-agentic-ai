@@ -1,5 +1,5 @@
 """
-Replanning graph end to end (P0-34): approved plan -> event -> policy -> replan -> check ->
+Replanning graph end to end: approved plan -> event -> policy -> replan -> check ->
 diff -> explain -> propose -> interrupt -> approve / reject.
 
 Real use cases, planner, checker and in-memory ports; only the clock is fixed. The thread is
@@ -671,7 +671,7 @@ def test_the_state_tells_the_guests_what_changed(r) -> None:
     assert r.stop_node() in values["diff"].stops_removed
 
 
-# --- editing a replan (P0-32) ------------------------------------------------------------------
+# --- editing a replan ------------------------------------------------------------------
 
 
 def _optional_stop(plan: Any, *, besides: tuple[str, ...] = ()) -> str:
@@ -753,7 +753,7 @@ def test_a_stop_already_done_cannot_be_edited_out(r) -> None:
 def test_the_replan_narrator_explains_from_the_reason_and_the_changes(
     monkeypatch,
 ) -> None:
-    """P0-31: an updated plan is explained from why it changed and what changed."""
+    """An updated plan is explained from why it changed and what changed."""
     narrator = ScriptedNarrator("Your plan changed because a ride closed.")
     r = _Replanning(monkeypatch, narrator=narrator)
 

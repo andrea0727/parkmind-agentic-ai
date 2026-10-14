@@ -1,4 +1,4 @@
-"""Fixtures for the real-PostgreSQL repository tests (P0-12).
+"""Fixtures for the real-PostgreSQL repository tests.
 
 Every test here talks to a throwaway database ``parkmind_test_<hex>`` created on
 the server named by ``PARKMIND_TEST_DATABASE_URL`` (default: ``DATABASE_URL``),

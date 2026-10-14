@@ -7,9 +7,9 @@
 <!--
   VISUAL MOCKUP — not the final client.
   Design and interaction reference for the ParkMind UI. The MVP client will be
-  built with React on top of the FastAPI channel (P0-35, src/parkmind/api/).
+  built with React on top of the FastAPI channel (src/parkmind/api/).
   FIXTURE field names are an ILLUSTRATIVE SHAPE, NOT the domain contract: the
-  real contract comes from P0-35 (§33) and core/contracts.
+  real contract comes from the API (§33) and core/contracts.
   See docs/UI-INTEGRATION.md and the matching ADR in docs/decisions/.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -936,7 +936,7 @@ const t = (k, vars) => {
    Los nombres de campo de aquí NO coinciden con core/contracts: el dominio
    usa stops/node_id/arrival_time, departure_time, AccessibilityRequirements
    por invitado, y stops_added/removed/modified/reordered en el diff.
-   El contrato real sale de P0-35 (§33). No construyas el adaptador contra
+   El contrato real sale de la API (§33). No construyas el adaptador contra
    este fixture: constrúyelo contra el contrato y ajusta aquí.
    Las coordenadas vienen de entity.location en ThemeParks.wiki
    (aquí aproximadas; en live, exactas).
@@ -1730,7 +1730,7 @@ function mockReply(text){
         {kind:"hard",label:loc(FIXTURE.accessibility_requirements.flags[1].label)},
         {kind:"hard",label:"⏱ "+FIXTURE.party_constraints.departure_time},
         {kind:"soft",label:loc(FIXTURE.guest_preferences.soft[0].label)}],
-      confirm:true };   // P0-29: las restricciones duras no entran sin confirmación
+      confirm:true };   // las restricciones duras no entran sin confirmación
 
   if (has("lluvia","llover","lloviendo","rain","raining","chuva","chover","pluie","pleuvoir",
           "clima","tiempo","weather","forecast","météo","previsão","15:00","3 pm","3pm","las 3"))
@@ -1800,7 +1800,7 @@ function replyAfterConfirm(){
     plan_preview:true, followups:true };
 }
 
-/* Tarjeta de confirmación de restricciones duras (P0-29). Nada se guarda ni
+/* Tarjeta de confirmación de restricciones duras. Nada se guarda ni
    se planifica hasta que el invitado confirma: consentimiento explícito para
    accesibilidad y altura, y elección de retención. */
 function renderConfirmCard(constraints){

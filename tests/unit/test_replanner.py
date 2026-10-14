@@ -1,5 +1,5 @@
 """
-Unit tests for Replanner service (P0-23).
+Unit tests for Replanner service.
 Ensures completed stops freeze, location fallback works, and PlanDiff generates correctly.
 """
 

@@ -1,8 +1,8 @@
-"""parkmind-mcp over the real MCP protocol (P0-24).
+"""parkmind-mcp over the real MCP protocol.
 
 Most tests connect an MCP ``Client`` to the server in-process; one launches
 ``scripts/run_mcp_server.py`` as a subprocess over stdio, exactly as an external
-client (the LLM-only baseline harness, P1-15) would. No MCP server needs to be
+client (the LLM-only baseline harness) would. No MCP server needs to be
 running beforehand.
 """
 

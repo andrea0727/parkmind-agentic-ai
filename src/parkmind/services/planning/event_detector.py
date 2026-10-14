@@ -1,4 +1,4 @@
-"""Snapshot-to-event detection (section 24, backlog P0-33).
+"""Snapshot-to-event detection.
 
 Pure: two consecutive stored snapshots in, candidate ``Event``s out. Nothing
 here sets ``severity`` or ``requires_replan`` -- only ``EventPolicy`` does

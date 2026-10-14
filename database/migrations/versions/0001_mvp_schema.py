@@ -1,4 +1,4 @@
-"""MVP schema (P0-12).
+"""MVP schema.
 
 Revision ID: 0001
 Revises:
@@ -12,7 +12,7 @@ Not created here, on purpose:
   * LangGraph checkpoint tables -- owned by langgraph-checkpoint-postgres
     (``PostgresSaver.setup()``). ``AccessibilityRequirements`` never enter state
     or checkpoints (section 34 / C19).
-  * pgvector / knowledge tables -- P0-26.
+  * pgvector / knowledge tables -- added by migration 0003.
 """
 
 import sqlalchemy as sa
@@ -164,7 +164,7 @@ _UPGRADE = [
         PRIMARY KEY (park_id, service_date)
     )
     """,
-    # -- id mapping (P0-10 owns the model; this is storage only) ---------------
+    # -- id mapping (storage only; the model lives in the core) ---------------
     """
     CREATE TABLE id_mapping (
         provider      TEXT NOT NULL,
@@ -229,7 +229,7 @@ _DOWNGRADE_TABLES = [
 
 
 # Created by the retired v1 database/init.sql, which docker compose used to run
-# on first start -- so every dev volume created before P0-12 still holds them.
+# on first start -- so a dev volume created before the migrations still holds them.
 _V1_TABLES = ["guests", "plans", "proposals", "behavior_signals", "snapshots"]
 
 

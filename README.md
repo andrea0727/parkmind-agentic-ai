@@ -35,7 +35,7 @@ parkmind-agentic-ai/
 │       ├── __init__.py          # every package below is a REGULAR package
 │       │                        # with its own __init__.py — namespace
 │       │                        # subpackages cost mypy/coverage/pytest
-│       │                        # friction and buy nothing [P0-04]
+│       │                        # friction and buy nothing
 │       │
 │       ├── core/                # deterministic core — no framework imports
 │       │   └── contracts/       # Pydantic domain models — data only, no logic
@@ -75,7 +75,7 @@ parkmind-agentic-ai/
 ├── scripts/                        # seed_db, collect_snapshot, renormalize_snapshots, run_monitor,
 │                                   # run_mcp_server, fetch_embedding_model, index_knowledge,
 │                                   # e2e/ (live runner); run_demo_scenario and run_baselines are stubs
-├── database/                        # alembic.ini + migrations/ (schema owner, P0-12)
+├── database/                        # alembic.ini + migrations/ (schema owner)
 ├── ui/
 │   ├── app.py                         # Streamlit stub (not used; the demo UI is ui/web)
 │   └── web/                           # React + Vite demo UI (served by server.py)
@@ -104,7 +104,7 @@ blocking the other.
 
 **Every folder is a regular package.** Each subfolder under `src/parkmind/`
 has its own `__init__.py` — namespace packages (PEP 420) were tried and
-dropped (P0-04): they cost `mypy`/`import-linter`/`pytest` friction (e.g.
+dropped: they cost `mypy`/`import-linter`/`pytest` friction (e.g.
 `import-linter` can't resolve an implicit namespace package as a module) and
 buy nothing here. `src/` still isn't pip-installed as a package; `pytest.ini`
 and `agent.py` both add it to the import path, so
@@ -280,8 +280,8 @@ reduced to their roles.
 - LangSmith tracing (`LANGSMITH_TRACING=true`) is still refused: its tracer is added by
   `langchain-core` and never passes through the mask.
 - The stack's secrets are local defaults. Don't expose it beyond localhost, and don't send real
-  guest data to a cloud project: P1-18 still has to add the trace metadata (plan, snapshot,
-  prompt and model versions), failure correlation and the §42 scores.
+  guest data to a cloud project: the traces do not carry the trace metadata (plan, snapshot,
+  prompt and model versions), failure correlation or the §42 scores.
 
 ### Database
 
@@ -292,9 +292,9 @@ reduced to their roles.
   scenario (two opposing profiles, one active plan, one pending candidate). It
   is safe to re-run.
 - **Reset:** `docker compose down -v && docker compose up -d`, then migrate
-  again. A volume created before P0-12 still holds the old `init.sql` tables and
+  again. A volume created before the migrations still holds the old `init.sql` tables and
   must be reset this way before the first `upgrade head`.
-- **pgvector (P0-26):** the compose image is `postgres:16` plus the
+- **pgvector:** the compose image is `postgres:16` plus the
   `postgresql-16-pgvector` package (`database/Dockerfile`; CI installs the same
   package into its service container). Migration `0003` enables the extension.
   A container started from the old plain image stops it with a message:
@@ -336,7 +336,7 @@ several API workers would lose records between them. `server.py` fails loudly at
 startup if more than one worker is requested (`WEB_CONCURRENCY` or
 `PARKMIND_WORKERS` above 1, or `--workers`; `api/guard.py`).
 
-### IDs and normalization (P0-10)
+### IDs and normalization
 
 - **Internal ids.** An entity's internal id is the ThemeParks entity UUID it had
   when first seen. Every lookup goes through the `id_mapping` table
@@ -354,7 +354,7 @@ startup if more than one worker is requested (`WEB_CONCURRENCY` or
   Today the 28 SHOW entities show up as `MISSING_METADATA` until they're
   curated in `themeparks_reference_data.py`.
 
-### Snapshots (P0-11)
+### Snapshots
 
 A snapshot is the park's live data at one moment: ThemeParks waits, statuses and
 showtimes plus the hourly weather, stored as the **raw provider payloads** next
@@ -402,7 +402,7 @@ poetry run python scripts/renormalize_snapshots.py             # rows from an ol
 poetry run python scripts/renormalize_snapshots.py --all       # or every snapshot
 ```
 
-### Event monitor (P0-33)
+### Event monitor
 
 The monitor compares the two most recent stored snapshots and reports what
 changed in the park: an attraction going down or coming back
@@ -441,7 +441,7 @@ poetry run python scripts/run_monitor.py --no-collect   # detect on what is alre
   new event. `BEHIND_SCHEDULE` only fires once something records progress
   (`completed_stop_ids` or `skipped_stop_ids` in `PlanExecutionState`); assumed
   progress never counts. Today only `seed.py` writes it, so in production the event
-  never fires until reporting a stop as done is built (#48, P0-35b): that is an
+  never fires until reporting a stop as done is built: that is an
   acceptance criterion to carry into that ticket. A replan's reported progress is
   carried over to the new plan when its proposal is approved, so what the guests
   report while deciding is not lost.
@@ -456,7 +456,7 @@ poetry run python scripts/run_monitor.py --no-collect   # detect on what is alre
   what the replanning graph does (below). Waking a party's graph from the monitor
   is not wired yet.
 
-### Replanning graph (P0-34)
+### Replanning graph
 
 `graph/replanning_graph.py` (`langgraph.json` entry `replanning`) runs on the thread
 of the initial plan, with `{"thread_id": ..., "events": [Event, ...]}` as input;
@@ -483,7 +483,7 @@ LOAD PLAN → HANDLE EVENTS (dedup · apply execution updates · EventPolicy)
   reported progress, the party is assumed on schedule: stops that should have ended
   by now count as done. A closure or reopening reported after the snapshot is applied
   to the replan's context so the replan and its check see the same availability.
-- **Fatigue.** A confirmed `GUEST_FATIGUE` sets the walking cap (P0-33) and makes the
+- **Fatigue.** A confirmed `GUEST_FATIGUE` sets the walking cap and makes the
   new horizon open with a `REST` stop (§25). If a rest cannot fit, the replan fails
   closed.
 - **Walking budget.** The optimizer is given what is left of the party budget, the
@@ -495,9 +495,9 @@ LOAD PLAN → HANDLE EVENTS (dedup · apply execution updates · EventPolicy)
 - **Known limits.** After a replan finds no valid plan the events stay recorded, so a
   duplicate report does not retry it (a new event does). REJECT's "update
   preferences" step is not implemented (the reason is stored on the proposal and in
-  the behavior log; P1-03). An in-progress stop is treated as still ahead.
+  the behavior log). An in-progress stop is treated as still ahead.
 
-### Human approval: approve / edit / reject (P0-32)
+### Human approval: approve / edit / reject
 
 Both planning graphs pause at the same approval interrupt
 (`"kind": "plan_approval"`). Resume it with one of:
@@ -544,9 +544,9 @@ plain resume value kept that way would also answer the *next* interrupt.
   its role only (no height). A superseded proposal logs nothing, and a decision
   applied twice is logged once (`entry_id` is the proposal and the decision). A
   decision without the party's guests is refused. An edit's `attraction_ids` mixes
-  what was removed and what was added; the direction is a P1-01 follow-up (#51).
+  what was removed and what was added; the direction is not recorded (#51).
 
-### Explanations (P0-31)
+### Explanations
 
 Both graphs' EXPLAIN step puts a validated plan into words with Claude, and never
 lets it invent a figure (Architecture §40, C17):
@@ -583,20 +583,20 @@ lets it invent a figure (Architecture §40, C17):
   narrator (`tests/explain_support.py`), so they never call Claude, even with a key in
   `.env`.
 
-### MCP capability boundary (P0-24..P0-27)
+### MCP capability boundary
 
 `parkmind-mcp` publishes the same use cases the graph calls in-process as typed
 MCP tools (Architecture §27, C22/C23). The graph never depends on it; external
-clients (the LLM-only baseline, P1-15) and, when configured, LOAD CONTEXT do.
+clients (the LLM-only baseline) and, when configured, LOAD CONTEXT do.
 Every result is `{data, provenance}` (§32); failures are structured
 `{"error": {code, message, retryable, details}}`. No tool proposes, persists or
 activates a plan.
 
 | Namespace | Tools |
 |---|---|
-| `data.*` (P0-25) | `get_live_waits`, `get_attraction_status`, `get_schedule`, `get_showtimes`, `get_weather`, `get_walking_time`, `get_attraction_info` |
-| `knowledge.*` (P0-26) | `search_policies`, `find_similar_attractions`, `check_accessibility` |
-| `planner.*` (P0-27) | `build_plan`, `check_plan`, `replan`, `score_preferences`, `forecast_waits` |
+| `data.*` | `get_live_waits`, `get_attraction_status`, `get_schedule`, `get_showtimes`, `get_weather`, `get_walking_time`, `get_attraction_info` |
+| `knowledge.*` | `search_policies`, `find_similar_attractions`, `check_accessibility` |
+| `planner.*` | `build_plan`, `check_plan`, `replan`, `score_preferences`, `forecast_waits` |
 
 ```bash
 # stdio (what an MCP client launches), or streamable HTTP at http://127.0.0.1:8765/mcp
@@ -612,11 +612,11 @@ machine: stdio answers the process that launched it, and HTTP binds to loopback
 (any other `--host` is refused; the SDK also checks Host and Origin against DNS
 rebinding). A `session_id` works as a capability: whoever reaches the server and
 knows one gets plans that reflect that session's accessibility requirements, and
-violations name the rule and the stop (P0-27's diagnostics) though never the
+violations name the rule and the stop (the planner tools' diagnostics) though never the
 requirement. That is the demo's single-machine boundary; serving it on a network
-needs authentication first (with the API layer, P0-35a).
+needs authentication first (with the API layer).
 
-**Knowledge store (P0-26).** Semantic search runs on pgvector with a local
+**Knowledge store.** Semantic search runs on pgvector with a local
 multilingual model (fastembed, `paraphrase-multilingual-MiniLM-L12-v2`, ~220 MB,
 English questions against the Spanish corpus quoted from the official park
 pages). One-time setup, after `docker compose up -d --build` and
@@ -629,11 +629,11 @@ poetry run python scripts/index_knowledge.py         # embed the corpus into pgv
 
 Without the model or the index, `knowledge.search_policies` answers by keyword
 search over the same passages and says so in `provenance.degraded` (§43);
-`knowledge.check_accessibility` never degrades (fail-closed, P0-26a). PR CI never
+`knowledge.check_accessibility` never degrades (fail-closed). PR CI never
 downloads the model; the manual **Embedding smoke** workflow runs the
 `requires_model` tests with it.
 
-**LOAD CONTEXT over MCP (P0-24).** `PARKMIND_CONTEXT_TRANSPORT=mcp` makes the graph
+**LOAD CONTEXT over MCP.** `PARKMIND_CONTEXT_TRANSPORT=mcp` makes the graph
 read `data.*` and `knowledge.*` through the server at `PARKMIND_MCP_URL` (start
 it with `--http`); if the server is unreachable, the in-process adapter of the
 same port answers and `LoadedContext.transport` says `in_process_fallback`. The
@@ -673,7 +673,7 @@ curl -sSL https://install.python-poetry.org | python3 -
 - `poetry lock` — update poetry.lock (commit this to git when dependencies change)
 - `poetry update` — upgrade all dependencies to their latest versions
 
-All four of the above run on every pull request via `.github/workflows/ci.yml` (P0-04).
+All four of the above run on every pull request via `.github/workflows/ci.yml`.
 
 ## Implementation Status
 
@@ -681,18 +681,17 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 |---|---|---|
 | **LangGraph State v2** | ✅ Done | Typed ParkMindState, state helpers, message reducer |
 | **Preference Resolution** | ✅ Done | Weighted aggregation from GuestProfile (queue, walking, categories) |
-| **Plan Synthesis** | ✅ Initial planning graph [P0-30] | ELICIT → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED. Runs on in-process use cases, no MCP server. APPROVE / EDIT / REJECT [P0-32]: an edit is re-planned, re-checked and proposed again. |
-| **Explanations** | ✅ P0-31 | Claude explains the validated plan from a payload only (plan, diff, provenance, stated/learned preference weights); every numeral is checked against the payload, one retry, then the deterministic template. |
-| **Event monitor** | ✅ P0-33 | Snapshot-to-event detector with per-reading freshness, `EventPolicy` (§25 table, confirmation gate, fatigue walking cap), cross-source dedup, supersede on significant events, `scripts/run_monitor.py`. Consumed by the replanning graph [P0-34]. |
-| **MCP capability boundary** | ✅ P0-24..P0-27 | `parkmind-mcp`: 15 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` takes the plan, its progress and the events inline (§31), so a client without a stored plan can replan. |
-| **Demo app (API + UI)** | ✅ P0-35 / P0-36 | FastAPI layer over the graphs (`/api/*`, Swagger at `/docs`) and a React UI; bearer-token login, per-user session ownership, LLM usage caps, es/en conversation. Open: P0-32 edit path, #88 e2e bugs, guardrails, Langfuse. |
-| **Observability** | 🟡 P1-18 core (PR #93) | Masked Langfuse tracing of every API graph run, opt-in (`PARKMIND_TRACING=langfuse`); local stack in `docker-compose.langfuse.yml`; C19 canary over exported spans. Metadata, failure correlation and scores remain (P1-18) |
+| **Plan Synthesis** | ✅ Initial planning graph | ELICIT → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED. Runs on in-process use cases, no MCP server. APPROVE / EDIT / REJECT: an edit is re-planned, re-checked and proposed again. |
+| **Explanations** | ✅ Done | Claude explains the validated plan from a payload only (plan, diff, provenance, stated/learned preference weights); every numeral is checked against the payload, one retry, then the deterministic template. |
+| **Event monitor** | ✅ Done | Snapshot-to-event detector with per-reading freshness, `EventPolicy` (§25 table, confirmation gate, fatigue walking cap), cross-source dedup, supersede on significant events, `scripts/run_monitor.py`. Consumed by the replanning graph. |
+| **MCP capability boundary** | ✅ Done | `parkmind-mcp`: 15 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` takes the plan, its progress and the events inline (§31), so a client without a stored plan can replan. |
+| **Demo app (API + UI)** | ✅ Done | FastAPI layer over the graphs (`/api/*`, Swagger at `/docs`) and a React UI; bearer-token login, per-user session ownership, LLM usage caps, es/en conversation. |
+| **Observability** | ✅ Done | Masked Langfuse tracing of every API graph run, opt-in (`PARKMIND_TRACING=langfuse`); local stack in `docker-compose.langfuse.yml`; C19 canary over exported spans. |
 | **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
 | **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
 | **PostgreSQL Repos** | ✅ Done | Profiles, Plans, Session store (in-memory for accessibility) |
-| **Initial Planning Graph** | ✅ Done | Superseded by the Plan Synthesis row above (P0-30). |
 | **Constraint Checker** | ✅ Done | 11 rules, plus `check_replan` for a replanned day; PlanDiff generation |
-| **Replanner** | ✅ P0-23 / P0-34 | Replanner (frozen completed stops, remaining walking budget, rest-first) and the replanning graph: events → policy → replan → check → diff → explain → propose → approval. |
+| **Replanner** | ✅ Done | Replanner (frozen completed stops, remaining walking budget, rest-first) and the replanning graph: events → policy → replan → check → diff → explain → propose → approval. |
 
 ## Working conventions
 

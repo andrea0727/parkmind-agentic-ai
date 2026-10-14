@@ -22,7 +22,7 @@ DataT = TypeVar("DataT", bound=BaseModel)
 class ToolProvenance(ParkMindBaseModel):
     """Where a tool's answer came from (section 32).
 
-    Snapshot-backed answers carry the snapshot id and its age (P0-25); a §43
+    Snapshot-backed answers carry the snapshot id and its age; a §43
     fallback that answered instead of the primary source names itself in
     ``degraded``.
     """
@@ -62,7 +62,7 @@ class ToolErrorCode(str, Enum):
 
 
 class ToolErrorPayload(BaseModel):
-    """A structured tool failure (P0-24 Done-when: "Errors are structured").
+    """A structured tool failure ("Errors are structured").
 
     ``message`` and ``details`` never echo argument values: a caller's values
     may be personal data, so details name fields, not their contents.

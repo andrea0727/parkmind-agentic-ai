@@ -1,4 +1,4 @@
-"""The Claude narrator of EXPLAIN (P0-31): no key, no call."""
+"""The Claude narrator of EXPLAIN: no key, no call."""
 
 from typing import Any, ClassVar
 

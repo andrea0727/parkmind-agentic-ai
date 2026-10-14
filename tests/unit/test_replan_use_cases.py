@@ -1,4 +1,4 @@
-"""Replanning building blocks (P0-34): progress, reported availability, reasons, diff, proposals."""
+"""Replanning building blocks: progress, reported availability, reasons, diff, proposals."""
 
 from datetime import datetime, timedelta
 

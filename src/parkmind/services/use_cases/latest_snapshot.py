@@ -1,4 +1,4 @@
-"""The most recent valid snapshot and its age (backlog P0-11).
+"""The most recent valid snapshot and its age.
 
 This is the "recent cached snapshot" step of section 43's chain -- live data ->
 recent cached snapshot -> historical profile -- and what rule 11

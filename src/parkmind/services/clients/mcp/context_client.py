@@ -1,4 +1,4 @@
-"""``ContextDataPort`` over ``parkmind-mcp`` (P0-24): LOAD CONTEXT through the MCP client.
+"""``ContextDataPort`` over ``parkmind-mcp``: LOAD CONTEXT through the MCP client.
 
 Each read is one ``data.*`` / ``knowledge.*`` tool call; the structured results
 are validated back into section 33 contracts, so nothing provider- or

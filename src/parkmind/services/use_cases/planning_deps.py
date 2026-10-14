@@ -1,4 +1,4 @@
-"""The ports the initial planning use cases run on (P0-30).
+"""The ports the initial planning use cases run on.
 
 Use cases take a ``DepsFactory`` -- a context manager yielding ``PlanningDeps`` --
 so each call owns its connection (repositories are built on a caller-owned one)

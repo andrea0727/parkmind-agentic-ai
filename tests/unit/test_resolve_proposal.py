@@ -1,4 +1,4 @@
-"""ResolveProposalUseCase: activation, progress carry-over and the behavior log (P0-32, P0-33)."""
+"""ResolveProposalUseCase: activation, progress carry-over and the behavior log."""
 
 from datetime import timedelta
 

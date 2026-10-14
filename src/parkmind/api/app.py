@@ -1,4 +1,4 @@
-"""FastAPI application (P0-35): thin routes over a ``Conversation``.
+"""FastAPI application: thin routes over a ``Conversation``.
 
 A route validates its body, makes one call on the conversation and presents the result. It
 never plans, checks or decides anything; the planner's gates are behind the conversation.

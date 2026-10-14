@@ -1,4 +1,4 @@
-"""HandleEventsUseCase (P0-33): record classified events, supersede, update execution state."""
+"""HandleEventsUseCase: record classified events, supersede, update execution state."""
 
 from datetime import datetime, timedelta
 

@@ -1,4 +1,4 @@
-"""Raw snapshot payload -> ``LiveContext`` (backlog P0-11).
+"""Raw snapshot payload -> ``LiveContext``.
 
 The one place a stored raw payload becomes a normalized ``LiveContext``. The
 collector uses it when a snapshot is taken, and the re-normalization command
@@ -43,7 +43,7 @@ from parkmind.services.ports import IdMappingRepository
 from parkmind.services.use_cases.id_resolution import ANCHOR_PROVIDER, IdResolver
 
 RAW_SCHEMA = 1
-ACCESSIBILITY_GAP = "accessibility checks are per party: done by load_context (P0-30), not the collector"
+ACCESSIBILITY_GAP = "accessibility checks are per party: done by load_context, not the collector"
 
 
 class RawSnapshotError(ValueError):
@@ -150,7 +150,7 @@ def reading_times(
     """Each entity's provider reading time (``lastUpdated``) in one stored raw payload.
 
     Keyed by internal id, like the snapshot's ``LiveContext``; ``None`` where the
-    provider gave no time. This is what per-reading freshness reads (P0-33): the
+    provider gave no time. This is what per-reading freshness reads: the
     normalized ``LiveContext`` keeps no reading times, the raw payload does (C21).
 
     Read-only: ids are looked up with one ``id_mappings.resolve_many`` and no sighting is
@@ -219,7 +219,7 @@ def coverage_report(
 ) -> CoverageReport:
     """The coverage report over one context's statuses, showtimes and weather.
 
-    Public because LOAD CONTEXT assembled from ``data.*`` tools (P0-24) must judge
+    Public because LOAD CONTEXT assembled from ``data.*`` tools must judge
     coverage by this same rule, not a copy of it.
     """
     # Which entities run on scheduled starts comes from curated data, never from

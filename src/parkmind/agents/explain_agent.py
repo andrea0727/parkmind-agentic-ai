@@ -1,4 +1,4 @@
-"""``explain``: a validated plan -> words for the guests (section 40, P0-31).
+"""``explain``: a validated plan -> words for the guests.
 
 The LLM only phrases; it never decides. It receives the payload that
 ``ExplainPlanUseCase.prepare`` builds -- validated plan, diff, provenance and the

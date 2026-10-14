@@ -1,16 +1,16 @@
-"""Use case: the park-data reads behind the ``data.*`` tools (P0-25; Architecture section 29).
+"""Use case: the park-data reads behind the ``data.*`` tools.
 
 Each method answers one question from **one** current snapshot, read the way
 LOAD CONTEXT reads it (``current_snapshot``: fresh collection, else the latest
 valid stored snapshot), and returns the snapshot's stamp with the answer, so a
 caller always knows which snapshot a number came from and how old it is
-(P0-25: "Responses based on live data carry the snapshot id and its age").
+(responses based on live data carry the snapshot id and its age).
 
 Provider formats never leave this layer: answers are section 33 contracts
 (``WaitEstimate``, ``AttractionStatus``, ``WeatherHour``, ``Attraction``,
 ``Park``). Waits are standby only (section 29); showtimes are the scheduled
 performances the normalizer kept -- availability windows (``Operating``) and
-separately ticketed events never become showtimes (P0-10). Unknown ids are
+separately ticketed events never become showtimes. Unknown ids are
 reported back instead of failing the whole call.
 """
 

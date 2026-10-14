@@ -1,4 +1,4 @@
-"""P0-10: stable internal ids, and mapping problems surfaced instead of merged.
+"""Stable internal ids, and mapping problems surfaced instead of merged.
 
 ``IdMappingRepository`` is the only thing faked (a port): the fake keeps the
 Postgres adapter's documented semantics -- a first sighting inserts, the same

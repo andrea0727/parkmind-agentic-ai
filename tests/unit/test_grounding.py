@@ -1,4 +1,4 @@
-"""The deterministic numeral check behind EXPLAIN (P0-31 Done-when: "No numerical value
+"""The deterministic numeral check behind EXPLAIN ("No numerical value
 can be introduced unless present in the supplied data")."""
 
 import json

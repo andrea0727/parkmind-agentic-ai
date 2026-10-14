@@ -1,4 +1,4 @@
-"""``parkmind-mcp``: the tool registry served over MCP (P0-24).
+"""``parkmind-mcp``: the tool registry served over MCP.
 
 One server, three namespaces (``data.*``, ``knowledge.*``, ``planner.*``;
 Architecture section 28). MCP is a transport, not the critical path (section

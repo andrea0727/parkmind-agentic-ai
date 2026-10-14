@@ -1,4 +1,4 @@
-"""Cross-source event identity (sections 24 and 43 "Duplicate event", backlog P0-33).
+"""Cross-source event identity (sections 24 and 43 "Duplicate event").
 
 "The monitor and a user report of the same closure produce **one** event:
 idempotency keys cover both sources." ``deduplicate`` gives every candidate an

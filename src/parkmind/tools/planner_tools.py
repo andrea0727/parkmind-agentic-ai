@@ -1,4 +1,4 @@
-"""``planner.*`` tools (P0-27; Architecture section 31).
+"""``planner.*`` tools.
 
 ``build_plan``, ``check_plan``, ``replan``, ``score_preferences``,
 ``forecast_waits``. Each handler is one call to ``PlannerQueries``, which

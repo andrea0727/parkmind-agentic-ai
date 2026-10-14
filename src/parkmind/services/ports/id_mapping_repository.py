@@ -1,8 +1,8 @@
-"""IdMappingRepository -- provider id -> stable internal id (backlog P0-10).
+"""IdMappingRepository -- provider id -> stable internal id.
 
 Storage only, typed with plain values: section 33 defines no ``IdMapping``
 contract, and adding one is a baseline change. ``EntityKind`` is the closed
-``entity_kind`` vocabulary (P0-10); it is a ``StrEnum``, so it can be passed
+``entity_kind`` vocabulary; it is a ``StrEnum``, so it can be passed
 wherever the port takes a ``str``. The model around this port lives in
 ``services.use_cases.id_resolution``.
 """

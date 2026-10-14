@@ -1,4 +1,4 @@
-"""Knowledge store on pgvector (P0-26).
+"""Knowledge store on pgvector.
 
 Revision ID: 0003
 Revises: 0002

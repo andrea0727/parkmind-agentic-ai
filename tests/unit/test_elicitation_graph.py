@@ -464,7 +464,7 @@ def test_elicitation_logs_nothing_the_guests_wrote(caplog) -> None:
     reason=(
         "C19: the guests' raw turns are checkpointed in ParkMindState.messages. Pending "
         "the decision in docs/decisions/0004-agentic-guardrails.md (G5), required before "
-        "P0-35 persists checkpoints in Postgres."
+        "The API layer persists checkpoints in Postgres."
     ),
 )
 def test_the_guests_raw_words_are_not_checkpointed() -> None:

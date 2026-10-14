@@ -1,4 +1,4 @@
-"""P0-11 Done-when 5 (local execution path) and the re-normalization *command*.
+"""The local execution path and the re-normalization *command*.
 
 The scripts are loaded from scripts/ and their ``main`` is called in-process
 with fixture-backed clients -- the scripts themselves contain no test hooks.

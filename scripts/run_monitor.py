@@ -1,4 +1,4 @@
-"""Runs the event monitor: collect a snapshot, then detect park events (backlog P0-33).
+"""Runs the event monitor: collect a snapshot, then detect park events.
 
     poetry run python scripts/run_monitor.py                 # collect + detect once
     poetry run python scripts/run_monitor.py --loop          # every 5 minutes until Ctrl+C
@@ -10,7 +10,7 @@ Each run takes a snapshot exactly as ``scripts/collect_snapshot.py`` does, then
 compares the two most recent stored snapshots and prints the park-wide events
 (down, available, wait spike, rain). They are *candidates*: severity and
 whether a party must replan are decided per party by EventPolicy when the
-replanning graph handles them (P0-34). A reading the provider has not updated
+replanning graph handles them. A reading the provider has not updated
 within the freshness window never produces an event.
 
 Exit codes: 0 done, 1 database problem, 2 park data unavailable (no snapshot

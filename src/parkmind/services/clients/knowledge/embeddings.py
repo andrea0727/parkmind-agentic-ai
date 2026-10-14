@@ -1,4 +1,4 @@
-"""Text embedders for the knowledge store (P0-26). Adapter-internal: no port.
+"""Text embedders for the knowledge store. Adapter-internal: no port.
 
 * ``FastEmbedEmbedder`` -- the configured multilingual model
   (``paraphrase-multilingual-MiniLM-L12-v2``, 384 dimensions) run locally with

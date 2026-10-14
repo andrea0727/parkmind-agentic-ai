@@ -1,4 +1,4 @@
-"""``knowledge.*`` tools over MCP (P0-26 Done-when), offline.
+"""``knowledge.*`` tools over MCP, offline.
 
 Without a semantic search port the keyword fallback answers, and says so; the
 pgvector-backed path is covered in tests/integration/postgres.

@@ -7,7 +7,7 @@ Static companion to the interactive pages. Open them in a browser:
 
 Green = implemented, dashed yellow = target / stub.
 
-## 1. Initial planning graph (implemented: P0-29 + P0-30 + P0-32)
+## 1. Initial planning graph
 
 `build_initial_planning_graph()` compiles the elicitation graph and mounts the planning stage as its `downstream` subgraph. Both share `ParkMindState` and the parent's checkpointer.
 
@@ -57,7 +57,7 @@ Notes:
 - `explain` uses a narrator whose numerals must all appear in the plan or check result (grounding), with the stated and learned preferences labelled; anything ungrounded falls back to the deterministic template. English only for now.
 - State holds only `accessibility_ref` (guest ids) [C19].
 
-## 2. Replanning graph (implemented: P0-34 + P0-32)
+## 2. Replanning graph
 
 `build_replanning_graph()` runs on the thread of the initial plan with `{"thread_id", "events"}` as input. Constraints, profiles, `accessibility_ref` and the group objective come from that thread's checkpoint; the active plan comes from the repository. A replan is a new `plan_id`, checked by the same `ConstraintChecker` as an initial plan (`check_replan`: the whole day, counting what was already walked). Only the resumed approval interrupt activates it; rejecting keeps the current plan.
 
@@ -97,4 +97,4 @@ Notes:
 
 - `GUEST_FATIGUE` (confirmed) sets the walking cap and makes the new horizon open with a `REST` stop; if it cannot fit, the replan fails closed.
 - `EDITED` goes back to `load_context` with the edited constraints: the replan is rebuilt from the active plan and the execution state (a stop already done cannot be removed), checked over the whole day and proposed again. The active plan stays until a proposal is approved.
-- Not implemented: REJECT's "update preferences" step (P1-03); the user-report interpretation front (`INTERPRET`, `SCHEMA VALIDATE`) is upstream of this graph's `events` input.
+- Not implemented: REJECT's "update preferences" step; the user-report interpretation front (`INTERPRET`, `SCHEMA VALIDATE`) is upstream of this graph's `events` input.

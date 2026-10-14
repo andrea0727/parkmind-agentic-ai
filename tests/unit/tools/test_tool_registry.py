@@ -1,4 +1,4 @@
-"""The tool registry (P0-24): typed tools, namespaced names, one dispatch path."""
+"""The tool registry: typed tools, namespaced names, one dispatch path."""
 
 from typing import Any
 
@@ -139,7 +139,7 @@ def test_build_registry_collects_every_group_for_one_context() -> None:
 
 
 def test_every_tool_publishes_input_and_output_schema() -> None:
-    """P0-24: "Tools expose typed input/output contracts" -- every default tool."""
+    """Tools expose typed input/output contracts: every default tool."""
     registry = build_registry()
 
     assert len(registry) > 0

@@ -1,4 +1,4 @@
-"""LOAD CONTEXT through the ``data.*`` / ``knowledge.*`` capabilities (P0-24; Architecture section 27 [C23]).
+"""LOAD CONTEXT through the ``data.*`` / ``knowledge.*`` capabilities (Architecture section 27 [C23]).
 
 ``assemble_from_port`` builds the party's ``LiveContext`` from a
 ``ContextDataPort``: catalog, schedule, waits, statuses, showtimes and weather,

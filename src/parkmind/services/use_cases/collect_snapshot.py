@@ -1,4 +1,4 @@
-"""Snapshot collector (backlog P0-11, Architecture 41 [C21]).
+"""Snapshot collector (Architecture 41 [C21]).
 
 Fetches the park's live data (ThemeParks ``/live`` + ``/schedule``) and the
 hourly weather (Open-Meteo), stores the raw payloads verbatim beside the

@@ -150,7 +150,7 @@ class RoutingClient:
 
         Without a matrix entry or coordinates the answer is ``unknown`` with no
         minutes, even when ``fallback_enabled`` -- a published walking time must
-        not be a silent default (P0-25).
+        not be a silent default.
         """
         self._validate_node_id(origin_node_id, "origin_node_id")
         self._validate_node_id(destination_node_id, "destination_node_id")

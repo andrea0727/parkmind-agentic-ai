@@ -1,4 +1,4 @@
-"""Tests for ConstraintChecker — the functional safety gate (P0-15)."""
+"""Tests for ConstraintChecker — the functional safety gate."""
 
 from datetime import timedelta
 

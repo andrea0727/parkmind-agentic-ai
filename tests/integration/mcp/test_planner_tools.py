@@ -1,6 +1,6 @@
-"""``planner.*`` tools over MCP (P0-27 Done-when), offline on the 2026-09-27 capture.
+"""``planner.*`` tools over MCP, offline on the 2026-09-27 capture.
 
-Also the P0-24 guarantees that matter most for the planner: no tool writes a
+Also the MCP guarantees that matter most for the planner: no tool writes a
 plan or a proposal, and accessibility crosses the boundary by reference only.
 """
 

@@ -1,4 +1,4 @@
-"""Wiring the ForecastService from stored snapshots (P0-18)."""
+"""Wiring the ForecastService from stored snapshots."""
 
 import copy
 from datetime import datetime, timedelta

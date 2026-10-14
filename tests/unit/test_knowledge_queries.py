@@ -1,4 +1,4 @@
-"""KnowledgeQueries (P0-26): semantic when it can, keyword when it can't, and
+"""KnowledgeQueries: semantic when it can, keyword when it can't, and
 accessibility checks that never degrade."""
 
 from collections.abc import Iterator

@@ -1,7 +1,7 @@
 """The single tool registry (Architecture section 27 [C22, C23], section 8.1 [C11]).
 
 One list of typed tools, published two ways: by ``parkmind-mcp`` (``mcp_server``)
-for external clients, and -- from P1-22 -- as the agentic context loader's
+for external clients, and as the agentic context loader's
 allowlist. The registry knows nothing about MCP: a tool is a name, a request
 model, a data model and a handler that delegates to a use case.
 
@@ -108,8 +108,7 @@ class ToolRegistry:
         return result
 
 
-# Each namespace registers its group here as it lands (P0-25 data, P0-26
-# knowledge, P0-27 planner).
+# Each namespace registers its group here.
 DEFAULT_GROUPS: tuple[ToolGroup, ...] = (data_tools, knowledge_tools, planner_tools)
 
 

@@ -1,4 +1,4 @@
-"""LOAD CONTEXT through parkmind-mcp (P0-24 Done-when: "The context loader can be
+"""LOAD CONTEXT through parkmind-mcp ("The context loader can be
 configured to call data.* / knowledge.* through the MCP client, with in-process
 fallback through the same port" [C23]).
 

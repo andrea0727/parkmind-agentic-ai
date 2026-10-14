@@ -1,4 +1,4 @@
-"""Use case: REPLAN the rest of the day for the active plan (P0-23, P0-34).
+"""Use case: REPLAN the rest of the day for the active plan.
 
 Composes the deterministic core exactly as ``BuildPlanUseCase`` does for the initial
 plan -- ``ParkGraph``, ``PreferenceScorer``, ``GreedyInsertionOptimizer`` and the
@@ -28,7 +28,7 @@ Two things the graph's state cannot hold are derived here from the repositories:
   statuses, so the replan and the CHECK that follows see the same attractions as
   unavailable, until a newer snapshot says otherwise.
 
-A caller without the graph's thread -- ``planner.replan`` (P0-27), whose clients
+A caller without the graph's thread -- ``planner.replan``, whose clients
 send the plan, its progress and the events inline (section 31) -- passes them in
 ``ReplanRequest.execution_state`` and ``ReplanRequest.events``: the given progress
 replaces the repository's (the on-schedule assumption still applies to it), and the

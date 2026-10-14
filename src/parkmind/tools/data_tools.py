@@ -1,4 +1,4 @@
-"""``data.*`` tools (P0-25; Architecture section 29).
+"""``data.*`` tools.
 
 ``get_live_waits``, ``get_attraction_status``, ``get_schedule``,
 ``get_showtimes``, ``get_weather``, ``get_walking_time``,

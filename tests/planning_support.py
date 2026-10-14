@@ -1,4 +1,4 @@
-"""Fakes for the P0-30 planning use cases and graph: every port in-memory, no DB, no network."""
+"""Fakes for the planning use cases and graph: every port in-memory, no DB, no network."""
 
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager

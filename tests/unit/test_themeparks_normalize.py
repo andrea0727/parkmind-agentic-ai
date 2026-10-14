@@ -1,4 +1,4 @@
-"""P0-10: canonical status/timestamps and surfaced (never merged) identity problems.
+"""Canonical status/timestamps and surfaced (never merged) identity problems.
 
 Pure functions over the captured ThemeParks payload shapes in
 tests/fixtures/themeparks/ -- no HTTP, no network.

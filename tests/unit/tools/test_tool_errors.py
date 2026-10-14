@@ -1,4 +1,4 @@
-"""Exceptions become structured tool errors (P0-24 Done-when: "Errors are structured").
+"""Exceptions become structured tool errors ("Errors are structured").
 
 No message or detail may echo a caller's argument values or a driver's text.
 """

@@ -1,4 +1,4 @@
-"""scripts/run_monitor.py prints the monitor's candidates (P0-33)."""
+"""scripts/run_monitor.py prints the monitor's candidates."""
 
 import importlib.util
 from dataclasses import replace

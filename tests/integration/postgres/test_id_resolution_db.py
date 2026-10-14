@@ -1,4 +1,4 @@
-"""P0-10 against the real ``id_mapping`` table (backlog Done-when 1 and 2).
+"""ID resolution against the real ``id_mapping`` table.
 
 1. "The same attraction has a stable internal ID across snapshots."
 2. "Provider IDs can be traced back through provenance."

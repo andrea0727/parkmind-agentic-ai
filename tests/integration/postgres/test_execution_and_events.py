@@ -1,4 +1,4 @@
-"""P0-12: execution state (section 33 [C13]) and events (section 33 [C10], section 43)."""
+"""Execution state (section 33 [C13]) and events (section 33 [C10], section 43)."""
 
 from datetime import timedelta
 

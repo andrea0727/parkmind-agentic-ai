@@ -1,4 +1,4 @@
-"""P0-12 Done-when: "Repositories are testable independently of the HTTP layer."
+"""Repositories are testable independently of the HTTP layer.
 
 Importing the repository ports and the Postgres adapters must not drag in the
 HTTP layer (`fastapi`, `parkmind.api`) or any LLM/graph framework -- so a

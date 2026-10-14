@@ -1,4 +1,4 @@
-"""ConversationService: the one place that knows which graph owns a thread (P0-35).
+"""ConversationService: the one place that knows which graph owns a thread.
 
 A thread starts in the initial planning graph; once a plan exists, events run the
 replanning graph on the same thread, and whichever graph last stopped for a human owns the

@@ -8,8 +8,8 @@ the party).
 The real fairness-aware group resolution — per-guest eligible sets from
 LiveContext.accessibility_results, hard-constraint union, event thresholds
 from the most-sensitive guest — is services/personalization's
-GroupPreferenceResolver [P0-16]. This agent only fills group_objective so
-downstream nodes have a valid value until P0-16 lands.
+GroupPreferenceResolver. This agent only fills group_objective so
+downstream nodes have a valid value.
 
 Inputs: constraints (from state)
 Outputs: guest_profiles (list[GuestProfile]), group_objective (GroupObjective)

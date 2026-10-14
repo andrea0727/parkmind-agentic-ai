@@ -1,4 +1,4 @@
-"""Langfuse tracing, masked before anything leaves the process (ADR 0003, C19, P1-18).
+"""Langfuse tracing, masked before anything leaves the process (ADR 0003, C19).
 
 Tracing is opt-in: ``PARKMIND_TRACING=langfuse`` plus ``LANGFUSE_PUBLIC_KEY``,
 ``LANGFUSE_SECRET_KEY`` and ``LANGFUSE_BASE_URL``. ``langfuse_callbacks`` then

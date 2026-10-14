@@ -1,4 +1,4 @@
-"""Structured output of the ``explain`` step (P0-31).
+"""Structured output of the ``explain`` step.
 
 The LLM returns one field: the explanation text. It is validated here, then
 checked numeral by numeral against the payload (``agents/grounding.py``) before

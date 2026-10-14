@@ -1,5 +1,5 @@
 {
-  "about": "P0-31 Done-when: hand-written EXPLAIN outputs against one payload, each with the numerals the deterministic check must reject (section 40 [C17]).",
+  "about": "Hand-written EXPLAIN outputs against one payload, each with the numerals the deterministic check must reject (section 40 [C17]).",
   "payload": {
     "stops": [
       {

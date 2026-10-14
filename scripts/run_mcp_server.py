@@ -1,9 +1,9 @@
-"""Runs parkmind-mcp, the published capability boundary (backlog P0-24).
+"""Runs parkmind-mcp, the published capability boundary.
 
     poetry run python scripts/run_mcp_server.py                      # stdio (MCP clients launch it)
     poetry run python scripts/run_mcp_server.py --http --port 8765   # streamable HTTP at /mcp
 
-stdio is what an MCP client such as the LLM-only baseline harness (P1-15) or the
+stdio is what an MCP client such as the LLM-only baseline harness or the
 MCP Inspector starts as a subprocess:
 
     npx @modelcontextprotocol/inspector poetry run python scripts/run_mcp_server.py

@@ -2,7 +2,7 @@
 
 Extracted from ThemeParksClient (#55) and OpenMeteoClient (#54), which had
 copied the same loop -- and, before self-review, the same two bugs (see
-issue #56). Every future HTTP adapter (P0-09 routing, P1-06 Queue-Times)
+issue #56). Every HTTP adapter (routing, Queue-Times, ...)
 should call `send_with_retry` instead of writing a new loop; the guard test
 `tests/architecture/test_retry_not_duplicated.py` fails the build if one
 shows up anyway.

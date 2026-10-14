@@ -1,4 +1,4 @@
-"""Use case: RESOLVE GROUP and BUILD PLAN of the initial planning graph (P0-30).
+"""Use case: RESOLVE GROUP and BUILD PLAN of the initial planning graph.
 
 Composes the deterministic core -- ``ParkGraph``, ``GroupPreferenceResolver``,
 ``PreferenceScorer`` and ``GreedyInsertionOptimizer`` -- so the graph reaches

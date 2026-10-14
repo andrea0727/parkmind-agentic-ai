@@ -1,4 +1,4 @@
-"""HTTP API (P0-35): success paths, invalid requests, and the one-process guarantees."""
+"""HTTP API: success paths, invalid requests, and the one-process guarantees."""
 
 import ast
 import json

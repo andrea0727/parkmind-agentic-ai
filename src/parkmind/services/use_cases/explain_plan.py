@@ -4,7 +4,7 @@ Explanation happens only after validation: ``prepare`` raises
 ``ExplainBeforeValidationError`` for a result that is not valid. It reads the plan
 and never feeds anything back into it.
 
-``prepare`` gives the EXPLAIN step (``agents/explain_agent.py``, P0-31) both halves
+``prepare`` gives the EXPLAIN step (``agents/explain_agent.py``) both halves
 of section 40's contract:
 
 * the **payload** -- the only data the LLM may explain from: the validated plan,

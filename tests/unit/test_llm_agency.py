@@ -4,7 +4,7 @@ Without tools there is no loop and nothing to call: the worst a model can do is 
 one form badly, and that form is validated (ADR 0004). A real tool, a second schema
 or a free tool choice would break that, so it is pinned here for every LLM client.
 
-P1-22's context loader will be the one LLM with real tools: read-only ones, from its
+The agentic context loader is the one LLM with real tools: read-only ones, from its
 allowlist. When it lands, this file pins that it binds exactly that subset (ADR 0004, L10).
 """
 
@@ -127,7 +127,7 @@ def _called_name(call: ast.Call) -> str | None:
 
 
 def test_no_llm_client_is_built_outside_the_modules_this_file_pins():
-    """A third LLM client (the P1-22 context loader, say) fails here until its
+    """A third LLM client (the agentic context loader, say) fails here until its
     binding is pinned above and its module added to ``PINNED_CLIENT_MODULES``."""
     source = Path(__file__).resolve().parents[2] / "src" / "parkmind"
     builders: set[str] = set()

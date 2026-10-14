@@ -1,4 +1,4 @@
-"""Deterministic numeral check for explanations (section 40 [C17], P0-31).
+"""Deterministic numeral check for explanations (section 40 [C17]).
 
 "Every numeral in the explanation is extracted and asserted to be a subset of the
 numerals in the supplied payload." No LLM judge sits on this path.

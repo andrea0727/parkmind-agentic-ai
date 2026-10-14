@@ -1,4 +1,4 @@
-"""Rebuilds stored snapshots from their raw payloads (backlog P0-11, Architecture 41 C21).
+"""Rebuilds stored snapshots from their raw payloads.
 
     poetry run python scripts/renormalize_snapshots.py                 # rows built by an older normalizer
     poetry run python scripts/renormalize_snapshots.py --all           # every snapshot

@@ -1,4 +1,4 @@
-"""Collects park snapshots into Postgres (backlog P0-11).
+"""Collects park snapshots into Postgres.
 
     poetry run alembic -c database/alembic.ini upgrade head   # once
     poetry run python scripts/collect_snapshot.py             # one snapshot, then exit

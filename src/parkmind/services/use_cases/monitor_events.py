@@ -1,14 +1,14 @@
-"""Use case: the event monitor (section 24, backlog P0-33).
+"""Use case: the event monitor.
 
 "The monitor runs independently of the agent" and "does not wake the LLM for
 every snapshot": it compares the two most recent stored snapshots with the
 deterministic ``event_detector`` and returns park-wide candidate events. The
-snapshots themselves are taken by the collector (P0-11; ``scripts/run_monitor.py``
+snapshots themselves are taken by the collector (``scripts/run_monitor.py``
 collects, then detects).
 
 Candidates carry no ``severity`` or ``requires_replan``: those depend on the
 party, so ``HandleEventsUseCase`` judges them per thread with EventPolicy.
-Waking each thread's replanning graph is P0-34.
+Waking each thread's replanning graph is the replanning graph's job.
 
 Per-reading freshness: reading times come from the current snapshot's raw
 payload (``snapshot_normalization.reading_times``). A snapshot whose raw payload

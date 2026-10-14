@@ -1,6 +1,6 @@
 """MCP is a transport (Architecture section 27 [C22]): the SDK may be imported
 by the server adapter and by the client adapter the context loader can bind to
-(P0-24), nowhere else. import-linter already keeps it out of the deterministic
+, nowhere else. import-linter already keeps it out of the deterministic
 core; this guard also keeps it out of use cases, the graph, agents and the rest
 of tools/, so business logic can never grow behind the transport.
 

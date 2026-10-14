@@ -1,4 +1,4 @@
-"""P0-04: the import-boundary check runs as part of `poetry run pytest`, not only
+"""The import-boundary check runs as part of `poetry run pytest`, not only
 as a separate `poetry run lint-imports` CLI step, so CI can't skip it by mistake.
 
 Contract source of truth: `.importlinter` at the repo root. See its comments for
@@ -24,7 +24,7 @@ def test_importlinter_contract_file_exists() -> None:
 def test_import_boundaries_are_respected() -> None:
     """Fails with the offending module named in stdout/console output when a
     boundary path imports something it must not (adapters, frameworks, DB
-    drivers, or an LLM SDK) -- see Done-when bullet 3 of backlog item P0-04.
+    drivers, or an LLM SDK) -- the import-linter contracts forbid it.
     """
     passed = importlinter_use_cases.lint_imports(
         config_filename=str(CONTRACT_FILE), no_logo=True

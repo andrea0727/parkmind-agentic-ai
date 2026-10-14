@@ -1,4 +1,4 @@
-"""Every PostgresSessionStore in the process shares the one SESSION_MEMORY (P0-30).
+"""Every PostgresSessionStore in the process shares the one SESSION_MEMORY.
 
 ``session_only`` requirements written by the intake must still be there when
 ``load_context`` reads them, whatever connection each store uses.

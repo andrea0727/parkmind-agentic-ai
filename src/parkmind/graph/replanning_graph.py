@@ -1,5 +1,5 @@
 """
-Replanning graph (P0-34).
+Replanning graph.
 
 Workflow (architecture v2.2 sections 9 and 36)::
 
@@ -45,7 +45,7 @@ the top on resume):
   whole day and proposed again; the active plan stays until a proposal is approved.
 
 Known limits: REJECT's "update preferences" step is not implemented (the reason is
-stored on the proposal and in the behavior log; P1-03). After a replan finds no valid
+stored on the proposal and in the behavior log). After a replan finds no valid
 plan the events stay recorded, so a duplicate report does not retry it; a new event
 does.
 """
@@ -417,7 +417,7 @@ def _make_diff_node() -> StateNode:
 def _make_explain_node(
     deps_factory: DepsFactory, narrator: PlanNarrator | None
 ) -> StateNode:
-    """EXPLAIN (section 40, P0-31): why and what changed, grounded, else the template."""
+    """EXPLAIN: why and what changed, grounded, else the template."""
     explainer = ExplainPlanUseCase(deps_factory)
     reasons = ReplanReasonUseCase(deps_factory)
 

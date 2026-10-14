@@ -1,4 +1,4 @@
-"""Downloads the knowledge store's embedding model once (backlog P0-26).
+"""Downloads the knowledge store's embedding model once.
 
     poetry run python scripts/fetch_embedding_model.py
 

@@ -1,4 +1,4 @@
-"""Versioned system prompt of the ``explain`` step (section 40, P0-31)."""
+"""Versioned system prompt of the ``explain`` step."""
 
 EXPLAIN_PROMPT_VERSION = "explain-v1"
 

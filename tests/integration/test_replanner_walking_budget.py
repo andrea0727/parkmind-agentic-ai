@@ -1,5 +1,5 @@
 """
-Replanner walking-budget and rest-first behavior (P0-23 review follow-up, P0-34).
+Replanner walking-budget and rest-first behavior.
 
 Real Replanner + PlannerResolveLoop + GreedyInsertionOptimizer + ConstraintChecker:
 a replanned day is valid only if the WHOLE day (completed stops + horizon) passes the

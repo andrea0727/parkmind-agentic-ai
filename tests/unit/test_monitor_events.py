@@ -1,4 +1,4 @@
-"""The event monitor end to end on the 2026-09-27 capture (P0-33).
+"""The event monitor end to end on the 2026-09-27 capture.
 
 Two collections through the real collector and normalizer; the second /live
 payload closes Jungle Cruise with a fresh ``lastUpdated`` and also flips the

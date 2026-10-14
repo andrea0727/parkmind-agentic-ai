@@ -1,4 +1,4 @@
-"""Use case: the planner reads behind the ``planner.*`` tools (P0-27; Architecture section 31).
+"""Use case: the planner reads behind the ``planner.*`` tools.
 
 ``build_plan`` runs the same chain the initial planning graph runs -- LOAD
 CONTEXT, RESOLVE GROUP, BUILD PLAN (with the section 21 re-solve loop), CHECK --

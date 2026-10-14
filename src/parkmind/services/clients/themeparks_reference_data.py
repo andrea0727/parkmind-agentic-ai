@@ -438,7 +438,7 @@ PROVISIONAL_TYPICAL_WAITS: frozenset[str] = frozenset(
     }
 )
 """Ids whose ``typical_wait_minutes`` is a conservative guess, not a measured value.
-Replace each with the average STANDBY wait from collected snapshots (P0-11) once
+Replace each with the average STANDBY wait from collected snapshots once
 enough have been stored."""
 
 _MNSSHP = "party-only: Mickey's Not-So-Scary Halloween Party (separate ticket)"

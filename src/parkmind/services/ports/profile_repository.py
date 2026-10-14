@@ -2,7 +2,7 @@
 
 Profiles are versioned and never overwritten: every ``save`` appends a
 ``profile_version``. Merge/update semantics (which dimensions change, that
-``stated_value`` survives) belong to the GuestProfile service, P0-14.
+``stated_value`` survives) belong to the GuestProfile service.
 """
 
 from typing import Protocol

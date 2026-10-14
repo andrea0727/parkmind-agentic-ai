@@ -1,5 +1,5 @@
 """EventPolicy -- severity, ``requires_replan`` and a bounded effect per event
-(sections 24-25 [C10, C23], backlog P0-33).
+(sections 24-25 [C10, C23]).
 
 The single deterministic judge for both sources: a monitor event and a
 user-reported one go through the same table, and **this is the only module that
@@ -48,7 +48,7 @@ calibrate like the resolver's threshold ranges:
 Effects are typed and bounded -- never free-form edits (section 25 [C23]).
 ``PARTY_RELOCATED`` and the walking cap touch ``PlanExecutionState``
 (``apply_execution_updates`` before the policy, ``apply_decisions`` after);
-the others are for the replanner (P0-34 passes them on).
+the others are for the replanner, which the replanning graph passes them to.
 """
 
 from collections.abc import Collection, Iterable, Mapping, Sequence

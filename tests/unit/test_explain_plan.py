@@ -158,7 +158,7 @@ def test_the_use_case_reads_the_height_limits_from_the_catalog():
     assert "Guest 2 (90 cm) will skip Space Mountain (minimum height 112 cm)" in text
 
 
-# --- the payload the LLM explains from (P0-31, section 40) -----------------------
+# --- the payload the LLM explains from -----------------------
 
 OBJECTIVE = GroupObjective(
     objective_version="t",

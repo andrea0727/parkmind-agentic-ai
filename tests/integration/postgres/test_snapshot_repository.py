@@ -1,5 +1,5 @@
-"""P0-12 snapshots (Architecture section 41 [C21]): raw provider payload beside the
-normalized rows. P0-11's collector builds idempotency, age and re-normalization on
+"""Snapshots (Architecture section 41 [C21]): raw provider payload beside the
+normalized rows. The collector builds idempotency, age and re-normalization on
 top of these guarantees.
 """
 
@@ -130,7 +130,7 @@ def test_a_snapshot_may_be_collected_from_no_source_at_all(
     assert repo.get_data_sources("snap_1") == []
 
 
-# ----------------------------------------------------- P0-11: normalizer version
+# ----------------------------------------------------- normalizer version
 
 
 def test_meta_is_readable_without_parsing_live_context(
@@ -233,7 +233,7 @@ def test_normalizer_version_must_be_positive(conn: psycopg.Connection) -> None:
 def test_latest_valid_snapshot_skips_a_row_that_no_longer_validates(
     conn: psycopg.Connection,
 ) -> None:
-    """P0-11 Done-when 3 against the real table: a corrupt newest row is passed over."""
+    """Against the real table: a corrupt newest row is passed over."""
     from parkmind.services.use_cases.latest_snapshot import latest_valid_snapshot
 
     repo = PostgresSnapshotRepository(conn)

@@ -1,4 +1,4 @@
-"""Unit tests for GreedyInsertionOptimizer (P0-19).
+"""Unit tests for GreedyInsertionOptimizer.
 
 Coverage:
   - Basic greedy flow with chronological ordering
@@ -1412,7 +1412,7 @@ class TestForecastInputsAndEdges:
 
 
 class TestReplanKnobs:
-    """``rest_first`` and ``walking_budget_minutes`` (P0-23 follow-up, P0-34)."""
+    """``rest_first`` and ``walking_budget_minutes`` ."""
 
     @staticmethod
     def _build(optimizer: GreedyInsertionOptimizer, **kwargs):

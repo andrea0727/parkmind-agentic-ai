@@ -165,7 +165,7 @@ class GreedyInsertionOptimizer:
         group_objective:
             Resolved group objective; used for per-guest eligible sets.
         forecast_service:
-            Expected waits per stop time (P0-18). Without it, the posted wait
+            Expected waits per stop time. Without it, the posted wait
             is charged at every hour, as before.
         now:
             The planning moment, required with ``forecast_service``; the

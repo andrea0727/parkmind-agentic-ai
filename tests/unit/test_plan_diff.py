@@ -1,4 +1,4 @@
-"""Unit tests for PlanDiff (P0-22 / #36).
+"""Unit tests for PlanDiff.
 
 Coverage:
   - Empty plans produce empty diff.

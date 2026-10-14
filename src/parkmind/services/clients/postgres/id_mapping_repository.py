@@ -1,4 +1,4 @@
-"""PostgreSQL adapter for ``IdMappingRepository`` (storage only; P0-10 owns the model)."""
+"""PostgreSQL adapter for ``IdMappingRepository`` (storage only; the model lives in the core)."""
 
 from collections.abc import Iterable
 from datetime import datetime
