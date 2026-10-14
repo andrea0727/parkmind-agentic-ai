@@ -50,7 +50,7 @@ def _writes(
         if isinstance(node, ast.Dict):
             for key, value in zip(node.keys, node.values, strict=True):
                 if _is_key(key, aliases):
-                    found.append((node.lineno if key is None else key.lineno, value))
+                    found.append((node.lineno, value))
         elif isinstance(node, ast.Assign):
             for target in node.targets:
                 if isinstance(target, ast.Subscript) and _is_key(target.slice, aliases):
@@ -103,6 +103,27 @@ def node(state):
     lines = [line for line, value in _writes(ast.parse(code)) if not _is_false(value)]
 
     assert sorted(lines) == [3, 4, 5]
+
+
+def test_a_write_in_a_class_method_or_an_async_function_is_an_offender():
+    code = """
+class Node:
+    def run(self, state):
+        return {"constraints_valid": True}
+
+async def node(state):
+    state["constraints_valid"] = True
+"""
+    module = ast.parse(code)
+    outside = [n for n in module.body if not isinstance(n, ast.FunctionDef)]
+    lines = [
+        line
+        for node in outside
+        for line, value in _writes(node)
+        if not _is_false(value)
+    ]
+
+    assert sorted(lines) == [4, 7]
 
 
 def test_the_walk_follows_a_module_constant_that_holds_the_key():

@@ -99,6 +99,27 @@ def test_every_graph_builds_with_tracing_off():
     build_elicitation_graph(checkpointer=MemorySaver(), names=make_names())
     build_initial_planning_graph(checkpointer=MemorySaver(), names=make_names())
     build_replanning_graph(MemorySaver())
+    build_planning_stage()
+
+
+def test_one_switch_on_is_refused_even_when_another_says_false():
+    """Deliberately wider than langsmith, which reads only one of them: refuse if any is on."""
+    with pytest.raises(UnmaskedTracingError, match="LANGSMITH_TRACING"):
+        tracing_guard({"LANGSMITH_TRACING_V2": "false", "LANGSMITH_TRACING": "true"})
+
+
+def test_the_parity_check_below_is_not_vacuous_the_installed_langsmith_traces_on_true(
+    monkeypatch,
+):
+    """The parity test only asserts where langsmith would trace; make sure it does somewhere."""
+    from langsmith import utils as ls_utils
+
+    monkeypatch.setenv("LANGSMITH_TRACING", "true")
+    ls_utils.get_env_var.cache_clear()
+    try:
+        assert ls_utils.tracing_is_enabled() is True
+    finally:
+        ls_utils.get_env_var.cache_clear()
 
 
 def test_the_api_server_refuses_to_start_while_tracing_is_on(monkeypatch):
