@@ -45,7 +45,7 @@ parkmind-agentic-ai/
 │       ├── services/            # all business logic lives here
 │       │   ├── planning/        # ParkGraph, Optimizer, ConstraintChecker,
 │       │   │                    # Replanner, PlanDiff, ForecastService
-│       │   ├── personalization/ # GroupPreferenceResolver, BehaviorLog,
+│       │   ├── personalization/ # GroupPreferenceResolver, PreferenceScorer,
 │       │   │                    # preference_learner.py (stub, see scope.md)
 │       │   ├── clients/         # ThemeParks, Open-Meteo, Postgres,
 │       │   │                    # in-memory knowledge store
@@ -438,8 +438,8 @@ poetry run python scripts/run_monitor.py --no-collect   # detect on what is alre
   final for the stop: if the guests reject or ignore the replan it proposes, the
   same stop does not raise another one, however late the party gets. It needs
   progress *reported* by the party (`completed_stop_ids` or `skipped_stop_ids`);
-  assumed progress never counts. Until something records it (reporting a stop as
-  done: #48, P0-35b), the event is not raised in production. A replan's reported
+  assumed progress never counts. `RecordProgressUseCase` (P1-01) records it; until an
+  API calls it (P0-35b), the event is not raised in production. A replan's reported
   progress is carried over to the new plan when its proposal is approved, so what
   the guests report while deciding is not lost.
 - **Confirmation first (§25, C10).** A doubtful guest report, or a fatigue report
@@ -476,9 +476,11 @@ LOAD PLAN → HANDLE EVENTS (dedup · apply execution updates · EventPolicy)
 - **Human decides.** Only the resumed approval interrupt activates a plan
   (`ResolveProposalUseCase`); rejecting leaves the active plan untouched. A new
   significant event supersedes the proposal that was waiting (`supersede_pending`).
-- **Progress.** The replan starts from the stored `PlanExecutionState`. If nobody has
-  reported progress, the party is assumed on schedule: stops that should have ended
-  by now count as done. A closure or reopening reported after the snapshot is applied
+- **Progress.** The replan starts from the stored `PlanExecutionState`. Reported stops
+  (completed or skipped) are taken as reported; every other stop that should have
+  ended by now is assumed done, as for an on-schedule party, so a partial report never
+  puts the past back in the plan. A stop that wasn't done must be reported skipped.
+  A closure or reopening reported after the snapshot is applied
   to the replan's context so the replan and its check see the same availability.
 - **Fatigue.** A confirmed `GUEST_FATIGUE` sets the walking cap (P0-33) and makes the
   new horizon open with a `REST` stop (§25). If a rest cannot fit, the replan fails
@@ -540,8 +542,49 @@ plain resume value kept that way would also answer the *next* interrupt.
   within a party, so each guest is registered as `"{thread_id}:{guest_id}"`, with
   its role only (no height). A superseded proposal logs nothing, and a decision
   applied twice is logged once (`entry_id` is the proposal and the decision). A
-  decision without the party's guests is refused. An edit's `attraction_ids` mixes
-  what was removed and what was added; the direction is a P1-01 follow-up (#51).
+  decision without the party's guests is refused. An edit also records what it
+  removed apart from what it added (P1-01, below).
+
+### Behavior log and progress (P1-01)
+
+The `BehaviorLog` is its own aggregate, keyed by guest (§33 [C12]); it never lives
+inside a profile.
+
+- **Stable types.** `BehaviorEventType`: `PROPOSAL_ACCEPTED`, `PROPOSAL_REJECTED`,
+  `PROPOSAL_EDITED`, `ATTRACTION_COMPLETED`, `ATTRACTION_SKIPPED` and
+  `ALTERNATIVE_REQUESTED`. The last one has no producer yet: no flow defines what
+  asking for an alternative is.
+- **Context.** Each entry names its plan, and its proposal for a decision.
+  `attraction_ids` are the attractions the entry is about: the plan's for a
+  decision, the stop's for progress.
+- **Edits.** A `PROPOSAL_EDITED` entry also carries `removed_attraction_ids` and
+  `added_attraction_ids`. They are kept apart because P1-03 reads them as opposite
+  signals: a removal is a rejection, an addition is interest. Only an edit may
+  carry them (a contract validator). Entries logged before P1-01 have neither field
+  and still read: for P1-03 such an entry's direction is **unknown**, not "removed
+  nothing" (its `attraction_ids` mixed both).
+- **Progress.** `RecordProgressUseCase` records that the party completed or skipped
+  a stop of its **active** plan. In one transaction it adds the stop to the stored
+  `PlanExecutionState` (what the replanner keeps and `BEHIND_SCHEDULE` reads) and,
+  for an attraction or show, writes `ATTRACTION_COMPLETED` / `ATTRACTION_SKIPPED`
+  for each guest the stop served. Meal and rest stops change the progress only.
+  - The same report twice writes nothing the second time (`entry_id` is plan, stop
+    and outcome). A stop can't be both completed and skipped, and a late report
+    never moves the progress back in time.
+  - The party must be the plan's (`per_guest_satisfaction` and the stops'
+    `served_guests`): a missing or unknown guest refuses the report, so behavior is
+    never logged for an invented party.
+  - Every refusal is an `InvalidProgressError` with a `ProgressProblem` (no guests, a
+    time without a timezone, not the active plan, not a stop, party mismatch, the
+    other outcome already recorded), for P0-35b to map to one response.
+  - Writers of a plan's progress (this use case and `HandleEventsUseCase`) hold the
+    plan's lock (`ExecutionStateRepository.lock`, a row lock in Postgres) for the
+    read-modify-write, so two reports, or a report and an event, never overwrite
+    each other.
+  - A replan takes the reported stops as reported and still assumes the departed,
+    unreported ones done (above). No API exposes it yet (P0-35b).
+- **Querying.** `BehaviorLogRepository.get(party_guest_id(thread_id, guest_id))`
+  returns a guest's entries, oldest first.
 
 ### Explanations (P0-31)
 

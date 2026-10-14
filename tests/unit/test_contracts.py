@@ -486,6 +486,63 @@ class TestBehaviorLog:
         assert len(log.entries) == 1
         assert log.entries[0].event_type == BehaviorEventType.PROPOSAL_ACCEPTED
 
+    def test_an_edit_keeps_what_it_removed_apart_from_what_it_added(
+        self, aware_datetime
+    ):
+        entry = BehaviorEntry(
+            entry_id="be_1",
+            event_type=BehaviorEventType.PROPOSAL_EDITED,
+            decision="EDITED",
+            attraction_ids=["a1", "a2"],
+            removed_attraction_ids=["a2"],
+            added_attraction_ids=["a3"],
+            timestamp=aware_datetime,
+        )
+        assert (entry.removed_attraction_ids, entry.added_attraction_ids) == (
+            ["a2"],
+            ["a3"],
+        )
+
+    @pytest.mark.parametrize(
+        "event_type",
+        [t for t in BehaviorEventType if t is not BehaviorEventType.PROPOSAL_EDITED],
+    )
+    @pytest.mark.parametrize(
+        "field", ["removed_attraction_ids", "added_attraction_ids"]
+    )
+    def test_only_an_edit_carries_removed_or_added_attractions(
+        self, aware_datetime, event_type, field
+    ):
+        with pytest.raises(ValueError, match="only for PROPOSAL_EDITED"):
+            BehaviorEntry(
+                entry_id="be_1",
+                event_type=event_type,
+                timestamp=aware_datetime,
+                **{field: ["a1"]},
+            )
+
+    def test_an_edit_cannot_remove_and_add_the_same_attraction(self, aware_datetime):
+        with pytest.raises(ValueError, match="both removed and added"):
+            BehaviorEntry(
+                entry_id="be_1",
+                event_type=BehaviorEventType.PROPOSAL_EDITED,
+                removed_attraction_ids=["a1"],
+                added_attraction_ids=["a1"],
+                timestamp=aware_datetime,
+            )
+
+    def test_an_entry_stored_before_the_edit_fields_still_reads(self, aware_datetime):
+        """Entries logged by P0-32 have no removed / added fields; they still validate."""
+        stored = {
+            "entry_id": "prop_1:EDITED",
+            "event_type": "PROPOSAL_EDITED",
+            "decision": "EDITED",
+            "attraction_ids": ["a1"],
+            "timestamp": aware_datetime.isoformat(),
+        }
+        entry = BehaviorEntry.model_validate(stored)
+        assert (entry.removed_attraction_ids, entry.added_attraction_ids) == ([], [])
+
 
 # ============================================================================
 # INTEGRATION TESTS

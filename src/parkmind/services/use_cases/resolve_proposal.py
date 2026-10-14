@@ -24,7 +24,8 @@ keyed by guest, and a party's guest ids (``g1``, ``g2``) are only unique within 
 thread, so each guest is registered as ``party_guest_id(thread_id, guest_id)`` --
 with its role only, never its height (section 12). ``entry_id`` is the
 proposal and the decision, so a decision applied twice is logged once; a
-superseded proposal logs nothing.
+superseded proposal logs nothing. An edit's entry also records, apart, what the
+edit removed and what it added (P1-01): for learning they are opposite signals.
 """
 
 from collections.abc import Sequence
@@ -39,7 +40,7 @@ from parkmind.core.contracts import (
     Proposal,
     RejectionReason,
 )
-from parkmind.services.ports import InvalidStateTransitionError
+from parkmind.services.ports import InvalidStateTransitionError, party_guest_id
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
     default_planning_deps,
@@ -54,11 +55,6 @@ _LOGGED: dict[
     ApprovalStatus.REJECTED: (BehaviorEventType.PROPOSAL_REJECTED, "REJECTED"),
     ApprovalStatus.EDITED: (BehaviorEventType.PROPOSAL_EDITED, "EDITED"),
 }
-
-
-def party_guest_id(thread_id: str, guest_id: str) -> str:
-    """The guest's id in the behavior log: unique across parties."""
-    return f"{thread_id}:{guest_id}"
 
 
 class ProposalNoLongerPendingError(RuntimeError):
@@ -85,14 +81,21 @@ class ResolveProposalUseCase:
         guests: Sequence[Guest],
         rejection_reason: RejectionReason | None = None,
         attraction_ids: Sequence[str] = (),
+        removed_attraction_ids: Sequence[str] = (),
+        added_attraction_ids: Sequence[str] = (),
     ) -> Proposal:
         """``guests`` is the party (at least one: every decision is logged per guest);
-        ``attraction_ids`` is what the decision was about: the plan's attractions, or
-        for an edit what changed (section 23)."""
+        ``attraction_ids`` are the attractions of the plan decided on (section 23).
+        An edit must say what it removed and/or added; no other decision may."""
         if status not in _LOGGED:
             raise ValueError(f"{status.value} is not a decision")
         if not guests:
             raise ValueError("a decision is logged per guest: the party's guests are required")
+        edited = status is ApprovalStatus.EDITED
+        if edited and not (removed_attraction_ids or added_attraction_ids):
+            raise ValueError("an edit is logged with what it removed and/or added")
+        if not edited and (removed_attraction_ids or added_attraction_ids):
+            raise ValueError("only an edit removes or adds attractions")
         with open_deps(self._deps_factory) as deps, deps.transaction():
             stored = deps.proposals.get(proposal_id)
             if (
@@ -128,6 +131,8 @@ class ResolveProposalUseCase:
                 decision=decision,
                 rejection_reason=rejection_reason,
                 attraction_ids=list(attraction_ids),
+                removed_attraction_ids=list(removed_attraction_ids),
+                added_attraction_ids=list(added_attraction_ids),
                 timestamp=at,
             )
             for guest in guests:

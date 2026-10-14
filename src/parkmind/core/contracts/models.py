@@ -504,6 +504,12 @@ class BehaviorEntry(ParkMindBaseModel):
     Idempotency key (entry_id) prevents duplicate logging.
     Used to update preferences and measure learning.
 
+    ``attraction_ids`` are the attractions the entry is about: the plan's for a
+    decision, the stop's for a completed or skipped attraction. An edit also says
+    what it removed and what it added, kept apart because they are opposite
+    signals for learning (a removal is a rejection, an addition is interest); only
+    a ``PROPOSAL_EDITED`` entry may carry them (P1-01).
+
     §23, §33 [C12]
     """
 
@@ -514,7 +520,21 @@ class BehaviorEntry(ParkMindBaseModel):
     decision: Literal["ACCEPTED", "REJECTED", "EDITED"] | None = None
     rejection_reason: RejectionReason | None = None
     attraction_ids: list[str] = Field(default_factory=list)
+    removed_attraction_ids: list[str] = Field(default_factory=list)  # EDITED only
+    added_attraction_ids: list[str] = Field(default_factory=list)  # EDITED only
     timestamp: datetime
+
+    @model_validator(mode="after")
+    def check_edit_fields(self) -> "BehaviorEntry":
+        """Removed / added attractions belong to an edit, and to nothing else."""
+        edited = self.event_type is BehaviorEventType.PROPOSAL_EDITED
+        if not edited and (self.removed_attraction_ids or self.added_attraction_ids):
+            raise ValueError(
+                "removed_attraction_ids / added_attraction_ids are only for PROPOSAL_EDITED"
+            )
+        if set(self.removed_attraction_ids) & set(self.added_attraction_ids):
+            raise ValueError("an attraction cannot be both removed and added")
+        return self
 
 
 class BehaviorLog(ParkMindBaseModel):

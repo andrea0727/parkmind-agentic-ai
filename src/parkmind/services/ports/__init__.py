@@ -15,7 +15,7 @@ without importing an adapter (and therefore a DB driver).
 """
 
 from .attraction_repository import AttractionRepository
-from .behavior_log_repository import BehaviorLogRepository
+from .behavior_log_repository import BehaviorLogRepository, party_guest_id
 from .context_data import ContextDataPort, FromSnapshotRef, SnapshotRef
 from .errors import (
     ConflictError,
@@ -122,4 +122,5 @@ __all__ = [
     "WalkEstimate",
     "WalkEstimator",
     "WeatherPort",
+    "party_guest_id",
 ]

@@ -124,6 +124,9 @@ class HandleEventsUseCase:
         """Judge ``candidates`` for the party whose active plan is ``plan``."""
         with open_deps(self._deps_factory) as deps, deps.transaction():
             history = deps.events.list_for_thread(thread_id)
+            # Read-modify-write of the plan's progress: a concurrent progress report
+            # (RecordProgressUseCase) or event waits instead of being overwritten.
+            deps.execution_states.lock(plan.plan_id)
             stored_state = deps.execution_states.get(plan.plan_id)
             outdoor = {a.node_id for a in load_catalog(deps) if a.outdoor}
             requirements, missing = load_requirements(
