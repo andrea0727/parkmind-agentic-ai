@@ -75,6 +75,47 @@ _LLM_ENTRY_POINTS = {
 }
 
 
+# Imports that reach an LLM provider, whatever the call is named: any LangChain provider
+# package (not ``langchain_core``), LangChain's model factories, and the provider SDKs.
+_NOT_A_PROVIDER = frozenset(
+    {"langchain_core", "langchain_protocol", "langchain_text_splitters"}
+)
+_PROVIDER_SDKS = (
+    "anthropic",
+    "openai",
+    "litellm",
+    "cohere",
+    "mistralai",
+    "google.generativeai",
+    "google.genai",
+)
+_LANGCHAIN_MODEL_FACTORIES = (
+    "langchain.chat_models",
+    "langchain.llms",
+    "langchain.embeddings",
+)
+
+
+def _reaches_a_provider(module: str) -> bool:
+    root = module.split(".")[0]
+    if root.startswith("langchain_"):
+        return root not in _NOT_A_PROVIDER
+    return any(
+        module == prefix or module.startswith(prefix + ".")
+        for prefix in (*_PROVIDER_SDKS, *_LANGCHAIN_MODEL_FACTORIES)
+    )
+
+
+def _imported_modules(tree: ast.AST) -> list[str]:
+    modules: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules += [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            modules.append(node.module)
+    return modules
+
+
 def _called_name(call: ast.Call) -> str | None:
     func = call.func
     if isinstance(func, ast.Name):
@@ -89,10 +130,35 @@ def test_no_llm_client_is_built_outside_the_modules_this_file_pins():
     builders: set[str] = set()
     for path in source.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        if any(
+        calls_one = any(
             isinstance(node, ast.Call) and _called_name(node) in _LLM_ENTRY_POINTS
             for node in ast.walk(tree)
-        ):
+        )
+        imports_one = any(_reaches_a_provider(m) for m in _imported_modules(tree))
+        if calls_one or imports_one:
             builders.add(path.relative_to(source).as_posix())
 
     assert builders == PINNED_CLIENT_MODULES
+
+
+@pytest.mark.parametrize(
+    ("module", "provider"),
+    [
+        ("langchain_aws", True),
+        ("langchain_google_genai", True),
+        ("langchain_openai.chat_models", True),
+        ("litellm", True),
+        ("openai", True),
+        ("anthropic.types", True),
+        ("google.generativeai", True),
+        ("langchain.chat_models", True),
+        ("langchain_core.messages", False),
+        ("langfuse.langchain", False),
+        ("google.protobuf", False),
+    ],
+)
+def test_the_import_check_sees_any_provider_whatever_its_client_is_called(
+    module, provider
+):
+    """ChatBedrock, ChatGoogleGenerativeAI or litellm.completion are caught by import."""
+    assert _reaches_a_provider(module) is provider
