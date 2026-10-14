@@ -31,7 +31,9 @@ PLAN = factories.plan(
         factories.stop(node_id="a1", served_guests=[]),
         factories.stop(node_id="a2", served_guests=["g1"]),
         factories.stop(node_id="lunch", kind=StopKind.MEAL, served_guests=[]),
-    ]
+        factories.stop(node_id="rest", kind=StopKind.REST, served_guests=[]),
+    ],
+    per_guest_satisfaction={"g1": 0.9, "g2": 0.7},
 )
 
 
@@ -97,20 +99,33 @@ def test_the_log_keys_guests_by_thread_and_keeps_only_their_role(deps):
     )
 
 
-def test_a_meal_stop_changes_the_progress_but_logs_no_behavior(deps):
-    _report(deps, "lunch", StopOutcome.COMPLETED)
+@pytest.mark.parametrize("node_id", ["lunch", "rest"])
+def test_a_meal_or_rest_stop_changes_the_progress_but_logs_no_behavior(deps, node_id):
+    _report(deps, node_id, StopOutcome.COMPLETED)
 
-    assert deps.execution_states.get("plan_1").completed_stop_ids == ["lunch"]
+    assert deps.execution_states.get("plan_1").completed_stop_ids == [node_id]
     assert deps.behavior.get("t1:g1").entries == []
+    assert deps.guests.get("t1:g1") is None
 
 
-def test_the_same_report_twice_changes_nothing_and_logs_once(deps):
-    _report(deps, "a1", StopOutcome.COMPLETED)
+def test_the_same_report_twice_writes_nothing_the_second_time(deps):
+    first = _report(deps, "a1", StopOutcome.COMPLETED)
+    saves = len(deps.behavior.get("t1:g1").entries)
     again = _report(deps, "a1", StopOutcome.COMPLETED, at=NOW + timedelta(minutes=5))
 
-    assert not again.changed
-    assert deps.execution_states.get("plan_1").completed_stop_ids == ["a1"]
-    assert len(deps.behavior.get("t1:g1").entries) == 1
+    assert first.changed and not again.changed
+    stored = deps.execution_states.get("plan_1")
+    assert stored.completed_stop_ids == ["a1"]
+    assert stored.as_of == NOW  # nothing was saved again
+    assert again.execution_state == stored
+    assert len(deps.behavior.get("t1:g1").entries) == saves == 1
+
+
+def test_the_read_modify_write_holds_the_plans_lock(deps):
+    """Two reports, or a report and an event, never overwrite each other (Postgres test)."""
+    _report(deps, "a1", StopOutcome.COMPLETED)
+
+    assert deps.execution_states.locked == ["plan_1"]
 
 
 @pytest.mark.parametrize(
@@ -184,22 +199,74 @@ def test_nothing_is_recorded_for_a_thread_without_an_active_plan():
 
 
 def test_a_partial_report_never_puts_departed_stops_back_in_a_replan(deps):
-    """Reporting only a2 as skipped keeps a1 and lunch, which have departed, as done."""
+    """Reporting only a2 as skipped keeps a1, lunch and rest, which have departed, as done."""
     later = NOW + timedelta(hours=3)  # every stop of PLAN has departed by then
     assumed = effective_execution_state(PLAN, None, later)
-    assert assumed.completed_stop_ids == ["a1", "a2", "lunch"]
+    assert assumed.completed_stop_ids == ["a1", "a2", "lunch", "rest"]
 
     _report(deps, "a2", StopOutcome.SKIPPED)
 
     reported = effective_execution_state(
         PLAN, deps.execution_states.get("plan_1"), later
     )
-    assert reported.completed_stop_ids == ["a1", "lunch"]
+    assert reported.completed_stop_ids == ["a1", "lunch", "rest"]
     assert reported.skipped_stop_ids == ["a2"]
 
 
 def test_progress_is_logged_per_guest_so_the_party_is_required(deps):
-    with pytest.raises(ValueError, match="guests are required"):
+    with pytest.raises(InvalidProgressError) as raised:
         RecordProgressUseCase(factory_for(deps)).execute(
             "t1", "plan_1", "a1", StopOutcome.COMPLETED, at=NOW, guests=[]
         )
+
+    assert raised.value.problem is ProgressProblem.NO_GUESTS
+
+
+def test_a_report_time_without_a_timezone_is_refused(deps):
+    with pytest.raises(InvalidProgressError) as raised:
+        _report(deps, "a1", StopOutcome.COMPLETED, at=NOW.replace(tzinfo=None))
+
+    assert raised.value.problem is ProgressProblem.NAIVE_TIME
+    assert deps.execution_states.get("plan_1") is None
+
+
+@pytest.mark.parametrize(
+    "party",
+    [
+        [factories.guest(guest_id="g1")],  # g2 of the plan is missing
+        [*PARTY, factories.guest(guest_id="g9")],  # g9 isn't in the plan
+        [factories.guest(guest_id="g1"), factories.guest(guest_id="g3")],
+    ],
+    ids=["missing", "extra", "different"],
+)
+def test_a_party_that_is_not_the_plans_is_refused_and_nothing_is_logged(deps, party):
+    with pytest.raises(InvalidProgressError) as raised:
+        RecordProgressUseCase(factory_for(deps)).execute(
+            "t1", "plan_1", "a1", StopOutcome.COMPLETED, at=NOW, guests=party
+        )
+
+    assert raised.value.problem is ProgressProblem.PARTY_MISMATCH
+    assert deps.execution_states.get("plan_1") is None
+    assert deps.guests.get("t1:g9") is None and deps.guests.get("t1:g3") is None
+
+
+def test_a_served_guest_the_party_lacks_is_a_party_mismatch(deps):
+    """The plan's ``served_guests`` name its party too."""
+    plan = factories.plan(
+        plan_id="plan_9",
+        stops=[factories.stop(node_id="a1", served_guests=["g1", "g3"])],
+        per_guest_satisfaction={},
+    )
+    deps.plans.save("t9", plan)
+    deps.proposals.save(
+        "t9", factories.proposal(proposal_id="prop_9", candidate_plan_id="plan_9")
+    )
+    deps.proposals.resolve("prop_9", ApprovalStatus.APPROVED, at=NOW)
+    deps.plans.activate("t9", "plan_9", at=NOW)
+
+    with pytest.raises(InvalidProgressError) as raised:
+        RecordProgressUseCase(factory_for(deps)).execute(
+            "t9", "plan_9", "a1", StopOutcome.COMPLETED, at=NOW, guests=PARTY
+        )
+
+    assert raised.value.problem is ProgressProblem.PARTY_MISMATCH

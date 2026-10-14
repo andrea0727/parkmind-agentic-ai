@@ -4,20 +4,32 @@ One report updates two aggregates in one transaction (``PlanExecutionState`` and
 ``BehaviorLog``, section 33 [C12, C13]):
 - the stored progress: the stop joins ``completed_stop_ids`` or
   ``skipped_stop_ids``. That progress is what the replanner keeps, and what
-  ``BEHIND_SCHEDULE`` reads (P0-33). Once a stop is reported, the stored progress
-  is the reported one: replanning no longer assumes an on-schedule party
-  (``replan.effective_execution_state``);
+  ``BEHIND_SCHEDULE`` reads (P0-33). A replan takes reported stops as reported and
+  still assumes the unreported, departed ones done
+  (``replan.effective_execution_state``), so a stop that wasn't done is reported
+  skipped;
 - for an attraction or show, an ``ATTRACTION_COMPLETED`` / ``ATTRACTION_SKIPPED``
   entry for each guest the stop served (``Stop.served_guests``, empty meaning the
   whole party). The entries are keyed by ``party_guest_id``, with the guest's role
   only, like the proposal decisions. Meal and rest stops change the progress only:
   they say nothing about what a guest likes.
 
-The report is idempotent: the same outcome reported twice changes nothing and logs
-once (``entry_id`` is the plan, the stop and the outcome). A stop can't be both
-completed and skipped, and only a stop of the thread's *active* plan can be
-reported: a candidate is not being walked yet. Walking minutes are not part of a
-report; they stay with the events that carry them (P0-33).
+The report is idempotent: the same outcome reported twice writes nothing the second
+time (``entry_id`` is the plan, the stop and the outcome, and the entries were written
+with the first report, in the same transaction). A stop can't be both completed and
+skipped, and only a stop of the thread's *active* plan can be reported: a candidate
+is not being walked yet. Walking minutes are not part of a report; they stay with the
+events that carry them (P0-33).
+
+The party is checked against the active plan, which names its guests
+(``per_guest_satisfaction`` and each stop's ``served_guests``): a guest the plan
+doesn't know, or a guest of the plan missing from the party, refuses the report, so a
+caller can't log behavior for an invented party. Every refusal is an
+``InvalidProgressError`` with a ``ProgressProblem``, and changes nothing.
+
+Concurrency: the read-modify-write of the plan's progress holds the plan's lock
+(``ExecutionStateRepository.lock``) until the transaction ends, so two reports at
+once, or a report and an event (``HandleEventsUseCase``), never overwrite each other.
 
 No API exposes this yet (P0-35b).
 """
@@ -56,8 +68,11 @@ _EVENT_TYPE = {
 
 
 class ProgressProblem(str, Enum):
+    NO_GUESTS = "NO_GUESTS"
+    NAIVE_TIME = "NAIVE_TIME"
     NOT_THE_ACTIVE_PLAN = "NOT_THE_ACTIVE_PLAN"
     NOT_IN_PLAN = "NOT_IN_PLAN"
+    PARTY_MISMATCH = "PARTY_MISMATCH"
     OTHER_OUTCOME_RECORDED = "OTHER_OUTCOME_RECORDED"
 
 
@@ -93,8 +108,13 @@ class RecordProgressUseCase:
     ) -> RecordedProgress:
         """``guests`` is the party; ``node_id`` names a stop of the active plan ``plan_id``."""
         if not guests:
-            raise ValueError(
-                "progress is logged per guest: the party's guests are required"
+            raise InvalidProgressError(
+                ProgressProblem.NO_GUESTS,
+                "progress is logged per guest: the party's guests are required",
+            )
+        if at.tzinfo is None:
+            raise InvalidProgressError(
+                ProgressProblem.NAIVE_TIME, "the report time needs a timezone"
             )
         with open_deps(self._deps_factory) as deps, deps.transaction():
             active = deps.plans.get_active(thread_id)
@@ -108,7 +128,18 @@ class RecordProgressUseCase:
                 raise InvalidProgressError(
                     ProgressProblem.NOT_IN_PLAN, f"{node_id} is not a stop of {plan_id}"
                 )
+            party = {guest.guest_id for guest in guests}
+            named = set(active.per_guest_satisfaction).union(
+                *(s.served_guests for s in active.stops)
+            )
+            if named and party != named:
+                raise InvalidProgressError(
+                    ProgressProblem.PARTY_MISMATCH,
+                    f"the party ({', '.join(sorted(party))}) is not the plan's "
+                    f"({', '.join(sorted(named))})",
+                )
 
+            deps.execution_states.lock(plan_id)
             state = deps.execution_states.get(plan_id) or PlanExecutionState(
                 plan_id=plan_id, as_of=at
             )
@@ -121,15 +152,15 @@ class RecordProgressUseCase:
                     f"{node_id} is already recorded as "
                     f"{'skipped' if completed else 'completed'}",
                 )
-            changed = node_id not in recorded
-            if changed:
-                field = "completed_stop_ids" if completed else "skipped_stop_ids"
-                # A late report never moves the progress back in time (the repository
-                # keeps the newer state).
-                state = state.model_copy(
-                    update={field: [*recorded, node_id], "as_of": max(state.as_of, at)}
-                )
-                deps.execution_states.save(state)
+            if node_id in recorded:  # reported before: its entries are already logged
+                return RecordedProgress(state, changed=False)
+            field = "completed_stop_ids" if completed else "skipped_stop_ids"
+            # A late report never moves the progress back in time (the repository
+            # keeps the newer state).
+            state = state.model_copy(
+                update={field: [*recorded, node_id], "as_of": max(state.as_of, at)}
+            )
+            deps.execution_states.save(state)
 
             if stop.kind in _ATTRACTION_KINDS:
                 entry = BehaviorEntry(
@@ -146,4 +177,4 @@ class RecordProgressUseCase:
                     scoped = party_guest_id(thread_id, guest.guest_id)
                     deps.guests.save(Guest(guest_id=scoped, role=guest.role))
                     deps.behavior.append(scoped, entry)
-        return RecordedProgress(state, changed)
+        return RecordedProgress(state, changed=True)
