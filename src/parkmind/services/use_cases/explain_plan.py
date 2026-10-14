@@ -373,6 +373,11 @@ def _catalog_facts(deps_factory: DepsFactory) -> tuple[dict[str, str], dict[str,
     return names, limits
 
 
+def attraction_names(deps_factory: DepsFactory) -> dict[str, str]:
+    """Catalog names by node id, to name an attraction the way the guest said it."""
+    return _catalog_facts(deps_factory)[0]
+
+
 class ExplainPlanUseCase:
     def __init__(self, deps_factory: DepsFactory = default_planning_deps) -> None:
         self._deps_factory = deps_factory

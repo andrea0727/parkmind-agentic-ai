@@ -231,6 +231,26 @@ _CATALOG: dict[str, dict[Language, str]] = {
             "¿Cuántos minutos en total puedes caminar?"
         ),
     },
+    "q_lunch_after_departure": {
+        "en": (
+            "Your lunch window ({start}-{end}) starts after the time you plan to leave "
+            "({departure}). Which one should change: the lunch time or the departure?"
+        ),
+        "es": (
+            "Su horario de almuerzo ({start}-{end}) empieza después de la hora en que "
+            "piensan salir ({departure}). ¿Cuál quieren cambiar: el almuerzo o la salida?"
+        ),
+    },
+    "q_lunch_after_departure_solo": {
+        "en": (
+            "Your lunch window ({start}-{end}) starts after the time you plan to leave "
+            "({departure}). Which one should change: the lunch time or the departure?"
+        ),
+        "es": (
+            "Tu horario de almuerzo ({start}-{end}) empieza después de la hora en que "
+            "piensas salir ({departure}). ¿Cuál quieres cambiar: el almuerzo o la salida?"
+        ),
+    },
     "q_conflicting_attraction": {
         "en": (
             "'{name}' is on both your must-do and your avoid list. "
@@ -508,6 +528,16 @@ _CATALOG: dict[str, dict[Language, str]] = {
     "no_valid_plan": {
         "en": "I couldn't build a plan that meets every requirement, so nothing was proposed.",
         "es": "No pude armar un plan que cumpla todos los requisitos, así que no propuse nada.",
+    },
+    "must_do_not_fitted": {
+        "en": (
+            "These must-dos didn't fit in the day without breaking a rule: {names}. "
+            "Try removing one or more of them, or staying later."
+        ),
+        "es": (
+            "Estos imprescindibles no caben en el día sin romper una regla: {names}. "
+            "Prueben quitando uno o más, o quedándose hasta más tarde."
+        ),
     },
     "relax_hint": {
         "en": (

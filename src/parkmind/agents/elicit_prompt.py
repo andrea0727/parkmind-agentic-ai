@@ -1,6 +1,6 @@
 """Versioned system prompt of the ``elicit`` step."""
 
-ELICIT_PROMPT_VERSION = "elicit-v7"
+ELICIT_PROMPT_VERSION = "elicit-v8"
 
 ELICIT_SYSTEM_PROMPT = """\
 You extract structured planning information for a theme-park visit from what the \
@@ -28,7 +28,11 @@ accessibility need or a must-do/avoid attraction from it; those only count when 
 guests write them.
 - List one entry in `guests` per person, in the order mentioned, with `role` \
 (adult or child) when stated. Set `party_size` only if stated or countable.
-- `guest_ref` in `accessibility` is the 1-based position of the guest in `guests`.
+- When the person writing is part of the party ("me and my father", "I'm going \
+with my kids") they are guest 1 and the others follow in the order mentioned: \
+"me and my father" -> guest 1 is the writer, guest 2 is the father.
+- `guest_ref` in `accessibility` is the 1-based position of the guest in `guests`, \
+so a need of "my father" in that party is `guest_ref` 2, never 1.
 - `label` is how the guests call that person, only when they say it: a \
 relationship in the second person and the guests' language ("mi mamá" -> \
 "tu mamá", "my daughter" -> "your daughter") or a first name ("Lucas"). Keep \

@@ -1130,6 +1130,34 @@ def test_the_show_explanation_is_only_given_for_show_violations(monkeypatch):
     assert "couldn't fit a show" not in h.state()["messages"][-1].content
 
 
+def test_must_dos_that_did_not_fit_are_named_once_not_by_internal_id(monkeypatch):
+    result = CheckResult(
+        valid=False,
+        violations=[
+            ConstraintViolation(
+                rule=RuleId.MUST_DO,
+                stop_id=node_id,
+                message=f"Must-do {node_id} is listed as unmet but its status is OPERATING",
+            )
+            for node_id in ("id-space", "id-jungle")
+        ],
+    )
+    monkeypatch.setattr(ipg.CheckPlanUseCase, "execute", lambda *a, **k: result)
+    monkeypatch.setattr(
+        ipg,
+        "attraction_names",
+        lambda _deps: {"id-space": "Space Mountain", "id-jungle": "Jungle Cruise"},
+    )
+    h = _Harness(monkeypatch)
+
+    h.confirm()
+
+    message = h.state()["messages"][-1].content
+    assert "Space Mountain, Jungle Cruise" in message
+    assert "listed as unmet" not in message
+    assert h.state().get("proposal") is None
+
+
 def _only_children() -> dict[str, Any]:
     extraction = dict(COMPLETE["extraction"])
     extraction["guests"] = [{"role": "child"} for _ in extraction["guests"]]
