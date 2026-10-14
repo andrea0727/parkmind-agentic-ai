@@ -14,7 +14,11 @@ word that is a number in the other language is not one here: English "ten" is 10
 but Spanish "ten cuidado" is not, Spanish "once" is 11 but English "once" is not,
 and "the dos and don'ts" has no 2. English reads ``forty``, ``twenty-five``,
 ``forty-minute`` and ``two hundred and five``; Spanish reads ``cuarenta``,
-``veintiún``, ``treinta y cinco`` and ``ciento veinte``. The words that are mostly
+``veintiún``, ``treinta y cinco`` and ``ciento veinte``. Thousands and millions are read
+too (``two thousand`` is 2000, ``dos mil doscientos`` 2200), so no part of a number can
+ground the whole. Punctuation, digits and clock times end a run of number words:
+"twenty, five" is 20 and 5, never 25. Larger scales ("billion", "mil millones") are not
+read; a figure that size has no place in a park plan. The words that are mostly
 articles or pronouns (``one``, ``un``/``una``/``uno``) count only inside a
 compound, and fractions in words (``half``, ``media``) not at all: counting them
 would reject nearly every text. Text is
@@ -60,6 +64,8 @@ class _Vocabulary:
     """English "hundred", after an optional unit: "two hundred"."""
     hundred_joiner: str | None = None
     """English "two hundred and five"."""
+    multipliers: Mapping[str, int] = field(default_factory=dict)
+    """Thousands and millions: "two thousand", "dos mil doscientos", "a million"."""
 
 
 _EN_UNITS = {
@@ -110,6 +116,7 @@ _ENGLISH = _Vocabulary(
     },
     hundred="hundred",
     hundred_joiner="and",
+    multipliers={"thousand": 1_000, "million": 1_000_000},
 )
 _SPANISH = _Vocabulary(
     units=_ES_UNITS,
@@ -168,10 +175,14 @@ _SPANISH = _Vocabulary(
         "quinientos": 500,
         "quinientas": 500,
     },
+    multipliers={"mil": 1_000, "millon": 1_000_000, "millones": 1_000_000},
 )
 _VOCABULARIES: dict[Language, _Vocabulary] = {"en": _ENGLISH, "es": _SPANISH}
 _WORD = re.compile(r"[a-z]+(?:-[a-z]+)*")
 """A word, hyphenated words kept together (``forty-minute``, ``must-dos``)."""
+_BREAK = re.compile(r"[^a-z\s-]+")
+"""Anything but letters, spaces and hyphens ends a run of number words: "twenty, five"
+is two numbers, not 25, so a payload can't assemble one from separate words."""
 
 
 def _without_accents(text: str) -> str:
@@ -202,7 +213,48 @@ def _below_hundred(
 
 
 def _number_at(tokens: Sequence[str], i: int, v: _Vocabulary) -> tuple[int, int] | None:
-    """The number starting at ``tokens[i]`` (hundreds included), and the index after it."""
+    """The number starting at ``tokens[i]``, thousands and millions included, and the
+    index after it: groups below a thousand, each times the multiplier after it."""
+    total, j, found = 0, i, False
+    while j < len(tokens):
+        if tokens[j] in v.multipliers:  # "a thousand", "mil", "un millón"
+            group: tuple[int, int] | None = (1, j)
+        else:
+            group = _below_thousand(tokens, j, v, after_multiplier=found)
+            if (
+                group is None
+                and tokens[j] in v.compound_units
+                and j + 1 < len(tokens)
+                and tokens[j + 1] in v.multipliers
+            ):
+                group = (v.compound_units[tokens[j]], j + 1)  # "one thousand"
+        if group is None:
+            break
+        value, after = group
+        found = True
+        if after < len(tokens) and tokens[after] in v.multipliers:
+            total += value * v.multipliers[tokens[after]]
+            j = after + 1
+            if (
+                v.hundred_joiner
+                and j + 1 < len(tokens)
+                and tokens[j] == v.hundred_joiner
+                and _below_thousand(tokens, j + 1, v, after_multiplier=True)
+            ):
+                j += 1  # "two thousand and five"
+            continue
+        total += value
+        j = after
+        break
+    return (total, j) if found else None
+
+
+def _below_thousand(
+    tokens: Sequence[str], i: int, v: _Vocabulary, *, after_multiplier: bool = False
+) -> tuple[int, int] | None:
+    """The number below 1000 starting at ``tokens[i]``, and the index after it."""
+    if i >= len(tokens):
+        return None
     word = tokens[i]
     hundreds: int | None = None
     if word in v.hundreds:
@@ -217,7 +269,7 @@ def _number_at(tokens: Sequence[str], i: int, v: _Vocabulary) -> tuple[int, int]
     ):
         hundreds, j = v.compound_units[word] * 100, i + 2
     if hundreds is None:
-        return _below_hundred(tokens, i, v)
+        return _below_hundred(tokens, i, v, after_hundred=after_multiplier)
     k = (
         j + 1
         if v.hundred_joiner and j < len(tokens) and tokens[j] == v.hundred_joiner
@@ -248,16 +300,18 @@ def _word_numbers(text: str, language: Language) -> list[int]:
     """
     vocabulary = _VOCABULARIES[language]
     found: list[int] = []
-    run: list[str] = []
-    for word in _WORD.findall(_without_accents(text)):
-        if "-" in word:
-            found += _parse(run, vocabulary)
-            run = []
-            if vocabulary is _ENGLISH:
-                found += _parse(word.split("-"), vocabulary)
-        else:
-            run.append(word)
-    return found + _parse(run, vocabulary)
+    for segment in _BREAK.split(_without_accents(text)):
+        run: list[str] = []
+        for word in _WORD.findall(segment):
+            if "-" in word:
+                found += _parse(run, vocabulary)
+                run = []
+                if vocabulary is _ENGLISH:
+                    found += _parse(word.split("-"), vocabulary)
+            else:
+                run.append(word)
+        found += _parse(run, vocabulary)
+    return found
 
 
 def _number(text: str) -> str:
@@ -284,7 +338,7 @@ def numerals(text: str, language: Language = DEFAULT_LANGUAGE) -> set[str]:
     """The normalized clock times and numbers in ``text``, written in ``language``."""
     text = _plain(text)
     found = {f"{int(hours)}:{minutes}" for hours, minutes in _TIME.findall(text)}
-    without_times = _TIME.sub(" ", text)
+    without_times = _TIME.sub(" ; ", text)  # a clock time also ends a run of words
     found.update(_number(match) for match in _NUMBER.findall(without_times))
     found.update(str(value) for value in _word_numbers(without_times, language))
     return found

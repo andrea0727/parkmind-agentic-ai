@@ -72,6 +72,37 @@ def test_hundreds_are_one_number_so_a_part_cannot_ground_the_whole():
 
 
 @pytest.mark.parametrize(
+    ("text", "language", "value"),
+    [
+        ("two thousand steps", "en", "2000"),
+        ("two thousand five hundred steps", "en", "2500"),
+        ("two thousand and five steps", "en", "2005"),
+        ("a thousand steps", "en", "1000"),
+        ("a million steps", "en", "1000000"),
+        ("dos mil doscientos pasos", "es", "2200"),
+        ("mil pasos", "es", "1000"),
+        ("dos millones trescientos mil pasos", "es", "2300000"),
+    ],
+)
+def test_thousands_and_millions_are_one_number_so_a_part_cannot_ground_the_whole(
+    text, language, value
+):
+    """An invented 2000 is not grounded by a real 2 (two guests, say)."""
+    assert numerals(text, language) == {value}
+    assert ungrounded_numerals(text, '{"guests": 2}', language) == [value]
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["twenty, five", "wait: twenty. Five minutes", "twenty 3 five", "twenty 9:05 five"],
+)
+def test_punctuation_digits_and_times_end_a_run_of_number_words(text):
+    """So a payload can't assemble a 25 from words that stand apart."""
+    assert "25" not in numerals(text)
+    assert {"20", "5"} <= numerals(text)
+
+
+@pytest.mark.parametrize(
     ("text", "language"),
     [
         ("one of your must-dos", "en"),
