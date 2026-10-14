@@ -1,8 +1,8 @@
 # E2E scenarios on real ports (initial planning graph)
 
-Manual end-to-end runs of `build_initial_planning_graph` against real infrastructure: Postgres,
+End-to-end runs of `build_initial_planning_graph` against real infrastructure: Postgres,
 ThemeParks, Open-Meteo, the real clock and a real LLM (Anthropic, injected as the extractor). They
-complement `tests/integration/test_initial_planning_graph.py`, which uses fakes only.
+complement `tests/integration/test_initial_planning_graph.py`, which uses fakes only. The scenarios are defined in `tests/e2e/catalog`; the layer-by-layer criteria are in `docs/testing/SCENARIO_MATRIX.md`.
 
 Status legend: **OK** = behaved as expected, **OK (partial)** = expected outcome, part not verified, **BUG** or **ISSUE** = defect or open question found.
 

@@ -8,6 +8,11 @@ name: CI
 # `services: postgres:` container below. CI is set by GitHub Actions, so an
 # unreachable database FAILS those tests instead of skipping them.
 #
+# `pytest` runs every testing layer that needs no credentials (workflow, LLM
+# evaluation on deterministic metrics, observability, reliability, security,
+# performance; see docs/testing/README.md). Tests marked `live` call real
+# services and are skipped here; run them locally with `pytest --live`.
+#
 # That Postgres gets pgvector installed by the first step; the
 # embedding model is never downloaded here (tests use a deterministic embedder).
 
@@ -79,7 +84,7 @@ jobs:
         env:
           PYTHONPATH: src
 
-      - name: Tests (pytest)
+      - name: Tests (pytest, all offline layers)
         run: poetry run pytest
         env:
           PARKMIND_TEST_DATABASE_URL: postgresql://parkmind:parkmind@localhost:5432/parkmind

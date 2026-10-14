@@ -3,7 +3,9 @@ OpenMeteoClient, InMemoryKnowledgeStore) here once the first one exists, so
 unit/ tests never need real network/DB access. The Postgres repositories are
 tested against a real database in tests/integration/postgres/."""
 
+import os
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import httpx
 import pytest
@@ -121,3 +123,55 @@ def fake_open_meteo_client(fake_weather_hours: list[WeatherHour]) -> OpenMeteoCl
 
     transport = httpx.MockTransport(lambda req: httpx.Response(200, json=mock_payload))
     return OpenMeteoClient(transport=transport)
+
+
+# ---------------------------------------------------------------------------
+# Test taxonomy (docs/testing/README.md)
+# ---------------------------------------------------------------------------
+
+_LAYER_BY_FOLDER = {
+    "unit": "unit",
+    "integration": "integration",
+    "architecture": "architecture",
+    "e2e": "e2e",
+    "workflow": "workflow",
+    "evals": "llm_eval",
+    "observability": "observability",
+    "resilience": "reliability",
+    "security": "security",
+    "performance": "performance",
+}
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--live",
+        action="store_true",
+        default=False,
+        help="run tests marked `live`: they call real Anthropic, ThemeParks, Open-Meteo and Postgres",
+    )
+
+
+def _live_enabled(config: pytest.Config) -> bool:
+    return (
+        bool(config.getoption("--live")) or os.environ.get("PARKMIND_RUN_LIVE") == "1"
+    )
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Mark each test with its layer (from its folder) and skip `live` tests unless asked for."""
+    skip_live = pytest.mark.skip(
+        reason="live test: pass --live or set PARKMIND_RUN_LIVE=1"
+    )
+    tests_root = Path(__file__).parent
+    for item in items:
+        try:
+            folder = Path(str(item.path)).relative_to(tests_root).parts[0]
+        except ValueError:
+            continue
+        if layer := _LAYER_BY_FOLDER.get(folder):
+            item.add_marker(getattr(pytest.mark, layer))
+        if "live" in item.keywords and not _live_enabled(config):
+            item.add_marker(skip_live)
