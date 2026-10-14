@@ -39,7 +39,7 @@ from parkmind.core.contracts import (
     Proposal,
     RejectionReason,
 )
-from parkmind.services.ports import InvalidStateTransitionError
+from parkmind.services.ports import InvalidStateTransitionError, party_guest_id
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
     default_planning_deps,
@@ -54,11 +54,6 @@ _LOGGED: dict[
     ApprovalStatus.REJECTED: (BehaviorEventType.PROPOSAL_REJECTED, "REJECTED"),
     ApprovalStatus.EDITED: (BehaviorEventType.PROPOSAL_EDITED, "EDITED"),
 }
-
-
-def party_guest_id(thread_id: str, guest_id: str) -> str:
-    """The guest's id in the behavior log: unique across parties."""
-    return f"{thread_id}:{guest_id}"
 
 
 class ProposalNoLongerPendingError(RuntimeError):
