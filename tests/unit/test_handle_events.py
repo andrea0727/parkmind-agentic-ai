@@ -95,6 +95,13 @@ def _pending(deps):
     return [p.proposal_id for p in deps.proposals.list_pending(THREAD)]
 
 
+def test_handling_events_holds_the_plans_lock_while_it_rewrites_the_progress(deps):
+    """A progress report at the same time waits instead of being overwritten."""
+    _handle(deps, [_down("space")])
+
+    assert deps.execution_states.locked == [PLAN.plan_id]
+
+
 def test_a_significant_event_supersedes_the_pending_proposal(deps):
     handled = _handle(deps, [_down("space")])
 

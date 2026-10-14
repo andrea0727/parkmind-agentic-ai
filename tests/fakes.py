@@ -305,6 +305,13 @@ class InMemoryExecutionStateRepository:
     def __init__(self, plans: "InMemoryPlanRepository | None" = None) -> None:
         self._plans = plans
         self.rows: dict[str, PlanExecutionState] = {}
+        self.locked: list[str] = []
+
+    def lock(self, plan_id: str) -> None:
+        """One process, one thread per test: nothing to wait for; the plan must exist."""
+        self.locked.append(plan_id)
+        if self._plans is not None and plan_id not in self._plans.plans:
+            raise NotFoundError("plan does not exist")
 
     def save(self, state: PlanExecutionState) -> bool:
         if self._plans is not None and state.plan_id not in self._plans.plans:

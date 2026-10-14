@@ -66,8 +66,10 @@ class InvalidEditError(ValueError):
 class AppliedEdit:
     constraints: PartyConstraints
     """The party's constraints with the edit applied, one version later."""
-    changed_ids: list[str]
-    """Removed, then added: the behavior log's "what changed" (section 23)."""
+    removed: list[str]
+    """The stops the edit dropped (a rejection, for the behavior log)."""
+    added: list[str]
+    """The attractions the edit asked for (interest, for the behavior log)."""
 
 
 def _unique(ids: Sequence[str]) -> list[str]:
@@ -142,4 +144,4 @@ class ApplyEditUseCase:
                 "constraints_version": constraints.constraints_version + 1,
             }
         )
-        return AppliedEdit(edited, remove + add)
+        return AppliedEdit(edited, remove, add)

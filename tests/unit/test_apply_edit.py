@@ -50,7 +50,7 @@ def test_a_removed_stop_is_avoided_and_an_added_attraction_is_a_must_do(use_case
     assert applied.constraints.must_do == ["id-teacups"]
     assert applied.constraints.avoid == ["id-tron"]
     assert applied.constraints.constraints_version == constraints.constraints_version + 1
-    assert applied.changed_ids == ["id-tron", "id-teacups"]
+    assert (applied.removed, applied.added) == (["id-tron"], ["id-teacups"])
 
 
 def test_the_rest_of_the_constraints_is_kept(use_case):
@@ -70,7 +70,7 @@ def test_repeated_ids_count_once(use_case):
     )
 
     assert applied.constraints.must_do == ["id-teacups"]
-    assert applied.changed_ids == ["id-teacups"]
+    assert (applied.removed, applied.added) == ([], ["id-teacups"])
 
 
 @pytest.mark.parametrize(
