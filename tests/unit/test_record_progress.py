@@ -128,6 +128,30 @@ def test_the_read_modify_write_holds_the_plans_lock(deps):
     assert deps.execution_states.locked == ["plan_1"]
 
 
+def test_the_plan_is_locked_before_it_is_checked_to_be_the_active_one(deps, monkeypatch):
+    """A report that waited for the lock must see which plan is active after it."""
+    seen: list[list[str]] = []
+    real = deps.plans.get_active
+
+    def get_active(thread_id):
+        seen.append(list(deps.execution_states.locked))
+        return real(thread_id)
+
+    monkeypatch.setattr(deps.plans, "get_active", get_active)
+
+    _report(deps, "a1", StopOutcome.COMPLETED)
+
+    assert seen == [["plan_1"]]
+
+
+def test_a_plan_that_was_never_saved_is_not_the_active_plan(deps):
+    with pytest.raises(InvalidProgressError) as raised:
+        _report(deps, "a1", StopOutcome.COMPLETED, plan_id="plan_missing")
+
+    assert raised.value.problem is ProgressProblem.NOT_THE_ACTIVE_PLAN
+    assert deps.execution_states.get("plan_missing") is None
+
+
 @pytest.mark.parametrize(
     ("first", "then"),
     [

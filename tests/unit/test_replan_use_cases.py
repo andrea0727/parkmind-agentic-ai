@@ -88,7 +88,7 @@ def test_untracked_progress_assumes_the_party_is_on_schedule():
 
 
 def test_reported_progress_is_kept_and_unreported_departed_stops_are_assumed_done():
-    """A partial report never puts the past back in a replan (PR #99 review)."""
+    """A partial report never puts the past back in a replan."""
     stored = factories.execution_state(
         plan_id="plan_1", completed_stop_ids=["a1"], as_of=NOW - timedelta(minutes=5)
     )

@@ -84,7 +84,7 @@ def replan_deps():
         factories.execution_state(plan_id="plan_0", completed_stop_ids=["a1"])
     )
     deps.plans.save("t1", factories.plan(plan_id="plan_1"))
-    deps.proposals.save("t1", factories.proposal())
+    deps.proposals.save("t1", factories.proposal(base_plan_id="plan_0"))
     return deps
 
 
@@ -114,6 +114,47 @@ def test_progress_reported_while_the_guests_decide_is_not_lost(replan_deps):
     )
 
     assert deps.execution_states.get("plan_1").completed_stop_ids == ["a1", "a2"]
+
+
+def test_approving_a_replan_locks_the_base_plan_before_the_proposal_row(
+    replan_deps, monkeypatch
+):
+    """Same order as HandleEvents (plan, then proposals), so the two never deadlock."""
+    deps = replan_deps
+    seen: list[list[str]] = []
+    real = deps.proposals.resolve
+
+    def resolve(*args, **kwargs):
+        seen.append(list(deps.execution_states.locked))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(deps.proposals, "resolve", resolve)
+
+    ResolveProposalUseCase(factory_for(deps)).execute(
+        "t1", "prop_1", ApprovalStatus.APPROVED, at=NOW, guests=PARTY
+    )
+
+    assert seen == [["plan_0"]]
+    assert deps.execution_states.locked == ["plan_0"]
+
+
+@pytest.mark.parametrize("decision", [ApprovalStatus.REJECTED, ApprovalStatus.EDITED])
+def test_a_decision_that_activates_nothing_takes_no_lock(replan_deps, decision):
+    edit = {"removed_attraction_ids": ["a1"]} if decision is ApprovalStatus.EDITED else {}
+
+    ResolveProposalUseCase(factory_for(replan_deps)).execute(
+        "t1", "prop_1", decision, at=NOW, guests=PARTY, **edit
+    )
+
+    assert replan_deps.execution_states.locked == []
+
+
+def test_approving_an_initial_plan_takes_no_lock(deps):
+    ResolveProposalUseCase(factory_for(deps)).execute(
+        "t1", "prop_1", ApprovalStatus.APPROVED, at=NOW, guests=PARTY
+    )
+
+    assert deps.execution_states.locked == []
 
 
 @pytest.mark.parametrize("decision", [ApprovalStatus.REJECTED, ApprovalStatus.SUPERSEDED])

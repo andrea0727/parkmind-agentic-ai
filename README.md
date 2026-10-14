@@ -640,14 +640,19 @@ inside a profile.
     never moves the progress back in time.
   - The party must be the plan's (`per_guest_satisfaction` and the stops'
     `served_guests`): a missing or unknown guest refuses the report, so behavior is
-    never logged for an invented party.
+    never logged for an invented party. If the group changes during the day, the
+    plan no longer matches it: reports are refused with `PARTY_MISMATCH` until the
+    party is replanned, not recorded against the old group.
   - Every refusal is an `InvalidProgressError` with a `ProgressProblem` (no guests, a
     time without a timezone, not the active plan, not a stop, party mismatch, the
     other outcome already recorded), so an API can map them to one response.
-  - Writers of a plan's progress (this use case and `HandleEventsUseCase`) hold the
-    plan's lock (`ExecutionStateRepository.lock`, a row lock in Postgres) for the
-    read-modify-write, so two reports, or a report and an event, never overwrite
-    each other.
+  - Writers of a plan's progress (this use case, `HandleEventsUseCase`, and the
+    approval of a replan, which copies the base plan's progress to the new plan)
+    hold the plan's lock (`ExecutionStateRepository.lock`, a row lock in Postgres)
+    for the read-modify-write, so two reports, a report and an event, or a report
+    and an approval never overwrite each other. A report takes the lock before it
+    checks the plan is the active one, so one that waited sees the plan as the
+    writer ahead of it left it.
   - A replan takes the reported stops as reported and still assumes the departed,
     unreported ones done (above). No API exposes it yet.
 - **Querying.** `BehaviorLogRepository.get(party_guest_id(thread_id, guest_id))`

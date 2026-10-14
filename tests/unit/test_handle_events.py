@@ -18,6 +18,7 @@ from parkmind.core.contracts import (
     HardConstraintSet,
     StopKind,
 )
+from parkmind.services.ports import NotFoundError
 from parkmind.services.use_cases.handle_events import HandleEventsUseCase
 
 NOW = datetime(2026, 9, 16, 10, 30, tzinfo=PARK_TZ)
@@ -100,6 +101,23 @@ def test_handling_events_holds_the_plans_lock_while_it_rewrites_the_progress(dep
     _handle(deps, [_down("space")])
 
     assert deps.execution_states.locked == [PLAN.plan_id]
+
+
+def test_handling_events_of_a_plan_that_was_never_saved_fails_instead_of_guessing(deps):
+    """The active plan is always a stored one; anything else is a caller's bug."""
+    unsaved = factories.plan(plan_id="plan_unsaved", stops=PLAN.stops)
+
+    with pytest.raises(NotFoundError):
+        HandleEventsUseCase(factory_for(deps)).execute(
+            THREAD,
+            [_down("space")],
+            plan=unsaved,
+            constraints=CONSTRAINTS,
+            objective=OBJECTIVE,
+            accessibility_ref=[],
+            confirmed=True,
+            now=NOW,
+        )
 
 
 def test_a_significant_event_supersedes_the_pending_proposal(deps):

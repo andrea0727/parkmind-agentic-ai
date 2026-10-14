@@ -103,6 +103,16 @@ class ResolveProposalUseCase:
                 and stored.approval_status is not ApprovalStatus.PENDING
             ):
                 raise ProposalNoLongerPendingError(proposal_id, stored.approval_status)
+            if (
+                status is ApprovalStatus.APPROVED
+                and stored is not None
+                and stored.base_plan_id != stored.candidate_plan_id
+            ):
+                # The carry-over below reads the base plan's progress and copies it:
+                # a report or event being written at the same time must finish first.
+                # The plan's lock comes before the proposal's row (as in HandleEvents),
+                # so the two never wait on each other.
+                deps.execution_states.lock(stored.base_plan_id)
             try:
                 proposal = deps.proposals.resolve(
                     proposal_id, status, at=at, rejection_reason=rejection_reason

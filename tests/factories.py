@@ -173,7 +173,7 @@ def plan(**overrides: Any) -> Plan:
 def proposal(**overrides: Any) -> Proposal:
     fields: dict[str, Any] = {
         "proposal_id": "prop_1",
-        "base_plan_id": "plan_0",
+        "base_plan_id": "plan_1",
         "candidate_plan_id": "plan_1",
         "reason": "initial plan",
         "diff": PlanDiff(),

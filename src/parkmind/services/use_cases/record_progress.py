@@ -29,7 +29,10 @@ caller can't log behavior for an invented party. Every refusal is an
 
 Concurrency: the read-modify-write of the plan's progress holds the plan's lock
 (``ExecutionStateRepository.lock``) until the transaction ends, so two reports at
-once, or a report and an event (``HandleEventsUseCase``), never overwrite each other.
+once, a report and an event (``HandleEventsUseCase``), or a report and the approval
+of a replan (``ResolveProposalUseCase``) never overwrite each other. The lock is taken
+before the plan is checked to be the active one: a report that waited sees the plan
+as the writer ahead of it left it.
 
 No API exposes this yet.
 """
@@ -46,7 +49,7 @@ from parkmind.core.contracts import (
     PlanExecutionState,
     StopKind,
 )
-from parkmind.services.ports import party_guest_id
+from parkmind.services.ports import NotFoundError, party_guest_id
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
     default_planning_deps,
@@ -117,6 +120,16 @@ class RecordProgressUseCase:
                 ProgressProblem.NAIVE_TIME, "the report time needs a timezone"
             )
         with open_deps(self._deps_factory) as deps, deps.transaction():
+            # Lock first, check after: a report that waited here must see the plan
+            # as it is once the writer ahead of it finished (an approval may have
+            # replaced the active plan meanwhile).
+            try:
+                deps.execution_states.lock(plan_id)
+            except NotFoundError:
+                raise InvalidProgressError(
+                    ProgressProblem.NOT_THE_ACTIVE_PLAN,
+                    f"{plan_id} is not the active plan of this thread",
+                ) from None
             active = deps.plans.get_active(thread_id)
             if active is None or active.plan_id != plan_id:
                 raise InvalidProgressError(
@@ -139,7 +152,6 @@ class RecordProgressUseCase:
                     f"({', '.join(sorted(named))})",
                 )
 
-            deps.execution_states.lock(plan_id)
             state = deps.execution_states.get(plan_id) or PlanExecutionState(
                 plan_id=plan_id, as_of=at
             )

@@ -38,7 +38,9 @@ def _thread_with_a_pending_proposal(conn: psycopg.Connection, thread: str) -> No
     PostgresProposalRepository(conn).save(
         thread,
         factories.proposal(
-            proposal_id=f"prop_{thread}", candidate_plan_id=f"plan_{thread}"
+            proposal_id=f"prop_{thread}",
+            base_plan_id=f"plan_{thread}",
+            candidate_plan_id=f"plan_{thread}",
         ),
     )
 
