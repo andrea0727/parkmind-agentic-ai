@@ -1,6 +1,6 @@
 # ADR 0003 — Observability: Langfuse for traces, LangSmith off by default
 
-- **Status:** Accepted (2026-10-14, team decision)
+- **Status:** Accepted (2026-10-13, team decision)
 - **Backlog:** issue #5 (evaluate LangSmith); informs P1-18 (Langfuse observability)
 - **Architecture:** §42 (Observability), §40 (groundedness score), §45 (metrics), C19 (raw user turns masked in traces)
 
