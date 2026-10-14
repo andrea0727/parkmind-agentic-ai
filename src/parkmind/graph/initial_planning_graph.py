@@ -46,7 +46,7 @@ at ``load_context``, so the new candidate is built, checked, explained and propo
 as a new PENDING proposal like any other. If no valid plan fits the edit, the guests
 are told why and get back what they had: the plan before the edit, with the
 constraints before it, goes through CHECK again (on the fresh data) and is proposed
-anew. If even that no longer passes, nothing is proposed, as after any failed check.
+anew, under a new plan id. If even that no longer passes, nothing is proposed, as after any failed check.
 
 A port that fails or has no data (``PlanningUnavailableError``) ends the planning
 stage with a plain-language message and no plan, instead of an unhandled exception.
@@ -76,6 +76,7 @@ from parkmind.agents.explain_agent import (
 from parkmind.core.contracts import (
     PARK_TZ,
     ApprovalStatus,
+    PartyConstraints,
     Plan,
     RejectionReason,
     StopKind,
@@ -278,6 +279,10 @@ def before_edit_update(state: ParkMindState, reasons: list[str]) -> dict[str, An
 
     ``None`` when the failed plan did not come from an edit. The caller routes to its
     CHECK node, so the plan is proposed again only if it still passes on fresh data.
+
+    The plan comes back under a new id: EXPLAIN writes it again and records which
+    prompt did (``explained``), and a stored plan body never changes, so the plan
+    first proposed cannot be saved again with another explanation's version.
     """
     plan = state.get("plan_before_edit")
     constraints = state.get("constraints_before_edit")
@@ -286,7 +291,7 @@ def before_edit_update(state: ParkMindState, reasons: list[str]) -> dict[str, An
     message = "\n".join([EDIT_DID_NOT_FIT_MESSAGE, *reasons, EDIT_REOFFER_MESSAGE])
     return {
         "messages": [AIMessage(content=message)],
-        "candidate_plan": plan,
+        "candidate_plan": plan.model_copy(update={"plan_id": f"plan_{uuid4().hex[:12]}"}),
         "constraints": constraints,
         "check_result": None,
         "explanation": None,
@@ -364,12 +369,14 @@ def _propose_plan(
     the interrupt, not inside the same node as interrupt() (see
     _interrupt_for_approval -- LangGraph re-executes a node from the top on
     every resume). Only a plan that passed the ConstraintChecker, with its
-    explanation, may be proposed.
+    explanation, may be proposed, and only for a party with guests (``require_party``,
+    checked before anything is saved).
     """
     plan = state.get("candidate_plan")
     if not plan:
         raise ValueError("No candidate plan to propose")
     _require_valid_candidate(state)
+    require_party(state)
 
     proposal = ProposePlanUseCase(deps_factory).execute(
         state["thread_id"],
@@ -441,6 +448,15 @@ def _apply_edit(
         return str(exc)
 
 
+def require_party(state: ParkMindState) -> PartyConstraints:
+    """The party's constraints, with at least one guest: every decision on a proposal
+    is logged per guest (section 23), so nothing is proposed or decided for nobody."""
+    constraints = state.get("constraints")
+    if constraints is None or not constraints.guests:
+        raise ValueError("a proposal needs the party's guests")
+    return constraints
+
+
 def _attraction_ids(plan: Plan) -> list[str]:
     return [
         stop.node_id
@@ -481,10 +497,7 @@ def _interrupt_for_approval(
     proposal = state.get("proposal")
     if not plan or not proposal:
         raise ValueError("No candidate plan/proposal to approve")
-    constraints = state.get("constraints")
-    if constraints is None or not constraints.guests:
-        # Every decision is logged per guest (section 23): never decide for nobody.
-        raise ValueError("a decision needs the party's guests")
+    constraints = require_party(state)
 
     payload: dict[str, Any] = {
         "kind": APPROVAL_INTERRUPT_KIND,

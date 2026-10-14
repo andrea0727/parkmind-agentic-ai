@@ -694,7 +694,9 @@ def test_an_edit_that_cannot_be_planned_gives_back_the_plan_before_it(monkeypatc
         "propose",
     ]
     offered = h.state()
-    assert offered["candidate_plan"].plan_id == first["candidate_plan"].plan_id
+    # The same plan, under a new id (a stored plan body never changes).
+    assert offered["candidate_plan"].plan_id != first["candidate_plan"].plan_id
+    assert offered["candidate_plan"].stops == first["candidate_plan"].stops
     assert offered["constraints"] == first["constraints"]
     assert offered["check_result"].valid
     assert offered.get("plan_before_edit") is None
@@ -709,7 +711,7 @@ def test_an_edit_that_cannot_be_planned_gives_back_the_plan_before_it(monkeypatc
 
     h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
 
-    assert h.deps.plans.get_active("t1").plan_id == first["candidate_plan"].plan_id
+    assert h.deps.plans.get_active("t1").plan_id == offered["candidate_plan"].plan_id
 
 
 def test_when_the_plan_before_the_edit_no_longer_passes_nothing_is_proposed(monkeypatch):
@@ -854,3 +856,68 @@ def test_a_rejection_reason_is_ignored_on_approval(monkeypatch):
 
     assert "__interrupt__" not in result
     assert h.deps.plans.get_active("t1") is not None
+
+
+def test_the_plan_is_re_offered_even_when_its_new_explanation_is_the_template(monkeypatch):
+    """The re-offer is explained again; a different prompt version must not clash with
+    the plan stored under the first one (plan bodies are immutable)."""
+    narrator = ScriptedNarrator("Here is your day at the park.", "A 999 minute wait.", "Still 999.")
+    h = _Harness(monkeypatch, narrator=narrator)
+    h.confirm()
+    first = h.state()
+    assert first["candidate_plan"].provenance.prompt_versions["explain"] == "explain-v1"
+    edit = _edit_of(first["candidate_plan"])
+    _fail_plans_without(monkeypatch, edit["remove"][0])
+
+    result = h.graph.invoke(Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG)
+
+    assert result["__interrupt__"][0].value["kind"] == "plan_approval"
+    offered = h.state()
+    assert offered["candidate_plan"].provenance.prompt_versions["explain"] == "template"
+    assert [p.approval_status.value for p in h.proposals] == ["EDITED", "PENDING"]
+
+
+def test_an_open_attraction_that_no_longer_fits_fails_the_real_check_and_re_offers(monkeypatch):
+    """No fake checker: a ride added back while its wait fills the rest of the day."""
+    h = _Harness(monkeypatch)
+    h.confirm()
+    removed = _edit_of(h.state()["candidate_plan"])["remove"]
+    h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": {"remove": removed}}), config=CONFIG
+    )
+    before = h.state()
+    live = snapshot_context(snapshot_id="snap_queue", retrieved_at=NOW - timedelta(minutes=1))
+    waits = {
+        node_id: live.waits[node_id].model_copy(update={"wait_minutes": 900.0})
+        for node_id in removed
+    }
+    seed_snapshot(h.deps.snapshots, live.model_copy(update={"waits": {**live.waits, **waits}}))
+    h.events.clear()
+
+    result = h.graph.invoke(Command(resume={"decision": "EDITED", "edit": {"add": removed}}), config=CONFIG)
+
+    assert result["__interrupt__"][0].value["kind"] == "plan_approval"
+    assert h.events.count("check") == 2  # the edited plan fails, the one before it passes
+    offered = h.state()
+    assert offered["constraints"] == before["constraints"]
+    assert offered["candidate_plan"].stops == before["candidate_plan"].stops
+    assert any(ipg.EDIT_DID_NOT_FIT_MESSAGE in str(m.content) for m in offered["messages"])
+    assert [p.approval_status.value for p in h.proposals] == ["EDITED", "EDITED", "PENDING"]
+
+
+def test_nothing_is_proposed_for_a_party_without_guests(monkeypatch):
+    saved: list[Any] = []
+    monkeypatch.setattr(ipg.ProposePlanUseCase, "execute", lambda *a, **k: saved.append(a))
+    state: Any = {
+        "thread_id": "t1",
+        "messages": [],
+        "candidate_plan": factories.plan(),
+        "check_result": CheckResult(valid=True),
+        "explanation": "x",
+        "constraints": factories.party_constraints(guests=[]),
+    }
+
+    with pytest.raises(ValueError, match="party's guests"):
+        ipg._propose_plan(state)
+
+    assert saved == []

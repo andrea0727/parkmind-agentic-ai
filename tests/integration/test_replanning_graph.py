@@ -734,10 +734,48 @@ def test_an_edited_replan_that_cannot_be_planned_gives_back_the_replan_before_it
     assert _interrupt(result)["kind"] == "plan_approval"
     [second] = r.pending()
     assert second.proposal_id != first.proposal_id
-    assert second.candidate_plan_id == original.plan_id
+    assert second.candidate_plan_id != original.plan_id
+    assert r.deps.plans.get(second.candidate_plan_id).stops == original.stops
     offered = r.values()
     assert offered["constraints"] == constraints
     assert offered.get("plan_before_edit") is None
     said = [str(m.content) for m in offered["messages"]]
     assert any(ipg.EDIT_DID_NOT_FIT_MESSAGE in m and "the edit does not fit" in m for m in said)
     assert r.active == before
+
+
+def test_a_replan_is_re_offered_even_when_its_new_explanation_is_the_template(monkeypatch) -> None:
+    narrator = ScriptedNarrator("Your plan changed because a ride closed.", "A 999 wait.", "999.")
+    r = _Replanning(monkeypatch, narrator=narrator)
+    r.send(_down(r.stop_node()))
+    original = r.values()["candidate_plan"]
+    assert original.provenance.prompt_versions["explain"] == "explain-v1"
+    dropped = _optional_stop(original)
+    check = rg.CheckPlanUseCase.execute_replan
+
+    def refuse_without_dropped(this: Any, **kwargs: Any) -> Any:
+        result = check(this, **kwargs)
+        if dropped in {s.node_id for s in kwargs["plan"].stops}:
+            return result
+        violation = ConstraintViolation(rule=RuleId.MUST_DO, message="the edit does not fit")
+        return result.model_copy(update={"valid": False, "violations": [violation]})
+
+    monkeypatch.setattr(rg.CheckPlanUseCase, "execute_replan", refuse_without_dropped)
+
+    result = r.resume({"decision": "EDITED", "edit": {"remove": [dropped]}})
+
+    assert _interrupt(result)["kind"] == "plan_approval"
+    [second] = r.pending()
+    assert r.values()["candidate_plan"].provenance.prompt_versions["explain"] == "template"
+    assert r.deps.plans.get(second.candidate_plan_id).stops == original.stops
+
+
+def test_nothing_is_proposed_for_a_party_without_guests(r) -> None:
+    r.send(_down(r.stop_node()))
+    state = {**r.values(), "constraints": r.values()["constraints"].model_copy(update={"guests": []})}
+    before = len(r.proposals)
+
+    with pytest.raises(ValueError, match="party's guests"):
+        rg._propose_replan(state, deps_factory=factory_for(r.deps), clock=lambda: NOW)
+
+    assert len(r.proposals) == before

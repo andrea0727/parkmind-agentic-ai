@@ -79,6 +79,7 @@ from parkmind.graph.initial_planning_graph import (
     before_edit_update,
     explained,
     park_clock,
+    require_party,
 )
 from parkmind.graph.state import ParkMindState
 from parkmind.graph.state_helpers import (
@@ -426,7 +427,8 @@ def _propose_replan(
 ) -> ParkMindState:
     """Persist the candidate and open a PENDING proposal against the active plan.
 
-    Only a plan that passed the checker, with its explanation and diff, may be proposed.
+    Only a plan that passed the checker, with its explanation and diff, may be proposed,
+    and only for a party with guests (``require_party``).
     """
     plan = state.get("candidate_plan")
     current = state.get("current_plan")
@@ -436,6 +438,7 @@ def _propose_replan(
             "a candidate plan, the active plan and their diff are required"
         )
     _require_valid_candidate(state)
+    require_party(state)
 
     reason = ReplanReasonUseCase(deps_factory).execute(state.get("events") or [])
     proposal = ProposePlanUseCase(deps_factory).execute(

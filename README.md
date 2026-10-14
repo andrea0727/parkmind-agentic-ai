@@ -375,10 +375,15 @@ plain resume value kept that way would also answer the *next* interrupt.
 - **An edit that cannot be planned gives back what the guests had.** If no valid
   plan fits the edit (for example an open attraction added when the day has no
   room left), the guests are told why, and the plan before the edit, with the
-  constraints before it, is checked again on the fresh data and proposed anew. If it
+  constraints before it, is checked again on the fresh data and proposed anew, under
+  a new plan id (it is explained again, and a stored plan body never changes). If it
   no longer passes either, nothing is proposed, as after any failed check. An
   attraction that is down is not a failed edit: it is planned as an unmet must-do
   ("could not fit today").
+- **Known limit: missing park data while an edit is re-planned.** The run ends with
+  the usual "planning unavailable" message and nothing is re-offered: the edited
+  proposal is already `EDITED`, and the constraints keep the edit, so the next
+  attempt plans with it.
 - **Behavior log.** Every decision writes one `BehaviorEntry` per guest, in the
   same transaction (§23). The log is keyed by guest, and `g1`, `g2` are only unique
   within a party, so each guest is registered as `"{thread_id}:{guest_id}"`, with
