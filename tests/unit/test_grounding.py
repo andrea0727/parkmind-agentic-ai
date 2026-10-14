@@ -25,12 +25,47 @@ PAYLOAD = (
 )
 
 
-def test_numbers_and_clock_times_are_numerals_and_words_are_not():
+def test_numbers_clock_times_and_number_words_are_numerals():
     assert numerals("Arrive at 9:05, wait 25 min (0.80 match), two rides") == {
         "9:05",
         "25",
         "0.8",
+        "2",
     }
+
+
+@pytest.mark.parametrize(
+    ("text", "value"),
+    [
+        ("a forty minute wait", "40"),
+        ("twenty-five minutes", "25"),
+        ("twenty five minutes", "25"),
+        ("veinticinco minutos", "25"),
+        ("treinta y cinco minutos", "35"),
+        ("dieciséis paradas", "16"),
+        ("twelve stops", "12"),
+    ],
+)
+def test_a_number_spelled_out_is_not_grounded_unless_its_value_is_in_the_payload(
+    text, value
+):
+    assert ungrounded_numerals(text, '{"wait_minutes": 15}') == [value]
+    assert ungrounded_numerals(text, f'{{"wait_minutes": {value}}}') == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "one of your must-dos",
+        "your must-do rides",
+        "once you arrive",
+        "a well-known ride",
+        "half an hour",
+        "una atracción",
+    ],
+)
+def test_articles_pronouns_and_hyphenated_words_are_not_numbers(text):
+    assert numerals(text) == set()
 
 
 def test_the_same_value_written_differently_is_one_numeral():
