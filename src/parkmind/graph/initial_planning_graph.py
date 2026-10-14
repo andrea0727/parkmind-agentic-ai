@@ -69,7 +69,6 @@ from pydantic import ValidationError
 from parkmind.agents.elicit_agent import GuestInfoExtractor
 from parkmind.agents.explain_agent import (
     AnthropicNarrator,
-    GroundedExplanation,
     PlanNarrator,
     explain_grounded,
 )
@@ -91,6 +90,7 @@ from parkmind.graph.elicitation_graph import (
 from parkmind.graph.state import ParkMindState
 from parkmind.graph.state_helpers import (
     approve_plan,
+    explained,
     language_of,
     propose_plan_change,
     reject_plan,
@@ -371,26 +371,6 @@ def _no_valid_plan(state: ParkMindState) -> Command[Any]:
         },
         goto=END,
     )
-
-
-def explained(plan: Plan, result: GroundedExplanation) -> dict[str, Any]:
-    """EXPLAIN's state update: the text, and which prompt wrote it in the plan's provenance.
-
-    ``prompt_versions["explain"]`` is ``explain-v1`` for grounded LLM text and
-    ``template`` for the fallback; it travels to the proposal with the plan.
-    """
-    provenance = plan.provenance
-    versions = {**provenance.prompt_versions, "explain": result.prompt_version}
-    return {
-        "explanation": result.text,
-        "candidate_plan": plan.model_copy(
-            update={
-                "provenance": provenance.model_copy(
-                    update={"prompt_versions": versions}
-                )
-            }
-        ),
-    }
 
 
 def _make_explain_node(

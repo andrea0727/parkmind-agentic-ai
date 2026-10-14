@@ -78,7 +78,6 @@ from parkmind.graph.initial_planning_graph import (
     _make_resolve_group_node,
     _require_valid_candidate,
     before_edit_update,
-    explained,
     park_clock,
     require_party,
 )
@@ -86,6 +85,7 @@ from parkmind.graph.state import ParkMindState
 from parkmind.graph.state_helpers import (
     active_plan_update,
     discarded_proposal_update,
+    explained,
     language_of,
     propose_plan_change,
     solo_of,
