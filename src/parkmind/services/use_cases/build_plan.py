@@ -22,6 +22,7 @@ from datetime import datetime
 from typing import Any
 
 from parkmind.core.contracts import (
+    CheckResult,
     FairnessConfig,
     GroupObjective,
     GuestProfile,
@@ -84,6 +85,8 @@ class BuiltPlan:
     resolved: bool
     """False when the re-solve loop found no valid plan; ``plan`` is then the unrepaired candidate."""
     failure: str | None = None
+    check_result: CheckResult | None = None
+    """The checker's verdict on ``plan``: present exactly when ``resolved``."""
 
 
 class BuildPlanUseCase:
@@ -187,7 +190,9 @@ class BuildPlanUseCase:
                 reloaded[-1] if reloaded else without_guests(live_context, accessibility_ref)
             )
             if result.valid and result.plan is not None:
-                return BuiltPlan(result.plan, state_context, resolved=True)
+                return BuiltPlan(
+                    result.plan, state_context, resolved=True, check_result=result.check_result
+                )
             logger.info("re-solve loop found no valid plan: %s", result.fatal_error)
             candidate = optimizer.build_plan(context=live_context, **inputs)
             return BuiltPlan(candidate, state_context, resolved=False, failure=result.fatal_error)

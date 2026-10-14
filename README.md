@@ -152,9 +152,12 @@ One container serves the FastAPI API and the built React UI on http://localhost:
 
 > **Known limit (decision, not an oversight).** Conversations are checkpointed in memory
 > (`default_checkpointer()`), so a restart loses open sessions and there is no horizontal
-> scaling. A Postgres checkpointer is a follow-up: it needs C19 first, because a durable
-> checkpoint must never hold `AccessibilityRequirements` (they live only in `SESSION_MEMORY`
-> and are re-read at planning time).
+> scaling. A Postgres checkpointer is a follow-up, and it needs a C19 decision first.
+> `AccessibilityRequirements` are already kept out of a durable checkpoint (they live only in
+> `SESSION_MEMORY` and are re-read at planning time, with a test). What is not covered is the
+> guests' raw text: `state.messages` ("mi papá no puede caminar mucho") would be persisted.
+> Either redact it before it is stored, or move the turns to the SessionStore, which honors
+> retention.
 
 **1. Configure `.env`** (copy from `.env.example`). Required for the app to start:
 

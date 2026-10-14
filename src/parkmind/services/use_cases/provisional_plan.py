@@ -18,7 +18,6 @@ from datetime import date, datetime, timedelta
 from parkmind.core.contracts import (
     PARK_TZ,
     AttractionStatus,
-    CheckResult,
     CoverageReport,
     GuestProfile,
     LiveContext,
@@ -126,13 +125,12 @@ class ProvisionalPlanUseCase:
             objective=objective,
             now=opening,
         )
-        if not built.resolved:
+        if not built.resolved or built.check_result is None:
             return ProvisionalPlan(text("provisional_failed", lang, solo=solo), None, target)
 
-        # ``resolved`` means the resolve loop's own checker passed this plan.
         prepared = ExplainPlanUseCase(self._deps_factory).prepare(
             built.plan,
-            CheckResult(valid=True),
+            built.check_result,
             guests=planned.guests,
             must_do=planned.must_do,
             objective=objective,

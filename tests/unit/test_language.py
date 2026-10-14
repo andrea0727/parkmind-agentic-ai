@@ -6,9 +6,10 @@ import pytest
 from elicit_support import FakeExtractor, make_intake, make_names, scenario
 from langchain_core.messages import HumanMessage
 
-from parkmind.agents.elicit_agent import echo_for, make_elicit_node
+from parkmind.agents.elicit_agent import make_elicit_node
 from parkmind.core.contracts import PARK_TZ
 from parkmind.core.language import _CATALOG, as_language, detect_language, text
+from parkmind.services.use_cases.confirmation_echo import echo_for
 from parkmind.services.use_cases.replan_reason import replan_reason
 
 

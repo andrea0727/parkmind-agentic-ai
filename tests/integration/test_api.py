@@ -425,6 +425,8 @@ NEVER_RETURNED = (
 
 
 def test_no_response_after_the_confirmation_carries_the_objective_or_accessibility_data(client):
+    # The confirmation response itself is left out on purpose: it carries
+    # ``accessibility_guests`` (guest ids only), which the UI needs to ask for consent.
     t, turn = _to_proposal(client)
     pid = turn["proposal"]["proposal_id"]
     bodies = [turn]

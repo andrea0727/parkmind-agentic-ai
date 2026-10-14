@@ -17,7 +17,6 @@ from parkmind.agents.elicit_agent import (
     ExtractorOutputError,
     build_guest_profiles,
     build_party_constraints,
-    echo_for,
     extract_with_recovery,
     make_elicit_node,
     missing_information,
@@ -31,6 +30,7 @@ from parkmind.core.contracts import (
     SensitivityKind,
     SensitivityLevel,
 )
+from parkmind.services.use_cases.confirmation_echo import echo_for
 from parkmind.services.use_cases.resolve_attraction_names import CatalogUnavailableError
 
 TODAY = date(2026, 10, 6)

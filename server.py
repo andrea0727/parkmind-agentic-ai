@@ -12,7 +12,6 @@ pinned to a snapshot taken during park hours), E2E_NOW=HH:MM (fixed park clock f
 PARKMIND_HOUSEHOLDS_FILE (default demo/households.json): parties saved per username.
 """
 
-import json
 import os
 import sys
 from dataclasses import replace
@@ -36,26 +35,12 @@ from parkmind.graph.initial_planning_graph import (
     park_clock,
 )
 from parkmind.graph.replanning_graph import build_replanning_graph
-from parkmind.services.personalization.household import (
-    Household,
-    HouseholdFileError,
-    parse_households,
-)
 from parkmind.services.use_cases.describe_plan import DescribePlanUseCase
+from parkmind.services.use_cases.load_households import load_households
 from parkmind.services.use_cases.park_status import ParkStatusUseCase
 from parkmind.services.use_cases.planning_deps import default_planning_deps
 
 ROOT = Path(__file__).parent
-
-
-def load_households(path: Path) -> dict[str, Household]:
-    """An absent file means no saved parties; a present but broken one is an error."""
-    if not path.is_file():
-        return {}
-    try:
-        return parse_households(json.loads(path.read_text(encoding="utf-8")))
-    except json.JSONDecodeError as exc:
-        raise HouseholdFileError(f"{path.name} is not valid JSON: {exc}") from None
 
 
 DEMO_SWITCHES = ("PARKMIND_PLAN_FROM_STORED", "E2E_NOW")

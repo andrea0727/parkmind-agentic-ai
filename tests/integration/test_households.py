@@ -13,7 +13,7 @@ from parkmind.services.personalization.household import (
     parse_households,
 )
 from parkmind.services.use_cases.describe_plan import DescribePlanUseCase
-from server import load_households
+from parkmind.services.use_cases.load_households import load_households
 
 FAMILY = {
     "party": [

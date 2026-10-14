@@ -41,7 +41,6 @@ from langgraph.types import interrupt
 from parkmind.agents.elicit_agent import (
     AnthropicExtractor,
     GuestInfoExtractor,
-    echo_for,
     make_elicit_node,
 )
 from parkmind.core.language import DEFAULT_LANGUAGE, text
@@ -54,7 +53,6 @@ from parkmind.services.use_cases.accessibility_intake import (
 )
 from parkmind.services.use_cases.resolve_attraction_names import AttractionNameResolver
 
-_ACCESSIBILITY_PREFIX = "accessibility:"
 _RETENTION_POLICIES = ("session_only", "persisted")
 
 
@@ -113,21 +111,14 @@ def _make_confirm_node(
         if not pending:
             return {}
 
-        accessibility_ids = sorted(
-            entry.removeprefix(_ACCESSIBILITY_PREFIX)
-            for entry in pending
-            if entry.startswith(_ACCESSIBILITY_PREFIX)
-        )
         constraints = state.get("constraints")
         labels = {g.guest_id: g.label for g in constraints.guests} if constraints else {}
+        confirmation = intake.confirmation(pending, lang, solo=solo, labels=labels)
+        accessibility_ids = list(confirmation.accessibility_guests)
         payload: dict[str, Any] = {
             "kind": "hard_constraint_confirmation",
             "pending": pending,
-            "echo": [
-                echo_for(e, lang, solo=solo, labels=labels)
-                for e in pending
-                if not e.startswith(_ACCESSIBILITY_PREFIX)
-            ],
+            "echo": list(confirmation.echo),
             "accessibility_guests": accessibility_ids,
         }
 

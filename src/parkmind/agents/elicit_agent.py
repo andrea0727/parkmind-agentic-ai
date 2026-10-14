@@ -48,6 +48,10 @@ from parkmind.services.use_cases.accessibility_intake import (
     AccessibilityIntakeUseCase,
     StagedAccessibility,
 )
+from parkmind.services.use_cases.confirmation_echo import (
+    ACCESSIBILITY_PREFIX,
+    HEIGHT_PREFIX,
+)
 from parkmind.services.use_cases.resolve_attraction_names import (
     AttractionNameResolver,
     NameResolution,
@@ -63,7 +67,6 @@ __all__ = [
     "build_guest_profiles",
     "build_party_constraints",
     "conflicting_names",
-    "echo_for",
     "extract_with_recovery",
     "human_texts",
     "make_elicit_node",
@@ -230,7 +233,6 @@ def missing_information(extraction: ElicitationExtraction) -> list[str]:
 _UNKNOWN_ATTRACTION = "unknown_attraction:"
 _AMBIGUOUS_ATTRACTION = "ambiguous_attraction:"
 _CONFLICTING_ATTRACTION = "conflicting_attraction:"
-_HEIGHT = "height:"
 _UNVERIFIED_HEIGHT = "height_unverified:"
 
 _HEIGHT_TOLERANCE_CM = 1.5
@@ -487,56 +489,15 @@ def pending_confirmations(
     if extraction.party_walking_budget_minutes is not None:
         pending.append(f"walking_budget: {extraction.party_walking_budget_minutes}")
     pending.extend(
-        f"{_HEIGHT}g{index}: {guest.height_cm:g}"
+        f"{HEIGHT_PREFIX}g{index}: {guest.height_cm:g}"
         for index, guest in enumerate(extraction.guests, start=1)
         if guest.height_cm is not None
     )
     pending.extend(
-        f"accessibility:g{ref}"
+        f"{ACCESSIBILITY_PREFIX}g{ref}"
         for ref in sorted({a.guest_ref for a in extraction.accessibility})
     )
     return pending
-
-
-def echo_for(
-    entry: str,
-    lang: Language = DEFAULT_LANGUAGE,
-    *,
-    solo: bool = False,
-    labels: Mapping[str, str | None] | None = None,
-) -> str:
-    """Plain-language echo of a non-accessibility pending entry, for confirmation.
-
-    ``labels`` maps a guest id ("g2") to how the guests call them, when they said so.
-    """
-    kind, _, value = entry.partition(": ")
-    if kind in ("must_do", "avoid", "departure_time", "walking_budget"):
-        return text(f"echo_{kind}", lang, solo=solo, value=value)
-    if kind == "lunch_window":
-        start, _, end = value.partition("-")
-        return text("echo_lunch_window", lang, start=start, end=end)
-    if kind.startswith(_HEIGHT):
-        guest_id = kind.removeprefix(_HEIGHT)
-        who = guest_ref(
-            lang,
-            guest_id.removeprefix("g"),
-            (labels or {}).get(guest_id),
-            start=True,
-        )
-        return text(
-            "echo_height",
-            lang,
-            solo=solo,
-            who=who,
-            value=value,
-            feet=_feet_inches(float(value)),
-        )
-    return entry
-
-
-def _feet_inches(cm: float) -> str:
-    total_inches = round(cm / 2.54)
-    return f"{total_inches // 12}'{total_inches % 12}\""
 
 
 def human_texts(state: ParkMindState) -> list[str]:
