@@ -30,6 +30,7 @@ from parkmind.core.contracts import (
     Plan,
     PlanDiff,
 )
+from parkmind.core.language import DEFAULT_LANGUAGE, Language, text
 from parkmind.services.planning.optimizer import MEAL_VENUE_TBD
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
@@ -49,14 +50,20 @@ def _require_valid(check_result: CheckResult) -> None:
         raise ExplainBeforeValidationError("a plan is explained only after it passed the checker")
 
 
-def _guest_name(guest: Guest) -> str:
+def _guest_ref(guest: Guest, lang: Language = DEFAULT_LANGUAGE) -> str:
+    """``Guest 2``: the neutral name, safe to send to the narrator."""
     number = guest.guest_id.removeprefix("g")
-    return f"Guest {number}" if number.isdigit() else guest.guest_id
+    return text("guest_label", lang, number=number) if number.isdigit() else guest.guest_id
 
 
-def _guest_label(guest: Guest) -> str:
+def _guest_name(guest: Guest, lang: Language = DEFAULT_LANGUAGE) -> str:
+    """The guest's own label ("tu mamá") for the template, which stays in-process."""
+    return guest.label or _guest_ref(guest, lang)
+
+
+def _guest_label(guest: Guest, lang: Language) -> str:
     """The template's label: the guests see their own height (``Guest 2 (110 cm)``)."""
-    label = _guest_name(guest)
+    label = _guest_name(guest, lang)
     return f"{label} ({guest.height_cm:g} cm)" if guest.height_cm is not None else label
 
 
@@ -65,6 +72,7 @@ def _skipped_rides(
     names: Mapping[str, str],
     guests: Sequence[Guest],
     height_limits: Mapping[str, int],
+    lang: Language,
 ) -> list[str]:
     """One line per height-restricted stop that part of the party sits out.
 
@@ -73,11 +81,9 @@ def _skipped_rides(
     """
     lines: list[str] = []
     for node_id, limit, skipping in _sitting_out(plan, guests, height_limits):
-        who = ", ".join(_guest_label(guest) for guest in skipping)
+        who = ", ".join(_guest_label(guest, lang) for guest in skipping)
         name = names.get(node_id, node_id)
-        lines.append(
-            f"{who} will skip {name} (minimum height {limit} cm) and wait outside."
-        )
+        lines.append(text("plan_skip", lang, who=who, name=name, limit=limit))
     return lines
 
 
@@ -108,23 +114,37 @@ def explain_plan(
     *,
     guests: Sequence[Guest] = (),
     height_limits: Mapping[str, int] | None = None,
+    lang: Language = DEFAULT_LANGUAGE,
 ) -> str:
     _require_valid(check_result)
-    names = {**names, MEAL_VENUE_TBD: "Lunch (restaurant to be chosen, near your previous stop)"}
+    solo = len(guests) == 1
+    names = {**names, MEAL_VENUE_TBD: text("plan_lunch_tbd", lang, solo=solo)}
     lines = [
-        f"{stop.arrival_time.astimezone(PARK_TZ):%H:%M} "
-        f"{names.get(stop.node_id, stop.node_id)} "
-        f"({stop.expected_wait_minutes:.0f} min wait, {stop.walking_minutes:.0f} min walk)"
+        text(
+            "plan_stop",
+            lang,
+            time=f"{stop.arrival_time.astimezone(PARK_TZ):%H:%M}",
+            name=names.get(stop.node_id, stop.node_id),
+            wait=f"{stop.expected_wait_minutes:.0f}",
+            walk=f"{stop.walking_minutes:.0f}",
+        )
         for stop in plan.stops
     ]
-    summary = (
-        f"{len(plan.stops)} stops, {plan.total_wait_minutes:.0f} min of waiting and "
-        f"{plan.total_walking_minutes:.0f} min of walking in total."
+    summary = text(
+        "plan_summary",
+        lang,
+        stops=len(plan.stops),
+        wait=f"{plan.total_wait_minutes:.0f}",
+        walk=f"{plan.total_walking_minutes:.0f}",
     )
-    parts = [summary, *lines, *_skipped_rides(plan, names, guests, height_limits or {})]
+    parts = [
+        summary,
+        *lines,
+        *_skipped_rides(plan, names, guests, height_limits or {}, lang),
+    ]
     if plan.unmet_must_do:
         unmet = ", ".join(names.get(node_id, node_id) for node_id in plan.unmet_must_do)
-        parts.append(f"Could not fit your must-dos today: {unmet}.")
+        parts.append(text("plan_unmet", lang, solo=solo, names=unmet))
     return "\n".join(parts)
 
 
@@ -143,20 +163,24 @@ def explain_replan(
     diff: PlanDiff,
     guests: Sequence[Guest] = (),
     height_limits: Mapping[str, int] | None = None,
+    lang: Language = DEFAULT_LANGUAGE,
 ) -> str:
     """``explain_plan`` led by why the plan changed and what changed."""
     changes: list[str] = []
-    for title, labels in (
-        ("Added", diff.stops_added),
-        ("Removed", diff.stops_removed),
-        ("Reordered", diff.stops_reordered),
-        ("Changed", list(diff.stops_modified)),
+    for key, labels in (
+        ("diff_added", diff.stops_added),
+        ("diff_removed", diff.stops_removed),
+        ("diff_reordered", diff.stops_reordered),
+        ("diff_changed", list(diff.stops_modified)),
     ):
         if labels:
-            changes.append(f"{title}: {', '.join(_label_name(label, names) for label in labels)}.")
+            items = ", ".join(_label_name(label, names) for label in labels)
+            changes.append(text("diff_line", lang, title=text(key, lang), items=items))
     if not changes:
-        changes.append("No stops changed; only times shifted.")
-    body = explain_plan(plan, check_result, names, guests=guests, height_limits=height_limits)
+        changes.append(text("diff_times_only", lang))
+    body = explain_plan(
+        plan, check_result, names, guests=guests, height_limits=height_limits, lang=lang
+    )
     lead = [reason] if reason else []
     return "\n".join([*lead, *changes, "", body])
 
@@ -164,8 +188,8 @@ def explain_replan(
 @dataclass(frozen=True)
 class GuestSittingOut:
     guest: str
-    """``Guest 2`` -- never the guest's height: the narrator does not need a child's
-    height to say they sit a ride out (section 12, data minimization)."""
+    """``Guest 2`` -- never the guest's height or their free-text label ("tu mamá"):
+    the narrator does not need either to say they sit a ride out (section 12)."""
     minimum_height_cm: int
     """The ride's posted minimum: park data, not the guest's."""
 
@@ -246,11 +270,13 @@ def explanation_payload(
     diff: PlanDiff | None = None,
 ) -> ExplanationPayload:
     _require_valid(check_result)
-    names = {**names, MEAL_VENUE_TBD: "Lunch (restaurant to be chosen, near your previous stop)"}
+    names = {
+        **names,
+        MEAL_VENUE_TBD: "Lunch (restaurant to be chosen, near your previous stop)",
+    }
     out_by_stop = {
         node_id: [
-            GuestSittingOut(guest=_guest_name(guest), minimum_height_cm=limit)
-            for guest in skipping
+            GuestSittingOut(guest=_guest_ref(guest), minimum_height_cm=limit) for guest in skipping
         ]
         for node_id, limit, skipping in _sitting_out(plan, guests, height_limits or {})
     }
@@ -321,9 +347,7 @@ def _catalog_facts(deps_factory: DepsFactory) -> tuple[dict[str, str], dict[str,
         catalog = load_catalog(deps)
     names = {a.node_id: a.name for a in catalog}
     limits = {
-        a.node_id: a.height_restriction_cm
-        for a in catalog
-        if a.height_restriction_cm is not None
+        a.node_id: a.height_restriction_cm for a in catalog if a.height_restriction_cm is not None
     }
     return names, limits
 
@@ -342,6 +366,7 @@ class ExplainPlanUseCase:
         objective: GroupObjective | None = None,
         reason: str | None = None,
         diff: PlanDiff | None = None,
+        lang: Language = DEFAULT_LANGUAGE,
     ) -> PreparedExplanation:
         """The payload the LLM explains from, and the template that stands in for it.
 
@@ -369,10 +394,16 @@ class ExplainPlanUseCase:
                 diff=diff,
                 guests=guests,
                 height_limits=limits,
+                lang=lang,
             )
             if diff is not None
             else explain_plan(
-                plan, check_result, names, guests=guests, height_limits=limits
+                plan,
+                check_result,
+                names,
+                guests=guests,
+                height_limits=limits,
+                lang=lang,
             )
         )
         return PreparedExplanation(payload, template)

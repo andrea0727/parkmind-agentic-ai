@@ -1,7 +1,7 @@
 # E2E scenarios on real ports (P0-30 initial planning graph)
 
 Manual end-to-end runs of `build_initial_planning_graph` against real infrastructure: Postgres,
-ThemeParks, Open-Meteo, the real clock and a real LLM (NVIDIA, injected as the extractor). They
+ThemeParks, Open-Meteo, the real clock and a real LLM (Anthropic, injected as the extractor). They
 complement `tests/integration/test_initial_planning_graph.py`, which uses fakes only.
 
 Status legend: **OK** = behaved as expected, **OK (partial)** = expected outcome, part not verified, **BUG** or **ISSUE** = defect or open question found.
@@ -32,11 +32,11 @@ Status legend: **OK** = behaved as expected, **OK (partial)** = expected outcome
 
 ## Batch 2 - critical cases (executed)
 
-Runner: `scripts/e2e/capture.py` (see `scripts/e2e/README.md`), real Postgres + ThemeParks + Open-Meteo + NVIDIA LLM. Outage cases patch `ThemeParksClient` or `settings.DATABASE_URL` at runtime. "Ask" below means a `missing_information` interrupt.
+Runner: `scripts/e2e/capture.py` (see `scripts/e2e/README.md`), real Postgres + ThemeParks + Open-Meteo + Anthropic LLM. Outage cases patch `ThemeParksClient` or `settings.DATABASE_URL` at runtime. "Ask" below means a `missing_information` interrupt.
 
 | # | Scenario | Setup / input | Expected | Observed | Status |
 |---|----------|---------------|----------|----------|--------|
-| 13 | Confirmation rejected | resume `confirmed: false` | No planning, no active plan | No planning stage ran; the graph asks "What should I change?" (first run hit a transient NVIDIA 500, repeated OK) | OK |
+| 13 | Confirmation rejected | resume `confirmed: false` | No planning, no active plan | No planning stage ran; the graph asks "What should I change?" (first run hit a transient LLM server error, repeated OK) | OK |
 | 14 | Garbage confirmation | resume `"yes"` | Re-ask or fail safely | `AttributeError: 'str' object has no attribute 'get'`; the graph crashes | BUG B6 |
 | 15 | No accessibility consent | wheelchair user, `consent: false` | No planning, accessibility not used | No planning stage ran; the graph asks for confirmation again | OK |
 | 16 | ThemeParks down, populated DB | All ThemeParks calls raise `ThemeParksUnavailableError` | Plan from stored data | Valid plan, 21 stops, approved and active. Whether live data fell back to the stored snapshot was not isolated | OK (partial) |

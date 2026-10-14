@@ -18,7 +18,7 @@ import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
-from parkmind.core.contracts import Attraction
+from parkmind.core.contracts import Attraction, AttractionCategory
 from parkmind.services.ports import AttractionRepository
 
 
@@ -39,6 +39,9 @@ class NameResolution:
     unknown: tuple[str, ...] = ()
     ambiguous: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     """Spoken name -> official names of the attractions it could mean."""
+    options_by_category: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    """Category -> some of the park's attractions, only filled when a name is unknown
+    so the guests can be shown what the park does have."""
 
     @property
     def complete(self) -> bool:
@@ -95,7 +98,26 @@ class AttractionNameResolver:
                 ambiguous[name] = tuple(sorted(a.name for a in matches))
             else:
                 unknown.append(name)
-        return NameResolution(resolved, tuple(unknown), ambiguous)
+        options = suggest_attractions(catalog) if unknown else {}
+        return NameResolution(resolved, tuple(unknown), ambiguous, options)
+
+
+_SUGGESTED_CATEGORIES = (
+    AttractionCategory.THRILL,
+    AttractionCategory.FAMILY,
+    AttractionCategory.DARK_RIDE,
+    AttractionCategory.WATER,
+)
+_SUGGESTIONS_PER_CATEGORY = 4
+
+
+def suggest_attractions(catalog: list[Attraction]) -> dict[str, tuple[str, ...]]:
+    options: dict[str, tuple[str, ...]] = {}
+    for category in _SUGGESTED_CATEGORIES:
+        names = sorted(a.name for a in catalog if a.category is category)
+        if names:
+            options[category.value] = tuple(names[:_SUGGESTIONS_PER_CATEGORY])
+    return options
 
 
 def _match(name: str, catalog: list[Attraction]) -> list[Attraction]:

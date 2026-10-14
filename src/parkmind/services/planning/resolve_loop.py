@@ -19,6 +19,7 @@ from pydantic import Field
 from parkmind.core.contracts import (
     AccessibilityRequirements,
     Attraction,
+    CheckResult,
     GroupObjective,
     LiveContext,
     Park,
@@ -51,6 +52,8 @@ class PlannerResolveResult(ParkMindBaseModel):
     plan: Plan | None = None
     unmet_must_do: list[str] = Field(default_factory=list)
     fatal_error: str | None = None
+    check_result: CheckResult | None = None
+    """The checker's verdict on ``plan``; set only when ``valid``."""
 
 
 def _remaining_walking_budget(
@@ -181,6 +184,7 @@ class PlannerResolveLoop:
                     plan=plan,
                     unmet_must_do=plan.unmet_must_do,
                     fatal_error=None,
+                    check_result=check_result,
                 )
 
             # DATA_FRESHNESS handling
@@ -228,6 +232,7 @@ class PlannerResolveLoop:
                         plan=plan,
                         unmet_must_do=plan.unmet_must_do,
                         fatal_error=None,
+                        check_result=recheck_result,
                     )
                 still_stale = any(
                     v.rule == RuleId.DATA_FRESHNESS for v in recheck_result.violations

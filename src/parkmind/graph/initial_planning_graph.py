@@ -81,6 +81,7 @@ from parkmind.core.contracts import (
     RejectionReason,
     StopKind,
 )
+from parkmind.core.language import DEFAULT_LANGUAGE, text
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.elicitation_graph import (
     StateNode,
@@ -88,7 +89,13 @@ from parkmind.graph.elicitation_graph import (
     ensure_confirmed,
 )
 from parkmind.graph.state import ParkMindState
-from parkmind.graph.state_helpers import approve_plan, propose_plan_change, reject_plan
+from parkmind.graph.state_helpers import (
+    approve_plan,
+    language_of,
+    propose_plan_change,
+    reject_plan,
+    solo_of,
+)
 from parkmind.services.use_cases.accessibility_intake import AccessibilityIntakeUseCase
 from parkmind.services.use_cases.apply_edit import (
     AppliedEdit,
@@ -100,6 +107,7 @@ from parkmind.services.use_cases.build_plan import BuildPlanUseCase
 from parkmind.services.use_cases.check_plan import CheckPlanUseCase
 from parkmind.services.use_cases.explain_plan import ExplainPlanUseCase
 from parkmind.services.use_cases.load_context import LoadContextUseCase
+from parkmind.services.use_cases.park_status import ParkClosedError, ParkStatusUseCase
 from parkmind.services.use_cases.planning_deps import (
     MAGIC_KINGDOM_PARK_ID,
     DepsFactory,
@@ -166,11 +174,28 @@ def _guarded(node: StateNode, *, then: str | None) -> StateNode:
     def guarded(state: ParkMindState) -> dict[str, Any] | Command[Any]:
         try:
             update = node(state)
+        except ParkClosedError as closed:
+            message = text(
+                "park_closed",
+                language_of(state),
+                solo=solo_of(state),
+                closing=closed.status.closing_label(),
+            )
+            return Command(
+                update={
+                    "messages": [AIMessage(content=message)],
+                    "candidate_plan": None,
+                    "check_result": None,
+                    "explanation": None,
+                    "provisional_offer": True,
+                },
+                goto=END,
+            )
         except PlanningUnavailableError:
             logger.exception("planning is unavailable")
             return Command(
                 update={
-                    "messages": [AIMessage(content=UNAVAILABLE_MESSAGE)],
+                    "messages": [AIMessage(content=text("unavailable", language_of(state), solo=solo_of(state)))],
                     "candidate_plan": None,
                     "check_result": None,
                     "explanation": None,
@@ -185,13 +210,15 @@ def _guarded(node: StateNode, *, then: str | None) -> StateNode:
 
 def _make_load_context_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
     use_case = LoadContextUseCase(deps_factory)
+    park_status = ParkStatusUseCase(deps_factory)
 
     def load_context(state: ParkMindState) -> dict[str, Any]:
         ensure_confirmed(state)
+        park_status.ensure_open(clock())
         loaded = use_case.execute(
             state["thread_id"], state.get("accessibility_ref") or [], clock()
         )
-        return {"live_context": loaded.for_state()}
+        return {"live_context": loaded.for_state(), "provisional_offer": False}
 
     return load_context
 
@@ -310,9 +337,10 @@ def _no_valid_plan(state: ParkMindState) -> Command[Any]:
     restored = before_edit_update(state, reasons)
     if restored is not None:
         return Command(update=restored, goto="check_plan")
-    lines = ["I couldn't build a plan that meets every requirement, so nothing was proposed."]
+    lang = language_of(state)
+    lines = [text("no_valid_plan", lang)]
     lines += reasons
-    lines.append("You can relax a constraint (for example the must-dos or the departure time) and I'll try again.")
+    lines.append(text("relax_hint", lang, solo=solo_of(state)))
     return Command(
         update={"messages": [AIMessage(content="\n".join(lines))], "candidate_plan": None},
         goto=END,
@@ -345,14 +373,18 @@ def _make_explain_node(deps_factory: DepsFactory, narrator: PlanNarrator | None)
         if plan is None or check is None:
             raise ValueError("a checked candidate plan is required")
         constraints = state.get("constraints")
+        lang = language_of(state)
         prepared = use_case.prepare(
             plan,
             check,
             guests=constraints.guests if constraints is not None else [],
             must_do=constraints.must_do if constraints is not None else [],
             objective=state.get("group_objective"),
+            lang=lang,
         )
-        return explained(plan, explain_grounded(narrator, prepared))
+        # The narrator writes English only; other languages get the localized template.
+        active = narrator if lang == DEFAULT_LANGUAGE else None
+        return explained(plan, explain_grounded(active, prepared))
 
     return explain
 
@@ -382,7 +414,7 @@ def _propose_plan(
         state["thread_id"],
         plan,
         proposal_id=f"prop_{uuid4().hex[:8]}",
-        reason="Initial plan for the party",
+        reason=text("initial_plan_reason", language_of(state)),
         explanation=state.get("explanation") or "",
         at=clock(),
     )
@@ -538,11 +570,12 @@ def _interrupt_for_approval(
             # Superseded by a significant event while the guests decided (section 9
             # [C18]): the decision is dropped, nothing is activated.
             logger.info("decision on %s not applied: %s", proposal.proposal_id, exc)
-            message = (
-                SUPERSEDED_KEEPS_PLAN_MESSAGE
-                if state.get("current_plan")
-                else SUPERSEDED_MESSAGE
-            )
+            lang = language_of(state)
+            parts = [text("superseded", lang, solo=solo_of(state))]
+            if state.get("current_plan"):
+                parts.append(text("keeps_plan", lang, solo=solo_of(state)))
+            parts.append(text("ask_again", lang, solo=solo_of(state)))
+            message = " ".join(parts)
             return Command(
                 update={
                     "messages": [AIMessage(content=message)],

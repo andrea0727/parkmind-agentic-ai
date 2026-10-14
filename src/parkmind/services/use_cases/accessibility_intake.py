@@ -11,7 +11,7 @@ Only derived flags are staged; the underlying statement is never kept.
 """
 
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from typing import Literal
@@ -21,8 +21,13 @@ from parkmind.core.contracts import (
     MobilityRequirement,
     RideRestriction,
 )
+from parkmind.core.language import DEFAULT_LANGUAGE, Language
 from parkmind.services.clients.postgres import connect
 from parkmind.services.ports import ConsentRequiredError, SessionStore
+from parkmind.services.use_cases.confirmation_echo import (
+    ConfirmationEcho,
+    confirmation_echo,
+)
 from parkmind.services.use_cases.session_memory import session_store
 
 RetentionPolicy = Literal["session_only", "persisted"]
@@ -97,6 +102,17 @@ class AccessibilityIntakeUseCase:
     def pending_guest_ids(self, session_id: str) -> list[str]:
         with self._lock:
             return sorted(self._pending.get(session_id, {}))
+
+    def confirmation(
+        self,
+        pending: Sequence[str],
+        lang: Language = DEFAULT_LANGUAGE,
+        *,
+        solo: bool = False,
+        labels: Mapping[str, str | None] | None = None,
+    ) -> ConfirmationEcho:
+        """The echo the guests confirm, and the accessibility ids awaiting consent."""
+        return confirmation_echo(pending, lang, solo=solo, labels=labels)
 
     def describe(self, session_id: str) -> dict[str, str]:
         """Echo text per guest id, for the confirmation UI.

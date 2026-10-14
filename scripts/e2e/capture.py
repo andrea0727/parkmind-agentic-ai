@@ -86,7 +86,6 @@ def attraction_rows(url: str) -> int | None:
 def run_once(name: str, scenario: dict[str, Any]) -> dict[str, Any]:
     h.EVENTS.clear()
     h.LLM_CALLS.clear()
-    h.LLM_RETRIES.clear()
     thread = f"{name}-{uuid.uuid4().hex[:6]}"
     confirm = scenario.get("confirm", h.CONFIRM)
     approval = scenario.get("approval", {"decision": "APPROVED"})
@@ -95,7 +94,7 @@ def run_once(name: str, scenario: dict[str, Any]) -> dict[str, Any]:
         "setup": getattr(scenario.get("ctx"), "__name__", None) if "ctx" in scenario else None,
         "now": h.e2e_now().strftime("%H:%M"), "steps": [],
     }
-    graph = ipg.build_initial_planning_graph(h.NvidiaExtractor(), None, default_checkpointer(), clock=h.e2e_now)
+    graph = ipg.build_initial_planning_graph(h.RecordingExtractor(), None, default_checkpointer(), clock=h.e2e_now)
     config: Any = {"configurable": {"thread_id": thread}}
     cm = scenario["ctx"]() if "ctx" in scenario else contextlib.nullcontext()
     rows_before = attraction_rows(sc.EDGE_URL) if name == "happy_catalogo_vacio" else None
@@ -132,8 +131,6 @@ def run_once(name: str, scenario: dict[str, Any]) -> dict[str, Any]:
     if rows_before is not None:
         out["attraction_rows"] = {"before": rows_before, "after": attraction_rows(sc.EDGE_URL)}
     out["seconds"] = round(time.time() - t0, 1)
-    if h.LLM_RETRIES:
-        out["llm_retries"] = list(h.LLM_RETRIES)
     return out
 
 

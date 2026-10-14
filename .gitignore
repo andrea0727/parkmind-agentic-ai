@@ -90,3 +90,5 @@ artifacts/
 tmp/
 temp/
 .cache/
+# Playwright MCP scratch output (snapshots, screenshots, console logs)
+.playwright-mcp/

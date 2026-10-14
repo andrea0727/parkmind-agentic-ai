@@ -24,9 +24,7 @@ from parkmind.services.use_cases.explain_plan import (
 
 INVALID = CheckResult(
     valid=False,
-    violations=[
-        ConstraintViolation(rule=RuleId.MUST_DO, message="missing")
-    ],
+    violations=[ConstraintViolation(rule=RuleId.MUST_DO, message="missing")],
 )
 
 
@@ -56,9 +54,7 @@ def test_the_use_case_resolves_names_from_the_catalog():
     plan = factories.plan(stops=[factories.stop(node_id="id-tron")])
 
     text = (
-        ExplainPlanUseCase(factory_for(make_deps()))
-        .prepare(plan, CheckResult(valid=True))
-        .template
+        ExplainPlanUseCase(factory_for(make_deps())).prepare(plan, CheckResult(valid=True)).template
     )
 
     assert "TRON" in text
@@ -207,7 +203,11 @@ def test_the_payload_shows_figures_as_the_template_prints_them_and_names_not_ids
     payload = _payload(plan=factories.plan(stops=[stop]))
 
     [facts] = payload.stops
-    assert (facts.name, facts.wait_minutes, facts.walk_minutes) == ("Space Mountain", 20, 5)
+    assert (facts.name, facts.wait_minutes, facts.walk_minutes) == (
+        "Space Mountain",
+        20,
+        5,
+    )
     assert facts.preference_score == 0.81
     assert "a1" not in payload.to_json()
 
@@ -221,10 +221,27 @@ def test_who_sits_out_a_ride_is_in_the_payload_but_never_the_guests_height():
     )
 
     [facts] = payload.stops
-    assert [(o.guest, o.minimum_height_cm) for o in facts.sitting_out] == [
-        ("Guest 2", 112)
-    ]
+    assert [(o.guest, o.minimum_height_cm) for o in facts.sitting_out] == [("Guest 2", 112)]
     assert "90" not in payload.to_json() and "175" not in payload.to_json()
+
+
+def test_the_narrator_payload_never_carries_a_guests_free_text_label():
+    """Review #91 (6): "tu hijo" stays in the in-process template, not the LLM payload."""
+    kid = factories.guest(guest_id="g2", role="child", height_cm=90, label="tu hijo")
+    plan = _restricted_plan(["g1"])
+
+    payload = _payload(plan=plan, guests=[ADULT, kid], height_limits={"a1": 112})
+    template = explain_plan(
+        plan,
+        CheckResult(valid=True),
+        {"a1": "Space Mountain"},
+        guests=[ADULT, kid],
+        height_limits={"a1": 112},
+    )
+
+    assert "hijo" not in payload.to_json()
+    assert [o.guest for o in payload.stops[0].sitting_out] == ["Guest 2"]
+    assert "tu hijo" in template
 
 
 def test_a_replan_payload_carries_its_reason_and_the_named_changes():
@@ -262,8 +279,11 @@ def test_a_replan_with_no_reason_does_not_open_with_a_blank_line():
     from parkmind.services.use_cases.explain_plan import explain_replan
 
     text = explain_replan(
-        factories.plan(), CheckResult(valid=True), {"a1": "Space Mountain"},
-        reason="", diff=PlanDiff(stops_added=["a1"]),
+        factories.plan(),
+        CheckResult(valid=True),
+        {"a1": "Space Mountain"},
+        reason="",
+        diff=PlanDiff(stops_added=["a1"]),
     )
 
     assert text.startswith("Added: Space Mountain.")

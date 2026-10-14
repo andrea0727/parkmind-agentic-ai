@@ -17,7 +17,6 @@ from parkmind.agents.elicit_agent import (
     ExtractorOutputError,
     build_guest_profiles,
     build_party_constraints,
-    echo_for,
     extract_with_recovery,
     make_elicit_node,
     missing_information,
@@ -31,6 +30,7 @@ from parkmind.core.contracts import (
     SensitivityKind,
     SensitivityLevel,
 )
+from parkmind.services.use_cases.confirmation_echo import echo_for
 from parkmind.services.use_cases.resolve_attraction_names import CatalogUnavailableError
 
 TODAY = date(2026, 10, 6)
@@ -511,3 +511,53 @@ def test_a_grounded_height_goes_to_confirmation_as_before() -> None:
     update = node(_state("Me and my son, he is 122 cm. Leaving at 6 PM."))
 
     assert "height:g2: 122" in update["pending_hard_constraint_confirmation"]
+
+
+# --- guests named by how the guests call them ---------------------------------
+
+
+def _named(*labels: str | None) -> ElicitationExtraction:
+    return ElicitationExtraction.model_validate(
+        {
+            "guests": [{"role": "adult", "label": label} for label in labels],
+            "departure_time": "18:00",
+        }
+    )
+
+
+def test_a_label_reaches_the_guest_contract() -> None:
+    extraction = _named("tu mamá", None)
+    resolution = make_names().resolve([])
+
+    guests = build_party_constraints(extraction, today=TODAY, resolution=resolution).guests
+
+    assert [g.label for g in guests] == ["tu mamá", None]
+
+
+def test_the_height_echo_uses_the_label_and_falls_back_to_the_number() -> None:
+    labels = {"g2": "tu hija"}
+
+    assert echo_for("height:g2: 110", "es", labels=labels).startswith("Tu hija mide 110 cm")
+    assert echo_for("height:g2: 110", "en", labels={"g2": "your daughter"}).startswith(
+        "Your daughter is 110 cm"
+    )
+    assert echo_for("height:g1: 110", "es", labels=labels).startswith("La Persona 1 mide")
+
+
+def test_the_unverified_height_question_uses_the_label() -> None:
+    from parkmind.agents.elicit_agent import _question_for
+
+    question = _question_for(["height_unverified:g2"], None, "es", 2, [None, "tu hija"])
+
+    assert "de tu hija" in question and "Persona" not in question
+
+
+@pytest.mark.parametrize(
+    "label", ["", "   ", "Guest 2", "mi mamá de 62 años", "x" * 31]
+)
+def test_a_label_that_is_not_a_short_name_is_dropped(label: str) -> None:
+    assert _named(label).guests[0].label is None
+
+
+def test_a_label_is_trimmed() -> None:
+    assert _named("  tu   mamá ").guests[0].label == "tu mamá"

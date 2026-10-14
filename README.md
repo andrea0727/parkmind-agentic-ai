@@ -54,8 +54,10 @@ parkmind-agentic-ai/
 │       │   │                    # never planning/personalization directly
 │       │   └── evaluation/      # baselines + metrics (the eval harness)
 │       │
-│       ├── agents/               # ConciergeAgent
-│       ├── graph/                 # LangGraph state + the two graphs
+│       ├── agents/               # elicit agent (Anthropic extractor, closed schema),
+│       │                         # concierge, plan synthesis, preference resolver
+│       ├── graph/                 # LangGraph state, the two graphs, ConversationService
+│       ├── api/                   # FastAPI app: routes, auth/limits (security.py), schemas
 │       ├── tools/                  # MCP tools (data.* / knowledge.* / planner.*)
 │       └── config/                  # settings.py — reads .env
 │
@@ -64,21 +66,31 @@ parkmind-agentic-ai/
 │   └── integration/              # full graphs + the 4 agent quality checks
 │
 ├── docs/
-│   └── evaluation/               # methodology behind the metrics
+│   ├── evaluation/               # methodology behind the metrics
+│   ├── e2e/                      # live-run scenarios (SCENARIOS.md) and last report
+│   ├── diagrams/                 # architecture.html
+│   └── context/, decisions/
 │
 ├── notebooks/                     # exploratory only, nothing imported by the app
-├── scripts/                        # seed_db.py, run_demo_scenario.py, run_baselines.py
+├── scripts/                        # seed_db, collect_snapshot, renormalize_snapshots, run_monitor,
+│                                   # run_mcp_server, fetch_embedding_model, index_knowledge,
+│                                   # e2e/ (live runner); run_demo_scenario and run_baselines are stubs
 ├── database/                        # alembic.ini + migrations/ (schema owner, P0-12)
-├── ui/                                # Streamlit app
+├── ui/
+│   ├── app.py                         # Streamlit stub (not used; the demo UI is ui/web)
+│   └── web/                           # React + Vite demo UI (served by server.py)
 │
+├── server.py                           # HTTP entrypoint: FastAPI API + built React UI on :8000
+├── Dockerfile                          # builds the UI, then runs server.py
 ├── agent.py                            # root entrypoint — exposes the compiled
 │                                        # graph(s) that langgraph.json points to
 ├── langgraph.json
-├── requirements.txt         → see pyproject.toml (uses Poetry)
-├── docker-compose.yml                   # Postgres only, see docs/decisions/scope.md
+├── pyproject.toml, poetry.lock          # dependencies (Poetry)
+├── docker-compose.yml                   # Postgres + the demo app
 ├── pytest.ini                            # lets pytest find `parkmind.*` without
 │                                         # installing it as a package
 ├── .env.example
+├── .github/workflows/                   # ci.yml, embedding-smoke.yml
 ├── .gitignore
 └── README.md
 ```
@@ -115,21 +127,118 @@ and `agent.py` both add it to the import path, so
 cp .env.example .env          # fill in ANTHROPIC_API_KEY at minimum
 poetry install
 
-# 2. start Postgres (built with pgvector from database/Dockerfile), then create
+# 2. start Postgres only (built with pgvector from database/Dockerfile), then create
 #    the schema (Alembic owns it) and, optionally, load the reproducible
 #    development scenario
-docker compose up -d --build
+docker compose up -d --build postgres
 poetry run alembic -c database/alembic.ini upgrade head
 poetry run python scripts/seed_db.py
 
 # 3. run tests (the `db` tests need the Postgres from step 2)
 poetry run pytest
 
-# 4. sanity-check the graphs build
+# 4. sanity-check the graphs build (prints "initial_planning: N nodes compiled", "replanning: ...")
 poetry run python agent.py
 
-# 5. run the UI (once graph/ is wired up)
-poetry run streamlit run ui/app.py
+# 5. run the demo app (API + React UI on :8000), see "Demo app" below.
+#    Needs PARKMIND_AUTH_USERS and PARKMIND_JWT_SECRET in .env first.
+docker compose up -d --build
+```
+
+### Demo app (API + React UI)
+
+One container serves the FastAPI API and the built React UI on http://localhost:8000
+(Swagger at `/docs`). It runs **one worker on purpose**: sessions live in memory.
+
+> **Known limit (decision, not an oversight).** Conversations are checkpointed in memory
+> (`default_checkpointer()`), so a restart loses open sessions and there is no horizontal
+> scaling. A Postgres checkpointer is a follow-up, and it needs a C19 decision first.
+> `AccessibilityRequirements` are already kept out of a durable checkpoint (they live only in
+> `SESSION_MEMORY` and are re-read at planning time, with a test). What is not covered is the
+> guests' raw text: `state.messages` ("mi papá no puede caminar mucho") would be persisted.
+> Either redact it before it is stored, or move the turns to the SessionStore, which honors
+> retention.
+
+**1. Configure `.env`** (copy from `.env.example`). Required for the app to start:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+PARKMIND_AUTH_USERS=demo=ChangeMe1234        # name=password[,name2=password2]; 8+ chars, no commas
+PARKMIND_JWT_SECRET=<32+ random chars>       # python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Optional: `PARKMIND_TOKEN_TTL_HOURS` (default 2), `PARKMIND_MESSAGES_PER_USER_DAY` (300),
+`PARKMIND_MESSAGES_GLOBAL_DAY` (2000), `ELICIT_MODEL` (Anthropic model, default `claude-haiku-4-5-20251001`), `PARKMIND_AUTH_DISABLED=1` (local demo only: no login,
+every route open), `PARKMIND_PLAN_FROM_STORED=1` (plan from the latest stored snapshot),
+`E2E_NOW=HH:MM` (fixed park clock); both demo switches need `PARKMIND_DEMO=1` too, and the server refuses to start with one set alone. After editing `.env`: `docker compose up -d app`.
+
+**2. Launch**
+
+```bash
+docker compose up -d --build        # Postgres + app (migrations and seed run on start)
+docker compose logs -f app          # watch it start
+docker compose down                 # stop (add -v to also drop the database volume)
+```
+
+Open http://localhost:8000 and sign in with the user from `PARKMIND_AUTH_USERS`.
+
+**Without Docker** (hot reload for UI work): terminal 1 `docker compose up -d postgres`, then
+`poetry run alembic -c database/alembic.ini upgrade head && poetry run python scripts/seed_db.py`
+(the container does this on start because the compose file sets `PARKMIND_SEED_DEMO=1`; here you do it once) and `poetry run python server.py`; terminal 2 `cd ui/web && npm ci && npm run dev` and open
+http://localhost:5173 (Vite proxies `/api` to :8000).
+
+**3. Check that it works**
+
+```bash
+curl -s localhost:8000/api/health
+# {"status":"ok","auth_required":true}
+
+TOKEN=$(curl -s -X POST localhost:8000/api/login -H 'content-type: application/json' \
+  -d '{"username":"demo","password":"ChangeMe1234"}' | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+curl -s -o /dev/null -w "%{http_code}\n" -X POST localhost:8000/api/session          # 401: no token
+THREAD=$(curl -s -X POST localhost:8000/api/session -H "Authorization: Bearer $TOKEN" \
+  | python -c "import sys,json; print(json.load(sys.stdin)['thread_id'])")
+curl -s -X POST "localhost:8000/api/message?thread_id=$THREAD" -H "Authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"text":"Somos 2 adultos y un niño de 8 años, queremos salir a las 17:00","lang":"es"}'
+```
+
+The answer is a `Turn` whose `status` says what the app waits for (`needs_answer`,
+`needs_confirmation`, `needs_approval`, `needs_event_confirmation` or `done`). Then `POST /api/constraints/confirm`,
+`GET /api/proposal`, `POST /api/proposal/{id}/approve|reject`, `GET /api/plan`,
+`POST /api/events` and `/api/events/confirm`; all take `?thread_id=` and a Bearer token.
+
+**Limits and errors:** `401` missing/expired token (sign in again, tokens last 2 h by default);
+`404` unknown session, or one that belongs to another user; `409` the call does not fit the
+session state; `429` too many requests or failed sign-ins (read `Retry-After`); `503` park data
+unavailable. Caps per user: 20 messages/min and 300/day, 20 new sessions/hour; global: 2000
+messages/day; 5 failed sign-ins per address+user lock that login for 5 minutes.
+
+**Tests and checks for the app**
+
+```bash
+poetry run pytest tests/integration/test_api.py tests/integration/test_api_security.py
+poetry run pytest                  # everything
+poetry run ruff check . && poetry run mypy src && PYTHONPATH=src poetry run lint-imports
+```
+
+(If your shell exports `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`, unset them for the live
+Anthropic tests.)
+
+### E2E on real ports (live LLM)
+
+`scripts/e2e/` runs the initial planning graph against **real** Postgres, ThemeParks,
+Open-Meteo and Anthropic (33 scenarios, ~35 LLM calls, ~15 minutes; costs API credit).
+Not part of CI. Needs `ANTHROPIC_API_KEY` and `DATABASE_URL` in `.env`, a migrated
+database, and (for two scenarios) the throwaway `parkmind_edge` database; details in
+`scripts/e2e/README.md`.
+
+```bash
+poetry run python scripts/e2e/capture.py                 # all scenarios, skipping the captured ones
+poetry run python scripts/e2e/capture.py espanol         # only these
+FORCE=1 poetry run python scripts/e2e/capture.py         # re-capture everything
+poetry run python scripts/e2e/build_report.py            # docs/e2e/raw -> docs/e2e/REPORT.md (no credentials)
 ```
 
 ### Database
@@ -180,10 +289,10 @@ def handle_request(thread_id: str, guest_id: str) -> None:
 Call `store.end_session(thread_id)` when the session ends. Persisted
 (consented) records are unaffected.
 
-**Single worker only for now.** The memory is process-local, so a deployment
-with several API workers would lose records between them. P0-35 must either
-fail loudly at startup with more than one worker, or use sticky sessions or a
-shared non-table store.
+**Single worker only.** The memory is process-local, so a deployment with
+several API workers would lose records between them. `server.py` fails loudly at
+startup if more than one worker is requested (`WEB_CONCURRENCY` or
+`PARKMIND_WORKERS` above 1, or `--workers`; `api/guard.py`).
 
 ### IDs and normalization (P0-10)
 
@@ -412,6 +521,11 @@ lets it invent a figure (Architecture §40, C17):
   `ANTHROPIC_API_KEY`, the guests read the deterministic template, which only prints
   figures from the payload. The proposal's provenance records which one wrote it
   (`prompt_versions["explain"]`: `explain-v1` or `template`).
+- **English only for now.** The narrator writes English; with `lang` other than `en` (for
+  example Spanish) the guests read the localized deterministic template, so the same
+  grounding guarantees hold but the wording is fixed. The narrator payload names a guest
+  who sits a ride out as `Guest N`, never by their free-text label ("tu mamá"); only the
+  template, which stays in the process, uses the label.
 - **Model:** `EXPLAIN_MODEL` (defaults to `ELICIT_MODEL`). Tests inject a fake
   narrator (`tests/explain_support.py`), so they never call Claude, even with a key in
   `.env`.
@@ -518,10 +632,11 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 | **Explanations** | ✅ P0-31 | Claude explains the validated plan from a payload only (plan, diff, provenance, stated/learned preference weights); every numeral is checked against the payload, one retry, then the deterministic template. |
 | **Event monitor** | ✅ P0-33 | Snapshot-to-event detector with per-reading freshness, `EventPolicy` (§25 table, confirmation gate, fatigue walking cap), cross-source dedup, supersede on significant events, `scripts/run_monitor.py`. Consumed by the replanning graph [P0-34]. |
 | **MCP capability boundary** | ✅ P0-24..P0-27 | `parkmind-mcp`: 15 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` takes the plan, its progress and the events inline (§31), so a client without a stored plan can replan. |
+| **Demo app (API + UI)** | ✅ P0-35 / P0-36 | FastAPI layer over the graphs (`/api/*`, Swagger at `/docs`) and a React UI; bearer-token login, per-user session ownership, LLM usage caps, es/en conversation. Open: P0-32 edit path, #88 e2e bugs, guardrails, Langfuse. |
 | **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
 | **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
 | **PostgreSQL Repos** | ✅ Done | Profiles, Plans, Session store (in-memory for accessibility) |
-| **Initial Planning Graph** | ✅ Done | 5-node orchestration: resolve → fetch → synthesize → propose → approve |
+| **Initial Planning Graph** | ✅ Done | Superseded by the Plan Synthesis row above (P0-30). |
 | **Constraint Checker** | ✅ Done | 11 rules, plus `check_replan` for a replanned day; PlanDiff generation |
 | **Replanner** | ✅ P0-23 / P0-34 | Replanner (frozen completed stops, remaining walking budget, rest-first) and the replanning graph: events → policy → replan → check → diff → explain → propose → approval. |
 

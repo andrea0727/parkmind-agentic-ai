@@ -41,18 +41,18 @@ from langgraph.types import interrupt
 from parkmind.agents.elicit_agent import (
     AnthropicExtractor,
     GuestInfoExtractor,
-    echo_for,
     make_elicit_node,
 )
+from parkmind.core.language import DEFAULT_LANGUAGE, text
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.state import ParkMindState
+from parkmind.graph.state_helpers import solo_of
 from parkmind.services.use_cases.accessibility_intake import (
     DEFAULT_RETENTION,
     AccessibilityIntakeUseCase,
 )
 from parkmind.services.use_cases.resolve_attraction_names import AttractionNameResolver
 
-_ACCESSIBILITY_PREFIX = "accessibility:"
 _RETENTION_POLICIES = ("session_only", "persisted")
 
 
@@ -105,21 +105,20 @@ def _make_confirm_node(
 ) -> StateNode:
     def confirm_hard_constraints(state: ParkMindState) -> dict[str, Any]:
         session_id = state["thread_id"]
+        lang = state.get("language") or DEFAULT_LANGUAGE
+        solo = solo_of(state)
         pending = list(state.get("pending_hard_constraint_confirmation") or [])
         if not pending:
             return {}
 
-        accessibility_ids = sorted(
-            entry.removeprefix(_ACCESSIBILITY_PREFIX)
-            for entry in pending
-            if entry.startswith(_ACCESSIBILITY_PREFIX)
-        )
+        constraints = state.get("constraints")
+        labels = {g.guest_id: g.label for g in constraints.guests} if constraints else {}
+        confirmation = intake.confirmation(pending, lang, solo=solo, labels=labels)
+        accessibility_ids = list(confirmation.accessibility_guests)
         payload: dict[str, Any] = {
             "kind": "hard_constraint_confirmation",
             "pending": pending,
-            "echo": [
-                echo_for(e) for e in pending if not e.startswith(_ACCESSIBILITY_PREFIX)
-            ],
+            "echo": list(confirmation.echo),
             "accessibility_guests": accessibility_ids,
         }
 
@@ -140,7 +139,7 @@ def _make_confirm_node(
                 new_message: Any = HumanMessage(content=correction)
             else:
                 new_message = AIMessage(
-                    content="What should I change?",
+                    content=text("what_to_change", lang),
                     additional_kwargs={"missing_information": ["correction"]},
                 )
             return {

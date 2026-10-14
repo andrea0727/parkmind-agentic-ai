@@ -6,6 +6,26 @@
 # (the pgdata volume and its data are kept).
 
 services:
+  # `docker compose up --build` -> http://localhost:8000 (UI) and /docs (OpenAPI).
+  # Needs ANTHROPIC_API_KEY in .env, plus PARKMIND_AUTH_USERS and
+  # PARKMIND_JWT_SECRET (see .env.example): the API refuses to start without credentials.
+  # Single worker by design (in-memory sessions).
+  app:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://parkmind:parkmind@postgres:5432/parkmind
+      PARKMIND_KNOWLEDGE_BACKEND: in_memory
+      PARKMIND_WORKERS: "1"
+      PARKMIND_SEED_DEMO: "1"  # this compose file is the local demo: load the dev scenario on start
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   postgres:
     build: ./database
     environment:

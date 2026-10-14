@@ -342,9 +342,6 @@ def build_steps(r: dict[str, Any], meta: tuple[Any, ...], status: str, msg: str,
             step(f"Then the stages after the decision are {r.get('stages_after_approval')}, approval={r.get('approval')}, plan active={r.get('plan_active')}")
     if (e := r.get("exception")):
         step(f"Then the run raised {e['type']}: {e['message'][:240]}", "failed" if status == "failed" else "broken", [attach("Exception", f"{e['type']}: {e['message']}", "text/plain")])
-    if r.get("llm_retries"):
-        step(f"Note: {len(r['llm_retries'])} transient LLM server error(s) were retried with backoff",
-             "skipped", [attach("LLM retries", "\n".join(r["llm_retries"]), "text/plain")])
     step(f"Then {expected[0].lower() + expected[1:]}", status, [attach("Verdict", msg + (f"\n\nWhy: {why}" if why and status != 'passed' else ""), "text/plain")])
     return S
 
@@ -363,7 +360,6 @@ def main() -> None:
     os.makedirs(RESULTS)
     rows: list[tuple[int, str, str, str, str]] = []
     md: list[str] = []
-    base = 1_760_000_000_000
     for sid, meta in sorted(M.items(), key=lambda kv: kv[1][0]):
         path = f"{RAW}/{sid}.json"
         if not os.path.exists(path):
@@ -379,8 +375,8 @@ def main() -> None:
             return {"name": name, "source": src, "type": mime}
 
         S = build_steps(r, meta, status, msg, attach)
-        t0 = base + num * 100000
-        t1 = t0 + int(r.get("seconds", 0) * 1000)
+        t1 = int(os.path.getmtime(path) * 1000)
+        t0 = t1 - int(r.get("seconds", 0) * 1000)
         full = f"e2e.real_ports.{sid}"
         res = {
             "uuid": str(uuid.uuid4()), "historyId": hashlib.md5(full.encode()).hexdigest(), "testCaseId": hashlib.md5(full.encode()).hexdigest(),
@@ -406,7 +402,7 @@ def main() -> None:
     for _, _, st, _, _ in rows:
         counts[st] = counts.get(st, 0) + 1
     head = ["# E2E report on real ports - P0-30 initial planning graph", "",
-            "Generated from live runs: Postgres, ThemeParks, Open-Meteo, the real clock and the NVIDIA LLM. Raw per-scenario data: `docs/e2e/raw/`. Reproduce with `scripts/e2e/README.md`. Interactive version: render the Allure results with `allure generate`.", "",
+            "Generated from live runs: Postgres, ThemeParks, Open-Meteo, the real clock and the Anthropic LLM. Raw per-scenario data: `docs/e2e/raw/`. Reproduce with `scripts/e2e/README.md`. Interactive version: render the Allure results with `allure generate`.", "",
             f"**Total {len(rows)}** | passed {counts.get('passed', 0)} | failed {counts.get('failed', 0)} | broken {counts.get('broken', 0)}", "",
             "| # | Scenario | Status | Feature |", "|---|----------|--------|---------|"]
     head += [f"| {n} | {t} | {md_status(s)} | {fe} |" for n, t, s, fe, _ in rows]
@@ -421,7 +417,7 @@ def main() -> None:
     commit = subprocess.run(["git", "-C", REPO, "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=False).stdout.strip()
     branch = subprocess.run(["git", "-C", REPO, "branch", "--show-current"], capture_output=True, text=True, check=False).stdout.strip()
     with open(f"{RESULTS}/environment.properties", "w") as fh:
-        fh.write(f"Branch={branch}\nCommit={commit}\nPython={sys.version.split()[0]}\nPorts=Postgres, ThemeParks, Open-Meteo (real)\nLLM=NVIDIA via ChatNVIDIA (injected extractor)\n")
+        fh.write(f"Branch={branch}\nCommit={commit}\nPython={sys.version.split()[0]}\nPorts=Postgres, ThemeParks, Open-Meteo (real)\nLLM=Anthropic via AnthropicExtractor (injected extractor)\n")
     print({"scenarios": len(rows), **counts})
 
 

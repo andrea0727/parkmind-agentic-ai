@@ -19,7 +19,7 @@ Statements are split into two disjoint groups:
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from parkmind.core.contracts import (
     AttractionCategory,
@@ -33,6 +33,7 @@ from parkmind.core.contracts import (
 )
 
 _HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+_MAX_LABEL = 30
 
 Classification = Literal["hard", "soft"]
 
@@ -66,7 +67,13 @@ class ExtractedAffinity(_Strict):
 class ExtractedGuest(_Strict):
     """One person in the party: soft preferences, plus the stated height (hard)."""
 
-    label: str | None = None
+    label: str | None = Field(
+        default=None,
+        description=(
+            "How the guests refer to this person, second person, in their language "
+            "('tu mamá', 'your daughter') or the person's first name; null if unstated"
+        ),
+    )
     role: GuestRole | None = None
     height_cm: float | None = Field(
         default=None,
@@ -82,6 +89,17 @@ class ExtractedGuest(_Strict):
     preferred_categories: list[AttractionCategory] = Field(default_factory=list)
     avoided_categories: list[AttractionCategory] = Field(default_factory=list)
     thematic_affinity: list[ExtractedAffinity] = Field(default_factory=list)
+
+    @field_validator("label")
+    @classmethod
+    def _plain_label(cls, value: str | None) -> str | None:
+        """A short name only: anything longer or with digits is not one, so the guest stays numbered."""
+        if value is None:
+            return None
+        label = " ".join(value.split())
+        if not label or len(label) > _MAX_LABEL or any(ch.isdigit() for ch in label):
+            return None
+        return label
 
 
 class ExtractedAccessibility(_Strict):

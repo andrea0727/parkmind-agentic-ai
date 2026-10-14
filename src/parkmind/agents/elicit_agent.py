@@ -14,13 +14,14 @@ still missing. It never decides what the checker enforces:
 
 import re
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time
 from typing import Any, Protocol
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import SecretStr, ValidationError
 
+from parkmind.agents.clock_answer import parse_clock
 from parkmind.agents.elicit_prompt import ELICIT_PROMPT_VERSION, ELICIT_SYSTEM_PROMPT
 from parkmind.agents.elicit_schema import ElicitationExtraction, normalize_name
 from parkmind.config.settings import settings
@@ -35,10 +36,21 @@ from parkmind.core.contracts import (
     PreferenceValue,
     TimeWindow,
 )
+from parkmind.core.language import (
+    DEFAULT_LANGUAGE,
+    Language,
+    detect_language,
+    guest_ref,
+    text,
+)
 from parkmind.graph.state import ParkMindState
 from parkmind.services.use_cases.accessibility_intake import (
     AccessibilityIntakeUseCase,
     StagedAccessibility,
+)
+from parkmind.services.use_cases.confirmation_echo import (
+    ACCESSIBILITY_PREFIX,
+    HEIGHT_PREFIX,
 )
 from parkmind.services.use_cases.resolve_attraction_names import (
     AttractionNameResolver,
@@ -55,7 +67,6 @@ __all__ = [
     "build_guest_profiles",
     "build_party_constraints",
     "conflicting_names",
-    "echo_for",
     "extract_with_recovery",
     "human_texts",
     "make_elicit_node",
@@ -69,9 +80,9 @@ _DEFAULT_TOLERANCE = 0.5
 _STATED_CONFIDENCE = 0.8
 
 _MISSING_QUESTIONS = {
-    "guests": "Who is in your party (how many people, and are they adults or children)?",
-    "departure_time": "What time do you plan to leave the park?",
-    "unreadable_response": "I couldn't understand that. Could you describe your party and plans again?",
+    "guests": "q_guests",
+    "departure_time": "q_departure_time",
+    "unreadable_response": "q_unreadable_response",
 }
 
 
@@ -91,6 +102,31 @@ class GuestInfoExtractor(Protocol):
         ...
 
 
+_ACCESS_FLAGS = (
+    "daily_walking_limit_minutes",
+    "rest_frequency_minutes",
+    "mobility_requirements",
+    "heat_sensitivity",
+    "ride_restrictions",
+)
+
+
+def without_empty_accessibility(args: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Drop accessibility entries that set no flag: with thinking off the model pads every guest.
+
+    An entry with no flag says "no restriction", so dropping it never weakens a constraint.
+    """
+    entries = args.get("accessibility")
+    if not isinstance(entries, list):
+        return args
+    kept = [
+        e
+        for e in entries
+        if not isinstance(e, Mapping) or any(e.get(f) for f in _ACCESS_FLAGS)
+    ]
+    return {**args, "accessibility": kept}
+
+
 class AnthropicExtractor:
     """Claude tool-calling extractor. The client is built on first use."""
 
@@ -108,7 +144,8 @@ class AnthropicExtractor:
                 api_key=SecretStr(self._api_key),
                 temperature=0,
                 max_tokens_to_sample=1500,
-                timeout=None,
+                timeout=60,
+                max_retries=2,
                 stop=None,
             )
             self._llm = chat.bind_tools(
@@ -137,7 +174,7 @@ class AnthropicExtractor:
         args = calls[0].get("args")
         if not isinstance(args, Mapping):
             raise ExtractorOutputError("the model returned malformed structured output")
-        return args
+        return without_empty_accessibility(args)
 
 
 @dataclass(frozen=True)
@@ -196,7 +233,6 @@ def missing_information(extraction: ElicitationExtraction) -> list[str]:
 _UNKNOWN_ATTRACTION = "unknown_attraction:"
 _AMBIGUOUS_ATTRACTION = "ambiguous_attraction:"
 _CONFLICTING_ATTRACTION = "conflicting_attraction:"
-_HEIGHT = "height:"
 _UNVERIFIED_HEIGHT = "height_unverified:"
 
 _HEIGHT_TOLERANCE_CM = 1.5
@@ -204,14 +240,16 @@ _CM_PER_FOOT = 30.48
 _CM_PER_INCH = 2.54
 _NUMBER = r"(\d+(?:[.,]\d+)?)"
 _CM_RE = re.compile(rf"{_NUMBER}\s*(?:cm|cms|centimet\w*|centím\w*)\b", re.IGNORECASE)
-_METERS_RE = re.compile(rf"{_NUMBER}\s*(?:m|mt|mts|meters?|metres?|metros?)\b", re.IGNORECASE)
+_METERS_RE = re.compile(
+    rf"{_NUMBER}\s*(?:m|mt|mts|meters?|metres?|metros?)\b", re.IGNORECASE
+)
 _FEET_RE = re.compile(
-    r"(\d)\s*(?:'|’|ft\b|feet\b|foot\b|-foot\b)\s*(?:(\d{1,2})\s*(?:\"|in\b|inch\w*)?)?",
+    r"(\d)\s*(?:'|’|ft\b|feet\b|foot\b|-foot\b|pies?\b)\s*(?:(\d{1,2})\s*(?:\"|in\b|inch\w*|pulgadas?\b)?)?",
     re.IGNORECASE,
 )
-_DECIMAL_METERS_RE = re.compile(r"(?<![\d.,])([12][.,]\d{1,2})(?![\d.,])")
+_DECIMAL_METERS_RE = re.compile(r"(?<![\d.,])([12][.,]\d{1,2})(?!\d|[.,]\d)")
 _BARE_RE = re.compile(
-    r"(?<![\d.,:])(\d{2,3})(?![\d.,:])(?!\s*(?:min|minutes?|hours?|hrs?|h\b|pm|am|%|years?|yo\b))",
+    r"(?<![\d.,:])(\d{2,3})(?!\d|[.,:]\d)(?!\s*(?:min|minutes?|minutos?|hours?|horas?|hrs?|h\b|pm|am|%|years?|años?|anos?|yo\b))",
     re.IGNORECASE,
 )
 
@@ -280,39 +318,69 @@ def conflicting_names(
 
 
 def _question_for(
-    missing: Sequence[str], resolution: NameResolution | None = None
+    missing: Sequence[str],
+    resolution: NameResolution | None = None,
+    lang: Language = DEFAULT_LANGUAGE,
+    party_size: int = 0,
+    labels: Sequence[str | None] = (),
 ) -> str:
     questions: list[str] = []
+    solo = party_size == 1
+
+    def who(key_ref: str, *, start: bool = False) -> str:
+        number = key_ref.removeprefix("g")
+        index = int(number) - 1 if number.isdigit() else -1
+        label = labels[index] if 0 <= index < len(labels) else None
+        return guest_ref(lang, number, label, start=start)
+
     for key in missing:
         if key.startswith("guest_role:"):
-            questions.append(f"Is {key.split(':', 1)[1]} an adult or a child?")
+            if solo:
+                questions.append(text("q_guest_role_solo", lang))
+            else:
+                questions.append(
+                    text(
+                        "q_guest_role",
+                        lang,
+                        # Spanish opens with the guest ("¿Tu mamá es…"); English with "Is".
+                        who=who(key.split(":", 1)[1], start=lang == "es"),
+                    )
+                )
         elif key.startswith(_UNKNOWN_ATTRACTION):
             name = key.removeprefix(_UNKNOWN_ATTRACTION)
+            groups = (
+                "; ".join(
+                    f"{text(f'attraction_group_{category}', lang)} ({', '.join(names)})"
+                    for category, names in resolution.options_by_category.items()
+                )
+                if resolution is not None
+                else ""
+            )
+            suggestions = text("attraction_options", lang, groups=groups) if groups else ""
             questions.append(
-                f"I couldn't find '{name}' among this park's attractions. Which attraction do you mean?"
+                text("q_unknown_attraction", lang, solo=solo, name=name, options=suggestions)
             )
         elif key.startswith(_AMBIGUOUS_ATTRACTION):
             name = key.removeprefix(_AMBIGUOUS_ATTRACTION)
             options = resolution.ambiguous[name] if resolution is not None else ()
             questions.append(
-                f"'{name}' could be {', '.join(options)}. Which one do you mean?"
+                text(
+                    "q_ambiguous_attraction",
+                    lang,
+                    name=name,
+                    options=", ".join(options),
+                )
             )
         elif key.startswith(_UNVERIFIED_HEIGHT):
-            guest = key.removeprefix(_UNVERIFIED_HEIGHT).removeprefix("g")
-            questions.append(
-                f"I couldn't match the height I understood for Guest {guest} to what you wrote. "
-                f"How tall is Guest {guest}, in cm (between 50 and 250)?"
-            )
+            guest = key.removeprefix(_UNVERIFIED_HEIGHT)
+            questions.append(text("q_unverified_height", lang, solo=solo, who=who(guest)))
         elif key.startswith(_CONFLICTING_ATTRACTION):
             name = key.removeprefix(_CONFLICTING_ATTRACTION)
-            questions.append(
-                f"'{name}' is on both your must-do and your avoid list. "
-                "Do you want it in the plan, or kept out of it?"
-            )
+            questions.append(text("q_conflicting_attraction", lang, solo=solo, name=name))
+        elif key in _MISSING_QUESTIONS:
+            questions.append(text(_MISSING_QUESTIONS[key], lang, solo=solo))
         else:
-            questions.append(
-                _MISSING_QUESTIONS.get(key, f"Could you tell me about {key}?")
-            )
+            questions.append(text("q_generic", lang, solo=solo, key=key))
     return " ".join(questions)
 
 
@@ -330,7 +398,7 @@ def build_party_constraints(
     """Build the contract. Call only when ``missing_information`` is empty and
     ``resolution`` is complete: must_do/avoid hold catalog ``node_id``s."""
     guests = [
-        Guest(guest_id=f"g{i}", role=g.role, height_cm=g.height_cm)  # type: ignore[arg-type]
+        Guest(guest_id=f"g{i}", role=g.role, height_cm=g.height_cm, label=g.label)  # type: ignore[arg-type]
         for i, g in enumerate(extraction.guests, start=1)
     ]
     window = extraction.lunch_window
@@ -421,43 +489,15 @@ def pending_confirmations(
     if extraction.party_walking_budget_minutes is not None:
         pending.append(f"walking_budget: {extraction.party_walking_budget_minutes}")
     pending.extend(
-        f"{_HEIGHT}g{index}: {guest.height_cm:g}"
+        f"{HEIGHT_PREFIX}g{index}: {guest.height_cm:g}"
         for index, guest in enumerate(extraction.guests, start=1)
         if guest.height_cm is not None
     )
     pending.extend(
-        f"accessibility:g{ref}"
+        f"{ACCESSIBILITY_PREFIX}g{ref}"
         for ref in sorted({a.guest_ref for a in extraction.accessibility})
     )
     return pending
-
-
-def echo_for(entry: str) -> str:
-    """Plain-language echo of a non-accessibility pending entry, for confirmation."""
-    kind, _, value = entry.partition(": ")
-    if kind == "must_do":
-        return f"'{value}' is a must-do: the plan has to include it."
-    if kind == "avoid":
-        return f"'{value}' is off-limits: the plan must never include it."
-    if kind == "departure_time":
-        return f"You leave the park at {value}: the plan must end by then."
-    if kind == "lunch_window":
-        start, _, end = value.partition("-")
-        return f"Lunch is fixed between {start} and {end}."
-    if kind == "walking_budget":
-        return f"The party's total walking must not exceed {value} minutes."
-    if kind.startswith(_HEIGHT):
-        guest = kind.removeprefix(_HEIGHT).removeprefix("g")
-        return (
-            f"Guest {guest} is {value} cm tall (about {_feet_inches(float(value))}): "
-            "rides with a higher minimum will be skipped."
-        )
-    return entry
-
-
-def _feet_inches(cm: float) -> str:
-    total_inches = round(cm / 2.54)
-    return f"{total_inches // 12}'{total_inches % 12}\""
 
 
 def human_texts(state: ParkMindState) -> list[str]:
@@ -501,6 +541,26 @@ def _staged(extraction: ElicitationExtraction) -> list[StagedAccessibility]:
     ]
 
 
+def _asked_for_departure(state: ParkMindState) -> bool:
+    messages = state.get("messages", [])
+    last = messages[-2] if len(messages) >= 2 else None
+    asked = getattr(last, "additional_kwargs", {}).get("missing_information") or ()
+    return getattr(last, "type", None) == "ai" and "departure_time" in asked
+
+
+def _with_clock_answer(
+    outcome: ExtractionOutcome, state: ParkMindState, answer: str
+) -> ExtractionOutcome:
+    """A short reply to "what time do you leave?" is read here: the extractor never sees the question."""
+    extraction = outcome.extraction
+    if extraction is None or not _asked_for_departure(state):
+        return outcome
+    hhmm = parse_clock(answer)
+    if hhmm is None:
+        return outcome
+    return replace(outcome, extraction=extraction.model_copy(update={"departure_time": hhmm}))
+
+
 def make_elicit_node(
     extractor: GuestInfoExtractor,
     intake: AccessibilityIntakeUseCase,
@@ -526,11 +586,15 @@ def make_elicit_node(
         texts = human_texts(state)
         if not texts:
             raise ValueError("elicit needs at least one guest message")
+        lang = detect_language(
+            texts[-1], fallback=state.get("language") or DEFAULT_LANGUAGE
+        )
 
         # Anything staged by an earlier pass is stale: this extraction replaces it.
         intake.discard(session_id)
 
         outcome = extract_with_recovery(extractor, texts, max_attempts=max_attempts)
+        outcome = _with_clock_answer(outcome, state, texts[-1])
         resolution = NameResolution()
         if outcome.extraction is None:
             missing = ["unreadable_response"]
@@ -546,12 +610,21 @@ def make_elicit_node(
             )
         if outcome.extraction is None or missing:
             return {
+                "language": lang,
                 "constraints": None,
                 "constraints_valid": False,
                 "pending_hard_constraint_confirmation": None,
                 "messages": [
                     AIMessage(
-                        content=_question_for(missing, resolution),
+                        content=_question_for(
+                            missing,
+                            resolution,
+                            lang,
+                            len(outcome.extraction.guests) if outcome.extraction else 0,
+                            [g.label for g in outcome.extraction.guests]
+                            if outcome.extraction
+                            else (),
+                        ),
                         additional_kwargs={"missing_information": missing},
                     )
                 ],
@@ -561,6 +634,7 @@ def make_elicit_node(
         for staged in _staged(extraction):
             intake.stage(session_id, staged)
         return {
+            "language": lang,
             "constraints": build_party_constraints(
                 extraction, today=today(), resolution=resolution
             ),

@@ -55,7 +55,15 @@ class PlanningAttractionRepository:
         return sorted(self._attractions, key=lambda a: a.node_id) if park_id == PARK_ID else []
 
     def get_schedule(self, park_id: str, on_date: date) -> Park | None:
-        return self._park if park_id == PARK_ID else None
+        if park_id != PARK_ID or self._park is None:
+            return None
+        shift = on_date - self._park.opening_time.date()
+        return self._park.model_copy(
+            update={
+                "opening_time": self._park.opening_time + shift,
+                "closing_time": self._park.closing_time + shift,
+            }
+        )
 
 
 def snapshot_context(
