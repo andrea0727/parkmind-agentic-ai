@@ -81,12 +81,44 @@ from parkmind.services.use_cases.score_preferences import ScorePreferencesUseCas
 logger = logging.getLogger(__name__)
 
 
+ProgressSource = Literal["sent", "stored", "assumed"]
+
+
+def _reports_stops(state: PlanExecutionState | None) -> bool:
+    return state is not None and bool(
+        state.completed_stop_ids or state.skipped_stop_ids
+    )
+
+
+def check_progress_of_plan(plan: Plan, state: PlanExecutionState) -> None:
+    """Progress must be for this plan and only about its stops: an unknown stop id
+    would also switch off the on-schedule assumption without saying so."""
+    if state.plan_id != plan.plan_id:
+        raise ValueError(
+            f"execution_state is for plan {state.plan_id}, not {plan.plan_id}"
+        )
+    stops = {s.node_id for s in plan.stops}
+    if not {*state.completed_stop_ids, *state.skipped_stop_ids} <= stops:
+        raise ValueError("completed and skipped stops must be stops of the plan")
+
+
+def progress_source(state: PlanExecutionState | None, *, sent: bool) -> ProgressSource:
+    """Where the completed stops come from, as ``effective_execution_state`` takes them.
+
+    ``assumed`` also covers a state that was sent or stored without completed or skipped
+    stops: its location and walking are kept, but the stops done are the on-schedule ones.
+    """
+    if not _reports_stops(state):
+        return "assumed"
+    return "sent" if sent else "stored"
+
+
 def effective_execution_state(
     plan: Plan, stored: PlanExecutionState | None, now: datetime
 ) -> PlanExecutionState:
     """The progress to replan from: what is stored, else an on-schedule party."""
     state = stored or PlanExecutionState(plan_id=plan.plan_id, as_of=now)
-    if not state.completed_stop_ids and not state.skipped_stop_ids:
+    if not _reports_stops(state):
         done = [stop.node_id for stop in plan.stops if stop.departure_time <= now]
         state = state.model_copy(update={"completed_stop_ids": done})
     return state.model_copy(update={"as_of": max(state.as_of, now)})
@@ -135,14 +167,8 @@ class ReplanRequest:
     """Events to apply on top of the ones the thread recorded (a caller without the thread)."""
 
     def __post_init__(self) -> None:
-        state = self.execution_state
-        if state is not None and state.plan_id != self.plan.plan_id:
-            raise ValueError(
-                f"execution_state is for plan {state.plan_id}, not {self.plan.plan_id}"
-            )
-
-
-ProgressSource = Literal["sent", "stored", "assumed"]
+        if self.execution_state is not None:
+            check_progress_of_plan(self.plan, self.execution_state)
 
 
 @dataclass(frozen=True)
@@ -191,14 +217,7 @@ class ReplanUseCase:
                 else deps.execution_states.get(request.plan.plan_id)
             )
             execution_state = effective_execution_state(request.plan, stored, request.now)
-            progress_source: ProgressSource = (
-                "assumed"
-                if stored is None
-                or not (stored.completed_stop_ids or stored.skipped_stop_ids)
-                else "sent"
-                if request.execution_state is not None
-                else "stored"
-            )
+            source = progress_source(stored, sent=request.execution_state is not None)
             live_context = with_checks(
                 with_events(request.live_context),
                 party_checks(requirements, catalog, deps.knowledge),
@@ -243,13 +262,14 @@ class ReplanUseCase:
             )
         if not result.valid:
             logger.info("replan of %s found no valid plan", request.plan.plan_id)
-        return ReplanOutcome(result, state_context, execution_state, progress_source)
+        return ReplanOutcome(result, state_context, execution_state, source)
 
 
 __all__: list[Any] = [
     "ReplanOutcome",
     "ReplanRequest",
     "ReplanUseCase",
+    "check_progress_of_plan",
     "effective_execution_state",
     "with_event_statuses",
 ]

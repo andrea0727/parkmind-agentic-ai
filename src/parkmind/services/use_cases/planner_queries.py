@@ -21,9 +21,9 @@ What leaves this use case never carries a requirement value: the checker's
 messages for rules 9 and 10 (walking, rest, heat; ride restrictions) quote the
 guest's limits, so those violations, and a re-solve failure that quotes them,
 are replaced by fixed sentences that keep the rule id and the stop. A replan whose
-whole day fails the checker joins the checker's messages without their rule
-ids, so that failure keeps only its first sentence; the redacted ``check`` still
-names each rule and stop.
+whole day fails the checker reports "The replanned day does not pass the constraint
+checker" followed by the checker's messages, which carry no rule id and may quote a
+limit: only that headline is kept; the redacted ``check`` still names each rule and stop.
 """
 
 import re
@@ -143,9 +143,18 @@ class PlanCandidate:
 
 
 class UnknownLocationError(ValueError):
-    """The location a client sent is not on the park map: its mistake, not an outage."""
+    """A node the client sent is not on the park map: its mistake, not an outage.
+
+    ``field`` names the argument at fault: by default the party's location, or the plan's stops.
+    """
 
     field = "execution_state.current_location_node_id"
+
+    def __init__(
+        self, message: str, field: str = "execution_state.current_location_node_id"
+    ) -> None:
+        super().__init__(message)
+        self.field = field
 
 
 @dataclass(frozen=True)
@@ -348,17 +357,38 @@ class PlannerQueries:
         )
 
     def _require_on_map(self, location: str, plan: Plan) -> None:
-        """``location`` must reach the plan's stops: the replan walks from it."""
-        others = [s.node_id for s in plan.stops if s.node_id != location]
+        """``location`` and the plan's stops must be on the map: the replan walks between them.
+
+        A stop the map does not know fails every walk to it, so the location is blamed
+        only when no stop is reachable from it and neither is any catalog node.
+        """
+        others = list(
+            dict.fromkeys(s.node_id for s in plan.stops if s.node_id != location)
+        )
         if not others:
             return
         with open_deps(self._deps_factory) as deps:
-            try:
-                deps.routing.walk_minutes(location, others[0])
-            except RoutingNotFoundError as exc:
+
+            def reaches(destination: str) -> bool:
+                try:
+                    deps.routing.walk_minutes(location, destination)
+                except RoutingNotFoundError:
+                    return False
+                return True
+
+            reached = [reaches(node) for node in others]
+            if all(reached):
+                return
+            if not any(reached) and not any(
+                reaches(a.node_id) for a in load_catalog(deps)
+            ):
                 raise UnknownLocationError(
                     f"The party's location {location!r} is not on the park map."
-                ) from exc
+                )
+            stop = others[reached.index(False)]
+            raise UnknownLocationError(
+                f"The plan's stop {stop!r} is not on the park map.", field="plan.stops"
+            )
 
     def check_plan(
         self,
