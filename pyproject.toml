@@ -40,6 +40,14 @@ ruff = ">=0.6"
 mypy = "^2.3.1"
 import-linter = "^2.15"
 
+# Optional: LLM-as-judge evaluation (tests/evals). Install with `poetry install --with eval`;
+# the eval tests skip themselves when it is absent.
+[tool.poetry.group.eval]
+optional = true
+
+[tool.poetry.group.eval.dependencies]
+deepeval = "^4.2.8"
+
 [tool.mypy]
 python_version = "3.12"
 mypy_path = "src"

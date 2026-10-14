@@ -29,3 +29,7 @@ Hard constraint violation rate, accessibility violation rate, total wait
 minutes, total walking minutes. A personalized plan that's operationally
 terrible is still a bad plan — but these aren't what to lead with in the
 defense.
+
+## Automated LLM evaluation (DeepEval)
+
+The tests in `tests/evals` score the model-facing parts of the agent: extraction accuracy against a labeled set, groundedness of the plan explanation, consistency across repeated runs, tool-call correctness and instruction following. Deterministic metrics run offline; judged metrics (LLM-as-judge) run only with `--live`. Thresholds live in `tests/evals/eval_thresholds.py`. See `tests/evals/README.md` and `docs/testing/README.md`.

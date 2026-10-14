@@ -1,4 +1,4 @@
-"""P0-11 collector: idempotent windows, raw payloads kept, honest coverage, degrade.
+"""Snapshot collector: idempotent windows, raw payloads kept, honest coverage, degrade.
 
 Real clients over ``httpx.MockTransport`` serving the payloads captured together
 on 2026-09-27 (tests/fixtures/snapshot_2026-09-27); only the repository ports

@@ -1,5 +1,5 @@
 """
-Replanning graph (P0-34).
+Replanning graph.
 
 Workflow (architecture v2.2 sections 9 and 36)::
 
@@ -45,7 +45,7 @@ the top on resume):
   whole day and proposed again; the active plan stays until a proposal is approved.
 
 Known limits: REJECT's "update preferences" step is not implemented (the reason is
-stored on the proposal and in the behavior log; P1-03). After a replan finds no valid
+stored on the proposal and in the behavior log). After a replan finds no valid
 plan the events stay recorded, so a duplicate report does not retry it; a new event
 does.
 """
@@ -79,7 +79,6 @@ from parkmind.graph.initial_planning_graph import (
     _make_resolve_group_node,
     _require_valid_candidate,
     before_edit_update,
-    explained,
     park_clock,
     require_party,
 )
@@ -87,6 +86,7 @@ from parkmind.graph.state import ParkMindState
 from parkmind.graph.state_helpers import (
     active_plan_update,
     discarded_proposal_update,
+    explained,
     language_of,
     propose_plan_change,
     solo_of,
@@ -149,7 +149,17 @@ def _make_load_plan_node(deps_factory: DepsFactory) -> StateNode:
         plan = use_case.execute(state["thread_id"]) if state.get("thread_id") else None
         if plan is None or not _ready_to_replan(state):
             return Command(
-                update={"messages": [AIMessage(content=text("nothing_to_replan", language_of(state), solo=solo_of(state)))]},
+                update={
+                    "messages": [
+                        AIMessage(
+                            content=text(
+                                "nothing_to_replan",
+                                language_of(state),
+                                solo=solo_of(state),
+                            )
+                        )
+                    ]
+                },
                 goto=END,
             )
         return Command(update=active_plan_update(plan), goto="handle_events")
@@ -327,7 +337,9 @@ def _make_replan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
             restored = before_edit_update(state, lines)
             if restored is not None:
                 return Command(update={**update, **restored}, goto="check_plan")
-            update["messages"] = [AIMessage(content=_not_proposed(lang, *lines, solo=solo_of(state)))]
+            update["messages"] = [
+                AIMessage(content=_not_proposed(lang, *lines, solo=solo_of(state)))
+            ]
             return Command(update=update, goto=END)
         update["candidate_plan"] = result.plan
         return Command(update=update, goto="check_plan")
@@ -365,12 +377,20 @@ def _make_check_replan_node(deps_factory: DepsFactory) -> StateNode:
         reasons = [f"- {v.message}" for v in result.violations]
         restored = before_edit_update(state, reasons)
         if restored is not None:
-            return Command(update={"check_result": result, **restored}, goto="check_plan")
+            return Command(
+                update={"check_result": result, **restored}, goto="check_plan"
+            )
         return Command(
             update={
                 "check_result": result,
                 "candidate_plan": None,
-                "messages": [AIMessage(content=_not_proposed(language_of(state), *reasons, solo=solo_of(state)))],
+                "messages": [
+                    AIMessage(
+                        content=_not_proposed(
+                            language_of(state), *reasons, solo=solo_of(state)
+                        )
+                    )
+                ],
             },
             goto=END,
         )
@@ -394,8 +414,10 @@ def _make_diff_node() -> StateNode:
     return diff
 
 
-def _make_explain_node(deps_factory: DepsFactory, narrator: PlanNarrator | None) -> StateNode:
-    """EXPLAIN (section 40, P0-31): why and what changed, grounded, else the template."""
+def _make_explain_node(
+    deps_factory: DepsFactory, narrator: PlanNarrator | None
+) -> StateNode:
+    """EXPLAIN: why and what changed, grounded, else the template."""
     explainer = ExplainPlanUseCase(deps_factory)
     reasons = ReplanReasonUseCase(deps_factory)
 
@@ -420,7 +442,9 @@ def _make_explain_node(deps_factory: DepsFactory, narrator: PlanNarrator | None)
         )
         # The narrator writes English only; other languages get the localized template.
         active = narrator if lang == DEFAULT_LANGUAGE else None
-        return explained(plan, explain_grounded(active, prepared))
+        return explained(
+            plan, explain_grounded(active, prepared, thread_id=state["thread_id"])
+        )
 
     return explain
 

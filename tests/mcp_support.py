@@ -1,4 +1,4 @@
-"""Realistic ports for the MCP tool tests (P0-24..P0-27), all offline.
+"""Realistic ports for the MCP tool tests, all offline.
 
 The real 2026-09-27 park capture (``capture.Provider``) collected through the real
 ``SnapshotCollector``, the real Magic Kingdom catalog fixture, the reviewed

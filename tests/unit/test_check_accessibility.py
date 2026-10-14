@@ -1,4 +1,4 @@
-"""check_accessibility use case (P0-26a): fail-closed matching against published notices."""
+"""check_accessibility use case: fail-closed matching against published notices."""
 
 import ast
 import inspect

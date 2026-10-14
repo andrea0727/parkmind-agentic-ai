@@ -115,6 +115,122 @@ _CATALOG: dict[str, dict[Language, str]] = {
             "¿Cuánto mides, en cm (entre 50 y 250)?"
         ),
     },
+    "q_height_needed": {
+        "en": (
+            "Some of the rides you want have a minimum height: {rides}. "
+            "How tall is each guest, in cm (between 50 and 250)?"
+        ),
+        "es": (
+            "Algunas de las atracciones que quieren tienen una estatura mínima: {rides}. "
+            "¿Cuánto mide cada persona, en cm (entre 50 y 250)?"
+        ),
+    },
+    "q_height_needed_solo": {
+        "en": (
+            "Some of the rides you want have a minimum height: {rides}. "
+            "How tall are you, in cm (between 50 and 250)?"
+        ),
+        "es": (
+            "Algunas de las atracciones que quieres tienen una estatura mínima: {rides}. "
+            "¿Cuánto mides, en cm (entre 50 y 250)?"
+        ),
+    },
+    "height_minimum": {
+        "en": "{name} (minimum {cm} cm)",
+        "es": "{name} (mínimo {cm} cm)",
+    },
+    "q_party_too_large": {
+        "en": (
+            "That is a big group: {size} people. I can plan for up to {max} people at once, "
+            "so everyone's needs are covered. Could you tell me about a smaller group, "
+            "or split yours into groups of up to {max}?"
+        ),
+        "es": (
+            "Es un grupo muy grande: {size} personas. Puedo planear para un máximo de {max} "
+            "personas a la vez, para cubrir las necesidades de todos. ¿Pueden contarme de un "
+            "grupo más pequeño, o dividir el suyo en grupos de hasta {max}?"
+        ),
+    },
+    "approval_needs_adult": {
+        "en": (
+            "This plan can't be approved: the group has no adult. "
+            "A responsible adult has to be part of the group before a plan is approved."
+        ),
+        "es": (
+            "Este plan no se puede aprobar: el grupo no tiene ningún adulto. "
+            "Debe haber un adulto responsable en el grupo antes de aprobar un plan."
+        ),
+    },
+    "shows_not_plannable": {
+        "en": (
+            "Parades and fireworks run at fixed showtimes, so they can't be planned as "
+            "stops. Plan your rides without them and watch the show when it starts."
+        ),
+        "es": (
+            "Los desfiles y los fuegos artificiales tienen horario fijo, así que no se pueden "
+            "planear como paradas. Planeen sus atracciones sin ellos y vean el show cuando empiece."
+        ),
+    },
+    "q_unverified_departure": {
+        "en": (
+            "I couldn't match the departure time I understood to what you wrote. "
+            "What time do you plan to leave the park?"
+        ),
+        "es": (
+            "No pude relacionar la hora de salida que entendí con lo que escribieron. "
+            "¿A qué hora piensan salir del parque?"
+        ),
+    },
+    "q_unverified_departure_solo": {
+        "en": (
+            "I couldn't match the departure time I understood to what you wrote. "
+            "What time do you plan to leave the park?"
+        ),
+        "es": (
+            "No pude relacionar la hora de salida que entendí con lo que escribiste. "
+            "¿A qué hora piensas salir del parque?"
+        ),
+    },
+    "q_unverified_lunch": {
+        "en": (
+            "I couldn't match the lunch window I understood to what you wrote. "
+            "Between what times would you like to have lunch?"
+        ),
+        "es": (
+            "No pude relacionar el horario de almuerzo que entendí con lo que escribieron. "
+            "¿Entre qué horas quieren almorzar?"
+        ),
+    },
+    "q_unverified_lunch_solo": {
+        "en": (
+            "I couldn't match the lunch window I understood to what you wrote. "
+            "Between what times would you like to have lunch?"
+        ),
+        "es": (
+            "No pude relacionar el horario de almuerzo que entendí con lo que escribiste. "
+            "¿Entre qué horas quieres almorzar?"
+        ),
+    },
+    "q_unverified_walking_budget": {
+        "en": (
+            "I couldn't match the walking limit I understood to what you wrote. "
+            "How many minutes in total can your party walk?"
+        ),
+        "es": (
+            "No pude relacionar el límite de caminata que entendí con lo que escribieron. "
+            "¿Cuántos minutos en total puede caminar su grupo?"
+        ),
+    },
+    "q_unverified_walking_budget_solo": {
+        "en": (
+            "I couldn't match the walking limit I understood to what you wrote. "
+            "How many minutes in total can you walk?"
+        ),
+        "es": (
+            "No pude relacionar el límite de caminata que entendí con lo que escribiste. "
+            "¿Cuántos minutos en total puedes caminar?"
+        ),
+    },
     "q_conflicting_attraction": {
         "en": (
             "'{name}' is on both your must-do and your avoid list. "
@@ -247,6 +363,26 @@ _CATALOG: dict[str, dict[Language, str]] = {
         "es": (
             "No pude armar un plan ahora porque falta información del parque que necesito. "
             "No se propuso nada. Intenta de nuevo en unos minutos."
+        ),
+    },
+    "assistant_unavailable": {
+        "en": (
+            "I'm having trouble understanding messages right now, so nothing was planned. "
+            "Please try again in a few minutes."
+        ),
+        "es": (
+            "Tengo problemas para entender mensajes en este momento, así que no se planeó "
+            "nada. Intenten de nuevo en unos minutos."
+        ),
+    },
+    "assistant_unavailable_solo": {
+        "en": (
+            "I'm having trouble understanding messages right now, so nothing was planned. "
+            "Please try again in a few minutes."
+        ),
+        "es": (
+            "Tengo problemas para entender mensajes en este momento, así que no se planeó "
+            "nada. Intenta de nuevo en unos minutos."
         ),
     },
     "park_closed": {

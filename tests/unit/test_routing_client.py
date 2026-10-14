@@ -299,7 +299,7 @@ def test_park_graph_with_alternative_routing_port():
     assert graph.walk_minutes("nodeA", "nodeB") == 42.0
 
 
-# -- WalkEstimator (P0-25: get_walking_time marks a route estimated or unknown) --
+# -- WalkEstimator (get_walking_time marks a route estimated or unknown) --
 
 
 def test_routing_client_is_a_walk_estimator() -> None:

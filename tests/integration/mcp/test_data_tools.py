@@ -1,4 +1,4 @@
-"""``data.*`` tools over MCP on the real 2026-09-27 capture (P0-25 Done-when).
+"""``data.*`` tools over MCP on the real 2026-09-27 capture.
 
 Every call is a real MCP round trip to ``parkmind-mcp`` in process; the ports
 behind it are the capture collected by the real ``SnapshotCollector``, the Magic

@@ -1,0 +1,75 @@
+{
+  "description": "Hand-labeled hard constraints for each scenario in tests/fixtures/elicit/scenarios.json, read from the guests' messages and not from the canned extraction. heights_cm lists one entry per guest, null where none was stated.",
+  "expectations": {
+    "wiki_example_missing_departure": {
+      "party_size": 4,
+      "heights_cm": [null, null, null, null],
+      "departure_time": null,
+      "must_do": ["TRON", "Space Mountain"],
+      "avoid": []
+    },
+    "wiki_example_complete": {
+      "party_size": 4,
+      "heights_cm": [null, null, null, null],
+      "departure_time": "20:00",
+      "must_do": ["TRON", "Space Mountain"],
+      "avoid": []
+    },
+    "casual_rest_breaks_vs_queue_preference": {
+      "party_size": 2,
+      "heights_cm": [null, null],
+      "departure_time": "18:00",
+      "must_do": [],
+      "avoid": []
+    },
+    "heat_sensitivity_is_accessibility": {
+      "party_size": 3,
+      "heights_cm": [null, null, null],
+      "departure_time": "21:00",
+      "must_do": [],
+      "avoid": []
+    },
+    "pure_preferences_no_accessibility": {
+      "party_size": 2,
+      "heights_cm": [null, null],
+      "departure_time": "21:00",
+      "must_do": [],
+      "avoid": []
+    },
+    "wheelchair_and_avoid": {
+      "party_size": 2,
+      "heights_cm": [null, null],
+      "departure_time": "17:00",
+      "must_do": [],
+      "avoid": ["Splash Mountain"]
+    },
+    "fear_of_heights_vs_motion_restriction": {
+      "party_size": 3,
+      "heights_cm": [null, null, null],
+      "departure_time": "19:00",
+      "must_do": [],
+      "avoid": []
+    },
+    "party_walking_budget": {
+      "party_size": 3,
+      "heights_cm": [null, null, null],
+      "departure_time": "20:00",
+      "must_do": [],
+      "avoid": []
+    },
+    "unknown_adult_or_child": {
+      "party_size": 2,
+      "heights_cm": [null, null],
+      "departure_time": "16:00",
+      "must_do": ["Space Mountain"],
+      "avoid": []
+    },
+    "stated_child_height": {
+      "party_size": 2,
+      "heights_cm": [null, 122],
+      "departure_time": "18:00",
+      "must_do": [],
+      "avoid": []
+    }
+  }
+}

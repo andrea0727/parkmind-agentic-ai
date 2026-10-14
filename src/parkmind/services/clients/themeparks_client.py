@@ -4,7 +4,7 @@ API docs: https://api.themeparks.wiki/docs/v1
 
 Implements services.ports.park_data.ParkDataPort structurally (duck-typed,
 no inheritance). Public methods never return raw provider JSON/dicts —
-"Raw provider schema does not leak into core" (P0-07 Done-when).
+"Raw provider schema does not leak into core".
 
 Retry/error policy is adapter-level only (reference pattern for the other
 services/clients adapters). The "degrade to cached snapshot" fallback chain
@@ -28,8 +28,7 @@ policy values and what each outcome means.
 - Unrecognized statuses, malformed entities and non-JSON bodies also raise
   ThemeParksSchemaError; malformed data is never coerced into a best guess.
 
-Parsing lives in `themeparks_normalize` (pure functions over the raw payload,
-P0-10) so a stored snapshot can be re-normalized without HTTP. This class only
+Parsing lives in `themeparks_normalize` (pure functions over the raw payload) so a stored snapshot can be re-normalized without HTTP. This class only
 fetches and delegates; it parses statuses lazily, for the ids it is asked about.
 """
 
@@ -126,7 +125,7 @@ class ThemeParksClient:
             payload, self._attraction_metadata, excluded=MAGIC_KINGDOM_EXCLUDED_ENTITIES
         )
         for issue in catalog.issues:
-            # The port returns attractions only; the collector (P0-11) works on
+            # The port returns attractions only; the collector works on
             # the raw payload and gets these issues as data instead.
             logger.warning(
                 "ThemeParksClient.get_catalog: %s %s (%s); skipping",
@@ -141,7 +140,7 @@ class ThemeParksClient:
         return self._park_id
 
     def fetch_live_payload(self) -> dict[str, Any]:
-        """The raw ``/live`` payload, as the provider returned it (P0-11).
+        """The raw ``/live`` payload, as the provider returned it.
 
         Timezone-checked, otherwise unparsed, so a snapshot can store it verbatim
         and re-normalize it later with ``themeparks_normalize.parse_live``.

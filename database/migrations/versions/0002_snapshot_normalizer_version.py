@@ -1,4 +1,4 @@
-"""Snapshot normalizer version (P0-11).
+"""Snapshot normalizer version.
 
 Revision ID: 0002
 Revises: 0001

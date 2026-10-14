@@ -1,4 +1,4 @@
-"""HTTP API (P0-35): success paths, invalid requests, and the one-process guarantees."""
+"""HTTP API: success paths, invalid requests, and the one-process guarantees."""
 
 import ast
 import json
@@ -216,7 +216,7 @@ def test_planning_unavailable_is_503(rig):
     from parkmind.services.use_cases.planning_deps import PlanningUnavailableError
 
     def down(*args, **kwargs):
-        raise PlanningUnavailableError("park data is down")
+        raise PlanningUnavailableError("postgres://user:secret@db.internal:5432 refused")
 
     rig.service.say = down  # type: ignore[method-assign]
     with TestClient(_app(rig)) as client:
@@ -225,7 +225,25 @@ def test_planning_unavailable_is_503(rig):
         response = client.post("/api/message", params=t, json={"text": "hi"})
 
     assert response.status_code == 503
-    assert "down" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "secret" not in detail and "postgres" not in detail
+    assert "Nothing was proposed" in detail
+
+
+def test_a_service_outage_is_503_with_the_message_for_the_guests(rig):
+    from parkmind.core.conversation import ServiceUnavailableError
+
+    def down(*args, **kwargs):
+        raise ServiceUnavailableError("No se propuso nada. Intenten de nuevo.")
+
+    rig.service.say = down  # type: ignore[method-assign]
+    with TestClient(_app(rig)) as client:
+        t = _session(client)
+
+        response = client.post("/api/message", params=t, json={"text": "hola"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "No se propuso nada. Intenten de nuevo."
 
 
 def test_the_ui_is_served_next_to_the_api(rig, tmp_path):

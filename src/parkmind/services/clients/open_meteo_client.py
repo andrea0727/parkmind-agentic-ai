@@ -223,7 +223,7 @@ class OpenMeteoClient:
         forecast_days: int = 1,
     ) -> dict[str, Any]:
         """
-        The raw ``/forecast`` hourly payload, as the provider returned it (P0-11).
+        The raw ``/forecast`` hourly payload, as the provider returned it.
 
         Same request, retry and error policy as ``get_hourly_forecast``; nothing is
         parsed here, so a snapshot can store it verbatim and re-normalize it later

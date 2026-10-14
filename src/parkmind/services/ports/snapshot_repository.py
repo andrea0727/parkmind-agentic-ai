@@ -5,7 +5,7 @@ payload, so an ID-mapping bug can be re-normalized instead of re-collected.
 The raw payload is opaque to the core: stored and returned verbatim, never
 parsed here. ``normalizer_version`` records which normalizer produced the
 ``LiveContext``; the collector, "latest valid snapshot" and re-normalization
-(P0-11) are layered on top of this port in ``services.use_cases``.
+ are layered on top of this port in ``services.use_cases``.
 """
 
 from collections.abc import Mapping, Sequence

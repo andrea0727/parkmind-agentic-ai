@@ -1,4 +1,4 @@
-"""Replanning building blocks (P0-34): progress, reported availability, reasons, diff, proposals."""
+"""Replanning building blocks: progress, reported availability, reasons, diff, proposals."""
 
 from datetime import datetime, timedelta
 
@@ -29,7 +29,10 @@ from parkmind.services.use_cases.explain_plan import (
 from parkmind.services.use_cases.pending_proposal import PendingProposalUseCase
 from parkmind.services.use_cases.propose_plan import ProposePlanUseCase
 from parkmind.services.use_cases.replan import (
+    ReplanRequest,
+    check_progress_of_plan,
     effective_execution_state,
+    progress_source,
     with_event_statuses,
 )
 from parkmind.services.use_cases.replan_reason import (
@@ -112,6 +115,57 @@ def test_as_of_never_lies_before_now():
     assert effective_execution_state(_plan(), ahead, NOW).as_of == NOW + timedelta(minutes=10)
 
 
+def test_the_progress_label_follows_where_the_completed_stops_come_from():
+    reported = factories.execution_state(plan_id="plan_1", completed_stop_ids=["a1"])
+    skipped = factories.execution_state(
+        plan_id="plan_1", completed_stop_ids=[], skipped_stop_ids=["a1"]
+    )
+    located = factories.execution_state(
+        plan_id="plan_1", completed_stop_ids=[], current_location_node_id="a2"
+    )
+
+    assert progress_source(reported, sent=True) == "sent"
+    assert progress_source(reported, sent=False) == "stored"
+    assert progress_source(skipped, sent=True) == "sent"
+    assert progress_source(None, sent=False) == "assumed"
+    # sent with a location and walking but no stops: the stops done are the schedule's
+    assert progress_source(located, sent=True) == "assumed"
+    assert effective_execution_state(_plan(), located, NOW).completed_stop_ids == [
+        "a1",
+        "a2",
+    ]
+
+
+def test_progress_must_be_for_the_plan_and_only_about_its_stops():
+    plan = _plan()
+    stray = factories.execution_state(plan_id="plan_1", completed_stop_ids=["ghost"])
+    other = factories.execution_state(plan_id="another", completed_stop_ids=["a1"])
+    fine = factories.execution_state(plan_id="plan_1", completed_stop_ids=["a1"])
+
+    check_progress_of_plan(plan, fine)
+    with pytest.raises(ValueError, match="stops of the plan"):
+        check_progress_of_plan(plan, stray)
+    with pytest.raises(ValueError, match="execution_state is for plan"):
+        check_progress_of_plan(plan, other)
+
+
+def test_a_request_refuses_progress_about_stops_the_plan_does_not_have():
+    stray = factories.execution_state(plan_id="plan_1", completed_stop_ids=["ghost"])
+
+    with pytest.raises(ValueError, match="stops of the plan"):
+        ReplanRequest(
+            thread_id=THREAD,
+            plan=_plan(),
+            constraints=factories.party_constraints(),
+            profiles=[],
+            accessibility_ref=[],
+            live_context=_context(),
+            objective=object(),
+            now=NOW,
+            execution_state=stray,
+        )
+
+
 def test_the_stored_state_is_not_mutated():
     stored = factories.execution_state(plan_id="plan_1", completed_stop_ids=["a1"])
     before = stored.model_copy(deep=True)
@@ -167,6 +221,18 @@ def test_an_attraction_reported_available_again_clears_a_closure_in_the_snapshot
     updated = with_event_statuses(
         context, [_event(EventType.ATTRACTION_AVAILABLE, minutes=2, attraction_id="a2")]
     )
+
+    assert updated.statuses["a2"] is AttractionStatus.OPERATING
+
+
+def test_a_reopening_stamped_before_the_snapshot_wins_when_the_caller_sent_it():
+    """``newer_only=False``: what the client sends overrides the snapshot's DOWN, as its
+    closure overrides an OPERATING one, whatever the timestamp."""
+    context = _context(a2=AttractionStatus.DOWN)
+    reopened = _event(EventType.ATTRACTION_AVAILABLE, minutes=-5, attraction_id="a2")
+
+    assert with_event_statuses(context, [reopened]) is context
+    updated = with_event_statuses(context, [reopened], newer_only=False)
 
     assert updated.statuses["a2"] is AttractionStatus.OPERATING
 

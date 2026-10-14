@@ -1,14 +1,14 @@
-"""LOAD CONTEXT -- the deterministic loader (P0-30; the agentic loader is P1-22).
+"""LOAD CONTEXT -- the deterministic loader (the agentic loader is a separate adapter).
 
 Source order (section 43): a fresh collection (when a collector is configured and
-the provider answers) -> the latest valid stored snapshot (P0-11) -> nothing, which
+the provider answers) -> the latest valid stored snapshot -> nothing, which
 is ``ContextUnavailableError``. The historical-profile rung of the chain feeds the
 forecast, not the context, so it is not a source here.
 
 A collected snapshot's coverage is park-wide and leaves
 ``accessibility_checks_complete`` false on purpose. This use case completes it per
 party: every guest with requirements on file is checked against every catalog
-attraction with ``check_accessibility`` (P0-26a). The flag turns true only when
+attraction with ``check_accessibility``. The flag turns true only when
 each pair got a result and every guest the confirmation committed requirements
 for could be read back; otherwise the gap is named in ``coverage_gaps`` and rule 11
 refuses the plan.
@@ -19,7 +19,7 @@ callers; ``LoadedContext.for_state()`` is what may be checkpointed: the coverage
 flag, without the per-guest results. The later use cases re-derive them from the
 SessionStore (``party_accessibility``).
 
-Transport (P0-24, section 27 [C23]): with ``PARKMIND_CONTEXT_TRANSPORT=mcp`` (or an
+Transport (section 27 [C23]): with ``PARKMIND_CONTEXT_TRANSPORT=mcp`` (or an
 explicit ``context_data`` port) the context is assembled from the ``data.*`` and
 ``knowledge.*`` capabilities through that port (``tool_context``) instead of read
 from the snapshot directly. If the transport fails -- or its server answers that it

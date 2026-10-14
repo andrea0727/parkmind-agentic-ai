@@ -1,4 +1,4 @@
-"""Integration tests for PlannerResolveLoop (P0-21).
+"""Integration tests for PlannerResolveLoop.
 
 Uses real GreedyInsertionOptimizer and real ConstraintChecker without mocks.
 Verifies:

@@ -1,4 +1,4 @@
-"""Every PostgresSessionStore in the process shares the one SESSION_MEMORY (P0-30).
+"""Every PostgresSessionStore in the process shares the one SESSION_MEMORY.
 
 ``session_only`` requirements written by the intake must still be there when
 ``load_context`` reads them, whatever connection each store uses.
@@ -56,13 +56,24 @@ def test_intake_and_planning_deps_build_their_stores_on_the_same_memory(monkeypa
 
 def test_no_service_code_builds_a_session_store_with_its_own_memory():
     """Only the helper (and the dev seed, which writes a persisted record) construct one."""
-    allowed = {"use_cases/session_memory.py", "clients/postgres/seed.py", "clients/postgres/session_store.py"}
+    allowed = {
+        "use_cases/session_memory.py",
+        "clients/postgres/seed.py",
+        "clients/postgres/session_store.py",
+    }
     offenders = []
     for path in SRC.rglob("*.py"):
-        rel = path.relative_to(SRC / "services").as_posix() if "services" in path.parts else path.as_posix()
+        rel = (
+            path.relative_to(SRC / "services").as_posix()
+            if "services" in path.parts
+            else path.as_posix()
+        )
         if rel in allowed:
             continue
         for node in ast.walk(ast.parse(path.read_text())):
-            if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "PostgresSessionStore":
+            if (
+                isinstance(node, ast.Call)
+                and getattr(node.func, "id", None) == "PostgresSessionStore"
+            ):
                 offenders.append(rel)
     assert offenders == []

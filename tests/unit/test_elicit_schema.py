@@ -97,3 +97,19 @@ def test_schema_has_no_consent_or_free_text_health_field(field: str) -> None:
                 ],
             }
         )
+
+
+@pytest.mark.parametrize("height", [20, 49.9, 250.1, 400])
+def test_a_height_outside_the_human_range_is_rejected(height: float) -> None:
+    """Scenario 29 ("400 cm and 20 cm"): the schema refuses it; the agent must ask, not clamp."""
+    with pytest.raises(ValidationError):
+        ElicitationExtraction.model_validate({"guests": [{"role": "adult", "height_cm": height}]})
+
+
+@pytest.mark.parametrize("height", [50, 250])
+def test_the_height_range_bounds_are_accepted(height: float) -> None:
+    extraction = ElicitationExtraction.model_validate(
+        {"guests": [{"role": "adult", "height_cm": height}]}
+    )
+
+    assert extraction.guests[0].height_cm == height

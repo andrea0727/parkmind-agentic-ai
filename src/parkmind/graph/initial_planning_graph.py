@@ -1,5 +1,5 @@
 """
-Initial planning graph (P0-30).
+Initial planning graph.
 
 Workflow::
 
@@ -8,7 +8,7 @@ Workflow::
            +-> EXPLAIN -> PROPOSE -> APPROVAL                                 (check passed)
            +-> NO VALID PLAN -> END, nothing explained or proposed            (check failed)
 
-The elicitation graph (P0-29) is reused as is; the planning chain is its
+The elicitation graph is reused as is; the planning chain is its
 ``downstream`` stage, compiled as a subgraph that shares ``ParkMindState`` and the
 parent's checkpointer. Context is loaded before the group is resolved [C23].
 
@@ -69,7 +69,6 @@ from pydantic import ValidationError
 from parkmind.agents.elicit_agent import ELICIT_PROMPT_VERSION, GuestInfoExtractor
 from parkmind.agents.explain_agent import (
     AnthropicNarrator,
-    GroundedExplanation,
     PlanNarrator,
     explain_grounded,
 )
@@ -77,9 +76,11 @@ from parkmind.config.tracing import tracing_guard
 from parkmind.core.contracts import (
     PARK_TZ,
     ApprovalStatus,
+    GuestRole,
     PartyConstraints,
     Plan,
     RejectionReason,
+    RuleId,
     StopKind,
 )
 from parkmind.core.language import DEFAULT_LANGUAGE, text
@@ -92,6 +93,7 @@ from parkmind.graph.elicitation_graph import (
 from parkmind.graph.state import ParkMindState
 from parkmind.graph.state_helpers import (
     approve_plan,
+    explained,
     language_of,
     propose_plan_change,
     reject_plan,
@@ -140,9 +142,14 @@ SUPERSEDED_KEEPS_PLAN_MESSAGE = (
     f"{_SUPERSEDED} Your current plan stays as it was. {_ASK_AGAIN}"
 )
 EDITING_MESSAGE = "Updating the plan with your changes."
-EDIT_DID_NOT_FIT_MESSAGE = "I couldn't fit your changes into a plan that meets every requirement:"
+EDIT_DID_NOT_FIT_MESSAGE = (
+    "I couldn't fit your changes into a plan that meets every requirement:"
+)
 EDIT_REOFFER_MESSAGE = "Here is the plan you had before, checked again. You can approve, edit or reject it."
-EDIT_CLEARED: ParkMindState = {"constraints_before_edit": None, "plan_before_edit": None}
+EDIT_CLEARED: ParkMindState = {
+    "constraints_before_edit": None,
+    "plan_before_edit": None,
+}
 """Drops what an edit kept to fall back on: set on every path that ends the edit."""
 UNAVAILABLE_MESSAGE = (
     "I couldn't put a plan together right now because some of the park information "
@@ -162,7 +169,9 @@ class CheckNotPassedError(RuntimeError):
 def _require_valid_candidate(state: ParkMindState) -> None:
     check = state.get("check_result")
     if check is None or not check.valid:
-        raise CheckNotPassedError("the candidate plan has not passed the constraint checker")
+        raise CheckNotPassedError(
+            "the candidate plan has not passed the constraint checker"
+        )
 
 
 def _guarded(node: StateNode, *, then: str | None) -> StateNode:
@@ -196,7 +205,13 @@ def _guarded(node: StateNode, *, then: str | None) -> StateNode:
             logger.exception("planning is unavailable")
             return Command(
                 update={
-                    "messages": [AIMessage(content=text("unavailable", language_of(state), solo=solo_of(state)))],
+                    "messages": [
+                        AIMessage(
+                            content=text(
+                                "unavailable", language_of(state), solo=solo_of(state)
+                            )
+                        )
+                    ],
                     "candidate_plan": None,
                     "check_result": None,
                     "explanation": None,
@@ -232,7 +247,9 @@ def _make_resolve_group_node(deps_factory: DepsFactory) -> StateNode:
         constraints = state["constraints"]
         live_context = state.get("live_context")
         if constraints is None or live_context is None:
-            raise ValueError("constraints and live context must be loaded before resolving")
+            raise ValueError(
+                "constraints and live context must be loaded before resolving"
+            )
         objective = use_case.resolve_group(
             thread_id=state["thread_id"],
             constraints=constraints,
@@ -254,7 +271,9 @@ def _make_build_plan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
         live_context = state.get("live_context")
         objective = state.get("group_objective")
         if constraints is None or live_context is None or objective is None:
-            raise ValueError("constraints, live context and group objective are required")
+            raise ValueError(
+                "constraints, live context and group objective are required"
+            )
         built = use_case.build(
             thread_id=state["thread_id"],
             constraints=constraints,
@@ -282,7 +301,9 @@ def _with_elicit_version(plan: Plan) -> Plan:
     provenance = plan.provenance
     versions = {**provenance.prompt_versions, "elicit": ELICIT_PROMPT_VERSION}
     return plan.model_copy(
-        update={"provenance": provenance.model_copy(update={"prompt_versions": versions})}
+        update={
+            "provenance": provenance.model_copy(update={"prompt_versions": versions})
+        }
     )
 
 
@@ -295,7 +316,9 @@ def _make_check_plan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
         constraints = state["constraints"]
         live_context = state.get("live_context")
         if plan is None or constraints is None or live_context is None:
-            raise ValueError("a candidate plan, constraints and live context are required")
+            raise ValueError(
+                "a candidate plan, constraints and live context are required"
+            )
         result = use_case.execute(
             thread_id=state["thread_id"],
             plan=plan,
@@ -314,7 +337,9 @@ def _route_after_check(state: ParkMindState) -> str:
     return "explain" if check is not None and check.valid else "no_valid_plan"
 
 
-def before_edit_update(state: ParkMindState, reasons: list[str]) -> dict[str, Any] | None:
+def before_edit_update(
+    state: ParkMindState, reasons: list[str]
+) -> dict[str, Any] | None:
     """After an edit no valid plan fits: put back what the guests had, to be checked again.
 
     ``None`` when the failed plan did not come from an edit. The caller routes to its
@@ -331,7 +356,9 @@ def before_edit_update(state: ParkMindState, reasons: list[str]) -> dict[str, An
     message = "\n".join([EDIT_DID_NOT_FIT_MESSAGE, *reasons, EDIT_REOFFER_MESSAGE])
     return {
         "messages": [AIMessage(content=message)],
-        "candidate_plan": plan.model_copy(update={"plan_id": f"plan_{uuid4().hex[:12]}"}),
+        "candidate_plan": plan.model_copy(
+            update={"plan_id": f"plan_{uuid4().hex[:12]}"}
+        ),
         "constraints": constraints,
         "check_result": None,
         "explanation": None,
@@ -353,31 +380,22 @@ def _no_valid_plan(state: ParkMindState) -> Command[Any]:
     lang = language_of(state)
     lines = [text("no_valid_plan", lang)]
     lines += reasons
+    if check is not None and any(v.rule is RuleId.SHOW_ARRIVAL for v in check.violations):
+        lines.append(text("shows_not_plannable", lang))
     lines.append(text("relax_hint", lang, solo=solo_of(state)))
     return Command(
-        update={"messages": [AIMessage(content="\n".join(lines))], "candidate_plan": None},
+        update={
+            "messages": [AIMessage(content="\n".join(lines))],
+            "candidate_plan": None,
+        },
         goto=END,
     )
 
 
-def explained(plan: Plan, result: GroundedExplanation) -> dict[str, Any]:
-    """EXPLAIN's state update: the text, and which prompt wrote it in the plan's provenance.
-
-    ``prompt_versions["explain"]`` is ``explain-v1`` for grounded LLM text and
-    ``template`` for the fallback; it travels to the proposal with the plan.
-    """
-    provenance = plan.provenance
-    versions = {**provenance.prompt_versions, "explain": result.prompt_version}
-    return {
-        "explanation": result.text,
-        "candidate_plan": plan.model_copy(
-            update={"provenance": provenance.model_copy(update={"prompt_versions": versions})}
-        ),
-    }
-
-
-def _make_explain_node(deps_factory: DepsFactory, narrator: PlanNarrator | None) -> StateNode:
-    """EXPLAIN (section 40, P0-31): the narrator's grounded text, else the template."""
+def _make_explain_node(
+    deps_factory: DepsFactory, narrator: PlanNarrator | None
+) -> StateNode:
+    """EXPLAIN: the narrator's grounded text, else the template."""
     use_case = ExplainPlanUseCase(deps_factory)
 
     def explain(state: ParkMindState) -> dict[str, Any]:
@@ -397,7 +415,11 @@ def _make_explain_node(deps_factory: DepsFactory, narrator: PlanNarrator | None)
         )
         # The narrator writes English only; other languages get the localized template.
         active = narrator if lang == DEFAULT_LANGUAGE else None
-        return explained(plan, explain_grounded(active, prepared))
+        return explained(
+            plan,
+            explain_grounded(active, prepared, thread_id=state["thread_id"]),
+            {"elicit": ELICIT_PROMPT_VERSION},
+        )
 
     return explain
 
@@ -510,6 +532,10 @@ def _attraction_ids(plan: Plan) -> list[str]:
     ]
 
 
+def _has_adult(constraints: PartyConstraints) -> bool:
+    return any(guest.role is GuestRole.ADULT for guest in constraints.guests)
+
+
 def _interrupt_for_approval(
     state: ParkMindState,
     *,
@@ -534,7 +560,7 @@ def _interrupt_for_approval(
     the checker like any plan. If no valid plan fits the edit, the plan before it is
     checked again and re-offered (``before_edit_update``).
 
-    A proposal superseded while the guests were deciding (P0-33) is not decided:
+    A proposal superseded while the guests were deciding is not decided:
     the guests are told and asked to request a new plan, the candidate and the
     proposal are dropped and ``current_plan`` is kept.
     """
@@ -555,12 +581,16 @@ def _interrupt_for_approval(
         if not isinstance(parsed, str):
             status, given_reason, edit = parsed
             if edit is None:
-                break
-            edited = _apply_edit(state, plan, edit, deps_factory)
-            if not isinstance(edited, str):
-                applied = edited
-                break
-            parsed = edited
+                if status is ApprovalStatus.APPROVED and not _has_adult(constraints):
+                    parsed = text("approval_needs_adult", language_of(state))
+                else:
+                    break
+            else:
+                edited = _apply_edit(state, plan, edit, deps_factory)
+                if not isinstance(edited, str):
+                    applied = edited
+                    break
+                parsed = edited
         payload = {**payload, "error": parsed}
     rejection_reason: RejectionReason | None = None
     if status is ApprovalStatus.REJECTED:
@@ -646,7 +676,9 @@ def build_planning_stage(
         destinations = (END,) if then is None else (then, END)
         graph.add_node(name, _guarded(node, then=then), destinations=destinations)
 
-    guarded_node("load_context", _make_load_context_node(deps_factory, clock), "resolve_group")
+    guarded_node(
+        "load_context", _make_load_context_node(deps_factory, clock), "resolve_group"
+    )
     guarded_node("resolve_group", _make_resolve_group_node(deps_factory), "build_plan")
     guarded_node("build_plan", _make_build_plan_node(deps_factory, clock), "check_plan")
     guarded_node("check_plan", _make_check_plan_node(deps_factory, clock), None)
@@ -658,7 +690,9 @@ def build_planning_stage(
     )
 
     graph.add_edge(START, "load_context")
-    graph.add_conditional_edges("check_plan", _route_after_check, ["explain", "no_valid_plan"])
+    graph.add_conditional_edges(
+        "check_plan", _route_after_check, ["explain", "no_valid_plan"]
+    )
     return graph.compile()
 
 

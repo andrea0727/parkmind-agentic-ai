@@ -1,4 +1,4 @@
-"""The reviewed knowledge corpus behind semantic search (P0-26; Architecture section 30).
+"""The reviewed knowledge corpus behind semantic search.
 
 Passages quoted from the official Walt Disney World pages -- park policies
 (Rider Switch, service animals, strollers, wheelchairs, first aid, baby care,

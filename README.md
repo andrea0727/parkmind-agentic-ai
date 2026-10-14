@@ -26,6 +26,17 @@ explains results; the deterministic core in `services/planning/` scores,
 optimizes, validates and replans; every plan change requires explicit guest
 approval before it's ever applied.
 
+## Contents
+
+[Prerequisites](#prerequisites) · [Getting started](#getting-started) ·
+[Demo app](#demo-app-api--react-ui) · [Planning rules](#planning-rules-the-guests-will-notice) ·
+[E2E](#e2e-on-real-ports-live-llm) · [Langfuse](#observability-langfuse-local) ·
+[Database](#database) · [Snapshots](#snapshots) · [Event monitor](#event-monitor) ·
+[Replanning](#replanning-graph) · [Approval](#human-approval-approve--edit--reject) ·
+[Explanations](#explanations) · [MCP](#mcp-capability-boundary) ·
+[Configuration](#configuration-reference) · [Tests and checks](#tests-and-checks) ·
+[Troubleshooting](#troubleshooting) · [Status](#implementation-status)
+
 ## Project structure
 
 ```
@@ -35,20 +46,22 @@ parkmind-agentic-ai/
 │       ├── __init__.py          # every package below is a REGULAR package
 │       │                        # with its own __init__.py — namespace
 │       │                        # subpackages cost mypy/coverage/pytest
-│       │                        # friction and buy nothing [P0-04]
+│       │                        # friction and buy nothing
 │       │
 │       ├── core/                # deterministic core — no framework imports
-│       │   └── contracts/       # Pydantic domain models — data only, no logic
-│       │                        # PartyConstraints, GuestProfile, Plan,
-│       │                        # Event, Proposal, AccessibilityRequirements
+│       │   ├── contracts/       # Pydantic domain models — data only, no logic
+│       │   │                    # PartyConstraints, GuestProfile, Plan,
+│       │   │                    # Event, Proposal, AccessibilityRequirements
+│       │   └── language.py      # es/en message catalog (questions, notices)
 │       │
 │       ├── services/            # all business logic lives here
 │       │   ├── planning/        # ParkGraph, Optimizer, ConstraintChecker,
 │       │   │                    # Replanner, PlanDiff, ForecastService
 │       │   ├── personalization/ # GroupPreferenceResolver, BehaviorLog,
 │       │   │                    # preference_learner.py (stub, see scope.md)
-│       │   ├── clients/         # ThemeParks, Open-Meteo, Postgres,
-│       │   │                    # in-memory knowledge store
+│       │   ├── ports/           # interfaces (repositories, park data, knowledge)
+│       │   ├── clients/         # ThemeParks, Open-Meteo, Postgres, MCP client,
+│       │   │                    # knowledge store (pgvector / in-memory), Langfuse
 │       │   ├── use_cases/       # wires planning+personalization+clients
 │       │   │                    # together — tools/ and graph/ call THIS,
 │       │   │                    # never planning/personalization directly
@@ -59,25 +72,29 @@ parkmind-agentic-ai/
 │       ├── graph/                 # LangGraph state, the two graphs, ConversationService
 │       ├── api/                   # FastAPI app: routes, auth/limits (security.py), schemas
 │       ├── tools/                  # MCP tools (data.* / knowledge.* / planner.*)
-│       └── config/                  # settings.py — reads .env
+│       └── config/                  # settings.py (reads .env), tracing.py
 │
 ├── tests/
 │   ├── unit/                     # one file per service/model, isolated
-│   └── integration/              # full graphs + the 4 agent quality checks
+│   ├── integration/              # full graphs, API, MCP, Postgres, agent quality checks
+│   └── architecture/             # import boundaries and ownership rules (who may validate, who sets event policy)
 │
 ├── docs/
 │   ├── evaluation/               # methodology behind the metrics
-│   ├── e2e/                      # live-run scenarios (SCENARIOS.md) and last report
-│   ├── diagrams/                 # architecture.html
+│   ├── e2e/                      # live-run scenarios (SCENARIOS.md); raw/ and REPORT.md are generated
+│   ├── diagrams/                 # system-architecture.html, agent-workflow.html
 │   └── context/, decisions/
 │
 ├── notebooks/                     # exploratory only, nothing imported by the app
 ├── scripts/                        # seed_db, collect_snapshot, renormalize_snapshots, run_monitor,
 │                                   # run_mcp_server, fetch_embedding_model, index_knowledge,
-│                                   # e2e/ (live runner); run_demo_scenario and run_baselines are stubs
-├── database/                        # alembic.ini + migrations/ (schema owner, P0-12)
+│                                   # langfuse_smoke, e2e/ (live runner);
+│                                   # run_demo_scenario and run_baselines are stubs
+├── demo/                              # households.json: parties saved per username (demo app)
+├── database/                        # alembic.ini + migrations/ (schema owner)
 ├── ui/
 │   ├── app.py                         # Streamlit stub (not used; the demo UI is ui/web)
+│   ├── prototype/                     # static HTML prototype
 │   └── web/                           # React + Vite demo UI (served by server.py)
 │
 ├── server.py                           # HTTP entrypoint: FastAPI API + built React UI on :8000
@@ -86,12 +103,14 @@ parkmind-agentic-ai/
 │                                        # graph(s) that langgraph.json points to
 ├── langgraph.json
 ├── pyproject.toml, poetry.lock          # dependencies (Poetry)
-├── docker-compose.yml                   # Postgres + the demo app
+├── docker-compose.yml                   # Postgres (pgvector) + the demo app
+├── docker-compose.langfuse.yml          # local Langfuse stack (observability)
 ├── pytest.ini                            # lets pytest find `parkmind.*` without
 │                                         # installing it as a package
-├── .env.example
-├── .github/workflows/                   # ci.yml, embedding-smoke.yml
-├── .gitignore
+├── .env.example                         # every setting, with its default
+├── .importlinter                        # import-boundary contracts
+├── .github/workflows/                   # ci.yml, embedding-smoke.yml (manual)
+├── .gitignore                           # build/, docs/e2e/raw/, .env are not committed
 └── README.md
 ```
 
@@ -104,7 +123,7 @@ blocking the other.
 
 **Every folder is a regular package.** Each subfolder under `src/parkmind/`
 has its own `__init__.py` — namespace packages (PEP 420) were tried and
-dropped (P0-04): they cost `mypy`/`import-linter`/`pytest` friction (e.g.
+dropped: they cost `mypy`/`import-linter`/`pytest` friction (e.g.
 `import-linter` can't resolve an implicit namespace package as a module) and
 buy nothing here. `src/` still isn't pip-installed as a package; `pytest.ini`
 and `agent.py` both add it to the import path, so
@@ -119,6 +138,17 @@ and `agent.py` both add it to the import path, so
 | Agent / personalization | `agents/`, `graph/`, `services/personalization/`, parts of `services/use_cases/` |
 | Evaluation | `services/evaluation/`, `docs/evaluation/` |
 | Mechanical, well-specified | `services/clients/knowledge/`, `services/planning/constraint_checker.py`, `core/contracts/` |
+
+## Prerequisites
+
+| Tool | Version | Needed for |
+|---|---|---|
+| Python | 3.12+ | everything |
+| [Poetry](https://python-poetry.org) | 2.x | dependencies and every `poetry run ...` command |
+| Docker (with Compose) | recent | Postgres + pgvector, the demo app, Langfuse |
+| Node.js | 22 (what the Dockerfile builds with) | only to run the React UI in dev mode (`ui/web`) |
+| Anthropic API key | | reading the guests' messages and writing explanations; the live e2e |
+| [Allure CLI](https://allurereport.org) (`brew install allure`) | | only to render the interactive e2e report |
 
 ## Getting started
 
@@ -136,6 +166,7 @@ poetry run python scripts/seed_db.py
 
 # 3. run tests (the `db` tests need the Postgres from step 2)
 poetry run pytest
+poetry run ruff check . && poetry run mypy src && PYTHONPATH=src poetry run lint-imports
 
 # 4. sanity-check the graphs build (prints "initial_planning: N nodes compiled", "replanning: ...")
 poetry run python agent.py
@@ -152,7 +183,7 @@ One container serves the FastAPI API and the built React UI on http://localhost:
 
 > **Known limit (decision, not an oversight).** Conversations are checkpointed in memory
 > (`default_checkpointer()`), so a restart loses open sessions and there is no horizontal
-> scaling. A Postgres checkpointer is a follow-up, and it needs a C19 decision first.
+> scaling. Moving to a Postgres checkpointer needs a C19 decision first.
 > `AccessibilityRequirements` are already kept out of a durable checkpoint (they live only in
 > `SESSION_MEMORY` and are re-read at planning time, with a test). What is not covered is the
 > guests' raw text: `state.messages` ("mi papá no puede caminar mucho") would be persisted.
@@ -226,20 +257,53 @@ poetry run ruff check . && poetry run mypy src && PYTHONPATH=src poetry run lint
 (If your shell exports `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`, unset them for the live
 Anthropic tests.)
 
+### Planning rules the guests will notice
+
+These sit in the graph around the deterministic core; none of them lets the LLM decide
+the itinerary.
+
+- **Heights.** ELICIT asks for each guest's height only when a must-do attraction has a
+  minimum height (one question for all the guests that need it). If a height is still
+  unknown, the `ConstraintChecker` fails closed on that ride: the guests are never put
+  on a ride whose limit they may not meet.
+- **Party size.** Above `PARKMIND_MAX_PARTY_SIZE` (default 10) the guests are asked to
+  split the group; no plan is built for the oversized party.
+- **An adult is required.** A plan for a group with no adult cannot be approved:
+  `APPROVED` is refused with an explanation, while `REJECTED` and `EDITED` stay available.
+- **Shows are not stops.** Shows have fixed times, so they are not planned as stops. When
+  the plan comes out empty because the guests asked for a show or the fireworks, the
+  answer says so instead of staying silent.
+- **Missing information is a question, never a guess.** Missing or doubtful data
+  (`height_needed`, `party_too_large`, `guest_role`, `height_unverified`,
+  `unknown_attraction`) is asked back in the guests' language (es/en), from the catalog in
+  `core/language.py`.
+
 ### E2E on real ports (live LLM)
 
 `scripts/e2e/` runs the initial planning graph against **real** Postgres, ThemeParks,
 Open-Meteo and Anthropic (33 scenarios, ~35 LLM calls, ~15 minutes; costs API credit).
 Not part of CI. Needs `ANTHROPIC_API_KEY` and `DATABASE_URL` in `.env`, a migrated
 database, and (for two scenarios) the throwaway `parkmind_edge` database; details in
-`scripts/e2e/README.md`.
+`scripts/e2e/README.md`, scenario tables in `docs/e2e/SCENARIOS.md`.
 
 ```bash
+# one-time: the throwaway database for the empty-catalog scenarios (recreate it for each full run,
+# one scenario fills its catalog)
+docker compose exec postgres createdb -U parkmind parkmind_edge
+DATABASE_URL=postgresql://parkmind:parkmind@localhost:5432/parkmind_edge \
+  poetry run alembic -c database/alembic.ini upgrade head
+
 poetry run python scripts/e2e/capture.py                 # all scenarios, skipping the captured ones
 poetry run python scripts/e2e/capture.py espanol         # only these
 FORCE=1 poetry run python scripts/e2e/capture.py         # re-capture everything
-poetry run python scripts/e2e/build_report.py            # docs/e2e/raw -> docs/e2e/REPORT.md (no credentials)
+poetry run python scripts/e2e/build_report.py            # docs/e2e/raw -> build/e2e/runs/<time>_<N>of33/ (no credentials)
+(cd build/e2e/latest/allure-report && python -m http.server 8766)   # open http://localhost:8766
 ```
+
+Captures go to `docs/e2e/raw/` and reports to `build/e2e/` (both git-ignored). Every
+report run is kept with its Allure history, so the trend across runs is visible.
+Optional: `E2E_NOW=HH:MM` (park clock, default 10:00), `E2E_EDGE_DATABASE_URL`,
+`E2E_RAW_DIR`, `E2E_BAD_DATABASE_URL`.
 
 ### Observability: Langfuse (local)
 
@@ -280,8 +344,8 @@ reduced to their roles.
 - LangSmith tracing (`LANGSMITH_TRACING=true`) is still refused: its tracer is added by
   `langchain-core` and never passes through the mask.
 - The stack's secrets are local defaults. Don't expose it beyond localhost, and don't send real
-  guest data to a cloud project: P1-18 still has to add the trace metadata (plan, snapshot,
-  prompt and model versions), failure correlation and the §42 scores.
+  guest data to a cloud project: the traces do not carry the trace metadata (plan, snapshot,
+  prompt and model versions), failure correlation or the §42 scores.
 
 ### Database
 
@@ -292,9 +356,9 @@ reduced to their roles.
   scenario (two opposing profiles, one active plan, one pending candidate). It
   is safe to re-run.
 - **Reset:** `docker compose down -v && docker compose up -d`, then migrate
-  again. A volume created before P0-12 still holds the old `init.sql` tables and
+  again. A volume created before the migrations still holds the old `init.sql` tables and
   must be reset this way before the first `upgrade head`.
-- **pgvector (P0-26):** the compose image is `postgres:16` plus the
+- **pgvector:** the compose image is `postgres:16` plus the
   `postgresql-16-pgvector` package (`database/Dockerfile`; CI installs the same
   package into its service container). Migration `0003` enables the extension.
   A container started from the old plain image stops it with a message:
@@ -336,7 +400,7 @@ several API workers would lose records between them. `server.py` fails loudly at
 startup if more than one worker is requested (`WEB_CONCURRENCY` or
 `PARKMIND_WORKERS` above 1, or `--workers`; `api/guard.py`).
 
-### IDs and normalization (P0-10)
+### IDs and normalization
 
 - **Internal ids.** An entity's internal id is the ThemeParks entity UUID it had
   when first seen. Every lookup goes through the `id_mapping` table
@@ -351,10 +415,10 @@ startup if more than one worker is requested (`WEB_CONCURRENCY` or
 - **Problems are reported, never merged.** A duplicated provider id, missing
   curated metadata, an unknown entity type, an unmapped or conflicting id: the
   entity is left out and returned as a `MappingIssue`; the rest still loads.
-  Today the 28 SHOW entities show up as `MISSING_METADATA` until they're
-  curated in `themeparks_reference_data.py`.
+  The 28 SHOW entities are reported as `MISSING_METADATA`: they are not in the
+  curated `themeparks_reference_data.py`, and shows are not plannable stops anyway.
 
-### Snapshots (P0-11)
+### Snapshots
 
 A snapshot is the park's live data at one moment: ThemeParks waits, statuses and
 showtimes plus the hourly weather, stored as the **raw provider payloads** next
@@ -402,7 +466,7 @@ poetry run python scripts/renormalize_snapshots.py             # rows from an ol
 poetry run python scripts/renormalize_snapshots.py --all       # or every snapshot
 ```
 
-### Event monitor (P0-33)
+### Event monitor
 
 The monitor compares the two most recent stored snapshots and reports what
 changed in the park: an attraction going down or coming back
@@ -434,14 +498,16 @@ poetry run python scripts/run_monitor.py --no-collect   # detect on what is alre
   report, since the provider can lag behind a guest. The cost: a wrong guest report
   can hide a real closure the monitor sees within those 2 h.
   `BEHIND_SCHEDULE` is recorded once per late stop, when the delay reaches 15
-  minutes, and only while the party's progress is being tracked. That one event is
-  final for the stop: if the guests reject or ignore the replan it proposes, the
-  same stop does not raise another one, however late the party gets. It needs
-  progress *reported* by the party (`completed_stop_ids` or `skipped_stop_ids`);
-  assumed progress never counts. Until something records it (reporting a stop as
-  done: #48, P0-35b), the event is not raised in production. A replan's reported
-  progress is carried over to the new plan when its proposal is approved, so what
-  the guests report while deciding is not lost.
+  minutes, and only while the party's progress is being tracked. "Once" means once
+  per stop *and planned departure*: if the guests reject or ignore the replan it
+  proposes, the same stop does not raise another one, however late the party gets.
+  Only an approved replan, which moves the departures, makes a new delay count as a
+  new event. `BEHIND_SCHEDULE` only fires once something records progress
+  (`completed_stop_ids` or `skipped_stop_ids` in `PlanExecutionState`); assumed
+  progress never counts. Only `seed.py` writes it, so outside the seeded scenario the
+  event does not fire: no API call reports a stop as done. A replan's reported progress is
+  carried over to the new plan when its proposal is approved, so what the guests
+  report while deciding is not lost.
 - **Confirmation first (§25, C10).** A doubtful guest report, or a fatigue report
   for a guest with a walking limit (or whose limit can't be read), is set aside
   until the guests confirm it; the rest of the batch goes on.
@@ -450,10 +516,10 @@ poetry run python scripts/run_monitor.py --no-collect   # detect on what is alre
   a proposal superseded meanwhile activates nothing and tells the guests.
 - **Next step.** The monitor prints the park-wide events; per-party judgement runs
   when `HandleEventsUseCase` is called with that party's plan and objective, which is
-  what the replanning graph does (below). Waking a party's graph from the monitor
-  is not wired yet.
+  what the replanning graph does (below). The monitor does not wake a party's
+  graph; the replanning graph is started with the events.
 
-### Replanning graph (P0-34)
+### Replanning graph
 
 `graph/replanning_graph.py` (`langgraph.json` entry `replanning`) runs on the thread
 of the initial plan, with `{"thread_id": ..., "events": [Event, ...]}` as input;
@@ -480,7 +546,7 @@ LOAD PLAN → HANDLE EVENTS (dedup · apply execution updates · EventPolicy)
   reported progress, the party is assumed on schedule: stops that should have ended
   by now count as done. A closure or reopening reported after the snapshot is applied
   to the replan's context so the replan and its check see the same availability.
-- **Fatigue.** A confirmed `GUEST_FATIGUE` sets the walking cap (P0-33) and makes the
+- **Fatigue.** A confirmed `GUEST_FATIGUE` sets the walking cap and makes the
   new horizon open with a `REST` stop (§25). If a rest cannot fit, the replan fails
   closed.
 - **Walking budget.** The optimizer is given what is left of the party budget, the
@@ -492,9 +558,9 @@ LOAD PLAN → HANDLE EVENTS (dedup · apply execution updates · EventPolicy)
 - **Known limits.** After a replan finds no valid plan the events stay recorded, so a
   duplicate report does not retry it (a new event does). REJECT's "update
   preferences" step is not implemented (the reason is stored on the proposal and in
-  the behavior log; P1-03). An in-progress stop is treated as still ahead.
+  the behavior log). An in-progress stop is treated as still ahead.
 
-### Human approval: approve / edit / reject (P0-32)
+### Human approval: approve / edit / reject
 
 Both planning graphs pause at the same approval interrupt
 (`"kind": "plan_approval"`). Resume it with one of:
@@ -541,9 +607,9 @@ plain resume value kept that way would also answer the *next* interrupt.
   its role only (no height). A superseded proposal logs nothing, and a decision
   applied twice is logged once (`entry_id` is the proposal and the decision). A
   decision without the party's guests is refused. An edit's `attraction_ids` mixes
-  what was removed and what was added; the direction is a P1-01 follow-up (#51).
+  what was removed and what was added; the direction is not recorded (#51).
 
-### Explanations (P0-31)
+### Explanations
 
 Both graphs' EXPLAIN step puts a validated plan into words with Claude, and never
 lets it invent a figure (Architecture §40, C17):
@@ -555,37 +621,45 @@ lets it invent a figure (Architecture §40, C17):
   preference weights that drove the plan, each labelled `stated`, `learned` or
   `default`. The prompt is `agents/explain_prompt.py` (`explain-v1`).
 - **Deterministic grounding.** `agents/grounding.py` extracts every number and clock
-  time from the answer; each must appear in the payload exactly (`25` = `25.0`, but a
-  bare `14` is not grounded by `14:05`, and no rounding). A figure that is a `stated` or
-  `learned` weight must carry that label in its sentence. No LLM judge.
+  time from the answer (and number words such as "ten" or "half"); each must appear in
+  the payload exactly (`25` = `25.0`, but a bare `14` is not grounded by `14:05`, and no
+  rounding). It is a subset test: it rejects an invented figure, but `3 PM`, `½` or a
+  swapped pair of figures pass when those numbers are already in the payload. A figure
+  that is a `stated` or `learned` weight must carry that label in its sentence (or its
+  list header), and a `default` weight must carry neither. A stop's `preference_score` is
+  not a weight and is never labelled. No LLM judge.
 - **One retry, then the template.** A schema failure, an ungrounded number or a wrong
-  label gets one retry with the errors listed (each request is capped at 20 s); after that, or without an
-  `ANTHROPIC_API_KEY`, the guests read the deterministic template, which only prints
-  figures from the payload. The proposal's provenance records which one wrote it
-  (`prompt_versions["explain"]`: `explain-v1` or `template`).
-- **English only for now.** The narrator writes English; with `lang` other than `en` (for
+  label gets one retry with the errors listed; after that, without an
+  `ANTHROPIC_API_KEY`, or if the model returns no structured output or the call fails,
+  the guests read the deterministic template, which only prints figures from the payload.
+  Each request is capped at `EXPLAIN_TIMEOUT_SECONDS` (20 s) and the client does not
+  retry on its own (`EXPLAIN_SDK_RETRIES=0`), so the guests wait at most 2 x 20 s = 40 s;
+  with `EXPLAIN_SDK_RETRIES=1` it would be up to 80 s. The proposal's provenance records
+  which one wrote it (`prompt_versions["explain"]`: `explain-v1` or `template`).
+- **English narrator only.** The narrator writes English; with `lang` other than `en` (for
   example Spanish) the guests read the localized deterministic template, so the same
   grounding guarantees hold but the wording is fixed. The narrator payload names a guest
   who sits a ride out as `Guest N`, never by their free-text label ("tu mamá"); only the
   template, which stays in the process, uses the label.
-- **Model:** `EXPLAIN_MODEL` (defaults to `ELICIT_MODEL`). Tests inject a fake
+- **Settings:** `EXPLAIN_MODEL` (defaults to `ELICIT_MODEL`), `EXPLAIN_TIMEOUT_SECONDS`,
+  `EXPLAIN_SDK_RETRIES`. Tests inject a fake
   narrator (`tests/explain_support.py`), so they never call Claude, even with a key in
   `.env`.
 
-### MCP capability boundary (P0-24..P0-27)
+### MCP capability boundary
 
 `parkmind-mcp` publishes the same use cases the graph calls in-process as typed
 MCP tools (Architecture §27, C22/C23). The graph never depends on it; external
-clients (the LLM-only baseline, P1-15) and, when configured, LOAD CONTEXT do.
+clients (the LLM-only baseline) and, when configured, LOAD CONTEXT do.
 Every result is `{data, provenance}` (§32); failures are structured
 `{"error": {code, message, retryable, details}}`. No tool proposes, persists or
 activates a plan.
 
 | Namespace | Tools |
 |---|---|
-| `data.*` (P0-25) | `get_live_waits`, `get_attraction_status`, `get_schedule`, `get_showtimes`, `get_weather`, `get_walking_time`, `get_attraction_info` |
-| `knowledge.*` (P0-26) | `search_policies`, `find_similar_attractions`, `check_accessibility` |
-| `planner.*` (P0-27) | `build_plan`, `check_plan`, `replan`, `score_preferences`, `forecast_waits` |
+| `data.*` | `get_live_waits`, `get_attraction_status`, `get_schedule`, `get_showtimes`, `get_weather`, `get_walking_time`, `get_attraction_info` |
+| `knowledge.*` | `search_policies`, `find_similar_attractions`, `check_accessibility` |
+| `planner.*` | `build_plan`, `check_plan`, `replan`, `score_preferences`, `forecast_waits` |
 
 ```bash
 # stdio (what an MCP client launches), or streamable HTTP at http://127.0.0.1:8765/mcp
@@ -601,11 +675,11 @@ machine: stdio answers the process that launched it, and HTTP binds to loopback
 (any other `--host` is refused; the SDK also checks Host and Origin against DNS
 rebinding). A `session_id` works as a capability: whoever reaches the server and
 knows one gets plans that reflect that session's accessibility requirements, and
-violations name the rule and the stop (P0-27's diagnostics) though never the
+violations name the rule and the stop (the planner tools' diagnostics) though never the
 requirement. That is the demo's single-machine boundary; serving it on a network
-needs authentication first (with the API layer, P0-35a).
+needs authentication first (with the API layer).
 
-**Knowledge store (P0-26).** Semantic search runs on pgvector with a local
+**Knowledge store.** Semantic search runs on pgvector with a local
 multilingual model (fastembed, `paraphrase-multilingual-MiniLM-L12-v2`, ~220 MB,
 English questions against the Spanish corpus quoted from the official park
 pages). One-time setup, after `docker compose up -d --build` and
@@ -618,11 +692,11 @@ poetry run python scripts/index_knowledge.py         # embed the corpus into pgv
 
 Without the model or the index, `knowledge.search_policies` answers by keyword
 search over the same passages and says so in `provenance.degraded` (§43);
-`knowledge.check_accessibility` never degrades (fail-closed, P0-26a). PR CI never
+`knowledge.check_accessibility` never degrades (fail-closed). PR CI never
 downloads the model; the manual **Embedding smoke** workflow runs the
 `requires_model` tests with it.
 
-**LOAD CONTEXT over MCP (P0-24).** `PARKMIND_CONTEXT_TRANSPORT=mcp` makes the graph
+**LOAD CONTEXT over MCP.** `PARKMIND_CONTEXT_TRANSPORT=mcp` makes the graph
 read `data.*` and `knowledge.*` through the server at `PARKMIND_MCP_URL` (start
 it with `--http`); if the server is unreachable, the in-process adapter of the
 same port answers and `LoadedContext.transport` says `in_process_fallback`. The
@@ -662,7 +736,72 @@ curl -sSL https://install.python-poetry.org | python3 -
 - `poetry lock` — update poetry.lock (commit this to git when dependencies change)
 - `poetry update` — upgrade all dependencies to their latest versions
 
-All four of the above run on every pull request via `.github/workflows/ci.yml` (P0-04).
+`ruff`, `mypy`, `lint-imports` and `pytest` run on every pull request via
+`.github/workflows/ci.yml` (Python 3.12, Postgres 16 with pgvector as a service).
+
+## Configuration reference
+
+Everything is read from `.env` (copy `.env.example`; it lists every setting with its
+default). The ones you will touch:
+
+| Variable | Default | What it does |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | – | Reads the guests' messages (ELICIT) and writes explanations |
+| `ELICIT_MODEL` | `claude-haiku-4-5-20251001` | Anthropic model for elicitation |
+| `EXPLAIN_MODEL` | `ELICIT_MODEL` | Model for explanations |
+| `EXPLAIN_TIMEOUT_SECONDS` / `EXPLAIN_SDK_RETRIES` | `20` / `0` | Explain request cap and client retries |
+| `PARKMIND_LLM_CALLS_PER_THREAD` | `40` | LLM calls one conversation may make; past it the agents use their deterministic path |
+| `PARKMIND_MAX_PARTY_SIZE` | `10` | Largest party the planner accepts |
+| `DATABASE_URL` | `postgresql://parkmind:parkmind@localhost:5432/parkmind` | Postgres |
+| `THEMEPARKS_BASE_URL`, `OPEN_METEO_BASE_URL` | public APIs | Park and weather data (no key) |
+| `PARKMIND_AUTH_USERS`, `PARKMIND_JWT_SECRET` | – (required) | API sign-in; the server refuses to start without them |
+| `PARKMIND_TOKEN_TTL_HOURS` | `2` | Token lifetime |
+| `PARKMIND_MESSAGES_PER_USER_DAY` / `PARKMIND_MESSAGES_GLOBAL_DAY` | `300` / `2000` | LLM usage caps |
+| `PARKMIND_AUTH_DISABLED` | off | Local demo only: every route open |
+| `PARKMIND_DEMO`, `PARKMIND_PLAN_FROM_STORED`, `E2E_NOW` | off | Demo switches (the last two need `PARKMIND_DEMO=1`) |
+| `PARKMIND_SEED_DEMO` | off (`1` in compose) | Load the dev scenario on container start |
+| `PORT`, `PARKMIND_UI_DIR`, `PARKMIND_CORS_ORIGINS` | `8000`, `ui/web/dist`, – | `server.py` port, built UI folder, extra CORS origins |
+| `PARKMIND_HOUSEHOLDS_FILE` | `demo/households.json` | Parties saved per username |
+| `PARKMIND_CONTEXT_TRANSPORT`, `PARKMIND_MCP_URL` | `in_process`, `http://127.0.0.1:8765/mcp` | LOAD CONTEXT transport |
+| `PARKMIND_MCP_TOKEN`, `PARKMIND_MCP_PLANNER_CALLS_PER_MINUTE` | –, `30` | MCP HTTP bearer token and `planner.*` rate limit |
+| `PARKMIND_KNOWLEDGE_BACKEND` | `pgvector` (`in_memory` in compose) | Semantic or keyword knowledge search |
+| `PARKMIND_EMBEDDING_MODEL`, `PARKMIND_EMBEDDING_CACHE` | MiniLM multilingual, `~/.cache/parkmind/fastembed` | Local embedding model |
+| `PARKMIND_TRACING`, `LANGFUSE_*`, `PARKMIND_TRACING_ENVIRONMENT` | `off` | Masked Langfuse tracing |
+| `PARKMIND_TEST_DATABASE_URL` | – | Postgres server for the `db` tests |
+| `PARKMIND_WORKERS` / `WEB_CONCURRENCY` | `1` | Must stay at 1 (sessions live in memory) |
+
+## Tests and checks
+
+```bash
+poetry run pytest                                   # everything (db tests need the compose Postgres)
+poetry run pytest tests/unit                        # fast, no database
+poetry run pytest -m "not db"                       # skip everything that needs Postgres
+poetry run pytest tests/integration/test_initial_planning_graph.py -k adult        # a single test by keyword
+poetry run pytest --cov=src/parkmind                # coverage
+poetry run ruff check .                             # lint
+poetry run mypy src                                 # types
+PYTHONPATH=src poetry run lint-imports              # import boundaries (.importlinter)
+```
+
+Markers (`pytest.ini`): `db` needs a real Postgres (skipped locally when unreachable,
+**fails** when `CI` is set); `requires_model` needs the local embedding model (skipped when
+it is not cached; the manual **Embedding smoke** workflow runs it). Most tests use a fake LLM;
+the few live Anthropic tests need `ANTHROPIC_API_KEY`. The full live check is the e2e above.
+
+## Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| `401` on every Anthropic call | Your shell exports `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` (a proxy). Unset them and use the key from `.env`. |
+| Server exits at start | `PARKMIND_AUTH_USERS` / `PARKMIND_JWT_SECRET` missing; a demo switch set without `PARKMIND_DEMO=1`; more than one worker; or LangSmith tracing on. The message names which. |
+| `Could not find package 'parkmind'` from `lint-imports` | Run it with `PYTHONPATH=src`. |
+| `db` tests skipped | Postgres is not running: `docker compose up -d postgres`, then migrate. |
+| Old tables / `init.sql` leftovers, migration fails | Volume from before the migrations: `docker compose down -v`, then migrate again. |
+| The Postgres container stops with a pgvector message | Plain image from before: `docker compose up -d --build`. |
+| Port 5432 or 8000 already in use | Stop the other service, or change the host port in `docker-compose.yml`. |
+| `knowledge.search_policies` says `degraded` | Model or index missing: run `fetch_embedding_model.py` and `index_knowledge.py`. |
+| The Allure report is blank | Serve it over HTTP (`python -m http.server`); `index.html` does not work from `file://`. |
+| Replies are in the template wording | No `ANTHROPIC_API_KEY`, the per-thread call cap was reached, or the model output failed grounding twice. |
 
 ## Implementation Status
 
@@ -670,18 +809,17 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 |---|---|---|
 | **LangGraph State v2** | ✅ Done | Typed ParkMindState, state helpers, message reducer |
 | **Preference Resolution** | ✅ Done | Weighted aggregation from GuestProfile (queue, walking, categories) |
-| **Plan Synthesis** | ✅ Initial planning graph [P0-30] | ELICIT → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED. Runs on in-process use cases, no MCP server. APPROVE / EDIT / REJECT [P0-32]: an edit is re-planned, re-checked and proposed again. |
-| **Explanations** | ✅ P0-31 | Claude explains the validated plan from a payload only (plan, diff, provenance, stated/learned preference weights); every numeral is checked against the payload, one retry, then the deterministic template. |
-| **Event monitor** | ✅ P0-33 | Snapshot-to-event detector with per-reading freshness, `EventPolicy` (§25 table, confirmation gate, fatigue walking cap), cross-source dedup, supersede on significant events, `scripts/run_monitor.py`. Consumed by the replanning graph [P0-34]. |
-| **MCP capability boundary** | ✅ P0-24..P0-27 | `parkmind-mcp`: 15 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` takes the plan, its progress and the events inline (§31), so a client without a stored plan can replan. |
-| **Demo app (API + UI)** | ✅ P0-35 / P0-36 | FastAPI layer over the graphs (`/api/*`, Swagger at `/docs`) and a React UI; bearer-token login, per-user session ownership, LLM usage caps, es/en conversation. Open: P0-32 edit path, #88 e2e bugs, guardrails, Langfuse. |
-| **Observability** | 🟡 P1-18 core (PR #93) | Masked Langfuse tracing of every API graph run, opt-in (`PARKMIND_TRACING=langfuse`); local stack in `docker-compose.langfuse.yml`; C19 canary over exported spans. Metadata, failure correlation and scores remain (P1-18) |
+| **Plan Synthesis** | ✅ Initial planning graph | ELICIT (asks heights when a must-do needs one, caps the party size) → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED, and never for a group without an adult. Runs on in-process use cases, no MCP server. APPROVE / EDIT / REJECT: an edit is re-planned, re-checked and proposed again. |
+| **Explanations** | ✅ Done | Claude explains the validated plan from a payload only (plan, diff, provenance, stated/learned preference weights); every numeral is checked against the payload, one retry, then the deterministic template. |
+| **Event monitor** | ✅ Done | Snapshot-to-event detector with per-reading freshness, `EventPolicy` (§25 table, confirmation gate, fatigue walking cap), cross-source dedup, supersede on significant events, `scripts/run_monitor.py`. Consumed by the replanning graph. |
+| **MCP capability boundary** | ✅ Done | `parkmind-mcp`: 15 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` takes the plan, its progress and the events inline (§31), so a client without a stored plan can replan. |
+| **Demo app (API + UI)** | ✅ Done | FastAPI layer over the graphs (`/api/*`, Swagger at `/docs`) and a React UI; bearer-token login, per-user session ownership, LLM usage caps, es/en conversation. |
+| **Observability** | ✅ Done | Masked Langfuse tracing of every API graph run, opt-in (`PARKMIND_TRACING=langfuse`); local stack in `docker-compose.langfuse.yml`; C19 canary over exported spans. |
 | **Weather Integration** | ✅ Done | OpenMeteo adapter (hourly forecast) |
 | **Attractions Integration** | ✅ Done | ThemePark catalog adapter (rides, wait times) |
 | **PostgreSQL Repos** | ✅ Done | Profiles, Plans, Session store (in-memory for accessibility) |
-| **Initial Planning Graph** | ✅ Done | Superseded by the Plan Synthesis row above (P0-30). |
 | **Constraint Checker** | ✅ Done | 11 rules, plus `check_replan` for a replanned day; PlanDiff generation |
-| **Replanner** | ✅ P0-23 / P0-34 | Replanner (frozen completed stops, remaining walking budget, rest-first) and the replanning graph: events → policy → replan → check → diff → explain → propose → approval. |
+| **Replanner** | ✅ Done | Replanner (frozen completed stops, remaining walking budget, rest-first) and the replanning graph: events → policy → replan → check → diff → explain → propose → approval. |
 
 ## Working conventions
 

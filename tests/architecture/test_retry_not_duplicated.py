@@ -2,7 +2,7 @@
 place a retry loop should sleep. Before the extraction, ThemeParksClient and
 OpenMeteoClient each carried their own copy of the same loop -- including,
 before self-review, the same two bugs. This fails the build the moment a new
-adapter (P0-09 routing, P1-06 Queue-Times, ...) writes `time.sleep(...)`
+adapter (routing, Queue-Times, ...) writes `time.sleep(...)`
 instead of calling `services.clients._retry.send_with_retry`.
 
 AST-based, not a text/regex scan, so a comment or docstring mentioning

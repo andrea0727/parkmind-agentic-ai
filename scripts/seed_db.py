@@ -1,4 +1,4 @@
-"""Loads the reproducible development scenario into Postgres (backlog P0-12).
+"""Loads the reproducible development scenario into Postgres.
 
     poetry run alembic -c database/alembic.ini upgrade head   # once, creates the schema
     poetry run python scripts/seed_db.py

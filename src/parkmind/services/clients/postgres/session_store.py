@@ -16,7 +16,7 @@ accessibility needs mid-session -- cannot happen by default.
 
 Limitation: the memory is process-local. A deployment with several API
 workers needs sticky sessions or another non-table store; that is an open
-question for P0-35, deliberately not decided here.
+question, deliberately not decided here.
 """
 
 import threading

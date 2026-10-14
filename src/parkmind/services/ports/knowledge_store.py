@@ -1,10 +1,10 @@
-"""KnowledgeStore -- the park's published safety notices (section 30 [C21], P0-26a).
+"""KnowledgeStore -- the park's published safety notices (section 30 [C21]).
 
 ``check_accessibility`` (services/use_cases/check_accessibility.py) matches a
 guest's derived flags against what this port returns. Two adapters sit behind
 it in the baseline: in-memory (services/clients/knowledge/in_memory.py) and
-pgvector (P0-26). Semantic search (``search_policies``,
-``find_similar_attractions``) is added to this port by P0-26.
+pgvector. Semantic search (``search_policies``,
+``find_similar_attractions``) is part of this port.
 
 A notice is the set of ``RideRestriction`` items the park publishes for an
 attraction -- the taxonomy is one-to-one with the park's safety notices
@@ -13,7 +13,7 @@ may not ride (section 33: "the attraction side lives in the notice corpus").
 Only closed enum members cross this port: never the notice text, never a
 free-text requirement.
 
-``KnowledgeSearch`` (P0-26) is the semantic half of the same capability: ranked
+``KnowledgeSearch`` is the semantic half of the same capability: ranked
 passages of the reviewed knowledge corpus (park policies, accessibility
 information, attraction profiles) for ``search_policies`` and
 ``find_similar_attractions``. It is a separate protocol so a notice-only store

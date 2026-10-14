@@ -1,5 +1,5 @@
 {
-  "description": "Hand-written snapshot pairs and the events the monitor must detect (P0-33). Times are park-local (America/New_York, EDT offsets), written independently of the detector code. 'now' is when the monitor runs; each snapshot lists statuses, posted waits (OPERATING unless stated) and hourly precipitation probabilities; 'reading_times' is the provider's lastUpdated per attraction in the current snapshot.",
+  "description": "Hand-written snapshot pairs and the events the monitor must detect. Times are park-local (America/New_York, EDT offsets), written independently of the detector code. 'now' is when the monitor runs; each snapshot lists statuses, posted waits (OPERATING unless stated) and hourly precipitation probabilities; 'reading_times' is the provider's lastUpdated per attraction in the current snapshot.",
   "cases": [
     {
       "name": "tron goes down, space mountain spikes, rain arrives at noon",

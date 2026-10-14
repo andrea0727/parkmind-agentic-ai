@@ -1,4 +1,4 @@
-"""From exceptions to structured tool errors (P0-24: "Errors are structured").
+"""From exceptions to structured tool errors (errors are structured).
 
 Every tool call goes through ``ToolRegistry.call``, which turns whatever the
 use case raised into a ``ToolFailure`` carrying a ``ToolErrorPayload``. The

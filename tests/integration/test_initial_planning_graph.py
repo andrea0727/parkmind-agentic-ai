@@ -1,5 +1,5 @@
 """
-End-to-end initial planning graph (P0-30), with every port faked: no Postgres, no
+End-to-end initial planning graph, with every port faked: no Postgres, no
 network, no MCP server.
 
 natural language -> confirm hard constraints -> LOAD CONTEXT -> RESOLVE GROUP ->
@@ -28,6 +28,7 @@ from planning_support import (
     snapshot_context,
 )
 
+from parkmind.agents.elicit_prompt import ELICIT_PROMPT_VERSION
 from parkmind.core.contracts import (
     AttractionStatus,
     CheckResult,
@@ -67,7 +68,11 @@ def test_set_constraints_works():
 
 
 def test_approve_plan_transitions_state():
-    state: ParkMindState = {"thread_id": "test", "messages": [], "candidate_plan": factories.plan()}
+    state: ParkMindState = {
+        "thread_id": "test",
+        "messages": [],
+        "candidate_plan": factories.plan(),
+    }
 
     state = approve_plan(state)
 
@@ -91,8 +96,13 @@ class _Harness:
         self.events: list[str] = []
         intake, sessions = make_intake()
         snapshots = InMemorySnapshotRepository()
-        seed_snapshot(snapshots, snapshot_context(retrieved_at=NOW - snapshot_age - timedelta(minutes=5)))
-        self.deps = make_deps(sessions=sessions, snapshots=snapshots, collector=collector)
+        seed_snapshot(
+            snapshots,
+            snapshot_context(retrieved_at=NOW - snapshot_age - timedelta(minutes=5)),
+        )
+        self.deps = make_deps(
+            sessions=sessions, snapshots=snapshots, collector=collector
+        )
         deps = self.deps
         self.checkpointer = default_checkpointer()
         self.graph = ipg.build_initial_planning_graph(
@@ -112,7 +122,9 @@ class _Harness:
         self._spy(monkeypatch, ipg.ProposePlanUseCase, "execute", "propose")
         self._spy_resolve(monkeypatch)
 
-    def _spy(self, monkeypatch: pytest.MonkeyPatch, cls: Any, method: str, label: str) -> None:
+    def _spy(
+        self, monkeypatch: pytest.MonkeyPatch, cls: Any, method: str, label: str
+    ) -> None:
         original = getattr(cls, method)
 
         def spy(this: Any, *args: Any, **kwargs: Any) -> Any:
@@ -124,7 +136,9 @@ class _Harness:
     def _spy_resolve(self, monkeypatch: pytest.MonkeyPatch) -> None:
         original = ipg.ResolveProposalUseCase.execute
 
-        def spy(this: Any, thread_id: str, proposal_id: str, status: Any, **kwargs: Any) -> Any:
+        def spy(
+            this: Any, thread_id: str, proposal_id: str, status: Any, **kwargs: Any
+        ) -> Any:
             self.events.append(f"resolve:{status.value}")
             return original(this, thread_id, proposal_id, status, **kwargs)
 
@@ -136,15 +150,22 @@ class _Harness:
 
     def start_to_confirmation(self) -> Any:
         result = self.graph.invoke(
-            {"thread_id": "t1", "messages": [HumanMessage(content=m) for m in COMPLETE["messages"]]},
+            {
+                "thread_id": "t1",
+                "messages": [HumanMessage(content=m) for m in COMPLETE["messages"]],
+            },
             config=CONFIG,
         )
-        assert result["__interrupt__"][0].value["kind"] == "hard_constraint_confirmation"
+        assert (
+            result["__interrupt__"][0].value["kind"] == "hard_constraint_confirmation"
+        )
         return result
 
     def confirm(self) -> Any:
         self.start_to_confirmation()
-        return self.graph.invoke(Command(resume={"confirmed": True, "consent": True}), config=CONFIG)
+        return self.graph.invoke(
+            Command(resume={"confirmed": True, "consent": True}), config=CONFIG
+        )
 
     def state(self) -> dict[str, Any]:
         """The thread's values; while paused inside the planning subgraph, that subgraph's."""
@@ -155,7 +176,9 @@ class _Harness:
         return snapshot.values
 
 
-def test_natural_language_yields_a_valid_candidate_plan_waiting_for_approval(monkeypatch):
+def test_natural_language_yields_a_valid_candidate_plan_waiting_for_approval(
+    monkeypatch,
+):
     h = _Harness(monkeypatch)
 
     result = h.confirm()
@@ -212,11 +235,18 @@ def test_stages_run_in_order_and_explain_follows_check(monkeypatch):
     h = _Harness(monkeypatch)
     h.confirm()
 
-    assert h.events == ["load_context", "resolve_group", "build_plan", "check", "explain", "propose"]
+    assert h.events == [
+        "load_context",
+        "resolve_group",
+        "build_plan",
+        "check",
+        "explain",
+        "propose",
+    ]
 
 
 def test_approving_a_proposal_superseded_meanwhile_activates_nothing(monkeypatch):
-    """A significant event supersedes the proposal while the guests decide (P0-33)."""
+    """A significant event supersedes the proposal while the guests decide."""
     h = _Harness(monkeypatch)
     h.confirm()
     pending = h.state()
@@ -236,7 +266,9 @@ def test_approving_a_proposal_superseded_meanwhile_activates_nothing(monkeypatch
     assert superseded.approval_status.value == "SUPERSEDED"
 
 
-def test_a_superseded_proposal_says_the_current_plan_stays_only_when_there_is_one(monkeypatch):
+def test_a_superseded_proposal_says_the_current_plan_stays_only_when_there_is_one(
+    monkeypatch,
+):
     """Review #86 (I7)."""
     h = _Harness(monkeypatch)
     h.graph.invoke(
@@ -256,12 +288,16 @@ def test_a_superseded_proposal_says_the_current_plan_stays_only_when_there_is_on
     assert "current plan" not in ipg.SUPERSEDED_MESSAGE
 
 
-def test_a_decision_already_stored_is_applied_again_not_reported_as_superseded(monkeypatch):
+def test_a_decision_already_stored_is_applied_again_not_reported_as_superseded(
+    monkeypatch,
+):
     """LangGraph re-runs the approval node if it stops after the decision was stored."""
     h = _Harness(monkeypatch)
     h.confirm()
     pending = h.state()
-    h.deps.proposals.resolve(pending["proposal"].proposal_id, ipg.ApprovalStatus.APPROVED, at=NOW)
+    h.deps.proposals.resolve(
+        pending["proposal"].proposal_id, ipg.ApprovalStatus.APPROVED, at=NOW
+    )
     h.deps.plans.activate("t1", pending["candidate_plan"].plan_id, at=NOW)
 
     h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
@@ -297,7 +333,9 @@ def test_a_rejected_plan_never_becomes_current(monkeypatch):
     h.confirm()
 
     h.graph.invoke(
-        Command(resume={"decision": "REJECTED", "rejection_reason": "TOO_MUCH_WALKING"}),
+        Command(
+            resume={"decision": "REJECTED", "rejection_reason": "TOO_MUCH_WALKING"}
+        ),
         config=CONFIG,
     )
 
@@ -306,9 +344,9 @@ def test_a_rejected_plan_never_becomes_current(monkeypatch):
     assert final["candidate_plan"] is None
     assert final["approval"] == "REJECTED"
     assert h.deps.plans.get_active("t1") is None
-    assert [(p.approval_status.value, p.rejection_reason.value) for p in h.proposals] == [
-        ("REJECTED", "TOO_MUCH_WALKING")
-    ]
+    assert [
+        (p.approval_status.value, p.rejection_reason.value) for p in h.proposals
+    ] == [("REJECTED", "TOO_MUCH_WALKING")]
 
 
 def test_a_failing_check_is_neither_explained_nor_proposed(monkeypatch):
@@ -321,7 +359,13 @@ def test_a_failing_check_is_neither_explained_nor_proposed(monkeypatch):
     assert not state["check_result"].valid
     assert RuleId.DATA_FRESHNESS in {v.rule for v in state["check_result"].violations}
     # BUILD PLAN reloads the stale context once (the second load_context), then CHECK still fails
-    assert h.events == ["load_context", "resolve_group", "build_plan", "load_context", "check"]
+    assert h.events == [
+        "load_context",
+        "resolve_group",
+        "build_plan",
+        "load_context",
+        "check",
+    ]
     assert "nothing was proposed" in state["messages"][-1].content
     assert not state.get("explanation")
     assert state.get("proposal") is None
@@ -370,7 +414,13 @@ SENSITIVE_EXTRACTION = {
         {"guest_ref": 3, "ride_restrictions": ["REQUIRES_TRANSFER_FROM_WHEELCHAIR"]},
     ],
 }
-SENSITIVE_VALUES = ["173", "97", "WHEELCHAIR", "NOT_RECOMMENDED_EXPECTANT", "REQUIRES_TRANSFER_FROM_WHEELCHAIR"]
+SENSITIVE_VALUES = [
+    "173",
+    "97",
+    "WHEELCHAIR",
+    "NOT_RECOMMENDED_EXPECTANT",
+    "REQUIRES_TRANSFER_FROM_WHEELCHAIR",
+]
 
 
 def _everything_checkpointed(checkpointer: Any) -> str:
@@ -378,7 +428,11 @@ def _everything_checkpointed(checkpointer: Any) -> str:
     chunks: list[str] = []
     for item in checkpointer.list(CONFIG):
         chunks.append(repr(item.checkpoint["channel_values"]))
-        chunks.append(checkpointer.serde.dumps_typed(item.checkpoint["channel_values"])[1].decode("utf-8", "replace"))
+        chunks.append(
+            checkpointer.serde.dumps_typed(item.checkpoint["channel_values"])[1].decode(
+                "utf-8", "replace"
+            )
+        )
         chunks.extend(repr(write) for write in item.pending_writes or [])
         chunks.append(repr(item.metadata))
     return "\n".join(chunks)
@@ -394,15 +448,25 @@ def test_accessibility_requirements_never_enter_graph_state(monkeypatch):
     assert "accessibility" not in state
     assert state["accessibility_ref"]
     assert all(isinstance(ref, str) for ref in state["accessibility_ref"])
-    assert state["check_result"] is not None  # the planning stage ran, with the requirements in play
+    assert (
+        state["check_result"] is not None
+    )  # the planning stage ran, with the requirements in play
     assert state["live_context"].accessibility_results == []
     hard = state["group_objective"].hard_constraints
-    assert (hard.per_guest_daily_walking_limits, hard.per_guest_rest_frequency, hard.ride_restrictions) == ({}, {}, {})
+    assert (
+        hard.per_guest_daily_walking_limits,
+        hard.per_guest_rest_frequency,
+        hard.ride_restrictions,
+    ) == ({}, {}, {})
 
     stored = _everything_checkpointed(h.checkpointer)
-    assert "accessibility_ref" in stored  # the search is looking at the real checkpoints
+    assert (
+        "accessibility_ref" in stored
+    )  # the search is looking at the real checkpoints
     for value in SENSITIVE_VALUES:
-        assert not re.search(rf"(?<![\w-]){value}(?![\w-])", stored), f"{value!r} was checkpointed"
+        assert not re.search(rf"(?<![\w-]){value}(?![\w-])", stored), (
+            f"{value!r} was checkpointed"
+        )
 
 
 @pytest.mark.parametrize(
@@ -479,11 +543,15 @@ class _FlakyCollector:
         self.calls += 1
         if self.calls == 1:
             raise ThemeParksUnavailableError("provider down")
-        return CollectResult(self._fresh.snapshot_id, created=True, live_context=self._fresh)
+        return CollectResult(
+            self._fresh.snapshot_id, created=True, live_context=self._fresh
+        )
 
 
 def test_stale_data_is_reloaded_once_and_the_plan_then_validates(monkeypatch):
-    fresh = snapshot_context(snapshot_id="fresh", retrieved_at=NOW - timedelta(minutes=5))
+    fresh = snapshot_context(
+        snapshot_id="fresh", retrieved_at=NOW - timedelta(minutes=5)
+    )
     collector = _FlakyCollector(fresh)
     h = _Harness(monkeypatch, snapshot_age=timedelta(hours=3), collector=collector)
 
@@ -495,7 +563,13 @@ def test_stale_data_is_reloaded_once_and_the_plan_then_validates(monkeypatch):
     assert state["check_result"].valid
     assert state["live_context"].accessibility_results == []
     assert result["__interrupt__"][0].value["kind"] == "plan_approval"
-    assert h.events[:5] == ["load_context", "resolve_group", "build_plan", "load_context", "check"]
+    assert h.events[:5] == [
+        "load_context",
+        "resolve_group",
+        "build_plan",
+        "load_context",
+        "check",
+    ]
 
 
 def test_stale_data_that_stays_stale_ends_with_the_reason(monkeypatch):
@@ -525,7 +599,9 @@ def test_an_edit_is_checked_again_and_proposed_as_a_new_pending_proposal(monkeyp
     edit = _edit_of(first["candidate_plan"])
     h.events.clear()
 
-    result = h.graph.invoke(Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG)
+    result = h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG
+    )
 
     assert result["__interrupt__"][0].value["kind"] == "plan_approval"
     assert h.events == [
@@ -543,13 +619,19 @@ def test_an_edit_is_checked_again_and_proposed_as_a_new_pending_proposal(monkeyp
     assert edited["check_result"].valid
     assert not {s.node_id for s in plan.stops} & set(edit["remove"])
     assert edited["constraints"].avoid == edit["remove"]
-    assert edited["constraints"].constraints_version == first["constraints"].constraints_version + 1
+    assert (
+        edited["constraints"].constraints_version
+        == first["constraints"].constraints_version + 1
+    )
     assert edited["approval"] == "PENDING"
     # Proposed: nothing of the edit is left to fall back on later.
     assert edited.get("plan_before_edit") is None
     assert edited.get("constraints_before_edit") is None
     status = {p.proposal_id: p.approval_status.value for p in h.proposals}
-    assert status == {first["proposal"].proposal_id: "EDITED", edited["proposal"].proposal_id: "PENDING"}
+    assert status == {
+        first["proposal"].proposal_id: "EDITED",
+        edited["proposal"].proposal_id: "PENDING",
+    }
     assert h.deps.plans.get_active("t1") is None
 
 
@@ -558,10 +640,13 @@ def test_an_attraction_added_back_is_planned_as_a_must_do(monkeypatch):
     h.confirm()
     removed = _edit_of(h.state()["candidate_plan"])["remove"]
     h.graph.invoke(
-        Command(resume={"decision": "EDITED", "edit": {"remove": removed}}), config=CONFIG
+        Command(resume={"decision": "EDITED", "edit": {"remove": removed}}),
+        config=CONFIG,
     )
 
-    h.graph.invoke(Command(resume={"decision": "EDITED", "edit": {"add": removed}}), config=CONFIG)
+    h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": {"add": removed}}), config=CONFIG
+    )
 
     edited = h.state()
     assert set(removed) <= {s.node_id for s in edited["candidate_plan"].stops}
@@ -574,7 +659,9 @@ def test_an_edited_plan_becomes_active_only_once_approved(monkeypatch):
     h = _Harness(monkeypatch)
     h.confirm()
     h.graph.invoke(
-        Command(resume={"decision": "EDITED", "edit": _edit_of(h.state()["candidate_plan"])}),
+        Command(
+            resume={"decision": "EDITED", "edit": _edit_of(h.state()["candidate_plan"])}
+        ),
         config=CONFIG,
     )
     edited = h.state()
@@ -591,11 +678,14 @@ def test_every_decision_is_in_the_behavior_log_of_each_guest(monkeypatch):
     edit = _edit_of(first["candidate_plan"])
     h.graph.invoke(Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG)
     h.graph.invoke(
-        Command(resume={"decision": "REJECTED", "rejection_reason": "BAD_TIMING"}), config=CONFIG
+        Command(resume={"decision": "REJECTED", "rejection_reason": "BAD_TIMING"}),
+        config=CONFIG,
     )
 
     for guest in first["constraints"].guests:
-        logged = {e.decision: e for e in h.deps.behavior.get(f"t1:{guest.guest_id}").entries}
+        logged = {
+            e.decision: e for e in h.deps.behavior.get(f"t1:{guest.guest_id}").entries
+        }
         assert set(logged) == {"EDITED", "REJECTED"}
         assert logged["EDITED"].proposal_id == first["proposal"].proposal_id
         assert logged["EDITED"].attraction_ids == edit["remove"] + edit["add"]
@@ -619,7 +709,9 @@ def test_an_edit_that_does_not_fit_asks_again_and_changes_nothing(monkeypatch, e
     h.confirm()
     pending = h.state()
 
-    again = h.graph.invoke(Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG)
+    again = h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG
+    )
 
     payload = again["__interrupt__"][0].value
     assert payload["kind"] == "plan_approval"
@@ -630,7 +722,7 @@ def test_an_edit_that_does_not_fit_asks_again_and_changes_nothing(monkeypatch, e
     assert h.deps.guests.list_all() == []
 
 
-# --- EXPLAIN through the grounded narrator (P0-31) ------------------------------------
+# --- EXPLAIN through the grounded narrator ------------------------------------
 
 
 def test_a_grounded_narration_is_what_the_guests_read(monkeypatch):
@@ -642,6 +734,7 @@ def test_a_grounded_narration_is_what_the_guests_read(monkeypatch):
     [proposal] = h.proposals
     assert proposal.explanation == "Here is your day at the park."
     assert proposal.provenance.prompt_versions["explain"] == "explain-v1"
+    assert proposal.provenance.prompt_versions["elicit"] == ELICIT_PROMPT_VERSION
     payload = json.loads(narrator.payloads[0])
     assert payload["stops"] and "preferences" in payload
 
@@ -666,7 +759,9 @@ def _fail_plans_without(monkeypatch: pytest.MonkeyPatch, node_id: str) -> None:
         result = original(this, **kwargs)
         if node_id in {s.node_id for s in kwargs["plan"].stops}:
             return result
-        violation = ConstraintViolation(rule=RuleId.MUST_DO, message="the edit does not fit")
+        violation = ConstraintViolation(
+            rule=RuleId.MUST_DO, message="the edit does not fit"
+        )
         return CheckResult(valid=False, violations=[violation])
 
     monkeypatch.setattr(ipg.CheckPlanUseCase, "execute", check)
@@ -680,7 +775,9 @@ def test_an_edit_that_cannot_be_planned_gives_back_the_plan_before_it(monkeypatc
     _fail_plans_without(monkeypatch, edit["remove"][0])
     h.events.clear()
 
-    result = h.graph.invoke(Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG)
+    result = h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG
+    )
 
     assert result["__interrupt__"][0].value["kind"] == "plan_approval"
     assert h.events == [
@@ -707,14 +804,18 @@ def test_an_edit_that_cannot_be_planned_gives_back_the_plan_before_it(monkeypatc
         offered["proposal"].proposal_id: "PENDING",
     }
     said = [m.content for m in offered["messages"]]
-    assert any(ipg.EDIT_DID_NOT_FIT_MESSAGE in m and "the edit does not fit" in m for m in said)
+    assert any(
+        ipg.EDIT_DID_NOT_FIT_MESSAGE in m and "the edit does not fit" in m for m in said
+    )
 
     h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
 
     assert h.deps.plans.get_active("t1").plan_id == offered["candidate_plan"].plan_id
 
 
-def test_when_the_plan_before_the_edit_no_longer_passes_nothing_is_proposed(monkeypatch):
+def test_when_the_plan_before_the_edit_no_longer_passes_nothing_is_proposed(
+    monkeypatch,
+):
     h = _Harness(monkeypatch)
     h.confirm()
     edit = _edit_of(h.state()["candidate_plan"])
@@ -725,7 +826,9 @@ def test_when_the_plan_before_the_edit_no_longer_passes_nothing_is_proposed(monk
 
     monkeypatch.setattr(ipg.CheckPlanUseCase, "execute", refuse)
 
-    result = h.graph.invoke(Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG)
+    result = h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG
+    )
 
     assert "__interrupt__" not in result
     final = h.state()
@@ -741,13 +844,21 @@ def test_a_closed_attraction_added_is_planned_as_an_unmet_must_do(monkeypatch):
     h.confirm()
     removed = _edit_of(h.state()["candidate_plan"])["remove"]
     h.graph.invoke(
-        Command(resume={"decision": "EDITED", "edit": {"remove": removed}}), config=CONFIG
+        Command(resume={"decision": "EDITED", "edit": {"remove": removed}}),
+        config=CONFIG,
     )
-    live = snapshot_context(snapshot_id="snap_down", retrieved_at=NOW - timedelta(minutes=1))
+    live = snapshot_context(
+        snapshot_id="snap_down", retrieved_at=NOW - timedelta(minutes=1)
+    )
     down = {node_id: AttractionStatus.DOWN for node_id in removed}
-    seed_snapshot(h.deps.snapshots, live.model_copy(update={"statuses": {**live.statuses, **down}}))
+    seed_snapshot(
+        h.deps.snapshots,
+        live.model_copy(update={"statuses": {**live.statuses, **down}}),
+    )
 
-    h.graph.invoke(Command(resume={"decision": "EDITED", "edit": {"add": removed}}), config=CONFIG)
+    h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": {"add": removed}}), config=CONFIG
+    )
 
     edited = h.state()
     assert edited["check_result"].valid
@@ -765,22 +876,25 @@ def test_a_second_edit_builds_on_the_first(monkeypatch):
         if s.kind.value == "ATTRACTION" and s.node_id not in ("id-tron", "id-space")
     ]
     h.graph.invoke(
-        Command(resume={"decision": "EDITED", "edit": {"remove": optional[:1]}}), config=CONFIG
+        Command(resume={"decision": "EDITED", "edit": {"remove": optional[:1]}}),
+        config=CONFIG,
     )
     second = h.state()
 
     h.graph.invoke(
-        Command(resume={"decision": "EDITED", "edit": {"remove": optional[1:2]}}), config=CONFIG
+        Command(resume={"decision": "EDITED", "edit": {"remove": optional[1:2]}}),
+        config=CONFIG,
     )
 
     third = h.state()
     assert third["constraints"].avoid == optional[:2]
-    assert third["constraints"].constraints_version == first["constraints"].constraints_version + 2
+    assert (
+        third["constraints"].constraints_version
+        == first["constraints"].constraints_version + 2
+    )
     guest = first["constraints"].guests[0].guest_id
     ids = sorted(e.entry_id for e in h.deps.behavior.get(f"t1:{guest}").entries)
-    assert ids == sorted(
-        f"{p['proposal'].proposal_id}:EDITED" for p in (first, second)
-    )
+    assert ids == sorted(f"{p['proposal'].proposal_id}:EDITED" for p in (first, second))
 
 
 def test_a_refused_edit_can_be_followed_by_a_valid_one(monkeypatch):
@@ -788,18 +902,24 @@ def test_a_refused_edit_can_be_followed_by_a_valid_one(monkeypatch):
     h.confirm()
     edit = _edit_of(h.state()["candidate_plan"])
     h.graph.invoke(
-        Command(resume={"decision": "EDITED", "edit": {"remove": ["id-not-in-the-plan"]}}),
+        Command(
+            resume={"decision": "EDITED", "edit": {"remove": ["id-not-in-the-plan"]}}
+        ),
         config=CONFIG,
     )
 
-    result = h.graph.invoke(Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG)
+    result = h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG
+    )
 
     assert "error" not in result["__interrupt__"][0].value
     assert h.state()["constraints"].avoid == edit["remove"]
     assert [p.approval_status.value for p in h.proposals] == ["EDITED", "PENDING"]
 
 
-def test_missing_park_data_fails_the_run_and_a_retry_applies_the_stored_answer(monkeypatch):
+def test_missing_park_data_fails_the_run_and_a_retry_applies_the_stored_answer(
+    monkeypatch,
+):
     """Replay-safe: an outage is never recorded as a refused answer. The run raises,
     LangGraph keeps the answer, and retrying the run (no new input) applies it.
 
@@ -839,7 +959,8 @@ def test_an_edit_sent_with_another_decision_is_refused(monkeypatch, decision):
     h.confirm()
 
     again = h.graph.invoke(
-        Command(resume={"decision": decision, "edit": {"remove": ["id-tron"]}}), config=CONFIG
+        Command(resume={"decision": decision, "edit": {"remove": ["id-tron"]}}),
+        config=CONFIG,
     )
 
     assert "EDITED" in again["__interrupt__"][0].value["error"]
@@ -851,17 +972,22 @@ def test_a_rejection_reason_is_ignored_on_approval(monkeypatch):
     h.confirm()
 
     result = h.graph.invoke(
-        Command(resume={"decision": "APPROVED", "rejection_reason": "BECAUSE"}), config=CONFIG
+        Command(resume={"decision": "APPROVED", "rejection_reason": "BECAUSE"}),
+        config=CONFIG,
     )
 
     assert "__interrupt__" not in result
     assert h.deps.plans.get_active("t1") is not None
 
 
-def test_the_plan_is_re_offered_even_when_its_new_explanation_is_the_template(monkeypatch):
+def test_the_plan_is_re_offered_even_when_its_new_explanation_is_the_template(
+    monkeypatch,
+):
     """The re-offer is explained again; a different prompt version must not clash with
     the plan stored under the first one (plan bodies are immutable)."""
-    narrator = ScriptedNarrator("Here is your day at the park.", "A 999 minute wait.", "Still 999.")
+    narrator = ScriptedNarrator(
+        "Here is your day at the park.", "A 999 minute wait.", "Still 999."
+    )
     h = _Harness(monkeypatch, narrator=narrator)
     h.confirm()
     first = h.state()
@@ -869,7 +995,9 @@ def test_the_plan_is_re_offered_even_when_its_new_explanation_is_the_template(mo
     edit = _edit_of(first["candidate_plan"])
     _fail_plans_without(monkeypatch, edit["remove"][0])
 
-    result = h.graph.invoke(Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG)
+    result = h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": edit}), config=CONFIG
+    )
 
     assert result["__interrupt__"][0].value["kind"] == "plan_approval"
     offered = h.state()
@@ -877,37 +1005,56 @@ def test_the_plan_is_re_offered_even_when_its_new_explanation_is_the_template(mo
     assert [p.approval_status.value for p in h.proposals] == ["EDITED", "PENDING"]
 
 
-def test_an_open_attraction_that_no_longer_fits_fails_the_real_check_and_re_offers(monkeypatch):
+def test_an_open_attraction_that_no_longer_fits_fails_the_real_check_and_re_offers(
+    monkeypatch,
+):
     """No fake checker: a ride added back while its wait fills the rest of the day."""
     h = _Harness(monkeypatch)
     h.confirm()
     removed = _edit_of(h.state()["candidate_plan"])["remove"]
     h.graph.invoke(
-        Command(resume={"decision": "EDITED", "edit": {"remove": removed}}), config=CONFIG
+        Command(resume={"decision": "EDITED", "edit": {"remove": removed}}),
+        config=CONFIG,
     )
     before = h.state()
-    live = snapshot_context(snapshot_id="snap_queue", retrieved_at=NOW - timedelta(minutes=1))
+    live = snapshot_context(
+        snapshot_id="snap_queue", retrieved_at=NOW - timedelta(minutes=1)
+    )
     waits = {
         node_id: live.waits[node_id].model_copy(update={"wait_minutes": 900.0})
         for node_id in removed
     }
-    seed_snapshot(h.deps.snapshots, live.model_copy(update={"waits": {**live.waits, **waits}}))
+    seed_snapshot(
+        h.deps.snapshots, live.model_copy(update={"waits": {**live.waits, **waits}})
+    )
     h.events.clear()
 
-    result = h.graph.invoke(Command(resume={"decision": "EDITED", "edit": {"add": removed}}), config=CONFIG)
+    result = h.graph.invoke(
+        Command(resume={"decision": "EDITED", "edit": {"add": removed}}), config=CONFIG
+    )
 
     assert result["__interrupt__"][0].value["kind"] == "plan_approval"
-    assert h.events.count("check") == 2  # the edited plan fails, the one before it passes
+    assert (
+        h.events.count("check") == 2
+    )  # the edited plan fails, the one before it passes
     offered = h.state()
     assert offered["constraints"] == before["constraints"]
     assert offered["candidate_plan"].stops == before["candidate_plan"].stops
-    assert any(ipg.EDIT_DID_NOT_FIT_MESSAGE in str(m.content) for m in offered["messages"])
-    assert [p.approval_status.value for p in h.proposals] == ["EDITED", "EDITED", "PENDING"]
+    assert any(
+        ipg.EDIT_DID_NOT_FIT_MESSAGE in str(m.content) for m in offered["messages"]
+    )
+    assert [p.approval_status.value for p in h.proposals] == [
+        "EDITED",
+        "EDITED",
+        "PENDING",
+    ]
 
 
 def test_nothing_is_proposed_for_a_party_without_guests(monkeypatch):
     saved: list[Any] = []
-    monkeypatch.setattr(ipg.ProposePlanUseCase, "execute", lambda *a, **k: saved.append(a))
+    monkeypatch.setattr(
+        ipg.ProposePlanUseCase, "execute", lambda *a, **k: saved.append(a)
+    )
     state: Any = {
         "thread_id": "t1",
         "messages": [],
@@ -931,4 +1078,88 @@ def test_the_plan_records_which_elicit_prompt_read_the_constraints(monkeypatch):
 
     [proposal] = h.proposals
     assert proposal.provenance.prompt_versions["elicit"] == ipg.ELICIT_PROMPT_VERSION
-    assert h.state()["candidate_plan"].provenance.prompt_versions["elicit"] == ipg.ELICIT_PROMPT_VERSION
+    assert (
+        h.state()["candidate_plan"].provenance.prompt_versions["elicit"]
+        == ipg.ELICIT_PROMPT_VERSION
+    )
+
+
+def _fail_check_with(monkeypatch: pytest.MonkeyPatch, rule: RuleId, message: str) -> None:
+    result = CheckResult(
+        valid=False, violations=[ConstraintViolation(rule=rule, message=message)]
+    )
+    monkeypatch.setattr(ipg.CheckPlanUseCase, "execute", lambda *a, **k: result)
+
+
+def test_an_empty_plan_for_a_show_must_do_explains_that_shows_have_fixed_showtimes(
+    monkeypatch,
+):
+    _fail_check_with(
+        monkeypatch,
+        RuleId.SHOW_ARRIVAL,
+        "No scheduled showtime for id-parade within the stop window",
+    )
+    h = _Harness(monkeypatch)
+
+    result = h.confirm()
+
+    message = h.state()["messages"][-1].content
+    assert "__interrupt__" not in result
+    assert "No scheduled showtime for id-parade" in message
+    assert "fixed showtimes" in message
+    assert "can't be planned as stops" in message
+    assert h.state().get("proposal") is None
+
+
+def test_the_show_explanation_is_only_given_for_show_violations(monkeypatch):
+    _fail_check_with(monkeypatch, RuleId.MUST_DO, "nothing fits")
+    h = _Harness(monkeypatch)
+
+    h.confirm()
+
+    assert "fixed showtimes" not in h.state()["messages"][-1].content
+
+
+def _only_children() -> dict[str, Any]:
+    extraction = dict(COMPLETE["extraction"])
+    extraction["guests"] = [{"role": "child"} for _ in extraction["guests"]]
+    extraction["accessibility"] = []
+    return extraction
+
+
+def test_a_plan_for_a_group_without_an_adult_cannot_be_approved(monkeypatch):
+    h = _Harness(monkeypatch, extraction=_only_children())
+    h.confirm()
+
+    again = h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
+
+    payload = again["__interrupt__"][0].value
+    assert payload["kind"] == "plan_approval"
+    assert "no adult" in payload["error"]
+    assert not any(e.startswith("resolve:") for e in h.events)
+    assert [p.approval_status.value for p in h.proposals] == ["PENDING"]
+    assert h.deps.plans.get_active("t1") is None
+
+
+def test_a_group_without_an_adult_can_still_reject_its_plan(monkeypatch):
+    h = _Harness(monkeypatch, extraction=_only_children())
+    h.confirm()
+
+    h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
+    h.graph.invoke(
+        Command(resume={"decision": "REJECTED", "rejection_reason": "OTHER"}),
+        config=CONFIG,
+    )
+
+    assert h.state()["approval"] == "REJECTED"
+    assert h.deps.plans.get_active("t1") is None
+
+
+def test_a_group_with_an_adult_is_not_blocked_from_approving(monkeypatch):
+    h = _Harness(monkeypatch)
+    h.confirm()
+
+    final = h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
+
+    assert "__interrupt__" not in final
+    assert h.deps.plans.get_active("t1") is not None

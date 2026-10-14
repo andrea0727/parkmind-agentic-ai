@@ -1,4 +1,4 @@
-# scope: one Postgres 16 with pgvector (P0-26). Transactional data and the
+# scope: one Postgres 16 with pgvector. Transactional data and the
 # knowledge store's embeddings share the instance (Architecture section 41);
 # the image is built from database/Dockerfile.
 #

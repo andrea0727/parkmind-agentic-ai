@@ -5,17 +5,22 @@ import pytest
 from conversation_support import COMPLETE, FIRST_REQUEST, MISSING, make_rig
 from planning_support import NOW
 
+from parkmind.agents.elicit_agent import ExtractorUnavailableError
 from parkmind.core.contracts import ApprovalStatus, EventType, RejectionReason
 from parkmind.core.conversation import (
     HardConstraintAnswer,
     NotExpectedError,
     PlanEditRequest,
+    ServiceUnavailableError,
     StaleProposalError,
     TurnStatus,
     UnknownAttractionError,
     UnknownThreadError,
 )
-from parkmind.services.use_cases.planning_deps import load_catalog
+from parkmind.services.use_cases.planning_deps import (
+    PlanningUnavailableError,
+    load_catalog,
+)
 
 CONFIRM = HardConstraintAnswer(confirmed=True, consent=True)
 
@@ -252,3 +257,36 @@ def test_a_failed_run_is_retried_with_the_same_answer_not_answered_again(monkeyp
 
     assert done.status is TurnStatus.DONE
     assert rig.service.active_plan(thread) is not None
+
+
+def test_an_unreachable_model_is_a_plain_message_and_the_thread_stays_usable():
+    rig = make_rig(ExtractorUnavailableError("ConnectError"), COMPLETE["extraction"])
+    thread = rig.service.start()
+
+    down = rig.service.say(thread, FIRST_REQUEST)
+
+    assert down.status is TurnStatus.DONE
+    assert "nothing was planned" in down.messages[-1]
+    assert "ConnectError" not in down.messages[-1]
+    assert rig.service.pending_proposal(thread) is None
+
+    back = rig.service.say(thread, FIRST_REQUEST)
+
+    assert back.status is TurnStatus.NEEDS_CONFIRMATION
+
+
+def test_an_outage_that_escapes_the_graph_reaches_the_guests_in_their_language(monkeypatch):
+    rig = make_rig()
+    thread = rig.service.start()
+    graph = rig.service._graphs["initial"]
+
+    def down(*args, **kwargs):
+        raise PlanningUnavailableError("postgres://user:secret@db.internal:5432 refused")
+
+    monkeypatch.setattr(graph, "invoke", down)
+
+    with pytest.raises(ServiceUnavailableError) as raised:
+        rig.service.say(thread, FIRST_REQUEST, "es")
+
+    assert "No se propuso nada" in str(raised.value)
+    assert "secret" not in str(raised.value)

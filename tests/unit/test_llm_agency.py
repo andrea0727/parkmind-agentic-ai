@@ -4,7 +4,7 @@ Without tools there is no loop and nothing to call: the worst a model can do is 
 one form badly, and that form is validated (ADR 0004). A real tool, a second schema
 or a free tool choice would break that, so it is pinned here for every LLM client.
 
-P1-22's context loader will be the one LLM with real tools: read-only ones, from its
+The agentic context loader is the one LLM with real tools: read-only ones, from its
 allowlist. When it lands, this file pins that it binds exactly that subset (ADR 0004, L10).
 """
 
@@ -63,6 +63,9 @@ def test_each_llm_gets_exactly_one_output_schema_forced_and_no_real_tool(
 
 # Every module that builds an LLM client, and so must be pinned by the test above.
 PINNED_CLIENT_MODULES = {"agents/elicit_agent.py", "agents/explain_agent.py"}
+# Modules that import a provider SDK without building a client: llm_budget reads the
+# SDK's exception types to decide which failures are worth a retry (G12).
+PROVIDER_IMPORT_ONLY_MODULES = {"agents/llm_budget.py"}
 _LLM_ENTRY_POINTS = {
     "ChatAnthropic",
     "ChatOpenAI",
@@ -124,21 +127,24 @@ def _called_name(call: ast.Call) -> str | None:
 
 
 def test_no_llm_client_is_built_outside_the_modules_this_file_pins():
-    """A third LLM client (the P1-22 context loader, say) fails here until its
+    """A third LLM client (the agentic context loader, say) fails here until its
     binding is pinned above and its module added to ``PINNED_CLIENT_MODULES``."""
     source = Path(__file__).resolve().parents[2] / "src" / "parkmind"
     builders: set[str] = set()
+    importers: set[str] = set()
     for path in source.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        calls_one = any(
+        name = path.relative_to(source).as_posix()
+        if any(
             isinstance(node, ast.Call) and _called_name(node) in _LLM_ENTRY_POINTS
             for node in ast.walk(tree)
-        )
-        imports_one = any(_reaches_a_provider(m) for m in _imported_modules(tree))
-        if calls_one or imports_one:
-            builders.add(path.relative_to(source).as_posix())
+        ):
+            builders.add(name)
+        if any(_reaches_a_provider(m) for m in _imported_modules(tree)):
+            importers.add(name)
 
     assert builders == PINNED_CLIENT_MODULES
+    assert importers == PINNED_CLIENT_MODULES | PROVIDER_IMPORT_ONLY_MODULES
 
 
 @pytest.mark.parametrize(

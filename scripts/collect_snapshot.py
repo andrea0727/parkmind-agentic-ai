@@ -1,4 +1,4 @@
-"""Collects park snapshots into Postgres (backlog P0-11).
+"""Collects park snapshots into Postgres.
 
     poetry run alembic -c database/alembic.ini upgrade head   # once
     poetry run python scripts/collect_snapshot.py             # one snapshot, then exit
@@ -8,6 +8,8 @@
 A run inside a collection window that is already stored writes nothing and
 calls no provider, so a scheduler may fire this as often as it likes. The
 README's "Snapshots" section shows the Windows Task Scheduler / cron setup.
+The database comes from the DATABASE_URL environment variable only: a flag
+would leak the password through shell history and ``ps``.
 
 Exit codes: 0 collected (or already collected), 1 database problem, 2 park
 data unavailable (no snapshot was stored).
@@ -68,11 +70,9 @@ def _report(result: CollectResult) -> str:
     return " | ".join(parts)
 
 
-def collect_once(
-    collector_factory: "CollectorFactory", database_url: str | None, now: datetime
-) -> int:
+def collect_once(collector_factory: "CollectorFactory", now: datetime) -> int:
     try:
-        with connect(database_url) as conn:
+        with connect() as conn:
             result = collector_factory(conn).collect(now=now)
     except ThemeParksClientError as exc:
         print(
@@ -87,9 +87,9 @@ def collect_once(
     return 0
 
 
-def show_latest(database_url: str | None, now: datetime) -> int:
+def show_latest(now: datetime) -> int:
     try:
-        with connect(database_url) as conn:
+        with connect() as conn:
             snapshots = PostgresSnapshotRepository(conn)
             latest = latest_valid_snapshot(snapshots, now=now)
             stored_any = bool(snapshots.recent_ids(1))
@@ -158,24 +158,23 @@ def main(
         default=MAGIC_KINGDOM,
         help="ThemeParks entity id (default Magic Kingdom)",
     )
-    parser.add_argument("--database-url", default=None, help="defaults to DATABASE_URL")
     args = parser.parse_args(argv)
     if args.interval < 60:
         parser.error("--interval must be at least 60 seconds")
 
     if args.latest:
-        return show_latest(args.database_url, datetime.now(PARK_TZ))
+        return show_latest(datetime.now(PARK_TZ))
 
     factory = CollectorFactory(
         parks or ThemeParksClient(args.park_id), weather or OpenMeteoClient()
     )
     if not args.loop:
-        return collect_once(factory, args.database_url, datetime.now(PARK_TZ))
+        return collect_once(factory, datetime.now(PARK_TZ))
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     try:
         while True:
-            code = collect_once(factory, args.database_url, datetime.now(PARK_TZ))
+            code = collect_once(factory, datetime.now(PARK_TZ))
             if code == 1:
                 return code  # a database problem won't fix itself between runs
             time.sleep(timedelta(seconds=args.interval).total_seconds())

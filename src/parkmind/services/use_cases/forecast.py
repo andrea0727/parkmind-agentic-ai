@@ -1,4 +1,4 @@
-"""Wiring the ForecastService from stored snapshots (P0-18).
+"""Wiring the ForecastService from stored snapshots.
 
 ``services/planning/forecast_service.py`` holds the pure service and strategies;
 this module feeds them data from the ports, which the deterministic core may not

@@ -33,7 +33,7 @@ Rules:
   spike is a MEDIUM event for a low-tolerance guest and shouldn't be masked
   by a high-tolerance party member. The ranges (queue 10-30 min, walking
   5-20 min, fatigue 0.5-0.9) are a starting point, not specified in §11/§25;
-  calibrate them when EventPolicy (P0-33) consumes them. A group with no
+  calibrate them when EventPolicy consumes them. A group with no
   profiles at all uses the same scale at the default tolerances, so
   "everyone defaulted" gives one answer regardless of how many profiles exist.
 - Only profiles of guests in `guests` count; a profile for someone outside
@@ -42,7 +42,7 @@ Rules:
   that order, so the result (and its JSON) does not depend on input order.
 - `weights` holds the group-level aggregates (mean tolerances, affinities).
   Per-guest preferences (sensitivities, preferred/avoided categories, pace)
-  are not carried; per-guest satisfaction is P0-17's concern.
+  are not carried; per-guest satisfaction is the preference scorer's concern.
 - `height_constraints` stores each guest's own height in cm (compared by
   rule 2 against Attraction.height_restriction_cm), not a minimum height.
 - Signature: superset of §11 `resolve_group(guests, profiles, accessibility,

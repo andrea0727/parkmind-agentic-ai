@@ -1,4 +1,4 @@
-"""The event monitor end to end on the 2026-09-27 capture (P0-33).
+"""The event monitor end to end on the 2026-09-27 capture.
 
 Two collections through the real collector and normalizer; the second /live
 payload closes Jungle Cruise with a fresh ``lastUpdated`` and also flips the
@@ -109,3 +109,14 @@ def test_reading_times_are_read_without_recording_a_sighting():
 
     assert id_mappings.rows == before
     assert times[FROM_2022] is not None and times[FROM_2022].year == 2022
+
+
+def test_reading_times_look_the_ids_up_in_one_batch():
+    _, snapshots, id_mappings = _monitor([(FIRST, None)])
+    raw = snapshots.get_raw_payload(snapshots.recent_ids(1)[0])
+    calls = id_mappings.resolve_many_calls
+
+    times = reading_times(raw, id_mappings)
+
+    assert len(times) > 1
+    assert id_mappings.resolve_many_calls == calls + 1

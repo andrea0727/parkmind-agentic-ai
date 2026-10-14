@@ -14,7 +14,10 @@ from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
 
 from parkmind.agents.elicit_agent import (
+    UNAVAILABLE_FLAG,
+    AnthropicExtractor,
     ExtractorOutputError,
+    ExtractorUnavailableError,
     build_guest_profiles,
     build_party_constraints,
     extract_with_recovery,
@@ -24,15 +27,18 @@ from parkmind.agents.elicit_agent import (
     ungrounded_heights,
 )
 from parkmind.agents.elicit_schema import ElicitationExtraction
+from parkmind.config.settings import settings
 from parkmind.core.contracts import (
     PARK_TZ,
+    Attraction,
+    AttractionCategory,
     PreferenceSource,
     SensitivityKind,
     SensitivityLevel,
 )
 from parkmind.services.use_cases.confirmation_echo import echo_for
-from parkmind.services.use_cases.resolve_attraction_names import CatalogUnavailableError
 
+MAX_PARTY_SIZE = settings.MAX_PARTY_SIZE
 TODAY = date(2026, 10, 6)
 NOW = datetime(2026, 10, 6, 9, 0, tzinfo=PARK_TZ)
 COMPLETE = scenario("wiki_example_complete")
@@ -416,7 +422,7 @@ def test_a_bad_time_is_repaired_without_echoing_what_the_guests_said() -> None:
     assert "around" not in hint and "1pm" not in hint
 
 
-def test_an_empty_catalog_is_an_error_not_a_question_to_the_guests() -> None:
+def test_an_empty_catalog_is_a_park_data_message_not_a_question_to_the_guests() -> None:
     intake, _ = make_intake()
     node = make_elicit_node(
         FakeExtractor(COMPLETE["extraction"]),
@@ -426,8 +432,43 @@ def test_an_empty_catalog_is_an_error_not_a_question_to_the_guests() -> None:
         now=lambda: NOW,
     )
 
-    with pytest.raises(CatalogUnavailableError):
-        node(_state(*COMPLETE["messages"]))
+    update = node(_state(*COMPLETE["messages"]))
+
+    assert update["constraints"] is None
+    assert update["messages"][0].additional_kwargs[UNAVAILABLE_FLAG]
+    assert "park information" in update["messages"][0].content
+
+
+def test_an_unreachable_model_is_a_flagged_message_not_a_raw_error() -> None:
+    intake, _ = make_intake()
+    node = make_elicit_node(
+        FakeExtractor(ExtractorUnavailableError("ConnectError")),
+        intake,
+        make_names(),
+        today=lambda: TODAY,
+        now=lambda: NOW,
+    )
+
+    update = node(_state(*COMPLETE["messages"]))
+
+    assert update["constraints"] is None
+    assert update["messages"][0].additional_kwargs[UNAVAILABLE_FLAG]
+    assert "ConnectError" not in update["messages"][0].content
+
+
+def test_a_failing_model_call_is_reported_as_unavailable_without_the_connection_details() -> None:
+    class Down:
+        def invoke(self, *_: object) -> object:
+            raise ConnectionError("https://user:secret@llm.internal:443 refused")
+
+    extractor = AnthropicExtractor()
+    extractor._runnable = lambda: Down()  # type: ignore[method-assign]
+
+    with pytest.raises(ExtractorUnavailableError) as raised:
+        extractor.extract(["hi"])
+
+    assert str(raised.value) == "ConnectionError"
+    assert "secret" not in str(raised.value)
 
 
 # --- a height must come from the guests' own words ------------------------------
@@ -561,3 +602,204 @@ def test_a_label_that_is_not_a_short_name_is_dropped(label: str) -> None:
 
 def test_a_label_is_trimmed() -> None:
     assert _named("  tu   mamá ").guests[0].label == "tu mamá"
+
+
+# --- heights are asked when a must-do has a minimum height --------------------------
+
+
+def _height_catalog() -> list[Attraction]:
+    return [
+        Attraction(
+            node_id="id-space",
+            name="Space Mountain",
+            category=AttractionCategory.THRILL,
+            height_restriction_cm=112,
+            typical_wait_minutes=40,
+        ),
+        Attraction(
+            node_id="id-dumbo",
+            name="Dumbo",
+            category=AttractionCategory.FAMILY,
+            height_restriction_cm=None,
+            typical_wait_minutes=20,
+        ),
+    ]
+
+
+def _height_node(extractor: FakeExtractor):
+    intake, _ = make_intake()
+    return make_elicit_node(
+        extractor,
+        intake,
+        make_names(_height_catalog()),
+        today=lambda: TODAY,
+        now=lambda: NOW,
+    )
+
+
+def _party(*heights: float | None, must_do: list[str]) -> dict:
+    return {
+        "guests": [
+            {"role": "adult" if i == 0 else "child", "height_cm": h}
+            for i, h in enumerate(heights)
+        ],
+        "must_do": must_do,
+        "departure_time": "18:00",
+    }
+
+
+def test_a_must_do_with_a_minimum_height_asks_for_the_heights_nobody_gave() -> None:
+    node = _height_node(FakeExtractor(_party(None, None, must_do=["Space Mountain"])))
+
+    update = node(_state("A parent and a child. We must ride Space Mountain, leaving at 6 PM."))
+
+    message = update["messages"][0]
+    assert update["constraints"] is None
+    assert message.additional_kwargs["missing_information"] == [
+        "height_needed:Space Mountain"
+    ]
+    assert "Space Mountain" in message.content and "112 cm" in message.content
+    assert "How tall" in message.content
+
+
+def test_one_question_covers_every_must_do_with_a_minimum_height() -> None:
+    catalog = [
+        *_height_catalog(),
+        Attraction(
+            node_id="id-tron",
+            name="TRON",
+            category=AttractionCategory.THRILL,
+            height_restriction_cm=122,
+            typical_wait_minutes=30,
+        ),
+    ]
+    intake, _ = make_intake()
+    node = make_elicit_node(
+        FakeExtractor(_party(None, None, must_do=["Space Mountain", "TRON"])),
+        intake,
+        make_names(catalog),
+        today=lambda: TODAY,
+        now=lambda: NOW,
+    )
+
+    update = node(_state("Two of us, Space Mountain and TRON, leaving at 6 PM."))
+
+    message = update["messages"][0]
+    assert len(message.additional_kwargs["missing_information"]) == 2
+    assert message.content.count("How tall") == 1
+    assert "112 cm" in message.content and "122 cm" in message.content
+
+
+def test_the_heights_question_is_in_the_guests_language() -> None:
+    node = _height_node(FakeExtractor(_party(None, None, must_do=["Space Mountain"])))
+
+    update = node(_state("Somos dos, queremos Space Mountain. Salimos a las 6 de la tarde."))
+
+    assert "mínima" in update["messages"][0].content
+    assert "cuánto mide" in update["messages"][0].content.lower()
+
+
+def test_a_solo_guest_is_asked_in_the_singular() -> None:
+    node = _height_node(FakeExtractor(_party(None, must_do=["Space Mountain"])))
+
+    update = node(_state("I am an adult and I want Space Mountain. I leave at 6 PM."))
+
+    assert "How tall are you" in update["messages"][0].content
+
+
+def test_no_height_is_asked_when_every_guest_gave_one() -> None:
+    node = _height_node(FakeExtractor(_party(170, 130, must_do=["Space Mountain"])))
+
+    update = node(_state("Adult 170 cm and kid 130 cm. Space Mountain. Leaving at 6 PM."))
+
+    assert update["constraints"] is not None
+
+
+def test_no_height_is_asked_when_no_must_do_has_a_minimum_height() -> None:
+    node = _height_node(FakeExtractor(_party(None, None, must_do=["Dumbo"])))
+
+    update = node(_state("A parent and a child. We want Dumbo. Leaving at 6 PM."))
+
+    assert update["constraints"] is not None
+
+
+def test_a_height_restricted_avoid_does_not_ask_for_heights() -> None:
+    party = {**_party(None, None, must_do=[]), "avoid": ["Space Mountain"]}
+    node = _height_node(FakeExtractor(party))
+
+    update = node(_state("A parent and a child. Avoid Space Mountain. Leaving at 6 PM."))
+
+    assert update["constraints"] is not None
+
+
+def test_a_guest_who_does_not_answer_is_asked_only_once() -> None:
+    """The checker keeps failing closed for the guests who never gave a height."""
+    node = _height_node(FakeExtractor(_party(None, None, must_do=["Space Mountain"])))
+    first = node(_state("A parent and a child. Space Mountain. Leaving at 6 PM."))
+    asked = first["messages"][0]
+
+    second = node(
+        {
+            "thread_id": "t1",
+            "messages": [
+                HumanMessage(content="A parent and a child. Space Mountain. Leaving at 6 PM."),
+                asked,
+                HumanMessage(content="I don't know their heights"),
+            ],
+        }
+    )
+
+    assert second["constraints"] is not None
+    assert {g.height_cm for g in second["constraints"].guests} == {None}
+
+
+def test_the_heights_that_are_missing_are_asked_alongside_other_missing_information() -> None:
+    party = {**_party(None, None, must_do=["Space Mountain"]), "departure_time": None}
+    node = _height_node(FakeExtractor(party))
+
+    update = node(_state("A parent and a child. Space Mountain."))
+
+    assert update["messages"][0].additional_kwargs["missing_information"] == [
+        "departure_time",
+        "height_needed:Space Mountain",
+    ]
+
+
+# --- a party over the limit is asked to be smaller --------------------------------
+
+
+def _crowd(size: int) -> dict:
+    return {
+        "party_size": size,
+        "guests": [{"role": "adult"} for _ in range(size)],
+        "must_do": ["Dumbo"],
+        "departure_time": "18:00",
+    }
+
+
+def test_a_party_over_the_limit_is_asked_to_be_smaller_and_nothing_else() -> None:
+    node = _height_node(FakeExtractor(_crowd(30)))
+
+    update = node(_state("We are 30 adults and want Dumbo. We leave at 6 PM."))
+
+    message = update["messages"][0]
+    assert update["constraints"] is None
+    assert update["pending_hard_constraint_confirmation"] is None
+    assert message.additional_kwargs["missing_information"] == ["party_too_large:30"]
+    assert str(MAX_PARTY_SIZE) in message.content and "30" in message.content
+
+
+def test_a_party_at_the_limit_is_planned() -> None:
+    node = _height_node(FakeExtractor(_crowd(MAX_PARTY_SIZE)))
+
+    update = node(_state("We are a group and want Dumbo. We leave at 6 PM."))
+
+    assert update["constraints"] is not None
+
+
+def test_the_party_limit_message_is_in_the_guests_language() -> None:
+    node = _height_node(FakeExtractor(_crowd(30)))
+
+    update = node(_state("Somos 30 adultos y queremos Dumbo. Salimos a las 6 de la tarde."))
+
+    assert "máximo" in update["messages"][0].content.lower()

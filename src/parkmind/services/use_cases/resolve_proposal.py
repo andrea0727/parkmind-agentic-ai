@@ -15,7 +15,7 @@ stored: it is derived again from the new plan and the clock on the next replan.
 A rejected or superseded proposal leaves no state behind.
 
 A proposal can stop being PENDING while the guests are still deciding: a
-significant event supersedes it (section 9 [C18], P0-33). Deciding on it then
+significant event supersedes it (section 9 [C18]). Deciding on it then
 raises ``ProposalNoLongerPendingError`` and changes nothing.
 
 Every decision writes one ``BehaviorEntry`` per guest of the party, in the same

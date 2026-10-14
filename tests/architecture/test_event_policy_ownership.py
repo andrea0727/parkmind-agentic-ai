@@ -1,10 +1,10 @@
-"""P0-33 invariants, checked on the source (AST), not on behaviour.
+"""Event-policy invariants, checked on the source (AST), not on behaviour.
 
 * Only ``EventPolicy`` sets ``Event.severity`` / ``Event.requires_replan``
   (section 24: "Both feed the same deterministic EventPolicy, which alone
   assigns severity and requires_replan").
 * The monitor, detector, policy and dedup never read the clock: ``now`` is
-  always passed in (backlog P0-33 Done-when).
+  always passed in.
 """
 
 import ast

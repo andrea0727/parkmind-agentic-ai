@@ -1,14 +1,19 @@
 name: CI
 
-# P0-04: every pull request runs automated checks (formatting/linting, type
+# Every pull request runs automated checks (formatting/linting, type
 # checking, unit + basic integration tests, import-boundary check). A failing
 # check fails the job -- no step below uses continue-on-error.
 #
-# P0-12: the repository tests (marked `db`) run against a real Postgres, the
+# The repository tests (marked `db`) run against a real Postgres, the
 # `services: postgres:` container below. CI is set by GitHub Actions, so an
 # unreachable database FAILS those tests instead of skipping them.
 #
-# P0-26: that Postgres gets pgvector installed by the first step; the
+# `pytest` runs every testing layer that needs no credentials (workflow, LLM
+# evaluation on deterministic metrics, observability, reliability, security,
+# performance; see docs/testing/README.md). Tests marked `live` call real
+# services and are skipped here; run them locally with `pytest --live`.
+#
+# That Postgres gets pgvector installed by the first step; the
 # embedding model is never downloaded here (tests use a deterministic embedder).
 
 on:
@@ -43,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install pgvector into the Postgres service (P0-26)
+      - name: Install pgvector into the Postgres service
         # There is no pgvector image outside Docker Hub, but the official image
         # carries the PGDG apt source: install the same package
         # database/Dockerfile installs for docker compose. No restart is needed
@@ -79,7 +84,7 @@ jobs:
         env:
           PYTHONPATH: src
 
-      - name: Tests (pytest)
+      - name: Tests (pytest, all offline layers)
         run: poetry run pytest
         env:
           PARKMIND_TEST_DATABASE_URL: postgresql://parkmind:parkmind@localhost:5432/parkmind

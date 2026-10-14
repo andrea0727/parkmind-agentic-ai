@@ -165,7 +165,7 @@ class GreedyInsertionOptimizer:
         group_objective:
             Resolved group objective; used for per-guest eligible sets.
         forecast_service:
-            Expected waits per stop time (P0-18). Without it, the posted wait
+            Expected waits per stop time. Without it, the posted wait
             is charged at every hour, as before.
         now:
             The planning moment, required with ``forecast_service``; the
@@ -198,7 +198,7 @@ class GreedyInsertionOptimizer:
                     f"only scored {sorted(scored - party)}, only in constraints {sorted(party - scored)}"
                 )
         start_time = self._resolve_start_time(park, context, now)
-        end_time = constraints.departure_time
+        end_time = self._resolve_end_time(park, constraints)
 
         # Effective rest frequency — minimum across all guests [C19]
         rest_freq = self._resolve_effective_rest_frequency(accessibility_reqs)
@@ -713,6 +713,18 @@ class GreedyInsertionOptimizer:
         if now is not None:
             return max(now, base_time)
         return base_time
+
+    @staticmethod
+    def _resolve_end_time(park: Park | None, constraints: PartyConstraints) -> datetime:
+        """The party's departure, never later than the park closes.
+
+        The checker rejects any stop that ends after ``park.closing_time`` (rule 1),
+        so the optimizer must not plan into those hours even when the party would
+        stay longer.
+        """
+        if park is None:
+            return constraints.departure_time
+        return min(constraints.departure_time, park.closing_time)
 
     @staticmethod
     def _resolve_effective_rest_frequency(

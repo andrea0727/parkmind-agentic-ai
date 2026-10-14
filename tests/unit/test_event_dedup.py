@@ -1,4 +1,4 @@
-"""Duplicate events are suppressed across sources (P0-33)."""
+"""Duplicate events are suppressed across sources."""
 
 from datetime import datetime, timedelta
 

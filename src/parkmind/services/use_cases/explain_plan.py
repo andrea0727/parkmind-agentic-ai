@@ -4,7 +4,7 @@ Explanation happens only after validation: ``prepare`` raises
 ``ExplainBeforeValidationError`` for a result that is not valid. It reads the plan
 and never feeds anything back into it.
 
-``prepare`` gives the EXPLAIN step (``agents/explain_agent.py``, P0-31) both halves
+``prepare`` gives the EXPLAIN step (``agents/explain_agent.py``) both halves
 of section 40's contract:
 
 * the **payload** -- the only data the LLM may explain from: the validated plan,
@@ -18,6 +18,7 @@ of section 40's contract:
 """
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -47,23 +48,40 @@ class ExplainBeforeValidationError(RuntimeError):
 def _require_valid(check_result: CheckResult) -> None:
     """Explanation comes only after validation (section 40)."""
     if not check_result.valid:
-        raise ExplainBeforeValidationError("a plan is explained only after it passed the checker")
+        raise ExplainBeforeValidationError(
+            "a plan is explained only after it passed the checker"
+        )
 
 
-def _guest_ref(guest: Guest, lang: Language = DEFAULT_LANGUAGE) -> str:
-    """``Guest 2``: the neutral name, safe to send to the narrator."""
-    number = guest.guest_id.removeprefix("g")
-    return text("guest_label", lang, number=number) if number.isdigit() else guest.guest_id
+def _guest_ref(
+    guest: Guest, guests: Sequence[Guest], lang: Language = DEFAULT_LANGUAGE
+) -> str:
+    """``Guest 2``: the neutral name, safe to send to the narrator.
+
+    Only a ``gN`` id is read as a number; any other id could carry a name, so that guest
+    is numbered by position in the party.
+    """
+    match = re.fullmatch(r"g(\d+)", guest.guest_id)
+    if match:
+        number = match.group(1)
+    else:
+        number = str(
+            1
+            + next((i for i, g in enumerate(guests) if g.guest_id == guest.guest_id), 0)
+        )
+    return text("guest_label", lang, number=number)
 
 
-def _guest_name(guest: Guest, lang: Language = DEFAULT_LANGUAGE) -> str:
+def _guest_name(
+    guest: Guest, guests: Sequence[Guest], lang: Language = DEFAULT_LANGUAGE
+) -> str:
     """The guest's own label ("tu mamá") for the template, which stays in-process."""
-    return guest.label or _guest_ref(guest, lang)
+    return guest.label or _guest_ref(guest, guests, lang)
 
 
-def _guest_label(guest: Guest, lang: Language) -> str:
+def _guest_label(guest: Guest, guests: Sequence[Guest], lang: Language) -> str:
     """The template's label: the guests see their own height (``Guest 2 (110 cm)``)."""
-    label = _guest_name(guest, lang)
+    label = _guest_name(guest, guests, lang)
     return f"{label} ({guest.height_cm:g} cm)" if guest.height_cm is not None else label
 
 
@@ -81,7 +99,7 @@ def _skipped_rides(
     """
     lines: list[str] = []
     for node_id, limit, skipping in _sitting_out(plan, guests, height_limits):
-        who = ", ".join(_guest_label(guest, lang) for guest in skipping)
+        who = ", ".join(_guest_label(guest, guests, lang) for guest in skipping)
         name = names.get(node_id, node_id)
         lines.append(text("plan_skip", lang, who=who, name=name, limit=limit))
     return lines
@@ -276,7 +294,8 @@ def explanation_payload(
     }
     out_by_stop = {
         node_id: [
-            GuestSittingOut(guest=_guest_ref(guest), minimum_height_cm=limit) for guest in skipping
+            GuestSittingOut(guest=_guest_ref(guest, guests), minimum_height_cm=limit)
+            for guest in skipping
         ]
         for node_id, limit, skipping in _sitting_out(plan, guests, height_limits or {})
     }
@@ -347,7 +366,9 @@ def _catalog_facts(deps_factory: DepsFactory) -> tuple[dict[str, str], dict[str,
         catalog = load_catalog(deps)
     names = {a.node_id: a.name for a in catalog}
     limits = {
-        a.node_id: a.height_restriction_cm for a in catalog if a.height_restriction_cm is not None
+        a.node_id: a.height_restriction_cm
+        for a in catalog
+        if a.height_restriction_cm is not None
     }
     return names, limits
 

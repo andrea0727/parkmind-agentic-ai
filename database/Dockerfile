@@ -1,4 +1,4 @@
-# PostgreSQL 16 + pgvector (P0-26: the knowledge store's semantic search).
+# PostgreSQL 16 + pgvector (the knowledge store's semantic search).
 #
 # Base: the official postgres image through its AWS ECR Public mirror -- the same
 # image CI runs (#81), and no Docker Hub rate limit. There is no pgvector image

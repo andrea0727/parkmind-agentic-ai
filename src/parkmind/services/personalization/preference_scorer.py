@@ -1,8 +1,8 @@
 """PreferenceScorer -- turns the resolved group objective and each guest's
-profile into a utility per attraction (section 17, backlog P0-17).
+profile into a utility per attraction.
 
-Where it sits (section 35): LOAD CONTEXT -> GroupPreferenceResolver (P0-16)
--> **PreferenceScorer** -> Optimizer (P0-19) -> ConstraintChecker. The
+Where it sits (section 35): LOAD CONTEXT -> GroupPreferenceResolver
+-> **PreferenceScorer** -> Optimizer -> ConstraintChecker. The
 optimizer ranks candidates by ``utility / minutes`` and never schedules a node
 missing from the utilities it is given; the scorer decides how much each stop
 is worth to this party, never when it happens.
@@ -18,7 +18,7 @@ Per-guest utility, only over the guest's eligible set
   keys reach it. Keys that match no land or category of an attraction in the
   catalog are reported in the result, never dropped silently.
 - sensitivity penalties, from attraction attributes we actually have:
-  INTENSITY is HIGH when the park's published notice (P0-26a, through the
+  INTENSITY is HIGH when the park's published notice (through the
   ``KnowledgeStore`` port) flags high g-force or motion sensitivity, MEDIUM
   for a THRILL ride without such a flag, LOW otherwise; DARKNESS comes from
   ``DARK_RIDE`` and WATER from ``WATER``. HEIGHTS, LOUD_NOISE and SPINNING have
@@ -37,7 +37,7 @@ Per-guest utility, only over the guest's eligible set
   party is, e.g. replans or explanations.
 - risk: a small penalty when no live wait was read for a queued attraction.
 - change: a small penalty for an attraction outside ``base_plan`` (replans,
-  P0-23: minimize unnecessary plan changes).
+  Minimize unnecessary plan changes).
 
 Group utility keeps two levers apart: how much the riders enjoy it (the mean
 utility among the guests eligible to ride) and section 17's "guest left

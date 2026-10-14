@@ -609,7 +609,7 @@ def test_show_arrival_protects_must_do_neighbor(base_constraints):
 
 
 # ---------------------------------------------------------------------------
-# Walking budget handed to the optimizer for a replan (P0-34)
+# Walking budget handed to the optimizer for a replan
 # ---------------------------------------------------------------------------
 
 

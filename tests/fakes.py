@@ -6,7 +6,7 @@ tests/integration/postgres/ runs the same use cases against the real adapters.
 Only ports are faked -- never the core.
 """
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import datetime
 from typing import Any
 
@@ -65,13 +65,16 @@ class InMemoryBehaviorLogRepository:
         return True
 
     def get(self, guest_id: str) -> BehaviorLog:
-        entries = sorted(self.rows.get(guest_id, []), key=lambda e: (e.timestamp, e.entry_id))
+        entries = sorted(
+            self.rows.get(guest_id, []), key=lambda e: (e.timestamp, e.entry_id)
+        )
         return BehaviorLog(guest_id=guest_id, entries=entries)
 
 
 class InMemoryIdMappingRepository:
     def __init__(self) -> None:
         self.rows: dict[tuple[str, str, str], str] = {}
+        self.resolve_many_calls = 0
 
     def record(
         self,
@@ -88,6 +91,17 @@ class InMemoryIdMappingRepository:
 
     def resolve(self, provider: str, provider_id: str, entity_kind: str) -> str | None:
         return self.rows.get((provider, provider_id, str(entity_kind)))
+
+    def resolve_many(
+        self, provider: str, keys: Iterable[tuple[str, str]]
+    ) -> dict[tuple[str, str], str]:
+        self.resolve_many_calls += 1
+        found = {
+            (provider_id, str(kind)): self.rows[(provider, provider_id, str(kind))]
+            for provider_id, kind in keys
+            if (provider, provider_id, str(kind)) in self.rows
+        }
+        return found
 
     def provider_ids_for(self, internal_id: str) -> list[tuple[str, str, str]]:
         return sorted(k for k, v in self.rows.items() if v == internal_id)
@@ -191,7 +205,8 @@ class InMemoryPlanRepository:
         if plan_id not in self.plans:
             raise NotFoundError("plan does not exist")
         approved = any(
-            p.candidate_plan_id == plan_id and p.approval_status is ApprovalStatus.APPROVED
+            p.candidate_plan_id == plan_id
+            and p.approval_status is ApprovalStatus.APPROVED
             for t, p in self._proposals.rows.values()
             if t == thread_id
         )
@@ -214,7 +229,9 @@ class InMemoryProposalRepository:
         if proposal.proposal_id in self.rows:
             return
         if self.list_pending(thread_id):
-            raise PendingProposalExistsError("the thread already holds a PENDING proposal")
+            raise PendingProposalExistsError(
+                "the thread already holds a PENDING proposal"
+            )
         self.rows[proposal.proposal_id] = (thread_id, proposal)
 
     def get(self, proposal_id: str) -> Proposal | None:
@@ -240,7 +257,10 @@ class InMemoryProposalRepository:
         if row is None:
             raise NotFoundError("proposal does not exist")
         thread_id, proposal = row
-        if proposal.approval_status is not ApprovalStatus.PENDING or status is ApprovalStatus.PENDING:
+        if (
+            proposal.approval_status is not ApprovalStatus.PENDING
+            or status is ApprovalStatus.PENDING
+        ):
             raise InvalidStateTransitionError("only a PENDING proposal can be resolved")
         resolved = proposal.model_copy(
             update={"approval_status": status, "rejection_reason": rejection_reason}
@@ -268,7 +288,9 @@ class InMemoryEventRepository:
         self.rows[key] = event
         return True
 
-    def list_for_thread(self, thread_id: str, *, since: datetime | None = None) -> list[Event]:
+    def list_for_thread(
+        self, thread_id: str, *, since: datetime | None = None
+    ) -> list[Event]:
         events = [
             e
             for (t, _), e in self.rows.items()

@@ -1,11 +1,11 @@
-"""``knowledge.*`` tools (P0-26; Architecture section 30).
+"""``knowledge.*`` tools.
 
 ``search_policies``, ``find_similar_attractions``, ``check_accessibility``. Each
 handler is one call to ``KnowledgeQueries``. Search answers carry the corpus
 version, the ranking strategy and -- when the keyword fallback answered -- the
 reason (section 43). ``check_accessibility`` takes a guest's *derived* flags
 (closed ``RideRestriction`` values, section 30's input), never their
-``AccessibilityRequirements`` (C19), and keeps the fail-closed result of P0-26a:
+``AccessibilityRequirements`` (C19), and keeps the fail-closed result:
 no notice on file means not eligible. All of them are read-only.
 """
 

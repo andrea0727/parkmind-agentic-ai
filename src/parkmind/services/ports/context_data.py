@@ -1,4 +1,4 @@
-"""ContextDataPort -- the data/knowledge reads LOAD CONTEXT can make through a transport (P0-24).
+"""ContextDataPort -- the data/knowledge reads LOAD CONTEXT can make through a transport.
 
 Architecture section 27 [C23]: in the demo configuration the context loader
 consumes ``data.*`` and ``knowledge.*`` **through the MCP client**, with the

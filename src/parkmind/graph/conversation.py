@@ -1,4 +1,4 @@
-"""ConversationService: the one place that knows which graph owns a thread (P0-35).
+"""ConversationService: the one place that knows which graph owns a thread.
 
 A thread starts in the initial planning graph; once a plan exists, events run the
 replanning graph on the same thread, and whichever graph last stopped for a human owns the
@@ -14,6 +14,7 @@ when ``server.py`` switches it on -- go into every graph run's config, with the 
 the Langfuse session and the graph as a tag. Nodes and LLM calls inherit them.
 """
 
+import logging
 import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
@@ -37,6 +38,7 @@ from parkmind.core.conversation import (
     HardConstraintAnswer,
     NotExpectedError,
     PlanEditRequest,
+    ServiceUnavailableError,
     StaleProposalError,
     Turn,
     TurnStatus,
@@ -46,17 +48,21 @@ from parkmind.core.conversation import (
 from parkmind.core.language import DEFAULT_LANGUAGE, Language, as_language, text
 from parkmind.graph.initial_planning_graph import APPROVAL_INTERRUPT_KIND, park_clock
 from parkmind.graph.replanning_graph import EVENT_CONFIRMATION_INTERRUPT_KIND
+from parkmind.graph.state_helpers import solo_of
 from parkmind.services.use_cases.active_plan import ActivePlanUseCase
 from parkmind.services.use_cases.park_status import ParkStatusUseCase
 from parkmind.services.use_cases.pending_proposal import PendingProposalUseCase
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
+    PlanningUnavailableError,
     default_planning_deps,
     load_catalog,
     open_deps,
 )
 from parkmind.services.use_cases.provisional_plan import ProvisionalPlanUseCase, retimed
 from parkmind.services.use_cases.resolve_attraction_names import suggest_attractions
+
+logger = logging.getLogger(__name__)
 
 MISSING_INFORMATION_KIND = "missing_information"
 HARD_CONSTRAINT_KIND = "hard_constraint_confirmation"
@@ -116,7 +122,9 @@ class ConversationService:
     def start(self, saved_party: str | None = None) -> str:
         thread_id = self._new_thread_id()
         with self._registry_lock:
-            self._threads[thread_id] = _Thread(lock=threading.RLock(), saved_party=saved_party)
+            self._threads[thread_id] = _Thread(
+                lock=threading.RLock(), saved_party=saved_party
+            )
         return thread_id
 
     def say(self, thread_id: str, text: str, lang: str | None = None) -> Turn:
@@ -169,7 +177,9 @@ class ConversationService:
         ):
             raise NotExpectedError("a decision is either APPROVED, REJECTED or EDITED")
         if (decision is ApprovalStatus.EDITED) != (edit is not None):
-            raise NotExpectedError("an edit goes with an EDITED decision, and only with it")
+            raise NotExpectedError(
+                "an edit goes with an EDITED decision, and only with it"
+            )
         if edit is not None and not (edit.remove or edit.add):
             raise NotExpectedError("an edit needs at least one stop to remove or add")
         thread = self._thread(thread_id)
@@ -190,7 +200,9 @@ class ConversationService:
         thread = self._thread(thread_id)
         with thread.lock:
             self._require_waiting(thread, EVENT_CONFIRMATION_INTERRUPT_KIND)
-            return self._answer(thread_id, thread, "replanning", {"confirmed": confirmed})
+            return self._answer(
+                thread_id, thread, "replanning", {"confirmed": confirmed}
+            )
 
     def provisional(self, thread_id: str) -> Turn:
         thread = self._thread(thread_id)
@@ -217,7 +229,9 @@ class ConversationService:
                 TurnStatus.DONE,
                 messages=(preview.text,),
                 provisional_plan=preview.plan,
-                provisional_opens=preview.opens_at if preview.plan is not None else None,
+                provisional_opens=preview.opens_at
+                if preview.plan is not None
+                else None,
             )
 
     def refresh_provisional(self, thread_id: str) -> Turn:
@@ -229,7 +243,12 @@ class ConversationService:
                 raise NotExpectedError("there is no provisional plan to refresh")
             now = self._clock()
             status = self._park_status.execute(now)
-            if status is None or status.closed or now < opens or now < status.opening_time:
+            if (
+                status is None
+                or status.closed
+                or now < opens
+                or now < status.opening_time
+            ):
                 raise NotExpectedError("the park has not opened yet")
             config: Any = {"configurable": {"thread_id": thread_id}}
             values = self._graphs["initial"].get_state(config).values or {}
@@ -254,14 +273,20 @@ class ConversationService:
         thread = self._thread(thread_id)
         with thread.lock:
             if thread.has_unapplied:
-                raise NotExpectedError("the last answer is still being applied; retry it first")
+                raise NotExpectedError(
+                    "the last answer is still being applied; retry it first"
+                )
             if thread.waiting_for not in (None, APPROVAL_INTERRUPT_KIND):
-                raise NotExpectedError(f"the planner is waiting for {thread.waiting_for}")
+                raise NotExpectedError(
+                    f"the planner is waiting for {thread.waiting_for}"
+                )
             self._require_known_attractions(events, thread.language)
             payload = {"thread_id": thread_id, "events": list(events)}
             return self._run(thread_id, thread, "replanning", payload)
 
-    def _require_known_attractions(self, events: Sequence[Event], lang: Language) -> None:
+    def _require_known_attractions(
+        self, events: Sequence[Event], lang: Language
+    ) -> None:
         named = {e.attraction_id for e in events if e.attraction_id is not None}
         if not named:
             return
@@ -299,7 +324,9 @@ class ConversationService:
         status = self._park_status.execute(self._clock())
         if status is None or not status.closed:
             return turn
-        notice = text("park_closed_heads_up", thread.language, closing=status.closing_label())
+        notice = text(
+            "park_closed_heads_up", thread.language, closing=status.closing_label()
+        )
         return replace(turn, messages=(notice, *turn.messages))
 
     def _thread(self, thread_id: str) -> _Thread:
@@ -320,7 +347,9 @@ class ConversationService:
             waiting = thread.waiting_for or "nothing"
             raise NotExpectedError(f"the planner is waiting for {waiting}, not {kind}")
 
-    def _answer(self, thread_id: str, thread: _Thread, owner: Owner, value: Any) -> Turn:
+    def _answer(
+        self, thread_id: str, thread: _Thread, owner: Owner, value: Any
+    ) -> Turn:
         """Answer the interrupt the thread is paused on, by its id.
 
         A plain ``Command(resume=value)`` kept by a failed run would, inside the planning
@@ -344,7 +373,9 @@ class ConversationService:
         thread.unapplied, thread.has_unapplied = None, False
         return turn
 
-    def _run(self, thread_id: str, thread: _Thread, owner: Owner, graph_input: Any) -> Turn:
+    def _run(
+        self, thread_id: str, thread: _Thread, owner: Owner, graph_input: Any
+    ) -> Turn:
         config: Any = {"configurable": {"thread_id": thread_id}}
         if self._callbacks:
             config["callbacks"] = list(self._callbacks)
@@ -352,7 +383,13 @@ class ConversationService:
                 "langfuse_session_id": thread_id,
                 "langfuse_tags": [owner],
             }
-        result = self._graphs[owner].invoke(graph_input, config=config)
+        try:
+            result = self._graphs[owner].invoke(graph_input, config=config)
+        except PlanningUnavailableError as exc:
+            logger.exception("planning is unavailable")
+            state: Any = self._graphs[owner].get_state(config).values or {}
+            message = text("unavailable", thread.language, solo=solo_of(state))
+            raise ServiceUnavailableError(message) from exc
         thread.owner = owner
         return self._turn(thread_id, thread, result)
 
@@ -360,7 +397,9 @@ class ConversationService:
         everything = list(result.get("messages") or [])
         fresh = everything[thread.seen_messages :]
         thread.seen_messages = len(everything)
-        texts = tuple(str(m.content) for m in fresh if isinstance(m, AIMessage) and m.content)
+        texts = tuple(
+            str(m.content) for m in fresh if isinstance(m, AIMessage) and m.content
+        )
         interrupts = result.get("__interrupt__")
         if not interrupts:
             thread.waiting_for = None

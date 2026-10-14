@@ -1,4 +1,4 @@
-"""Use case: the reads behind the ``knowledge.*`` tools (P0-26; Architecture section 30).
+"""Use case: the reads behind the ``knowledge.*`` tools.
 
 * ``search_policies`` -- passages of the reviewed corpus (policies, accessibility
   information) closest to a question: semantic search when it can answer, else
@@ -11,9 +11,9 @@
   publishes its full rider warning (``NOT_RECOMMENDED_HIGH_G_FORCE``),
   ``moderate`` for a motion, back/neck or heart warning, ``low`` for none,
   ``unknown`` without a notice. These tiers are provisional: the notice corpus
-  does not grade intensity (an open product question, P0-26a), so "less intense"
+  does not grade intensity (an open product question), so "less intense"
   keeps only attractions of a strictly lower tier, never an ``unknown`` one.
-* ``check_accessibility`` -- delegates to ``check_flags`` (P0-26a) and keeps its
+* ``check_accessibility`` -- delegates to ``check_flags`` and keeps its
   fail-closed result. It never depends on retrieval and never degrades.
 
 Each query opens only what it reads. The notices are in memory, so checks do no

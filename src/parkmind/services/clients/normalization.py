@@ -1,4 +1,4 @@
-"""Provider-neutral results of normalizing raw provider payloads (backlog P0-10).
+"""Provider-neutral results of normalizing raw provider payloads.
 
 A normalizer turns one raw payload into ParkMind contracts plus a list of
 ``MappingIssue``s. An entity with an identity problem -- a duplicated provider
@@ -22,12 +22,12 @@ from parkmind.services.ports.id_mapping_repository import EntityKind
 NORMALIZER_VERSION = 2
 """Version of the normalized output (``LiveContext``) the normalizers produce.
 
-Stored with every snapshot (P0-11). Bump it whenever a normalizer change alters
+Stored with every snapshot. Bump it whenever a normalizer change alters
 what a raw payload normalizes to -- e.g. which showtimes are kept -- and run
 ``scripts/renormalize_snapshots.py`` so older snapshots are rebuilt from their
 raw payloads (Architecture 41, C21).
 
-History: 1 = P0-10/P0-11. 2 = showtimes keep only ``Performance Time`` starts
+History: 1 = first version. 2 = showtimes keep only ``Performance Time`` starts
 (meet-and-greet ``Operating`` windows and party-only times dropped) and show
 coverage is judged from the curated scheduled shows (issue #69).
 """

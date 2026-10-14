@@ -1,4 +1,4 @@
-"""P0-10 against the real ``id_mapping`` table (backlog Done-when 1 and 2).
+"""ID resolution against the real ``id_mapping`` table.
 
 1. "The same attraction has a stable internal ID across snapshots."
 2. "Provider IDs can be traced back through provenance."
@@ -115,3 +115,26 @@ def test_plan_stop_traces_back_to_provider_id(conn: psycopg.Connection) -> None:
     )
     assert payload is not None
     assert SPACE_MOUNTAIN in {entity["id"] for entity in payload["liveData"]}
+
+
+def test_resolve_many_answers_a_batch_like_resolve(conn: psycopg.Connection) -> None:
+    repo = PostgresIdMappingRepository(conn)
+    repo.record("themeparks_wiki", "p1", "attraction", "i1", seen_at=NOW)
+    repo.record("themeparks_wiki", "p2", "show", "i2", seen_at=NOW)
+    repo.record("themeparks_wiki", "p1", "show", "i3", seen_at=NOW)
+    repo.record("other", "p1", "attraction", "i4", seen_at=NOW)
+
+    keys = [("p1", "attraction"), ("p2", "show"), ("p1", "show"), ("p2", "attraction")]
+    found = repo.resolve_many("themeparks_wiki", keys)
+
+    assert found == {
+        ("p1", "attraction"): "i1",
+        ("p2", "show"): "i2",
+        ("p1", "show"): "i3",
+    }
+    assert all(
+        repo.resolve("themeparks_wiki", provider_id, kind)
+        == found.get((provider_id, kind))
+        for provider_id, kind in keys
+    )
+    assert repo.resolve_many("themeparks_wiki", []) == {}

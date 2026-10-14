@@ -1,4 +1,4 @@
-"""KnowledgeStore port and its in-memory adapter (P0-26a)."""
+"""KnowledgeStore port and its in-memory adapter."""
 
 import pytest
 

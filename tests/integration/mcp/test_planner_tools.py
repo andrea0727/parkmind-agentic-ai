@@ -1,6 +1,6 @@
-"""``planner.*`` tools over MCP (P0-27 Done-when), offline on the 2026-09-27 capture.
+"""``planner.*`` tools over MCP, offline on the 2026-09-27 capture.
 
-Also the P0-24 guarantees that matter most for the planner: no tool writes a
+Also the MCP guarantees that matter most for the planner: no tool writes a
 plan or a proposal, and accessibility crosses the boundary by reference only.
 """
 
@@ -25,6 +25,7 @@ from parkmind.tools.planner_tools import (
     MAX_FORECASTS,
     MAX_GUESTS,
     MAX_STOPS,
+    ReplanToolRequest,
 )
 from parkmind.tools.registry import build_registry
 
@@ -677,3 +678,69 @@ def test_replan_inputs_are_capped() -> None:
             _args(plan=plan, events=[report] * (MAX_EVENTS + 1)),
         )
     )
+
+
+def test_a_stop_off_the_park_map_is_blamed_not_the_location() -> None:
+    """Review #89: a valid location with an unknown plan stop must not say the party is lost."""
+    registry = Deps().registry()
+    plan = _built_plan(registry)
+    stops = [dict(s) for s in plan["stops"]]
+    stops[1]["node_id"] = "bogus_stop"
+    here = plan["stops"][0]["node_id"]
+    located = factories.execution_state(
+        plan_id=plan["plan_id"],
+        completed_stop_ids=[here],
+        current_location_node_id=here,
+        as_of=REPLAN_AT,
+    ).model_dump(mode="json")
+
+    result = call_tool(
+        registry,
+        "planner.replan",
+        _args(
+            plan={**plan, "stops": stops},
+            now=REPLAN_AT.isoformat(),
+            execution_state=located,
+        ),
+    )
+
+    assert _rejected(result) == ["plan.stops"]
+    assert "bogus_stop" in result.structured_content["error"]["message"]
+    assert result.structured_content["error"]["retryable"] is False
+
+
+def test_progress_sent_without_completed_stops_is_labelled_assumed() -> None:
+    """The party is taken to be on schedule; the location it sent is kept."""
+    registry = Deps().registry()
+    plan = _built_plan(registry)
+    here = plan["stops"][0]["node_id"]
+    progress = factories.execution_state(
+        plan_id=plan["plan_id"],
+        completed_stop_ids=[],
+        current_location_node_id=here,
+        as_of=REPLAN_AT,
+        walking_minutes_consumed={"g1": 3.0},
+        remaining_walking_cap_minutes={},
+    ).model_dump(mode="json")
+
+    data = _replan(registry, plan, execution_state=progress)["data"]
+
+    assert data["progress"]["source"] == "assumed"
+    assert data["progress"]["current_location_node_id"] == here
+
+
+def test_replan_drops_the_severity_a_client_puts_on_an_event() -> None:
+    """Severity and requires_replan are EventPolicy's [Invariant #4]: ignored, not trusted."""
+    registry = Deps().registry()
+    plan = _built_plan(registry)
+    closed = next(r for r in _rides(plan, after=REPLAN_AT) if r != SPACE_MOUNTAIN)
+    claimed = {**_down(closed), "severity": "LOW", "requires_replan": False}
+
+    request = ReplanToolRequest.model_validate(
+        _args(plan=plan, now=REPLAN_AT.isoformat(), events=[claimed])
+    )
+
+    assert request.events[0].severity is None
+    assert request.events[0].requires_replan is None
+    data = _replan(registry, plan, events=[claimed])["data"]
+    assert closed not in _rides(data["plan"], after=REPLAN_AT)

@@ -1,4 +1,4 @@
-"""Rebuilds stored snapshots from their raw payloads (backlog P0-11, Architecture 41 C21).
+"""Rebuilds stored snapshots from their raw payloads.
 
     poetry run python scripts/renormalize_snapshots.py                 # rows built by an older normalizer
     poetry run python scripts/renormalize_snapshots.py --all           # every snapshot
@@ -52,11 +52,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--dry-run", action="store_true", help="list the snapshots, change nothing"
     )
-    parser.add_argument("--database-url", default=None, help="defaults to DATABASE_URL")
     args = parser.parse_args(argv)
 
     try:
-        with connect(args.database_url) as conn:
+        with connect() as conn:
             snapshots = PostgresSnapshotRepository(conn)
             if args.snapshot_id:
                 ids = list(args.snapshot_id)

@@ -1,4 +1,4 @@
-"""Use case: the proposal a thread's guests are still deciding on (P0-34).
+"""Use case: the proposal a thread's guests are still deciding on.
 
 The proposal repository, not graph state, is the source of truth for what is waiting for
 a human: a run of another graph on the same thread does not carry the interrupt of the

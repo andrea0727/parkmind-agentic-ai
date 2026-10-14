@@ -1,4 +1,4 @@
-"""Semantic search with the real multilingual model (P0-26), marked ``requires_model``.
+"""Semantic search with the real multilingual model, marked ``requires_model``.
 
 English questions against the Spanish corpus. Skipped unless the model is in
 the persistent cache (``scripts/fetch_embedding_model.py``); PR CI never

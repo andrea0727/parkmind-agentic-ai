@@ -1,4 +1,4 @@
-"""Narrators for graph tests: no test may call Claude, even with a key in .env (P0-31)."""
+"""Narrators for graph tests: no test may call Claude, even with a key in .env."""
 
 from collections.abc import Mapping
 from typing import Any

@@ -1,4 +1,4 @@
-"""Keyword fallback and embedders of the knowledge store (P0-26), no database."""
+"""Keyword fallback and embedders of the knowledge store, no database."""
 
 import math
 from pathlib import Path

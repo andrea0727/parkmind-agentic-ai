@@ -106,3 +106,17 @@ def test_without_callbacks_the_run_config_is_unchanged():
     service.say(thread_id, "hello")
 
     assert graph.configs == [{"configurable": {"thread_id": thread_id}}]
+
+
+def test_an_errors_text_is_reduced_to_its_type_in_the_status_message():
+    from parkmind.services.clients.observability.langfuse_tracing import (
+        _masked_handler_class,
+    )
+
+    handler = _masked_handler_class()(public_key="pk-test")
+
+    _, status = handler._get_error_level_and_status_message(
+        ValueError("No encontré 'zebra-canary' entre las atracciones")
+    )
+
+    assert status == "ValueError"

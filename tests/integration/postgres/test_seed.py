@@ -1,4 +1,4 @@
-"""P0-12 Done-when: "Seed data can populate a reproducible development scenario."
+"""Seed data can populate a reproducible development scenario.
 
 Reproducible means: the same content in two independent fresh databases, and no
 change when the seed is run again.

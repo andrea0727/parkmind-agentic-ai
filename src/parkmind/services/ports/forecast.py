@@ -1,4 +1,4 @@
-"""ForecastStrategy -- one source of expected wait times (section 18, P0-18).
+"""ForecastStrategy -- one source of expected wait times.
 
 ``ForecastService`` (services/planning/forecast_service.py) is the section 18
 composite: it asks its strategies in order -- API forecast, then historical

@@ -1,4 +1,4 @@
-"""P0-11 Done-when 3: "The application can retrieve the most recent valid snapshot and its age."
+"""The application can retrieve the most recent valid snapshot and its age.
 
 Age is measured at the ``now`` passed in -- the exact bug found in PR #63's rule 11,
 where age was measured against a plan's first stop.
