@@ -51,6 +51,7 @@ from parkmind.core.conversation import (
     ConversationError,
     HardConstraintAnswer,
     NotExpectedError,
+    PlanEditRequest,
     StaleProposalError,
     UnknownAttractionError,
     UnknownThreadError,
@@ -118,6 +119,7 @@ def create_app(
 
     ``saved_parties`` maps a username to the party saved for that account, as planner-ready text.
     """
+
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         ensure_single_worker(os.environ if env is None else env, argv)
@@ -144,18 +146,14 @@ def create_app(
         )
 
     @app.middleware("http")
-    async def _security_headers(
-        request: Request, call_next: Callable[[Request], Any]
-    ) -> Response:
+    async def _security_headers(request: Request, call_next: Callable[[Request], Any]) -> Response:
         response: Response = await call_next(request)
         for name, value in SECURITY_HEADERS.items():
             response.headers.setdefault(name, value)
         if request.url.path.startswith("/api"):
             response.headers.setdefault("Cache-Control", "no-store")
         if not request.url.path.startswith(_DOC_PATHS):
-            response.headers.setdefault(
-                "Content-Security-Policy", CONTENT_SECURITY_POLICY
-            )
+            response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
         return response
 
     present = Presenter(describe or DescribePlanUseCase())
@@ -363,21 +361,33 @@ def create_app(
     )
     def decide(
         proposal_id: str,
-        decision: Literal["approve", "reject"],
+        decision: Literal["approve", "reject", "edit"],
         thread_id: ThreadId,
         body: DecisionIn | None = None,
-    ) -> TurnOut:
-        status = (
-            ApprovalStatus.APPROVED
-            if decision == "approve"
-            else ApprovalStatus.REJECTED
+    ) -> TurnOut | JSONResponse:
+        body = body or DecisionIn()
+        if decision == "edit":
+            if not body.remove and not body.add:
+                return JSONResponse(
+                    status_code=422,
+                    content={"detail": "an edit needs at least one id in 'remove' or 'add'"},
+                )
+            turn = conversation.decide(
+                thread_id,
+                proposal_id,
+                ApprovalStatus.EDITED,
+                edit=PlanEditRequest(remove=tuple(body.remove), add=tuple(body.add)),
+            )
+            if turn.error:
+                return JSONResponse(status_code=422, content={"detail": turn.error})
+            return present.turn(turn)
+        if decision == "approve":
+            return present.turn(
+                conversation.decide(thread_id, proposal_id, ApprovalStatus.APPROVED)
+            )
+        return present.turn(
+            conversation.decide(thread_id, proposal_id, ApprovalStatus.REJECTED, body.reason)
         )
-        reason = (
-            body.reason
-            if body is not None and status == ApprovalStatus.REJECTED
-            else None
-        )
-        return present.turn(conversation.decide(thread_id, proposal_id, status, reason))
 
     @app.get(
         "/api/plan",

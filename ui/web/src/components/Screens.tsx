@@ -22,6 +22,12 @@ function Pane({ id, children }: { id: ScreenName; children: ReactNode }) {
   );
 }
 
+function MockNote() {
+  const { c, t } = useApp();
+  if (c.s.mode !== "mock" || c.s.booting) return null;
+  return <p className="note mock-note">{t("mock_banner")}</p>;
+}
+
 function LiveNote() {
   const { c, t } = useApp();
   if (c.s.mode !== "live") return null;
@@ -82,6 +88,7 @@ export function HomeScreen() {
         </>
       ) : (
         <>
+          <MockNote />
           <h2 className="greet">{greetWord(t)},<br />{FIXTURE.guest_profile.display_name}</h2>
           <p className="subline">{FIXTURE.plan.park} · {t("party")} {FIXTURE.guest_profile.party_size}</p>
           <div className="pills">
@@ -401,6 +408,7 @@ function Ticket() {
 
 export function ProfileScreen() {
   const { c, t, loc } = useApp();
+  const profileName = c.s.mode === "live" ? auth.username() : FIXTURE.guest_profile.display_name;
   return (
     <Pane id="profile">
       <div className="screen-head">
@@ -409,9 +417,10 @@ export function ProfileScreen() {
         <p>{t("profile_sub")}</p>
       </div>
       <LiveNote />
+      <MockNote />
       <div className="prof-head">
-        <div className="prof-av">A</div>
-        <div><b>Andrea</b><small>{t("party")} · {FIXTURE.guest_profile.party_size}</small></div>
+        <div className="prof-av">{(profileName ?? "·").charAt(0).toUpperCase()}</div>
+        <div><b>{profileName ?? "—"}</b><small>{t("party")} · {FIXTURE.guest_profile.party_size}</small></div>
       </div>
 
       <h3 className="sect" style={{ marginTop: 4 }}>{t("tickets")}</h3>

@@ -50,11 +50,15 @@ def _require_valid(check_result: CheckResult) -> None:
         raise ExplainBeforeValidationError("a plan is explained only after it passed the checker")
 
 
-def _guest_name(guest: Guest, lang: Language = DEFAULT_LANGUAGE) -> str:
-    if guest.label:
-        return guest.label
+def _guest_ref(guest: Guest, lang: Language = DEFAULT_LANGUAGE) -> str:
+    """``Guest 2``: the neutral name, safe to send to the narrator."""
     number = guest.guest_id.removeprefix("g")
     return text("guest_label", lang, number=number) if number.isdigit() else guest.guest_id
+
+
+def _guest_name(guest: Guest, lang: Language = DEFAULT_LANGUAGE) -> str:
+    """The guest's own label ("tu mamá") for the template, which stays in-process."""
+    return guest.label or _guest_ref(guest, lang)
 
 
 def _guest_label(guest: Guest, lang: Language) -> str:
@@ -133,7 +137,11 @@ def explain_plan(
         wait=f"{plan.total_wait_minutes:.0f}",
         walk=f"{plan.total_walking_minutes:.0f}",
     )
-    parts = [summary, *lines, *_skipped_rides(plan, names, guests, height_limits or {}, lang)]
+    parts = [
+        summary,
+        *lines,
+        *_skipped_rides(plan, names, guests, height_limits or {}, lang),
+    ]
     if plan.unmet_must_do:
         unmet = ", ".join(names.get(node_id, node_id) for node_id in plan.unmet_must_do)
         parts.append(text("plan_unmet", lang, solo=solo, names=unmet))
@@ -180,8 +188,8 @@ def explain_replan(
 @dataclass(frozen=True)
 class GuestSittingOut:
     guest: str
-    """``Guest 2`` -- never the guest's height: the narrator does not need a child's
-    height to say they sit a ride out (section 12, data minimization)."""
+    """``Guest 2`` -- never the guest's height or their free-text label ("tu mamá"):
+    the narrator does not need either to say they sit a ride out (section 12)."""
     minimum_height_cm: int
     """The ride's posted minimum: park data, not the guest's."""
 
@@ -262,11 +270,13 @@ def explanation_payload(
     diff: PlanDiff | None = None,
 ) -> ExplanationPayload:
     _require_valid(check_result)
-    names = {**names, MEAL_VENUE_TBD: "Lunch (restaurant to be chosen, near your previous stop)"}
+    names = {
+        **names,
+        MEAL_VENUE_TBD: "Lunch (restaurant to be chosen, near your previous stop)",
+    }
     out_by_stop = {
         node_id: [
-            GuestSittingOut(guest=_guest_name(guest), minimum_height_cm=limit)
-            for guest in skipping
+            GuestSittingOut(guest=_guest_ref(guest), minimum_height_cm=limit) for guest in skipping
         ]
         for node_id, limit, skipping in _sitting_out(plan, guests, height_limits or {})
     }
@@ -337,9 +347,7 @@ def _catalog_facts(deps_factory: DepsFactory) -> tuple[dict[str, str], dict[str,
         catalog = load_catalog(deps)
     names = {a.node_id: a.name for a in catalog}
     limits = {
-        a.node_id: a.height_restriction_cm
-        for a in catalog
-        if a.height_restriction_cm is not None
+        a.node_id: a.height_restriction_cm for a in catalog if a.height_restriction_cm is not None
     }
     return names, limits
 
@@ -390,7 +398,12 @@ class ExplainPlanUseCase:
             )
             if diff is not None
             else explain_plan(
-                plan, check_result, names, guests=guests, height_limits=limits, lang=lang
+                plan,
+                check_result,
+                names,
+                guests=guests,
+                height_limits=limits,
+                lang=lang,
             )
         )
         return PreparedExplanation(payload, template)

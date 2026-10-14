@@ -150,6 +150,12 @@ docker compose up -d --build
 One container serves the FastAPI API and the built React UI on http://localhost:8000
 (Swagger at `/docs`). It runs **one worker on purpose**: sessions live in memory.
 
+> **Known limit (decision, not an oversight).** Conversations are checkpointed in memory
+> (`default_checkpointer()`), so a restart loses open sessions and there is no horizontal
+> scaling. A Postgres checkpointer is a follow-up: it needs C19 first, because a durable
+> checkpoint must never hold `AccessibilityRequirements` (they live only in `SESSION_MEMORY`
+> and are re-read at planning time).
+
 **1. Configure `.env`** (copy from `.env.example`). Required for the app to start:
 
 ```bash
@@ -161,7 +167,7 @@ PARKMIND_JWT_SECRET=<32+ random chars>       # python -c "import secrets; print(
 Optional: `PARKMIND_TOKEN_TTL_HOURS` (default 2), `PARKMIND_MESSAGES_PER_USER_DAY` (300),
 `PARKMIND_MESSAGES_GLOBAL_DAY` (2000), `ELICIT_MODEL` (Anthropic model, default `claude-haiku-4-5-20251001`), `PARKMIND_AUTH_DISABLED=1` (local demo only: no login,
 every route open), `PARKMIND_PLAN_FROM_STORED=1` (plan from the latest stored snapshot),
-`E2E_NOW=HH:MM` (fixed park clock). After editing `.env`: `docker compose up -d app`.
+`E2E_NOW=HH:MM` (fixed park clock); both demo switches need `PARKMIND_DEMO=1` too, and the server refuses to start with one set alone. After editing `.env`: `docker compose up -d app`.
 
 **2. Launch**
 
@@ -175,7 +181,7 @@ Open http://localhost:8000 and sign in with the user from `PARKMIND_AUTH_USERS`.
 
 **Without Docker** (hot reload for UI work): terminal 1 `docker compose up -d postgres`, then
 `poetry run alembic -c database/alembic.ini upgrade head && poetry run python scripts/seed_db.py`
-(the container does this on start; here you do it once) and `poetry run python server.py`; terminal 2 `cd ui/web && npm ci && npm run dev` and open
+(the container does this on start because the compose file sets `PARKMIND_SEED_DEMO=1`; here you do it once) and `poetry run python server.py`; terminal 2 `cd ui/web && npm ci && npm run dev` and open
 http://localhost:5173 (Vite proxies `/api` to :8000).
 
 **3. Check that it works**
@@ -512,6 +518,11 @@ lets it invent a figure (Architecture §40, C17):
   `ANTHROPIC_API_KEY`, the guests read the deterministic template, which only prints
   figures from the payload. The proposal's provenance records which one wrote it
   (`prompt_versions["explain"]`: `explain-v1` or `template`).
+- **English only for now.** The narrator writes English; with `lang` other than `en` (for
+  example Spanish) the guests read the localized deterministic template, so the same
+  grounding guarantees hold but the wording is fixed. The narrator payload names a guest
+  who sits a ride out as `Guest N`, never by their free-text label ("tu mamá"); only the
+  template, which stays in the process, uses the label.
 - **Model:** `EXPLAIN_MODEL` (defaults to `ELICIT_MODEL`). Tests inject a fake
   narrator (`tests/explain_support.py`), so they never call Claude, even with a key in
   `.env`.

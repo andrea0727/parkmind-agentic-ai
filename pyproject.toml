@@ -38,7 +38,6 @@ pytest-cov = ">=5.0"
 ruff = ">=0.6"
 mypy = "^2.3.1"
 import-linter = "^2.15"
-httpx = "^0.28.1"
 
 [tool.mypy]
 python_version = "3.12"

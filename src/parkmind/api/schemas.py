@@ -33,7 +33,8 @@ class ParkStatusOut(BaseModel):
 class SessionOut(BaseModel):
     thread_id: str = Field(description="Pass as `?thread_id=` on every other call.")
     park: ParkStatusOut | None = Field(
-        default=None, description="Today's park status; null when the schedule is unknown."
+        default=None,
+        description="Today's park status; null when the schedule is unknown.",
     )
 
 
@@ -63,6 +64,16 @@ class ConstraintsConfirmIn(_Body):
 class DecisionIn(_Body):
     reason: RejectionReason | None = Field(
         default=None, description="Why the proposal was rejected; ignored on approve."
+    )
+    remove: list[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Edit only: node ids of attraction or show stops of the plan to drop.",
+    )
+    add: list[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Edit only: node ids of catalog attractions to fit in.",
     )
 
 

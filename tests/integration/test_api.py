@@ -1,6 +1,7 @@
 """HTTP API (P0-35): success paths, invalid requests, and the one-process guarantees."""
 
 import ast
+import json
 from pathlib import Path
 
 import pytest
@@ -231,7 +232,10 @@ def test_the_ui_is_served_next_to_the_api(rig, tmp_path):
     (tmp_path / "index.html").write_text("<h1>ParkMind</h1>")
     with TestClient(_app(rig, ui_dir=tmp_path)) as client:
         assert "ParkMind" in client.get("/").text
-        assert client.get("/api/health").json() == {"status": "ok", "auth_required": False}
+        assert client.get("/api/health").json() == {
+            "status": "ok",
+            "auth_required": False,
+        }
 
 
 # --- one process, one SessionMemory ---------------------------------------------------
@@ -244,6 +248,8 @@ def test_the_ui_is_served_next_to_the_api(rig, tmp_path):
         ({"PARKMIND_WORKERS": "4"}, []),
         ({}, ["uvicorn", "x:app", "--workers", "3"]),
         ({}, ["uvicorn", "x:app", "--workers=2"]),
+        ({}, ["gunicorn", "x:app", "-w", "2"]),
+        ({}, ["gunicorn", "x:app", "-w2"]),
     ],
 )
 def test_several_workers_fail_loudly_at_startup(rig, env, argv):
@@ -252,7 +258,7 @@ def test_several_workers_fail_loudly_at_startup(rig, env, argv):
     )
 
     with (
-        pytest.raises(MultipleWorkersError, match="exactly one worker"),
+        pytest.raises(MultipleWorkersError, match="one worker"),
         TestClient(app),
     ):
         pass
@@ -264,7 +270,6 @@ def test_several_workers_fail_loudly_at_startup(rig, env, argv):
         ({}, []),
         ({"WEB_CONCURRENCY": "1"}, []),
         ({}, ["--workers", "1"]),
-        ({"WEB_CONCURRENCY": "x"}, []),
     ],
 )
 def test_one_worker_starts(env, argv):
@@ -359,3 +364,75 @@ def test_an_event_on_an_unknown_attraction_is_a_422_not_a_silent_ignore(client):
     detail = response.json()["detail"]
     assert "not_a_ride" in detail
     assert "The park has:" in detail
+
+
+def test_an_edit_over_http_returns_a_new_proposal(client):
+    t, turn = _to_proposal(client)
+    old = turn["proposal"]
+    dropped = old["plan"]["stops"][-1]["node_id"]
+
+    edited = client.post(
+        f"/api/proposal/{old['proposal_id']}/edit", params=t, json={"remove": [dropped]}
+    )
+
+    assert edited.status_code == 200
+    body = edited.json()
+    assert body["status"] == "needs_approval"
+    assert body["proposal"]["proposal_id"] != old["proposal_id"]
+    assert dropped not in [s["node_id"] for s in body["proposal"]["plan"]["stops"]]
+    assert client.get("/api/plan", params=t).status_code == 204
+
+
+def test_an_edit_that_does_not_fit_is_422_and_keeps_the_proposal(client):
+    t, turn = _to_proposal(client)
+    pid = turn["proposal"]["proposal_id"]
+
+    bad = client.post(f"/api/proposal/{pid}/edit", params=t, json={"remove": ["nope"]})
+
+    assert bad.status_code == 422 and bad.json()["detail"]
+    assert client.get("/api/proposal", params=t).json()["proposal_id"] == pid
+    assert client.post(f"/api/proposal/{pid}/approve", params=t).status_code == 200
+
+
+def test_an_empty_edit_is_422(client):
+    t, turn = _to_proposal(client)
+    pid = turn["proposal"]["proposal_id"]
+
+    assert client.post(f"/api/proposal/{pid}/edit", params=t).status_code == 422
+    assert (
+        client.post(f"/api/proposal/{pid}/edit", params=t, json={}).status_code == 422
+    )
+
+
+@pytest.mark.parametrize(
+    ("env", "argv"),
+    [({"WEB_CONCURRENCY": "auto"}, []), ({}, ["--workers", "many"]), ({}, ["-wx"])],
+)
+def test_an_unreadable_worker_count_fails_closed(env, argv):
+    with pytest.raises(MultipleWorkersError, match="one worker"):
+        ensure_single_worker(env, argv)
+
+
+# --- what the API never returns ---------------------------------------------------------
+
+NEVER_RETURNED = (
+    "group_objective",
+    "accessibility_requirements",
+    "mobility_requirements",
+    "LIMITED_WALKING",
+    "guest_requirements",
+)
+
+
+def test_no_response_after_the_confirmation_carries_the_objective_or_accessibility_data(client):
+    t, turn = _to_proposal(client)
+    pid = turn["proposal"]["proposal_id"]
+    bodies = [turn]
+    bodies.append(client.get("/api/proposal", params=t).json())
+    bodies.append(client.post(f"/api/proposal/{pid}/approve", params=t).json())
+    bodies.append(client.get("/api/plan", params=t).json())
+    bodies.append(client.get("/api/health").json())
+
+    blob = json.dumps(bodies)
+
+    assert [name for name in NEVER_RETURNED if name in blob] == []

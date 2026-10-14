@@ -442,3 +442,13 @@ def test_the_server_builds_auth_from_env_and_can_be_opened_explicitly(capsys):
     assert auth.token_ttl_seconds == 3600 and auth.authenticate("alice", "alice-pass-1")
     assert server.auth_from_env({"PARKMIND_AUTH_DISABLED": "1"}) is None
     assert "WARNING" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("switch", ["PARKMIND_PLAN_FROM_STORED", "E2E_NOW"])
+def test_demo_switches_need_an_explicit_demo_opt_in(switch):
+    server = _server()
+    value = "10:00" if switch == "E2E_NOW" else "1"
+    with pytest.raises(RuntimeError, match="PARKMIND_DEMO"):
+        server.require_demo_for_switches({switch: value})
+    server.require_demo_for_switches({switch: value, "PARKMIND_DEMO": "1"})
+    server.require_demo_for_switches({})

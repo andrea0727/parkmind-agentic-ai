@@ -20,4 +20,5 @@ COPY server.py ./
 COPY --from=ui /ui/dist ./ui/web/dist
 EXPOSE 8000
 # One worker on purpose: sessions and session-only data live in this process's memory.
-CMD ["sh", "-c", "alembic -c database/alembic.ini upgrade head && python scripts/seed_db.py && python server.py"]
+# The dev scenario is loaded only when PARKMIND_SEED_DEMO=1 (docker-compose.yml sets it).
+CMD ["sh", "-c", "alembic -c database/alembic.ini upgrade head && { [ \"$PARKMIND_SEED_DEMO\" != 1 ] || python scripts/seed_db.py; } && python server.py"]

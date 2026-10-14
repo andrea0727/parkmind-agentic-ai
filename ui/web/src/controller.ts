@@ -679,12 +679,15 @@ export function useController(lang: Lang, t: TFn, loc: LocFn) {
     let cancelled = false;
     void (async () => {
       const ok = await goLive();
-      if (!cancelled && !ok) upd(() => ({ booting: false }));
+      if (!cancelled && !ok) {
+        upd(() => ({ booting: false }));
+        toast(env.current.t("live_fail"));
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [goLive, upd]);
+  }, [goLive, upd, toast]);
 
   /* Poll for a proposal the planner raised on its own (event monitor, weather). 204 is ignored. */
   useEffect(() => {

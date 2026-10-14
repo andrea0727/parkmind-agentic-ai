@@ -5,25 +5,33 @@ import sys
 from collections.abc import Mapping, Sequence
 
 WORKER_ENV_VARS = ("WEB_CONCURRENCY", "PARKMIND_WORKERS")
+_WORKER_FLAGS = ("--workers", "-w")
 
 
 class MultipleWorkersError(RuntimeError):
-    """More than one worker was asked for."""
+    """More than one worker was asked for, or the count cannot be read."""
 
 
 def _count(value: str | None) -> int:
-    try:
-        return int(value) if value else 1
-    except ValueError:
+    if not value:
         return 1
+    try:
+        return int(value)
+    except ValueError:
+        raise MultipleWorkersError(
+            f"cannot read the worker count {value!r}: ParkMind runs exactly one worker"
+        ) from None
 
 
 def _workers_in(argv: Sequence[str]) -> int:
+    """``--workers N``, ``--workers=N``, ``-w N`` and ``-wN`` (uvicorn and gunicorn)."""
     for i, arg in enumerate(argv):
-        if arg == "--workers" and i + 1 < len(argv):
+        if arg in _WORKER_FLAGS and i + 1 < len(argv):
             return _count(argv[i + 1])
         if arg.startswith("--workers="):
             return _count(arg.split("=", 1)[1])
+        if arg.startswith("-w") and len(arg) > 2 and not arg.startswith("--"):
+            return _count(arg[2:])
     return 1
 
 

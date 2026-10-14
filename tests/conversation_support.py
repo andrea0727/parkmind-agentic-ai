@@ -19,6 +19,7 @@ from parkmind.graph import initial_planning_graph as ipg
 from parkmind.graph import replanning_graph as rg
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.conversation import ConversationService
+from parkmind.services.use_cases.accessibility_intake import AccessibilityIntakeUseCase
 from parkmind.services.use_cases.planning_deps import PlanningDeps
 
 COMPLETE = scenario("wiki_example_complete")
@@ -31,6 +32,7 @@ class Rig:
     service: ConversationService
     deps: PlanningDeps
     extractor: FakeExtractor
+    intake: AccessibilityIntakeUseCase
 
 
 def make_rig(*extractions: Any, clock: Callable[[], datetime] | None = None) -> Rig:
@@ -57,6 +59,6 @@ def make_rig(*extractions: Any, clock: Callable[[], datetime] | None = None) -> 
         initial,
         replanning,
         deps_factory=factory_for(deps),
-        **({} if clock is None else {"clock": clock}),
+        clock=now,
     )
-    return Rig(service, deps, extractor)
+    return Rig(service, deps, extractor, intake)

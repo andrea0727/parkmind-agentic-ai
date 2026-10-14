@@ -420,3 +420,4 @@ h2.greet{font-size:32px;line-height:1.08;letter-spacing:-.035em;font-weight:800;
 .rp-chips button[aria-pressed="true"]{border-color:var(--twilight);background:#F7F4FE;color:var(--twilight)}
 .rp-pick{margin-top:10px}
 .rp-pick small{flex:0 0 100%;font-size:12px;color:var(--muted);font-weight:600}
+.mock-note{margin:0 0 10px;font-weight:600}

@@ -19,6 +19,7 @@ services:
       DATABASE_URL: postgresql://parkmind:parkmind@postgres:5432/parkmind
       PARKMIND_KNOWLEDGE_BACKEND: in_memory
       PARKMIND_WORKERS: "1"
+      PARKMIND_SEED_DEMO: "1"  # this compose file is the local demo: load the dev scenario on start
     ports:
       - "8000:8000"
     depends_on:

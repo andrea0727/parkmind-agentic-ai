@@ -78,12 +78,21 @@ class Turn:
     provisional_opens: datetime | None = None
     """The preview and when the park opens: it is refreshed from then on."""
 
+
 @dataclass(frozen=True)
 class HardConstraintAnswer:
     confirmed: bool
     consent: bool = False
     retention_policy: str = "session_only"
     correction: str | None = None
+
+
+@dataclass(frozen=True)
+class PlanEditRequest:
+    """An edit of a proposed plan, by node id: stops to drop and attractions to fit in."""
+
+    remove: tuple[str, ...] = ()
+    add: tuple[str, ...] = ()
 
 
 class Conversation(Protocol):
@@ -112,7 +121,13 @@ class Conversation(Protocol):
         proposal_id: str,
         decision: ApprovalStatus,
         rejection_reason: RejectionReason | None = None,
-    ) -> Turn: ...
+        edit: PlanEditRequest | None = None,
+    ) -> Turn:
+        """APPROVED, REJECTED or EDITED (with ``edit``).
+
+        An edit that does not fit the plan changes nothing: the same proposal comes back
+        with ``Turn.error``. A valid one comes back as a new proposal."""
+        ...
 
     def confirm_events(self, thread_id: str, confirmed: bool) -> Turn: ...
 

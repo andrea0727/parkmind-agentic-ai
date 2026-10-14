@@ -32,6 +32,7 @@ from parkmind.core.conversation import (
     ConfirmationRequest,
     HardConstraintAnswer,
     NotExpectedError,
+    PlanEditRequest,
     StaleProposalError,
     Turn,
     TurnStatus,
@@ -70,6 +71,12 @@ class _Thread:
     language: Language = DEFAULT_LANGUAGE
     saved_party: str | None = None
     provisional_opens: datetime | None = None
+    interrupt_id: str | None = None
+    """The interrupt the thread is paused on; an answer resumes it by this id."""
+    unapplied: Any = None
+    """An answer the graph took but whose run failed: LangGraph keeps it, so the run is
+    retried with no input instead of answering again."""
+    has_unapplied: bool = False
 
 
 def _new_thread_id() -> str:
@@ -110,7 +117,7 @@ class ConversationService:
         thread = self._thread(thread_id)
         with thread.lock:
             if thread.waiting_for == MISSING_INFORMATION_KIND:
-                return self._run(thread_id, thread, "initial", Command(resume=text))
+                return self._answer(thread_id, thread, "initial", text)
             self._require_nothing_pending(thread)
             payload: dict[str, Any] = {
                 "thread_id": thread_id,
@@ -139,7 +146,7 @@ class ConversationService:
                 "retention_policy": answer.retention_policy,
                 "correction": answer.correction,
             }
-            return self._run(thread_id, thread, "initial", Command(resume=resume))
+            return self._answer(thread_id, thread, "initial", resume)
 
     def decide(
         self,
@@ -147,9 +154,18 @@ class ConversationService:
         proposal_id: str,
         decision: ApprovalStatus,
         rejection_reason: RejectionReason | None = None,
+        edit: PlanEditRequest | None = None,
     ) -> Turn:
-        if decision not in (ApprovalStatus.APPROVED, ApprovalStatus.REJECTED):
-            raise NotExpectedError("a decision is either APPROVED or REJECTED")
+        if decision not in (
+            ApprovalStatus.APPROVED,
+            ApprovalStatus.REJECTED,
+            ApprovalStatus.EDITED,
+        ):
+            raise NotExpectedError("a decision is either APPROVED, REJECTED or EDITED")
+        if (decision is ApprovalStatus.EDITED) != (edit is not None):
+            raise NotExpectedError("an edit goes with an EDITED decision, and only with it")
+        if edit is not None and not (edit.remove or edit.add):
+            raise NotExpectedError("an edit needs at least one stop to remove or add")
         thread = self._thread(thread_id)
         with thread.lock:
             self._require_waiting(thread, APPROVAL_INTERRUPT_KIND)
@@ -160,18 +176,15 @@ class ConversationService:
             resume: dict[str, Any] = {"decision": decision.value}
             if rejection_reason is not None:
                 resume["rejection_reason"] = rejection_reason.value
-            return self._run(thread_id, thread, thread.owner, Command(resume=resume))
+            if edit is not None:
+                resume["edit"] = {"remove": list(edit.remove), "add": list(edit.add)}
+            return self._answer(thread_id, thread, thread.owner, resume)
 
     def confirm_events(self, thread_id: str, confirmed: bool) -> Turn:
         thread = self._thread(thread_id)
         with thread.lock:
             self._require_waiting(thread, EVENT_CONFIRMATION_INTERRUPT_KIND)
-            return self._run(
-                thread_id,
-                thread,
-                "replanning",
-                Command(resume={"confirmed": confirmed}),
-            )
+            return self._answer(thread_id, thread, "replanning", {"confirmed": confirmed})
 
     def provisional(self, thread_id: str) -> Turn:
         thread = self._thread(thread_id)
@@ -234,10 +247,10 @@ class ConversationService:
     def report_events(self, thread_id: str, events: Sequence[Event]) -> Turn:
         thread = self._thread(thread_id)
         with thread.lock:
+            if thread.has_unapplied:
+                raise NotExpectedError("the last answer is still being applied; retry it first")
             if thread.waiting_for not in (None, APPROVAL_INTERRUPT_KIND):
-                raise NotExpectedError(
-                    f"the planner is waiting for {thread.waiting_for}"
-                )
+                raise NotExpectedError(f"the planner is waiting for {thread.waiting_for}")
             self._require_known_attractions(events, thread.language)
             payload = {"thread_id": thread_id, "events": list(events)}
             return self._run(thread_id, thread, "replanning", payload)
@@ -256,7 +269,12 @@ class ConversationService:
             )
             options = text("attraction_options", lang, groups=groups) if groups else ""
             raise UnknownAttractionError(
-                text("event_unknown_attraction", lang, name=", ".join(unknown), options=options)
+                text(
+                    "event_unknown_attraction",
+                    lang,
+                    name=", ".join(unknown),
+                    options=options,
+                )
             )
 
     def pending_proposal(self, thread_id: str) -> tuple[Proposal, Plan] | None:
@@ -296,9 +314,31 @@ class ConversationService:
             waiting = thread.waiting_for or "nothing"
             raise NotExpectedError(f"the planner is waiting for {waiting}, not {kind}")
 
-    def _run(
-        self, thread_id: str, thread: _Thread, owner: Owner, graph_input: Any
-    ) -> Turn:
+    def _answer(self, thread_id: str, thread: _Thread, owner: Owner, value: Any) -> Turn:
+        """Answer the interrupt the thread is paused on, by its id.
+
+        A plain ``Command(resume=value)`` kept by a failed run would, inside the planning
+        subgraph, also answer the next interrupt of the same run. So the answer names its
+        interrupt, and after a failure the same answer retries the run with no input:
+        LangGraph already holds it. A different answer is refused until the retry succeeds.
+        """
+        if thread.has_unapplied:
+            if value != thread.unapplied:
+                raise NotExpectedError(
+                    "the last answer is still being applied; send the same answer again to retry"
+                )
+            graph_input: Any = None
+        else:
+            graph_input = Command(resume={thread.interrupt_id: value})
+        try:
+            turn = self._run(thread_id, thread, owner, graph_input)
+        except Exception:
+            thread.unapplied, thread.has_unapplied = value, True
+            raise
+        thread.unapplied, thread.has_unapplied = None, False
+        return turn
+
+    def _run(self, thread_id: str, thread: _Thread, owner: Owner, graph_input: Any) -> Turn:
         config: Any = {"configurable": {"thread_id": thread_id}}
         result = self._graphs[owner].invoke(graph_input, config=config)
         thread.owner = owner
@@ -308,13 +348,12 @@ class ConversationService:
         everything = list(result.get("messages") or [])
         fresh = everything[thread.seen_messages :]
         thread.seen_messages = len(everything)
-        texts = tuple(
-            str(m.content) for m in fresh if isinstance(m, AIMessage) and m.content
-        )
+        texts = tuple(str(m.content) for m in fresh if isinstance(m, AIMessage) and m.content)
         interrupts = result.get("__interrupt__")
         if not interrupts:
             thread.waiting_for = None
             thread.proposal_id = None
+            thread.interrupt_id = None
             return Turn(
                 thread_id,
                 TurnStatus.DONE,
@@ -324,6 +363,7 @@ class ConversationService:
 
         payload = interrupts[0].value
         kind = payload["kind"]
+        thread.interrupt_id = interrupts[0].id
         thread.waiting_for = kind
         thread.proposal_id = None
         error = payload.get("error")

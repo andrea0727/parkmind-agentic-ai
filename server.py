@@ -6,11 +6,13 @@ ANTHROPIC_API_KEY (the LLM key),
 PARKMIND_AUTH_USERS ("user=password,user2=password2") and PARKMIND_JWT_SECRET (>= 32 chars) are REQUIRED: the server refuses to start without them. PARKMIND_AUTH_DISABLED=1 opts out
 (local demos only; every route is then open). PARKMIND_TOKEN_TTL_HOURS (default 2).
 LLM caps (per user and global per 24 h): PARKMIND_MESSAGES_PER_USER_DAY (300), PARKMIND_MESSAGES_GLOBAL_DAY (2000).
+Demo switches, honoured only with PARKMIND_DEMO=1 (the server refuses to start with one set and no PARKMIND_DEMO):
 PARKMIND_PLAN_FROM_STORED=1 (plan from the latest stored snapshot, no provider call: for demos
 pinned to a snapshot taken during park hours), E2E_NOW=HH:MM (fixed park clock for demos).
 PARKMIND_HOUSEHOLDS_FILE (default demo/households.json): parties saved per username.
 """
 
+import json
 import os
 import sys
 from dataclasses import replace
@@ -34,12 +36,38 @@ from parkmind.graph.initial_planning_graph import (
     park_clock,
 )
 from parkmind.graph.replanning_graph import build_replanning_graph
-from parkmind.services.personalization.household import load_households
+from parkmind.services.personalization.household import (
+    Household,
+    HouseholdFileError,
+    parse_households,
+)
 from parkmind.services.use_cases.describe_plan import DescribePlanUseCase
 from parkmind.services.use_cases.park_status import ParkStatusUseCase
 from parkmind.services.use_cases.planning_deps import default_planning_deps
 
 ROOT = Path(__file__).parent
+
+
+def load_households(path: Path) -> dict[str, Household]:
+    """An absent file means no saved parties; a present but broken one is an error."""
+    if not path.is_file():
+        return {}
+    try:
+        return parse_households(json.loads(path.read_text(encoding="utf-8")))
+    except json.JSONDecodeError as exc:
+        raise HouseholdFileError(f"{path.name} is not valid JSON: {exc}") from None
+
+
+DEMO_SWITCHES = ("PARKMIND_PLAN_FROM_STORED", "E2E_NOW")
+
+
+def require_demo_for_switches(env=os.environ) -> None:
+    """A fixed clock or stored-only planning silently falsifies a real deployment: demo only."""
+    switches = [n for n in DEMO_SWITCHES if env.get(n)]
+    if switches and env.get("PARKMIND_DEMO") != "1":
+        raise RuntimeError(
+            f"{', '.join(switches)} only work with PARKMIND_DEMO=1; unset them or opt in to the demo"
+        )
 
 
 def _deps_factory():
@@ -72,9 +100,15 @@ def _clock():
 def auth_from_env(env=os.environ) -> AuthConfig | None:
     """Fail closed: no credentials configured means no server, unless explicitly disabled."""
     if env.get("PARKMIND_AUTH_DISABLED") == "1":
-        print("WARNING: PARKMIND_AUTH_DISABLED=1 - the API is open to anyone.", file=sys.stderr)
+        print(
+            "WARNING: PARKMIND_AUTH_DISABLED=1 - the API is open to anyone.",
+            file=sys.stderr,
+        )
         return None
-    users, secret = env.get("PARKMIND_AUTH_USERS", ""), env.get("PARKMIND_JWT_SECRET", "")
+    users, secret = (
+        env.get("PARKMIND_AUTH_USERS", ""),
+        env.get("PARKMIND_JWT_SECRET", ""),
+    )
     if not users or not secret:
         raise AuthConfigError(
             "set PARKMIND_AUTH_USERS and PARKMIND_JWT_SECRET (see .env.example), "
@@ -103,6 +137,7 @@ def limits_from_env(env=os.environ) -> Limits:
 
 def build_app():
     load_dotenv()
+    require_demo_for_switches()
     auth = auth_from_env()
     deps_factory = _deps_factory()
     clock = _clock()
@@ -116,16 +151,10 @@ def build_app():
         deps_factory=deps_factory,
         clock=clock,
     )
-    replanning = build_replanning_graph(
-        checkpointer, deps_factory=deps_factory, clock=clock
-    )
+    replanning = build_replanning_graph(checkpointer, deps_factory=deps_factory, clock=clock)
     ui_dir = Path(os.environ.get("PARKMIND_UI_DIR", ROOT / "ui" / "web" / "dist"))
     origins = [
-        o
-        for o in os.environ.get("PARKMIND_CORS_ORIGINS", "http://localhost:5173").split(
-            ","
-        )
-        if o
+        o for o in os.environ.get("PARKMIND_CORS_ORIGINS", "http://localhost:5173").split(",") if o
     ]
     return create_app(
         ConversationService(initial, replanning, deps_factory=deps_factory, clock=clock),

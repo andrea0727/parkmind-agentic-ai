@@ -26,6 +26,7 @@ def closed_client():
     checkpointer = default_checkpointer()
     initial = ipg.build_initial_planning_graph(
         rig.extractor,
+        rig.intake,
         checkpointer=checkpointer,
         deps_factory=factory,
         clock=lambda: AFTER_CLOSING,
@@ -134,12 +135,17 @@ def _closed_service(*extractions):
     factory = factory_for(rig.deps)
     checkpointer = default_checkpointer()
     initial = ipg.build_initial_planning_graph(
-        rig.extractor, checkpointer=checkpointer, deps_factory=factory, clock=lambda: AFTER_CLOSING
+        rig.extractor,
+        checkpointer=checkpointer,
+        deps_factory=factory,
+        clock=lambda: AFTER_CLOSING,
     )
     replanning = rg.build_replanning_graph(
         checkpointer, deps_factory=factory, clock=lambda: AFTER_CLOSING
     )
-    return ConversationService(initial, replanning, deps_factory=factory, clock=lambda: AFTER_CLOSING)
+    return ConversationService(
+        initial, replanning, deps_factory=factory, clock=lambda: AFTER_CLOSING
+    )
 
 
 def test_the_first_question_of_a_closed_day_says_the_park_is_closed():
@@ -220,3 +226,16 @@ def test_once_the_park_opens_the_provisional_plan_becomes_a_proposal():
     assert service.active_plan(thread_id) is None
     with pytest.raises(NotExpectedError):
         service.refresh_provisional(thread_id)
+
+
+def test_a_provisional_plan_is_not_built_for_a_guest_without_an_accessibility_record():
+    service, _, rig = _moving_rig()
+    thread_id, preview = _provisional_thread(service)
+    assert preview.provisional_plan is not None
+    assert rig.deps.sessions.records
+    rig.deps.sessions.records.clear()
+
+    again = service.provisional(thread_id)
+
+    assert again.provisional_plan is None
+    assert again.provisional_opens is None

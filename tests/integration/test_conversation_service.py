@@ -9,6 +9,7 @@ from parkmind.core.contracts import ApprovalStatus, EventType, RejectionReason
 from parkmind.core.conversation import (
     HardConstraintAnswer,
     NotExpectedError,
+    PlanEditRequest,
     StaleProposalError,
     TurnStatus,
     UnknownAttractionError,
@@ -173,3 +174,81 @@ def test_an_event_naming_an_attraction_outside_the_catalog_is_refused():
                 )
             ],
         )
+
+
+def _stop_ids(plan):
+    return [stop.node_id for stop in plan.stops]
+
+
+def test_an_edit_that_fits_comes_back_as_a_new_proposal():
+    rig = make_rig()
+    thread, turn = _to_proposal(rig)
+    dropped = _stop_ids(turn.candidate_plan)[-1]
+
+    edited = rig.service.decide(
+        thread,
+        turn.proposal.proposal_id,
+        ApprovalStatus.EDITED,
+        edit=PlanEditRequest(remove=(dropped,)),
+    )
+
+    assert edited.status is TurnStatus.NEEDS_APPROVAL and edited.error is None
+    assert edited.proposal.proposal_id != turn.proposal.proposal_id
+    assert dropped not in _stop_ids(edited.candidate_plan)
+    assert rig.service.active_plan(thread) is None
+
+
+def test_an_edit_that_does_not_fit_changes_nothing():
+    rig = make_rig()
+    thread, turn = _to_proposal(rig)
+
+    rejected = rig.service.decide(
+        thread,
+        turn.proposal.proposal_id,
+        ApprovalStatus.EDITED,
+        edit=PlanEditRequest(remove=("not_a_stop",)),
+    )
+
+    assert rejected.status is TurnStatus.NEEDS_APPROVAL and rejected.error
+    assert rejected.proposal.proposal_id == turn.proposal.proposal_id
+    done = rig.service.decide(thread, turn.proposal.proposal_id, ApprovalStatus.APPROVED)
+    assert done.status is TurnStatus.DONE
+
+
+def test_an_edit_needs_something_to_change_and_an_edited_decision():
+    rig = make_rig()
+    thread, turn = _to_proposal(rig)
+    pid = turn.proposal.proposal_id
+
+    with pytest.raises(NotExpectedError):
+        rig.service.decide(thread, pid, ApprovalStatus.EDITED, edit=PlanEditRequest())
+    with pytest.raises(NotExpectedError):
+        rig.service.decide(thread, pid, ApprovalStatus.EDITED)
+    with pytest.raises(NotExpectedError):
+        rig.service.decide(thread, pid, ApprovalStatus.APPROVED, edit=PlanEditRequest(add=("x",)))
+
+
+def test_a_failed_run_is_retried_with_the_same_answer_not_answered_again(monkeypatch):
+    rig = make_rig()
+    thread, turn = _to_proposal(rig)
+    pid = turn.proposal.proposal_id
+    proposals = rig.deps.proposals
+    real_resolve = proposals.resolve
+    attempts = []
+
+    def flaky_resolve(*args, **kwargs):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise RuntimeError("database went away")
+        return real_resolve(*args, **kwargs)
+
+    monkeypatch.setattr(proposals, "resolve", flaky_resolve)
+
+    with pytest.raises(RuntimeError):
+        rig.service.decide(thread, pid, ApprovalStatus.APPROVED)
+    with pytest.raises(NotExpectedError):
+        rig.service.decide(thread, pid, ApprovalStatus.REJECTED)
+    done = rig.service.decide(thread, pid, ApprovalStatus.APPROVED)
+
+    assert done.status is TurnStatus.DONE
+    assert rig.service.active_plan(thread) is not None

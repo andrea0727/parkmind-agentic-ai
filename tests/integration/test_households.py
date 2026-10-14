@@ -10,10 +10,10 @@ from planning_support import factory_for
 from parkmind.api.app import create_app
 from parkmind.services.personalization.household import (
     HouseholdFileError,
-    load_households,
     parse_households,
 )
 from parkmind.services.use_cases.describe_plan import DescribePlanUseCase
+from server import load_households
 
 FAMILY = {
     "party": [

@@ -34,6 +34,7 @@ from parkmind.services.use_cases.planning_deps import (
     PlanningUnavailableError,
     default_planning_deps,
     load_catalog,
+    load_requirements,
     load_schedule,
     open_deps,
 )
@@ -86,8 +87,13 @@ class ProvisionalPlanUseCase:
             with open_deps(self._deps_factory) as deps:
                 park = load_schedule(deps, target)
                 catalog = load_catalog(deps)
+                _, unread = load_requirements(deps, thread_id, accessibility_ref)
         except PlanningUnavailableError:
             logger.warning("no schedule for the provisional plan", exc_info=True)
+            return ProvisionalPlan(text("provisional_unavailable", lang, solo=solo), None, target)
+
+        if unread:
+            logger.warning("no provisional plan: no accessibility record for %s", unread)
             return ProvisionalPlan(text("provisional_unavailable", lang, solo=solo), None, target)
 
         opening = park.opening_time
@@ -99,7 +105,7 @@ class ProvisionalPlanUseCase:
                 required_attractions_covered=True,
                 required_shows_covered=True,
                 weather_covered=True,
-                accessibility_checks_complete=True,
+                accessibility_checks_complete=True,  # every record was read above (rule 11)
             ),
         )
         planned = retimed(constraints, target)
@@ -123,6 +129,7 @@ class ProvisionalPlanUseCase:
         if not built.resolved:
             return ProvisionalPlan(text("provisional_failed", lang, solo=solo), None, target)
 
+        # ``resolved`` means the resolve loop's own checker passed this plan.
         prepared = ExplainPlanUseCase(self._deps_factory).prepare(
             built.plan,
             CheckResult(valid=True),
