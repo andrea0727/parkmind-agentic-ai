@@ -1,5 +1,6 @@
 """elicit -> confirm -> validate graph: a new hard constraint needs confirmation."""
 
+import logging
 from typing import Any
 
 import pytest
@@ -354,3 +355,38 @@ def _all_serialized_bytes(saver: MemorySaver) -> bytes:
         for _task_id, _channel, payload, _task_path in writes.values():
             chunks.append(payload[1])
     return b"".join(chunks)
+
+
+# --- the guests' words stay out of logs and (pending a decision) checkpoints ----
+
+CANARY = "ZEBRACANARY"
+"""A word no code would write on its own: if it shows up, the guests' text leaked."""
+
+
+def test_elicitation_logs_nothing_the_guests_wrote(caplog) -> None:
+    caplog.set_level(logging.DEBUG)
+    graph, *_ = _graph(FakeExtractor(COMPLETE["extraction"]))
+
+    _start(graph, *COMPLETE["messages"], f"Our nickname is {CANARY}.")
+    _resume(graph, CONFIRM)
+
+    logged = "\n".join(record.getMessage() for record in caplog.records)
+    assert CANARY not in logged
+    for message in COMPLETE["messages"]:
+        assert message not in logged
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "C19: the guests' raw turns are checkpointed in ParkMindState.messages. Pending "
+        "the decision in docs/decisions/0004-agentic-guardrails.md (G5), required before "
+        "P0-35 persists checkpoints in Postgres."
+    ),
+)
+def test_the_guests_raw_words_are_not_checkpointed() -> None:
+    graph, _, _, _, saver = _graph(FakeExtractor(COMPLETE["extraction"]))
+
+    _start(graph, *COMPLETE["messages"], f"Our nickname is {CANARY}.")
+
+    assert CANARY.encode() not in _all_serialized_bytes(saver)

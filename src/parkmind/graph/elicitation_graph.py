@@ -43,6 +43,7 @@ from parkmind.agents.elicit_agent import (
     GuestInfoExtractor,
     make_elicit_node,
 )
+from parkmind.config.tracing import tracing_guard
 from parkmind.core.language import DEFAULT_LANGUAGE, text
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.state import ParkMindState
@@ -217,7 +218,10 @@ def build_elicitation_graph(
     ``downstream`` runs only once constraints are confirmed and valid; give it
     the next stage of the initial planning graph [P0-30]. It should call
     ``ensure_confirmed`` first.
+
+    Refuses to build with tracing switched on in the environment (``tracing_guard``).
     """
+    tracing_guard()
     intake = intake or AccessibilityIntakeUseCase()
     graph = StateGraph(ParkMindState)
 
