@@ -64,6 +64,7 @@ from parkmind.agents.explain_agent import (
     PlanNarrator,
     explain_grounded,
 )
+from parkmind.config.tracing import tracing_guard
 from parkmind.core.contracts import Event
 from parkmind.core.language import DEFAULT_LANGUAGE, Language, text
 from parkmind.graph.checkpointing import default_checkpointer
@@ -469,8 +470,10 @@ def build_replanning_graph(
     """Compile the replanning graph. Nothing is opened here: ports are created per node.
 
     EXPLAIN uses ``narrator``, Claude by default; the template stands in for it
-    without a key or when its text is not grounded.
+    without a key or when its text is not grounded. Refuses to build with tracing
+    switched on in the environment (``tracing_guard``).
     """
+    tracing_guard()
     explain_with = narrator or AnthropicNarrator()
     graph = StateGraph(ParkMindState)
 

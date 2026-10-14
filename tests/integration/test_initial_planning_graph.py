@@ -929,3 +929,14 @@ def test_nothing_is_proposed_for_a_party_without_guests(monkeypatch):
         ipg._propose_plan(state)
 
     assert saved == []
+
+
+def test_the_plan_records_which_elicit_prompt_read_the_constraints(monkeypatch):
+    """Prompts are versioned and the version flows into Provenance (.claude/rules/agents.md)."""
+    h = _Harness(monkeypatch)
+
+    h.confirm()
+
+    [proposal] = h.proposals
+    assert proposal.provenance.prompt_versions["elicit"] == ipg.ELICIT_PROMPT_VERSION
+    assert h.state()["candidate_plan"].provenance.prompt_versions["elicit"] == ipg.ELICIT_PROMPT_VERSION

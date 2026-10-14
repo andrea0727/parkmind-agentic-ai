@@ -18,6 +18,7 @@ from langgraph.types import Command
 from planning_support import NOW, factory_for
 from test_initial_planning_graph import CONFIG, _Harness
 
+from parkmind.agents import elicit_agent, elicit_prompt
 from parkmind.core.contracts import (
     ApprovalStatus,
     ConstraintViolation,
@@ -779,3 +780,27 @@ def test_nothing_is_proposed_for_a_party_without_guests(r) -> None:
         rg._propose_replan(state, deps_factory=factory_for(r.deps), clock=lambda: NOW)
 
     assert len(r.proposals) == before
+
+
+def test_a_replan_keeps_the_elicit_prompt_version_of_the_plan_it_replaces(r) -> None:
+    r.send(_down(r.stop_node()))
+
+    [proposal] = r.pending()
+    assert proposal.provenance.prompt_versions["elicit"] == ipg.ELICIT_PROMPT_VERSION
+
+
+def test_a_replan_after_a_new_elicit_prompt_keeps_the_version_that_read_the_constraints(
+    r, monkeypatch
+) -> None:
+    """The constraints were read by the prompt of the plan being replaced, not by
+    whichever prompt is deployed when the replan runs."""
+    original = ipg.ELICIT_PROMPT_VERSION
+    # Both names: the graph's import and the constant's home, wherever a stamp reads it.
+    monkeypatch.setattr(ipg, "ELICIT_PROMPT_VERSION", "elicit-next")
+    monkeypatch.setattr(elicit_agent, "ELICIT_PROMPT_VERSION", "elicit-next")
+    monkeypatch.setattr(elicit_prompt, "ELICIT_PROMPT_VERSION", "elicit-next")
+
+    r.send(_down(r.stop_node()))
+
+    [proposal] = r.pending()
+    assert proposal.provenance.prompt_versions["elicit"] == original
