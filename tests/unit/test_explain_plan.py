@@ -15,6 +15,7 @@ from parkmind.core.contracts import (
     PreferenceSource,
     RuleId,
 )
+from parkmind.services.planning.constraint_checker import ConstraintChecker
 from parkmind.services.use_cases.explain_plan import (
     ExplainBeforeValidationError,
     ExplainPlanUseCase,
@@ -315,3 +316,40 @@ def test_a_replan_with_no_reason_does_not_open_with_a_blank_line():
     )
 
     assert text.startswith("Added: Space Mountain.")
+
+
+@pytest.mark.parametrize(
+    "served, checker_flags_child, explain_names_child",
+    [
+        ([], True, False),
+        (["g1", "g2"], True, False),
+        (["g1"], False, True),
+    ],
+)
+def test_the_checker_and_the_explanation_read_served_guests_alike(
+    served, checker_flags_child, explain_names_child
+):
+    """Empty means the whole party for both: nobody sits out, so a short guest is a violation."""
+    constraints = factories.party_constraints(party_size=2, guests=[ADULT, CHILD])
+    plan = _restricted_plan(served)
+
+    result = ConstraintChecker().check(
+        plan,
+        constraints,
+        [],
+        {"a1": factories.attraction(height_restriction_cm=112)},
+        factories.park(),
+        factories.live_context(),
+        factories.NOW,
+    )
+    text = explain_plan(
+        plan,
+        CheckResult(valid=True),
+        {"a1": "Space Mountain"},
+        guests=[ADULT, CHILD],
+        height_limits={"a1": 112},
+    )
+
+    flagged = [v for v in result.violations if v.rule == RuleId.HEIGHT and "g2" in v.message]
+    assert bool(flagged) is checker_flags_child
+    assert ("Guest 2 (90 cm) will skip" in text) is explain_names_child

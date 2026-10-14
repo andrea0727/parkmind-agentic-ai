@@ -1471,3 +1471,128 @@ class TestReplanKnobs:
         plan = self._build(_build_optimizer(), walking_budget_minutes=0.0)
 
         assert [s for s in plan.stops if s.kind is StopKind.ATTRACTION] == []
+
+
+class TestParkHoursAndClock:
+    """B11 / B2: the plan stays inside the hours the checker enforces and never starts in the past."""
+
+    def _plan(self, *, park, now=None, departure_hour=22):  # type: ignore[no-untyped-def]
+        statuses = {A1: AttractionStatus.OPERATING, A2: AttractionStatus.OPERATING}
+        return _build_optimizer().build_plan(
+            constraints=_constraints(departure_hour=departure_hour),
+            context=_live_context(waits={A1: 10.0, A2: 10.0}, statuses=statuses),
+            utilities={A1: 1.0, A2: 1.0},
+            park=park,
+            catalog=_catalog(),
+            now=now,
+        )
+
+    def test_plan_ends_by_closing_time_when_the_party_leaves_after_it(self) -> None:
+        park = _park().model_copy(update={"closing_time": DAY.replace(hour=9, minute=45)})
+
+        plan = self._plan(park=park, departure_hour=22)
+
+        assert plan.stops
+        assert all(s.departure_time <= park.closing_time for s in plan.stops)
+
+    def test_checker_finds_no_opening_hours_violation_in_the_optimizers_plan(
+        self,
+    ) -> None:
+        from parkmind.services.planning.constraint_checker import ConstraintChecker
+
+        park = _park().model_copy(update={"closing_time": DAY.replace(hour=9, minute=45)})
+        statuses = {A1: AttractionStatus.OPERATING, A2: AttractionStatus.OPERATING}
+        context = _live_context(waits={A1: 10.0, A2: 10.0}, statuses=statuses)
+        constraints = _constraints(departure_hour=22)
+        plan = _build_optimizer().build_plan(
+            constraints=constraints,
+            context=context,
+            utilities={A1: 1.0, A2: 1.0},
+            park=park,
+            catalog=_catalog(),
+        )
+
+        result = ConstraintChecker().check(
+            plan,
+            constraints,
+            [],
+            {a.node_id: a for a in _catalog()},
+            park,
+            context,
+            DAY.replace(hour=9),
+        )
+
+        assert not any(v.rule.value == "OPENING_HOURS" for v in result.violations)
+
+    def test_plan_starts_at_now_when_the_park_opened_earlier(self) -> None:
+        now = DAY.replace(hour=15, minute=7)
+
+        plan = self._plan(park=_park(), now=now)
+
+        assert plan.stops[0].arrival_time >= now
+
+    def test_plan_starts_at_opening_when_now_is_before_it(self) -> None:
+        park = _park(opening_hour=9)
+
+        plan = self._plan(park=park, now=DAY.replace(hour=7))
+
+        assert plan.stops[0].arrival_time >= park.opening_time
+
+    def test_now_in_another_timezone_is_compared_by_instant(self) -> None:
+        from datetime import UTC
+
+        now = DAY.replace(hour=15).astimezone(UTC)
+
+        plan = self._plan(park=_park(), now=now)
+
+        assert plan.stops[0].arrival_time >= now
+
+    def test_nothing_is_planned_when_the_departure_is_already_past(self) -> None:
+        plan = self._plan(park=_park(), now=DAY.replace(hour=15), departure_hour=14)
+
+        assert plan.stops == []
+
+
+class TestUnknownHeight:
+    """Height review (a): a guest of unknown height is left off a height-restricted ride."""
+
+    def test_the_guest_is_not_served_the_restricted_ride_and_the_checker_agrees(self) -> None:
+        from parkmind.services.planning.constraint_checker import ConstraintChecker
+
+        guests = [
+            Guest(guest_id="known", role=GuestRole.ADULT, height_cm=175.0),
+            Guest(guest_id="unknown", role=GuestRole.CHILD, height_cm=None),
+        ]
+        constraints = _constraints(guests=guests)
+        context = _live_context(waits={A3: 5.0}, statuses={A3: AttractionStatus.OPERATING})
+        objective = GroupObjective(
+            objective_version="v1",
+            weights={"queue": 0.5},
+            per_guest_eligible={"known": [A3], "unknown": []},
+            hard_constraints=HardConstraintSet(),
+            fairness=FairnessConfig(lambda_fairness=0.1, min_satisfaction_floor=0.0),
+            event_thresholds=EventThresholds(),
+        )
+        catalog = _catalog()
+
+        plan = _build_optimizer().build_plan(
+            constraints=constraints,
+            context=context,
+            utilities={A3: 5.0},
+            park=_park(),
+            catalog=catalog,
+            group_objective=objective,
+        )
+
+        stop = next(s for s in plan.stops if s.node_id == A3)
+        assert stop.served_guests == ["known"]
+        result = ConstraintChecker().check(
+            plan,
+            constraints,
+            [],
+            {a.node_id: a for a in catalog},
+            _park(),
+            context,
+            DAY.replace(hour=9),
+        )
+        assert not any(v.rule.value == "HEIGHT" for v in result.violations)
