@@ -8,6 +8,7 @@ from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
 
+from parkmind.agents.elicit_agent import ExtractorUnavailableError
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.elicitation_graph import (
     UnconfirmedHardConstraintsError,
@@ -257,6 +258,53 @@ def test_persistent_schema_failure_asks_to_rephrase_then_recovers() -> None:
     result = _resume(graph, "Let me say that again: four of us, leaving at 8 PM.")
 
     assert _interrupt_value(result)["kind"] == "hard_constraint_confirmation"
+
+
+# --- a service that is down ends the turn with a safe message ----------------------
+
+
+def _last_message(result: dict[str, Any]) -> str:
+    return str(result["messages"][-1].content)
+
+
+def test_an_unreachable_model_ends_the_turn_without_the_raw_error() -> None:
+    graph, _, _, downstream, _ = _graph(FakeExtractor(ExtractorUnavailableError("ConnectError")))
+
+    result = _start(graph, *COMPLETE["messages"])
+
+    assert "__interrupt__" not in result
+    assert result.get("constraints") is None
+    assert "nothing was planned" in _last_message(result)
+    assert "ConnectError" not in _last_message(result)
+    assert downstream.seen == []
+
+
+def test_an_unreachable_model_is_reported_in_the_guests_language() -> None:
+    graph, *_ = _graph(FakeExtractor(ExtractorUnavailableError("ConnectError")))
+
+    result = _start(
+        graph, "Hola, somos cuatro y queremos ir al parque. Salimos a las 8 de la noche."
+    )
+
+    assert "no se planeó nada" in _last_message(result)
+
+
+def test_a_down_catalog_ends_the_turn_with_the_park_data_message() -> None:
+    intake, _ = make_intake()
+    downstream = Downstream()
+    graph = build_elicitation_graph(
+        FakeExtractor(COMPLETE["extraction"]),
+        intake,
+        default_checkpointer(),
+        downstream,
+        names=make_names([]),
+    )
+
+    result = _start(graph, *COMPLETE["messages"])
+
+    assert "__interrupt__" not in result
+    assert "park information" in _last_message(result)
+    assert downstream.seen == []
 
 
 # --- consent and retention come from the human ------------------------------------

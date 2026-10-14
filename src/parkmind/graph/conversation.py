@@ -10,6 +10,7 @@ Calls on one thread are serialized; different threads run in parallel. State liv
 process (``default_checkpointer`` is in-memory), which is why the API runs one worker.
 """
 
+import logging
 import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
@@ -33,6 +34,7 @@ from parkmind.core.conversation import (
     HardConstraintAnswer,
     NotExpectedError,
     PlanEditRequest,
+    ServiceUnavailableError,
     StaleProposalError,
     Turn,
     TurnStatus,
@@ -42,17 +44,21 @@ from parkmind.core.conversation import (
 from parkmind.core.language import DEFAULT_LANGUAGE, Language, as_language, text
 from parkmind.graph.initial_planning_graph import APPROVAL_INTERRUPT_KIND, park_clock
 from parkmind.graph.replanning_graph import EVENT_CONFIRMATION_INTERRUPT_KIND
+from parkmind.graph.state_helpers import solo_of
 from parkmind.services.use_cases.active_plan import ActivePlanUseCase
 from parkmind.services.use_cases.park_status import ParkStatusUseCase
 from parkmind.services.use_cases.pending_proposal import PendingProposalUseCase
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
+    PlanningUnavailableError,
     default_planning_deps,
     load_catalog,
     open_deps,
 )
 from parkmind.services.use_cases.provisional_plan import ProvisionalPlanUseCase, retimed
 from parkmind.services.use_cases.resolve_attraction_names import suggest_attractions
+
+logger = logging.getLogger(__name__)
 
 MISSING_INFORMATION_KIND = "missing_information"
 HARD_CONSTRAINT_KIND = "hard_constraint_confirmation"
@@ -340,7 +346,13 @@ class ConversationService:
 
     def _run(self, thread_id: str, thread: _Thread, owner: Owner, graph_input: Any) -> Turn:
         config: Any = {"configurable": {"thread_id": thread_id}}
-        result = self._graphs[owner].invoke(graph_input, config=config)
+        try:
+            result = self._graphs[owner].invoke(graph_input, config=config)
+        except PlanningUnavailableError as exc:
+            logger.exception("planning is unavailable")
+            state: Any = self._graphs[owner].get_state(config).values or {}
+            message = text("unavailable", thread.language, solo=solo_of(state))
+            raise ServiceUnavailableError(message) from exc
         thread.owner = owner
         return self._turn(thread_id, thread, result)
 

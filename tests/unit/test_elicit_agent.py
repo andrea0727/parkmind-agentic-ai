@@ -14,7 +14,10 @@ from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
 
 from parkmind.agents.elicit_agent import (
+    UNAVAILABLE_FLAG,
+    AnthropicExtractor,
     ExtractorOutputError,
+    ExtractorUnavailableError,
     build_guest_profiles,
     build_party_constraints,
     extract_with_recovery,
@@ -31,7 +34,6 @@ from parkmind.core.contracts import (
     SensitivityLevel,
 )
 from parkmind.services.use_cases.confirmation_echo import echo_for
-from parkmind.services.use_cases.resolve_attraction_names import CatalogUnavailableError
 
 TODAY = date(2026, 10, 6)
 NOW = datetime(2026, 10, 6, 9, 0, tzinfo=PARK_TZ)
@@ -416,7 +418,7 @@ def test_a_bad_time_is_repaired_without_echoing_what_the_guests_said() -> None:
     assert "around" not in hint and "1pm" not in hint
 
 
-def test_an_empty_catalog_is_an_error_not_a_question_to_the_guests() -> None:
+def test_an_empty_catalog_is_a_park_data_message_not_a_question_to_the_guests() -> None:
     intake, _ = make_intake()
     node = make_elicit_node(
         FakeExtractor(COMPLETE["extraction"]),
@@ -426,8 +428,45 @@ def test_an_empty_catalog_is_an_error_not_a_question_to_the_guests() -> None:
         now=lambda: NOW,
     )
 
-    with pytest.raises(CatalogUnavailableError):
-        node(_state(*COMPLETE["messages"]))
+    update = node(_state(*COMPLETE["messages"]))
+
+    assert update["constraints"] is None
+    assert update["messages"][0].additional_kwargs[UNAVAILABLE_FLAG]
+    assert "park information" in update["messages"][0].content
+
+
+def test_an_unreachable_model_is_a_flagged_message_not_a_raw_error() -> None:
+    intake, _ = make_intake()
+    node = make_elicit_node(
+        FakeExtractor(ExtractorUnavailableError("ConnectError")),
+        intake,
+        make_names(),
+        today=lambda: TODAY,
+        now=lambda: NOW,
+    )
+
+    update = node(_state(*COMPLETE["messages"]))
+
+    assert update["constraints"] is None
+    assert update["messages"][0].additional_kwargs[UNAVAILABLE_FLAG]
+    assert "ConnectError" not in update["messages"][0].content
+
+
+def test_a_failing_model_call_is_reported_as_unavailable_without_the_connection_details() -> None:
+    from parkmind.agents.elicit_agent import AnthropicExtractor
+
+    class Down:
+        def invoke(self, *_: object) -> object:
+            raise ConnectionError("https://user:secret@llm.internal:443 refused")
+
+    extractor = AnthropicExtractor()
+    extractor._runnable = lambda: Down()  # type: ignore[method-assign]
+
+    with pytest.raises(ExtractorUnavailableError) as raised:
+        extractor.extract(["hi"])
+
+    assert str(raised.value) == "ConnectionError"
+    assert "secret" not in str(raised.value)
 
 
 # --- a height must come from the guests' own words ------------------------------

@@ -20,9 +20,10 @@ from dataclasses import dataclass, field
 
 from parkmind.core.contracts import Attraction, AttractionCategory
 from parkmind.services.ports import AttractionRepository
+from parkmind.services.use_cases.planning_deps import PlanningUnavailableError
 
 
-class CatalogUnavailableError(RuntimeError):
+class CatalogUnavailableError(PlanningUnavailableError):
     """The park has no catalog to resolve names against (an infrastructure problem)."""
 
 

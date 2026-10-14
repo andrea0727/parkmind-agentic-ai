@@ -4,6 +4,7 @@ A route validates its body, makes one call on the conversation and presents the 
 never plans, checks or decides anything; the planner's gates are behind the conversation.
 """
 
+import logging
 import os
 import threading
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
@@ -52,13 +53,17 @@ from parkmind.core.conversation import (
     HardConstraintAnswer,
     NotExpectedError,
     PlanEditRequest,
+    ServiceUnavailableError,
     StaleProposalError,
     UnknownAttractionError,
     UnknownThreadError,
 )
+from parkmind.core.language import DEFAULT_LANGUAGE, text
 from parkmind.services.use_cases.describe_plan import DescribePlanUseCase
 from parkmind.services.use_cases.park_status import ParkStatusUseCase
 from parkmind.services.use_cases.planning_deps import PlanningUnavailableError
+
+logger = logging.getLogger(__name__)
 
 DESCRIPTION = """
 Talk to the ParkMind planner for one party at Magic Kingdom.
@@ -246,6 +251,11 @@ def create_app(
 
     @app.exception_handler(PlanningUnavailableError)
     async def _unavailable(_: Request, exc: PlanningUnavailableError) -> JSONResponse:
+        logger.exception("planning is unavailable")
+        return _problem(503, ServiceUnavailableError(text("unavailable", DEFAULT_LANGUAGE)))
+
+    @app.exception_handler(ServiceUnavailableError)
+    async def _service_unavailable(_: Request, exc: ServiceUnavailableError) -> JSONResponse:
         return _problem(503, exc)
 
     @app.get("/api/health", tags=["conversation"], response_model=HealthOut)
