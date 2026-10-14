@@ -35,37 +35,60 @@ def test_numbers_clock_times_and_number_words_are_numerals():
 
 
 @pytest.mark.parametrize(
-    ("text", "value"),
+    ("text", "language", "value"),
     [
-        ("a forty minute wait", "40"),
-        ("twenty-five minutes", "25"),
-        ("twenty five minutes", "25"),
-        ("veinticinco minutos", "25"),
-        ("treinta y cinco minutos", "35"),
-        ("dieciséis paradas", "16"),
-        ("twelve stops", "12"),
+        ("a forty minute wait", "en", "40"),
+        ("twenty-five minutes", "en", "25"),
+        ("twenty five minutes", "en", "25"),
+        ("twelve stops", "en", "12"),
+        ("ten stops", "en", "10"),
+        # A number inside a hyphenated modifier is still a number.
+        ("a forty-minute wait", "en", "40"),
+        ("a ten-minute walk", "en", "10"),
+        ("a twenty-five-minute walk", "en", "25"),
+        ("two hundred steps", "en", "200"),
+        ("two hundred and five steps", "en", "205"),
+        ("veinticinco minutos", "es", "25"),
+        ("treinta y cinco minutos", "es", "35"),
+        ("dieciséis paradas", "es", "16"),
+        ("veintiún minutos", "es", "21"),
+        ("veintiuna personas", "es", "21"),
+        ("ciento veinte minutos", "es", "120"),
+        ("doscientos pasos", "es", "200"),
+        ("once paradas", "es", "11"),
     ],
 )
 def test_a_number_spelled_out_is_not_grounded_unless_its_value_is_in_the_payload(
-    text, value
+    text, language, value
 ):
-    assert ungrounded_numerals(text, '{"wait_minutes": 15}') == [value]
-    assert ungrounded_numerals(text, f'{{"wait_minutes": {value}}}') == []
+    assert ungrounded_numerals(text, '{"wait_minutes": 15}', language) == [value]
+    assert ungrounded_numerals(text, f'{{"wait_minutes": {value}}}', language) == []
+
+
+def test_hundreds_are_one_number_so_a_part_cannot_ground_the_whole():
+    """An invented 120 is not grounded by a real 20, nor 200 by a 2 and a 100."""
+    assert ungrounded_numerals("ciento veinte minutos", '{"wait": 20}', "es") == ["120"]
+    assert ungrounded_numerals("two hundred steps", '{"a": 2, "b": 100}') == ["200"]
 
 
 @pytest.mark.parametrize(
-    "text",
+    ("text", "language"),
     [
-        "one of your must-dos",
-        "your must-do rides",
-        "once you arrive",
-        "a well-known ride",
-        "half an hour",
-        "una atracción",
+        ("one of your must-dos", "en"),
+        ("your must-do rides", "en"),
+        ("once you arrive", "en"),
+        ("a well-known ride", "en"),
+        ("half an hour", "en"),
+        ("the dos and don'ts", "en"),
+        ("una atracción", "es"),
+        ("ten cuidado con el sol", "es"),
+        ("ten en cuenta el calor", "es"),
     ],
 )
-def test_articles_pronouns_and_hyphenated_words_are_not_numbers(text):
-    assert numerals(text) == set()
+def test_articles_pronouns_hyphenated_words_and_the_other_languages_numbers_are_not_numbers(
+    text, language
+):
+    assert numerals(text, language) == set()
 
 
 def test_the_same_value_written_differently_is_one_numeral():

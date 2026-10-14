@@ -7,11 +7,16 @@ A numeral is a clock time (``14:05``, ``9:05``) or a number (``25``, ``0.8``),
 including digits written against letters (``15min``). Both sides are normalized the
 same way -- ``25`` and ``25.0`` are one numeral, ``09:05`` and ``9:05`` too -- and
 nothing else is allowed: a bare ``14`` is not grounded by ``14:05``, and ``7`` is
-not grounded by ``7.4``. Numbers written in English or Spanish words count by their
-value (``forty`` and ``cuarenta`` are ``40``, ``twenty-five`` and ``veinticinco``
-``25``), on both sides, so a figure cannot slip through spelled out. The words that
-are mostly articles or pronouns (``one``, ``un``/``una``/``uno``, ``half``,
-``media``) are left out, and Spanish ``once`` (an English word): counting them
+not grounded by ``7.4``. Numbers written as words count by their value, on both
+sides, so a figure cannot slip through spelled out. The words are read in the text's
+own language (``language``, English by default: the narrator writes English), so a
+word that is a number in the other language is not one here: English "ten" is 10
+but Spanish "ten cuidado" is not, Spanish "once" is 11 but English "once" is not,
+and "the dos and don'ts" has no 2. English reads ``forty``, ``twenty-five``,
+``forty-minute`` and ``two hundred and five``; Spanish reads ``cuarenta``,
+``veintiún``, ``treinta y cinco`` and ``ciento veinte``. The words that are mostly
+articles or pronouns (``one``, ``un``/``una``/``uno``) count only inside a
+compound, and fractions in words (``half``, ``media``) not at all: counting them
 would reject nearly every text. Text is
 NFKC-normalized first, so full-width digits are ordinary digits, and a vulgar
 fraction or other numeric symbol (``½``, ``²``) counts by its value (``0.5``, ``2``).
@@ -24,16 +29,40 @@ say where it comes from -- stated or learned -- as section 40 requires.
 
 import re
 import unicodedata
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
+from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
+
+from parkmind.core.language import DEFAULT_LANGUAGE, Language
 
 _TIME = re.compile(r"(?<!\d)(?<!\d:)(\d{1,2}):(\d{2})(?!\d)(?!:\d)")
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
-# English and Spanish number words. Left out: the words that are mostly articles or
-# pronouns ("one", "un"/"una"/"uno", "half", "media"), and Spanish "once" (11), which
-# is an everyday English word. "one"/"uno" still count inside a compound.
-_UNITS = {
+
+# English and Spanish number words, one vocabulary per language. Left out of the
+# standalone words: the ones that are mostly articles or pronouns ("one",
+# "un"/"una"/"uno"); they still count inside a compound ("twenty-one", "ciento uno")
+# or before "hundred" ("one hundred").
+@dataclass(frozen=True)
+class _Vocabulary:
+    units: Mapping[str, int]
+    """2..9 standalone."""
+    compound_units: Mapping[str, int]
+    """1..9 after a tens or hundreds word."""
+    tens: Mapping[str, int]
+    teens: Mapping[str, int]
+    """Every other word below a hundred: 0, 10..19 and Spanish 21..29."""
+    tens_joiner: str | None = None
+    """Spanish "treinta y cinco"."""
+    hundreds: Mapping[str, int] = field(default_factory=dict)
+    """Spanish hundreds words: "cien", "ciento", "doscientos"..."""
+    hundred: str | None = None
+    """English "hundred", after an optional unit: "two hundred"."""
+    hundred_joiner: str | None = None
+    """English "two hundred and five"."""
+
+
+_EN_UNITS = {
     "two": 2,
     "three": 3,
     "four": 4,
@@ -42,6 +71,8 @@ _UNITS = {
     "seven": 7,
     "eight": 8,
     "nine": 9,
+}
+_ES_UNITS = {
     "dos": 2,
     "tres": 3,
     "cuatro": 4,
@@ -51,62 +82,96 @@ _UNITS = {
     "ocho": 8,
     "nueve": 9,
 }
-_COMPOUND_UNITS = {**_UNITS, "one": 1, "uno": 1, "un": 1, "una": 1}
-_TENS = {
-    "twenty": 20,
-    "thirty": 30,
-    "forty": 40,
-    "fifty": 50,
-    "sixty": 60,
-    "seventy": 70,
-    "eighty": 80,
-    "ninety": 90,
-    "veinte": 20,
-    "treinta": 30,
-    "cuarenta": 40,
-    "cincuenta": 50,
-    "sesenta": 60,
-    "setenta": 70,
-    "ochenta": 80,
-    "noventa": 90,
-}
-_OTHER_WORDS = {
-    "zero": 0,
-    "ten": 10,
-    "eleven": 11,
-    "twelve": 12,
-    "thirteen": 13,
-    "fourteen": 14,
-    "fifteen": 15,
-    "sixteen": 16,
-    "seventeen": 17,
-    "eighteen": 18,
-    "nineteen": 19,
-    "hundred": 100,
-    "cero": 0,
-    "diez": 10,
-    "doce": 12,
-    "trece": 13,
-    "catorce": 14,
-    "quince": 15,
-    "dieciseis": 16,
-    "diecisiete": 17,
-    "dieciocho": 18,
-    "diecinueve": 19,
-    "veintiuno": 21,
-    "veintidos": 22,
-    "veintitres": 23,
-    "veinticuatro": 24,
-    "veinticinco": 25,
-    "veintiseis": 26,
-    "veintisiete": 27,
-    "veintiocho": 28,
-    "veintinueve": 29,
-    "cien": 100,
-}
-_WORD_VALUES = {**_UNITS, **_TENS, **_OTHER_WORDS}
+_ENGLISH = _Vocabulary(
+    units=_EN_UNITS,
+    compound_units={**_EN_UNITS, "one": 1},
+    tens={
+        "twenty": 20,
+        "thirty": 30,
+        "forty": 40,
+        "fifty": 50,
+        "sixty": 60,
+        "seventy": 70,
+        "eighty": 80,
+        "ninety": 90,
+    },
+    teens={
+        "zero": 0,
+        "ten": 10,
+        "eleven": 11,
+        "twelve": 12,
+        "thirteen": 13,
+        "fourteen": 14,
+        "fifteen": 15,
+        "sixteen": 16,
+        "seventeen": 17,
+        "eighteen": 18,
+        "nineteen": 19,
+    },
+    hundred="hundred",
+    hundred_joiner="and",
+)
+_SPANISH = _Vocabulary(
+    units=_ES_UNITS,
+    compound_units={**_ES_UNITS, "uno": 1, "un": 1, "una": 1},
+    tens={
+        "veinte": 20,
+        "treinta": 30,
+        "cuarenta": 40,
+        "cincuenta": 50,
+        "sesenta": 60,
+        "setenta": 70,
+        "ochenta": 80,
+        "noventa": 90,
+    },
+    teens={
+        "cero": 0,
+        "diez": 10,
+        "once": 11,
+        "doce": 12,
+        "trece": 13,
+        "catorce": 14,
+        "quince": 15,
+        "dieciseis": 16,
+        "diecisiete": 17,
+        "dieciocho": 18,
+        "diecinueve": 19,
+        "veintiun": 21,
+        "veintiuno": 21,
+        "veintiuna": 21,
+        "veintidos": 22,
+        "veintitres": 23,
+        "veinticuatro": 24,
+        "veinticinco": 25,
+        "veintiseis": 26,
+        "veintisiete": 27,
+        "veintiocho": 28,
+        "veintinueve": 29,
+    },
+    tens_joiner="y",
+    hundreds={
+        "cien": 100,
+        "ciento": 100,
+        **{
+            f"{prefix}ient{ending}": value
+            for prefix, value in (
+                ("dosc", 200),
+                ("tresc", 300),
+                ("cuatroc", 400),
+                ("seisc", 600),
+                ("setec", 700),
+                ("ochoc", 800),
+                ("novec", 900),
+            )
+            for ending in ("os", "as")
+        },
+        "quinientos": 500,
+        "quinientas": 500,
+    },
+)
+_VOCABULARIES: dict[Language, _Vocabulary] = {"en": _ENGLISH, "es": _SPANISH}
 _WORD = re.compile(r"[a-z]+(?:-[a-z]+)*")
-"""A word, hyphenated words kept whole: ``must-dos`` is not Spanish ``dos``."""
+"""A word, hyphenated words kept together (``forty-minute``, ``must-dos``)."""
 
 
 def _without_accents(text: str) -> str:
@@ -114,34 +179,85 @@ def _without_accents(text: str) -> str:
     return "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
 
 
-def _word_numbers(text: str) -> list[int]:
-    """The numbers spelled out in ``text``: ``forty``, ``twenty-five``, ``treinta y cinco``.
+def _below_hundred(
+    tokens: Sequence[str], i: int, v: _Vocabulary, *, after_hundred: bool = False
+) -> tuple[int, int] | None:
+    """The number below 100 starting at ``tokens[i]``, and the index after it."""
+    if i >= len(tokens):
+        return None
+    word = tokens[i]
+    if word in v.tens:
+        j = i + 1
+        if v.tens_joiner and j < len(tokens) and tokens[j] == v.tens_joiner:
+            j += 1
+        if j < len(tokens) and tokens[j] in v.compound_units:
+            return v.tens[word] + v.compound_units[tokens[j]], j + 1
+        return v.tens[word], i + 1
+    if word in v.teens:
+        return v.teens[word], i + 1
+    units = v.compound_units if after_hundred else v.units
+    if word in units:
+        return units[word], i + 1
+    return None
 
-    A tens word followed by a unit (after a hyphen, a space or Spanish ``y``) is one
-    number. Any other hyphenated word is not a number.
-    """
-    tokens = _WORD.findall(_without_accents(text))
+
+def _number_at(tokens: Sequence[str], i: int, v: _Vocabulary) -> tuple[int, int] | None:
+    """The number starting at ``tokens[i]`` (hundreds included), and the index after it."""
+    word = tokens[i]
+    hundreds: int | None = None
+    if word in v.hundreds:
+        hundreds, j = v.hundreds[word], i + 1
+    elif v.hundred and word == v.hundred:
+        hundreds, j = 100, i + 1
+    elif (
+        v.hundred
+        and word in v.compound_units
+        and i + 1 < len(tokens)
+        and tokens[i + 1] == v.hundred
+    ):
+        hundreds, j = v.compound_units[word] * 100, i + 2
+    if hundreds is None:
+        return _below_hundred(tokens, i, v)
+    k = (
+        j + 1
+        if v.hundred_joiner and j < len(tokens) and tokens[j] == v.hundred_joiner
+        else j
+    )
+    rest = _below_hundred(tokens, k, v, after_hundred=True)
+    return (hundreds + rest[0], rest[1]) if rest else (hundreds, j)
+
+
+def _parse(tokens: Sequence[str], v: _Vocabulary) -> list[int]:
     found: list[int] = []
     i = 0
     while i < len(tokens):
-        word = tokens[i]
-        if "-" in word:
-            tens, _, unit = word.partition("-")
-            if tens in _TENS and unit in _COMPOUND_UNITS:
-                found.append(_TENS[tens] + _COMPOUND_UNITS[unit])
+        if (number := _number_at(tokens, i, v)) is not None:
+            found.append(number[0])
+            i = number[1]
+        else:
             i += 1
-            continue
-        if word in _TENS:
-            after = tokens[i + 1 : i + 3]
-            unit = after[1:2] if after[:1] == ["y"] else after[:1]
-            if unit and unit[0] in _COMPOUND_UNITS:
-                found.append(_TENS[word] + _COMPOUND_UNITS[unit[0]])
-                i += 2 + (after[:1] == ["y"])
-                continue
-        if word in _WORD_VALUES:
-            found.append(_WORD_VALUES[word])
-        i += 1
     return found
+
+
+def _word_numbers(text: str, language: Language) -> list[int]:
+    """The numbers spelled out in ``text``: ``forty``, ``twenty-five``, ``ciento veinte``.
+
+    A hyphenated word is read by its parts (``forty-minute`` is ``40``,
+    ``twenty-five-minute`` is ``25``); Spanish doesn't hyphenate numbers, so in
+    Spanish text a hyphenated word is no number.
+    """
+    vocabulary = _VOCABULARIES[language]
+    found: list[int] = []
+    run: list[str] = []
+    for word in _WORD.findall(_without_accents(text)):
+        if "-" in word:
+            found += _parse(run, vocabulary)
+            run = []
+            if vocabulary is _ENGLISH:
+                found += _parse(word.split("-"), vocabulary)
+        else:
+            run.append(word)
+    return found + _parse(run, vocabulary)
 
 
 def _number(text: str) -> str:
@@ -164,19 +280,24 @@ def _plain(text: str) -> str:
     return unicodedata.normalize("NFKC", spelled)
 
 
-def numerals(text: str) -> set[str]:
-    """The normalized clock times and numbers in ``text``."""
+def numerals(text: str, language: Language = DEFAULT_LANGUAGE) -> set[str]:
+    """The normalized clock times and numbers in ``text``, written in ``language``."""
     text = _plain(text)
     found = {f"{int(hours)}:{minutes}" for hours, minutes in _TIME.findall(text)}
     without_times = _TIME.sub(" ", text)
     found.update(_number(match) for match in _NUMBER.findall(without_times))
-    found.update(str(value) for value in _word_numbers(without_times))
+    found.update(str(value) for value in _word_numbers(without_times, language))
     return found
 
 
-def ungrounded_numerals(output: str, payload: str) -> list[str]:
-    """The numerals in ``output`` that ``payload`` does not contain, sorted."""
-    return sorted(numerals(output) - numerals(payload))
+def ungrounded_numerals(
+    output: str, payload: str, language: Language = DEFAULT_LANGUAGE
+) -> list[str]:
+    """The numerals in ``output`` that ``payload`` does not contain, sorted.
+
+    Both are read in ``language``, the language the output is written in.
+    """
+    return sorted(numerals(output, language) - numerals(payload, language))
 
 
 _SENTENCE = re.compile(r"(?<=[.!?;])\s+|\n+")
