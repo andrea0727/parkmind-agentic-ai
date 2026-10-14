@@ -164,6 +164,23 @@ def test_behavior_log_is_idempotent_on_entry_id(conn: psycopg.Connection) -> Non
     assert guests.get("g1") is not None
 
 
+def test_an_edit_entry_keeps_what_it_removed_and_added(conn: psycopg.Connection) -> None:
+    _repos(conn)
+    log = PostgresBehaviorLogRepository(conn)
+    entry = factories.behavior_entry(
+        entry_id="prop_1:EDITED",
+        event_type=BehaviorEventType.PROPOSAL_EDITED,
+        decision="EDITED",
+        attraction_ids=["a1", "a2"],
+        removed_attraction_ids=["a2"],
+        added_attraction_ids=["a3"],
+    )
+
+    log.append("g1", entry)
+
+    assert log.get("g1").entries == [entry]
+
+
 def test_same_entry_id_is_independent_across_guests(conn: psycopg.Connection) -> None:
     _repos(conn)
     log = PostgresBehaviorLogRepository(conn)

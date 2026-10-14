@@ -54,6 +54,7 @@ from parkmind.services.clients.postgres.session_store import (
 from parkmind.services.clients.postgres.snapshot_repository import (
     PostgresSnapshotRepository,
 )
+from parkmind.services.ports import party_guest_id
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -128,7 +129,13 @@ def test_seeded_rows_validate_as_contracts(conn: psycopg.Connection) -> None:
     seed_dev_scenario(conn)
 
     guests = PostgresGuestRepository(conn).list_all()
-    assert {g.guest_id for g in guests} == {RELAXED_ADULT, RELAXED_CHILD, MAXIMIZER}
+    logged_maximizer = party_guest_id(THREAD_ID, MAXIMIZER)
+    assert {g.guest_id for g in guests} == {
+        RELAXED_ADULT,
+        RELAXED_CHILD,
+        MAXIMIZER,
+        logged_maximizer,
+    }
 
     # Opposing profiles (section 38), with stated values preserved.
     profiles = PostgresProfileRepository(conn)
@@ -175,7 +182,9 @@ def test_seeded_rows_validate_as_contracts(conn: psycopg.Connection) -> None:
 
     # Progress, behavior and events.
     assert PostgresExecutionStateRepository(conn).get(ACTIVE_PLAN_ID) is not None
-    assert len(PostgresBehaviorLogRepository(conn).get(MAXIMIZER).entries) == 1
+    behavior = PostgresBehaviorLogRepository(conn)
+    assert len(behavior.get(party_guest_id(THREAD_ID, MAXIMIZER)).entries) == 1
+    assert behavior.get(MAXIMIZER).entries == []
     assert len(PostgresEventRepository(conn).list_for_thread(THREAD_ID)) == 1
 
 
