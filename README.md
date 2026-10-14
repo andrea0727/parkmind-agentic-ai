@@ -45,7 +45,7 @@ parkmind-agentic-ai/
 │       ├── services/            # all business logic lives here
 │       │   ├── planning/        # ParkGraph, Optimizer, ConstraintChecker,
 │       │   │                    # Replanner, PlanDiff, ForecastService
-│       │   ├── personalization/ # GroupPreferenceResolver, BehaviorLog,
+│       │   ├── personalization/ # GroupPreferenceResolver, PreferenceScorer,
 │       │   │                    # preference_learner.py (stub, see scope.md)
 │       │   ├── clients/         # ThemeParks, Open-Meteo, Postgres,
 │       │   │                    # in-memory knowledge store
@@ -498,8 +498,37 @@ plain resume value kept that way would also answer the *next* interrupt.
   within a party, so each guest is registered as `"{thread_id}:{guest_id}"`, with
   its role only (no height). A superseded proposal logs nothing, and a decision
   applied twice is logged once (`entry_id` is the proposal and the decision). A
-  decision without the party's guests is refused. An edit's `attraction_ids` mixes
-  what was removed and what was added; the direction is a P1-01 follow-up (#51).
+  decision without the party's guests is refused. An edit also records what it
+  removed apart from what it added (P1-01, below).
+
+### Behavior log and progress (P1-01)
+
+The `BehaviorLog` is its own aggregate, keyed by guest (§33 [C12]); it never lives
+inside a profile.
+
+- **Stable types.** `BehaviorEventType`: `PROPOSAL_ACCEPTED`, `PROPOSAL_REJECTED`,
+  `PROPOSAL_EDITED`, `ATTRACTION_COMPLETED`, `ATTRACTION_SKIPPED` and
+  `ALTERNATIVE_REQUESTED`. The last one has no producer yet: no flow defines what
+  asking for an alternative is.
+- **Context.** Each entry names its plan, and its proposal for a decision.
+  `attraction_ids` are the attractions the entry is about: the plan's for a
+  decision, the stop's for progress.
+- **Edits.** A `PROPOSAL_EDITED` entry also carries `removed_attraction_ids` and
+  `added_attraction_ids`. They are kept apart because P1-03 reads them as opposite
+  signals: a removal is a rejection, an addition is interest. Only an edit may
+  carry them (a contract validator). Entries logged before P1-01 have neither field
+  and still read.
+- **Progress.** `RecordProgressUseCase` records that the party completed or skipped
+  a stop of its **active** plan. In one transaction it adds the stop to the stored
+  `PlanExecutionState` (what the replanner keeps and `BEHIND_SCHEDULE` reads) and,
+  for an attraction or show, writes `ATTRACTION_COMPLETED` / `ATTRACTION_SKIPPED`
+  for each guest the stop served. Meal and rest stops change the progress only. The
+  same report twice changes nothing (`entry_id` is plan, stop and outcome), a stop
+  can't be both completed and skipped, and a late report never moves the progress
+  back in time. Once a stop is reported, replanning starts from the reported
+  progress instead of assuming an on-schedule party. No API exposes it yet (P0-35b).
+- **Querying.** `BehaviorLogRepository.get(party_guest_id(thread_id, guest_id))`
+  returns a guest's entries, oldest first.
 
 ### Explanations (P0-31)
 
