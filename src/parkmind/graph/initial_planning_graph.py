@@ -31,10 +31,22 @@ needs requirements reads them from the SessionStore through its use case, keyed 
 one process-wide ``SESSION_MEMORY`` (``use_cases/session_memory.py``).
 
 Resume values: ``confirm_hard_constraints`` and ``ask_missing`` as documented in
-``elicitation_graph``; ``approval``: ``{"decision": "APPROVED" | "REJECTED",
-"rejection_reason": <RejectionReason value>}`` (``EDITED``: P0-32). The approval
-interrupt payload carries ``"kind": "plan_approval"``; a resume value that does not
-fit is answered with the same interrupt plus an ``"error"``, before any side effect.
+``elicitation_graph``; ``approval``: ``{"decision": "APPROVED" | "REJECTED" |
+"EDITED", "rejection_reason": <RejectionReason value>, "edit": {"remove": [stop
+node ids], "add": [attraction node ids]}}`` -- the reason only for a rejection, the
+edit only (and always) for ``EDITED``. The approval interrupt payload carries
+``"kind": "plan_approval"``; a resume value that does not fit, or an edit that does
+not fit the plan, is answered with the same interrupt plus an ``"error"``, before
+any side effect.
+
+An edit (section 23) is never a plan: ``ApplyEditUseCase`` turns it into the party's
+constraints (dropped stops avoided, added attractions must-dos), the edited proposal
+is resolved as ``EDITED`` -- it never activates anything -- and planning starts again
+at ``load_context``, so the new candidate is built, checked, explained and proposed
+as a new PENDING proposal like any other. If no valid plan fits the edit, the guests
+are told why and get back what they had: the plan before the edit, with the
+constraints before it, goes through CHECK again (on the fresh data) and is proposed
+anew, under a new plan id. If even that no longer passes, nothing is proposed, as after any failed check.
 
 A port that fails or has no data (``PlanningUnavailableError``) ends the planning
 stage with a plain-language message and no plan, instead of an unhandled exception.
@@ -52,6 +64,7 @@ from uuid import uuid4
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
+from pydantic import ValidationError
 
 from parkmind.agents.elicit_agent import GuestInfoExtractor
 from parkmind.agents.explain_agent import (
@@ -60,7 +73,14 @@ from parkmind.agents.explain_agent import (
     PlanNarrator,
     explain_grounded,
 )
-from parkmind.core.contracts import PARK_TZ, ApprovalStatus, Plan, RejectionReason
+from parkmind.core.contracts import (
+    PARK_TZ,
+    ApprovalStatus,
+    PartyConstraints,
+    Plan,
+    RejectionReason,
+    StopKind,
+)
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.elicitation_graph import (
     StateNode,
@@ -70,6 +90,12 @@ from parkmind.graph.elicitation_graph import (
 from parkmind.graph.state import ParkMindState
 from parkmind.graph.state_helpers import approve_plan, propose_plan_change, reject_plan
 from parkmind.services.use_cases.accessibility_intake import AccessibilityIntakeUseCase
+from parkmind.services.use_cases.apply_edit import (
+    AppliedEdit,
+    ApplyEditUseCase,
+    InvalidEditError,
+    PlanEdit,
+)
 from parkmind.services.use_cases.build_plan import BuildPlanUseCase
 from parkmind.services.use_cases.check_plan import CheckPlanUseCase
 from parkmind.services.use_cases.explain_plan import ExplainPlanUseCase
@@ -93,6 +119,8 @@ logger = logging.getLogger(__name__)
 Clock = Callable[[], datetime]
 
 APPROVAL_INTERRUPT_KIND = "plan_approval"
+EDIT_REENTRY = "load_context"
+"""Where both planning graphs start again after an edit: fresh data, then the same path."""
 _SUPERSEDED = (
     "Something in the park changed while you were deciding, so this proposal was "
     "set aside and nothing was activated."
@@ -102,6 +130,11 @@ SUPERSEDED_MESSAGE = f"{_SUPERSEDED} {_ASK_AGAIN}"
 SUPERSEDED_KEEPS_PLAN_MESSAGE = (
     f"{_SUPERSEDED} Your current plan stays as it was. {_ASK_AGAIN}"
 )
+EDITING_MESSAGE = "Updating the plan with your changes."
+EDIT_DID_NOT_FIT_MESSAGE = "I couldn't fit your changes into a plan that meets every requirement:"
+EDIT_REOFFER_MESSAGE = "Here is the plan you had before, checked again. You can approve, edit or reject it."
+EDIT_CLEARED: ParkMindState = {"constraints_before_edit": None, "plan_before_edit": None}
+"""Drops what an edit kept to fall back on: set on every path that ends the edit."""
 UNAVAILABLE_MESSAGE = (
     "I couldn't put a plan together right now because some of the park information "
     "I need isn't available. Nothing was proposed. Please try again in a few minutes."
@@ -141,6 +174,7 @@ def _guarded(node: StateNode, *, then: str | None) -> StateNode:
                     "candidate_plan": None,
                     "check_result": None,
                     "explanation": None,
+                    **EDIT_CLEARED,
                 },
                 goto=END,
             )
@@ -240,14 +274,49 @@ def _route_after_check(state: ParkMindState) -> str:
     return "explain" if check is not None and check.valid else "no_valid_plan"
 
 
-def _no_valid_plan(state: ParkMindState) -> dict[str, Any]:
-    """Tell the user why nothing was proposed; ``check_result`` stays in state."""
+def before_edit_update(state: ParkMindState, reasons: list[str]) -> dict[str, Any] | None:
+    """After an edit no valid plan fits: put back what the guests had, to be checked again.
+
+    ``None`` when the failed plan did not come from an edit. The caller routes to its
+    CHECK node, so the plan is proposed again only if it still passes on fresh data.
+
+    The plan comes back under a new id: EXPLAIN writes it again and records which
+    prompt did (``explained``), and a stored plan body never changes, so the plan
+    first proposed cannot be saved again with another explanation's version.
+    """
+    plan = state.get("plan_before_edit")
+    constraints = state.get("constraints_before_edit")
+    if plan is None or constraints is None:
+        return None
+    message = "\n".join([EDIT_DID_NOT_FIT_MESSAGE, *reasons, EDIT_REOFFER_MESSAGE])
+    return {
+        "messages": [AIMessage(content=message)],
+        "candidate_plan": plan.model_copy(update={"plan_id": f"plan_{uuid4().hex[:12]}"}),
+        "constraints": constraints,
+        "check_result": None,
+        "explanation": None,
+        "diff": None,
+        **EDIT_CLEARED,
+    }
+
+
+def _no_valid_plan(state: ParkMindState) -> Command[Any]:
+    """Tell the user why nothing was proposed; ``check_result`` stays in state.
+
+    A plan that failed after an edit gives way to the plan before the edit instead.
+    """
     check = state.get("check_result")
-    reasons = [v.message for v in check.violations] if check is not None else []
+    reasons = [f"- {v.message}" for v in check.violations] if check is not None else []
+    restored = before_edit_update(state, reasons)
+    if restored is not None:
+        return Command(update=restored, goto="check_plan")
     lines = ["I couldn't build a plan that meets every requirement, so nothing was proposed."]
-    lines += [f"- {reason}" for reason in reasons]
+    lines += reasons
     lines.append("You can relax a constraint (for example the must-dos or the departure time) and I'll try again.")
-    return {"messages": [AIMessage(content="\n".join(lines))], "candidate_plan": None}
+    return Command(
+        update={"messages": [AIMessage(content="\n".join(lines))], "candidate_plan": None},
+        goto=END,
+    )
 
 
 def explained(plan: Plan, result: GroundedExplanation) -> dict[str, Any]:
@@ -300,12 +369,14 @@ def _propose_plan(
     the interrupt, not inside the same node as interrupt() (see
     _interrupt_for_approval -- LangGraph re-executes a node from the top on
     every resume). Only a plan that passed the ConstraintChecker, with its
-    explanation, may be proposed.
+    explanation, may be proposed, and only for a party with guests (``require_party``,
+    checked before anything is saved).
     """
     plan = state.get("candidate_plan")
     if not plan:
         raise ValueError("No candidate plan to propose")
     _require_valid_candidate(state)
+    require_party(state)
 
     proposal = ProposePlanUseCase(deps_factory).execute(
         state["thread_id"],
@@ -315,31 +386,83 @@ def _propose_plan(
         explanation=state.get("explanation") or "",
         at=clock(),
     )
-    return propose_plan_change(state, proposal)
+    return {**propose_plan_change(state, proposal), **EDIT_CLEARED}
 
 
 _NOT_DECIDABLE = frozenset({ApprovalStatus.PENDING, ApprovalStatus.SUPERSEDED})
 
 
-def _parse_approval(value: Any) -> tuple[ApprovalStatus, RejectionReason | None] | str:
-    """The decision and the rejection reason given, or why the resume value is not valid."""
+def _parse_approval(
+    value: Any,
+) -> tuple[ApprovalStatus, RejectionReason | None, PlanEdit | None] | str:
+    """The decision, the rejection reason and the edit given, or why the value is not valid."""
     if not isinstance(value, Mapping):
         return "the decision must be a mapping with a 'decision' key"
     try:
         status = ApprovalStatus(value.get("decision"))
     except ValueError:
-        return "'decision' must be APPROVED or REJECTED"
-    if status is ApprovalStatus.EDITED:
-        return "EDITED decisions are not supported yet (P0-32); use APPROVED or REJECTED"
+        return "'decision' must be APPROVED, REJECTED or EDITED"
     if status in _NOT_DECIDABLE:
-        return "'decision' must be APPROVED or REJECTED"
+        return "'decision' must be APPROVED, REJECTED or EDITED"
+    if status is not ApprovalStatus.EDITED and value.get("edit") is not None:
+        return "an 'edit' is only taken with an EDITED decision"
+    edit: PlanEdit | None = None
+    if status is ApprovalStatus.EDITED:
+        raw_edit = value.get("edit")
+        if not isinstance(raw_edit, Mapping):
+            return "an EDITED decision needs an 'edit' with 'remove' and/or 'add'"
+        try:
+            edit = PlanEdit.model_validate(raw_edit)
+        except ValidationError:
+            return "'edit' takes only 'remove' and 'add', each a list of node ids"
     raw_reason = value.get("rejection_reason")
-    if raw_reason in (None, ""):
-        return status, None
+    if status is not ApprovalStatus.REJECTED or raw_reason in (None, ""):
+        return status, None, edit
     try:
-        return status, RejectionReason(raw_reason)
+        return status, RejectionReason(raw_reason), edit
     except ValueError:
         return "'rejection_reason' is not a known reason"
+
+
+def _apply_edit(
+    state: ParkMindState, plan: Plan, edit: PlanEdit, deps_factory: DepsFactory
+) -> AppliedEdit | str:
+    """The edited constraints, or why the edit cannot be applied (nothing changed).
+
+    Missing park data raises instead of asking again: on resume LangGraph replays the
+    answers in order, so whether an answer was refused must not depend on the network
+    (a refusal that a replay did not repeat would shift every later answer by one).
+    The run fails and LangGraph keeps the answer: retrying the run with no new input
+    (``invoke(None, config)``) applies it once the data is back. Resume by interrupt
+    id (``Command(resume={interrupt.id: value})``): inside this subgraph, a plain
+    resume value kept from a failed run would also answer the next interrupt.
+    """
+    constraints = state.get("constraints")
+    if constraints is None:
+        raise ValueError("an edit needs the party's constraints")
+    try:
+        return ApplyEditUseCase(deps_factory).execute(
+            constraints, plan, edit, execution_state=state.get("execution_state")
+        )
+    except InvalidEditError as exc:
+        return str(exc)
+
+
+def require_party(state: ParkMindState) -> PartyConstraints:
+    """The party's constraints, with at least one guest: every decision on a proposal
+    is logged per guest (section 23), so nothing is proposed or decided for nobody."""
+    constraints = state.get("constraints")
+    if constraints is None or not constraints.guests:
+        raise ValueError("a proposal needs the party's guests")
+    return constraints
+
+
+def _attraction_ids(plan: Plan) -> list[str]:
+    return [
+        stop.node_id
+        for stop in plan.stops
+        if stop.kind in (StopKind.ATTRACTION, StopKind.SHOW)
+    ]
 
 
 def _interrupt_for_approval(
@@ -347,7 +470,7 @@ def _interrupt_for_approval(
     *,
     deps_factory: DepsFactory = default_planning_deps,
     clock: Clock = park_clock,
-) -> ParkMindState:
+) -> Command[Any]:
     """Pause for a human decision, then resolve the proposal accordingly.
 
     Nothing here before interrupt() may have a side effect: LangGraph
@@ -356,10 +479,15 @@ def _interrupt_for_approval(
     (invariant: the LLM never activates a plan; see
     services/ports/plan_repository.py).
 
-    Expects the resume value to be a mapping with a ``"decision"`` key set to
-    ``APPROVED`` or ``REJECTED`` and, for a rejection, an optional
-    ``"rejection_reason"`` RejectionReason value. Anything else is answered with the
-    same interrupt carrying an ``"error"``; the decision is only applied once valid.
+    Expects the resume value described in the module docstring. Anything else --
+    including an edit that does not fit the plan -- is answered with the same
+    interrupt carrying an ``"error"``; the decision is only applied once valid.
+
+    APPROVED and REJECTED end the stage. EDITED (section 35: "EDIT -> LOG BEHAVIOR
+    -> APPLY EDIT -> CHECK -> PROPOSE") is resolved and logged first, then the
+    edited constraints go to ``load_context`` and the new candidate goes through
+    the checker like any plan. If no valid plan fits the edit, the plan before it is
+    checked again and re-offered (``before_edit_update``).
 
     A proposal superseded while the guests were deciding (P0-33) is not decided:
     the guests are told and asked to request a new plan, the candidate and the
@@ -369,20 +497,29 @@ def _interrupt_for_approval(
     proposal = state.get("proposal")
     if not plan or not proposal:
         raise ValueError("No candidate plan/proposal to approve")
+    constraints = require_party(state)
 
     payload: dict[str, Any] = {
         "kind": APPROVAL_INTERRUPT_KIND,
         "candidate_plan": plan,
         "proposal": proposal,
     }
+    applied: AppliedEdit | None = None
     while True:
         parsed = _parse_approval(interrupt(payload))
         if not isinstance(parsed, str):
-            break
+            status, given_reason, edit = parsed
+            if edit is None:
+                break
+            edited = _apply_edit(state, plan, edit, deps_factory)
+            if not isinstance(edited, str):
+                applied = edited
+                break
+            parsed = edited
         payload = {**payload, "error": parsed}
-    status, given_reason = parsed
-    approved = status is ApprovalStatus.APPROVED
-    rejection_reason = None if approved else given_reason or RejectionReason.OTHER
+    rejection_reason: RejectionReason | None = None
+    if status is ApprovalStatus.REJECTED:
+        rejection_reason = given_reason or RejectionReason.OTHER
 
     try:
         ResolveProposalUseCase(deps_factory).execute(
@@ -391,6 +528,10 @@ def _interrupt_for_approval(
             status,
             at=clock(),
             rejection_reason=rejection_reason,
+            guests=constraints.guests,
+            attraction_ids=(
+                applied.changed_ids if applied is not None else _attraction_ids(plan)
+            ),
         )
     except ProposalNoLongerPendingError as exc:
         if exc.status is not status:
@@ -402,17 +543,36 @@ def _interrupt_for_approval(
                 if state.get("current_plan")
                 else SUPERSEDED_MESSAGE
             )
-            return {
-                "messages": [AIMessage(content=message)],
-                "candidate_plan": None,
-                "proposal": None,
-                "approval": None,
-            }
+            return Command(
+                update={
+                    "messages": [AIMessage(content=message)],
+                    "candidate_plan": None,
+                    "proposal": None,
+                    "approval": None,
+                },
+                goto=END,
+            )
         # The same decision was already applied (a re-run after it was stored).
 
+    if applied is not None:
+        return Command(
+            update={
+                "messages": [AIMessage(content=EDITING_MESSAGE)],
+                "constraints": applied.constraints,
+                "constraints_before_edit": constraints,
+                "plan_before_edit": plan,
+                "candidate_plan": None,
+                "check_result": None,
+                "explanation": None,
+                "diff": None,
+                "proposal": None,
+                "approval": ApprovalStatus.EDITED.value,
+            },
+            goto=EDIT_REENTRY,
+        )
     if rejection_reason is None:
-        return approve_plan(state)
-    return reject_plan(state, rejection_reason)
+        return Command(update=approve_plan(state), goto=END)
+    return Command(update=reject_plan(state, rejection_reason), goto=END)
 
 
 def build_planning_stage(
@@ -431,7 +591,7 @@ def build_planning_stage(
     def propose_plan(state: ParkMindState) -> ParkMindState:
         return _propose_plan(state, deps_factory=deps_factory, clock=clock)
 
-    def interrupt_approval(state: ParkMindState) -> ParkMindState:
+    def interrupt_approval(state: ParkMindState) -> Command[Any]:
         return _interrupt_for_approval(state, deps_factory=deps_factory, clock=clock)
 
     def guarded_node(name: str, node: StateNode, then: str | None) -> None:
@@ -444,13 +604,13 @@ def build_planning_stage(
     guarded_node("check_plan", _make_check_plan_node(deps_factory, clock), None)
     guarded_node("explain", _make_explain_node(deps_factory, narrator), "propose_plan")
     guarded_node("propose_plan", cast(StateNode, propose_plan), "interrupt_approval")
-    graph.add_node("no_valid_plan", _no_valid_plan)
-    graph.add_node("interrupt_approval", interrupt_approval)
+    graph.add_node("no_valid_plan", _no_valid_plan, destinations=("check_plan", END))
+    graph.add_node(
+        "interrupt_approval", interrupt_approval, destinations=(EDIT_REENTRY, END)
+    )
 
     graph.add_edge(START, "load_context")
     graph.add_conditional_edges("check_plan", _route_after_check, ["explain", "no_valid_plan"])
-    graph.add_edge("no_valid_plan", END)
-    graph.add_edge("interrupt_approval", END)
     return graph.compile()
 
 

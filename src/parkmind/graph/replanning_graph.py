@@ -38,11 +38,16 @@ the top on resume):
   (or a bare bool). A user report that is low-confidence or touches a hard constraint
   is recorded and acted on only once the guests confirm it (section 36); dismissing it
   drops it without a trace.
-* ``plan_approval`` -- as in the initial planning graph.
+* ``plan_approval`` -- as in the initial planning graph. An ``EDITED`` decision
+  (section 36: "EDIT -> LOG BEHAVIOR -> RECHECK") goes back to ``load_context`` with
+  the edited constraints: the replan is built again from the active plan and the
+  execution state (a stop already done cannot be removed), checked against the
+  whole day and proposed again; the active plan stays until a proposal is approved.
 
 Known limits: REJECT's "update preferences" step is not implemented (the reason is
-stored on the proposal); EDIT is P0-32. After a replan finds no valid plan the events
-stay recorded, so a duplicate report does not retry it; a new event does.
+stored on the proposal and in the behavior log; P1-03). After a replan finds no valid
+plan the events stay recorded, so a duplicate report does not retry it; a new event
+does.
 """
 
 import logging
@@ -63,14 +68,18 @@ from parkmind.core.contracts import Event
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.elicitation_graph import StateNode
 from parkmind.graph.initial_planning_graph import (
+    EDIT_CLEARED,
+    EDIT_REENTRY,
     Clock,
     _guarded,
     _interrupt_for_approval,
     _make_load_context_node,
     _make_resolve_group_node,
     _require_valid_candidate,
+    before_edit_update,
     explained,
     park_clock,
+    require_party,
 )
 from parkmind.graph.state import ParkMindState
 from parkmind.graph.state_helpers import (
@@ -316,6 +325,9 @@ def _make_replan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
                 lines.append(
                     f"- Must-dos that no longer fit: {', '.join(result.unmet_must_do)}"
                 )
+            restored = before_edit_update(state, lines)
+            if restored is not None:
+                return Command(update={**update, **restored}, goto="check_plan")
             update["messages"] = [AIMessage(content=_not_proposed(*lines))]
             return Command(update=update, goto=END)
         update["candidate_plan"] = result.plan
@@ -352,6 +364,9 @@ def _make_check_replan_node(deps_factory: DepsFactory) -> StateNode:
         if result.valid:
             return Command(update={"check_result": result}, goto="diff")
         reasons = [f"- {v.message}" for v in result.violations]
+        restored = before_edit_update(state, reasons)
+        if restored is not None:
+            return Command(update={"check_result": result, **restored}, goto="check_plan")
         return Command(
             update={
                 "check_result": result,
@@ -412,7 +427,8 @@ def _propose_replan(
 ) -> ParkMindState:
     """Persist the candidate and open a PENDING proposal against the active plan.
 
-    Only a plan that passed the checker, with its explanation and diff, may be proposed.
+    Only a plan that passed the checker, with its explanation and diff, may be proposed,
+    and only for a party with guests (``require_party``).
     """
     plan = state.get("candidate_plan")
     current = state.get("current_plan")
@@ -422,6 +438,7 @@ def _propose_replan(
             "a candidate plan, the active plan and their diff are required"
         )
     _require_valid_candidate(state)
+    require_party(state)
 
     reason = ReplanReasonUseCase(deps_factory).execute(state.get("events") or [])
     proposal = ProposePlanUseCase(deps_factory).execute(
@@ -435,7 +452,7 @@ def _propose_replan(
         diff=diff,
         triggering_event_id=reason.triggering_event_id,
     )
-    return propose_plan_change(state, proposal)
+    return {**propose_plan_change(state, proposal), **EDIT_CLEARED}
 
 
 def build_replanning_graph(
@@ -456,7 +473,7 @@ def build_replanning_graph(
     def propose_plan(state: ParkMindState) -> ParkMindState:
         return _propose_replan(state, deps_factory=deps_factory, clock=clock)
 
-    def interrupt_approval(state: ParkMindState) -> ParkMindState:
+    def interrupt_approval(state: ParkMindState) -> Command[Any]:
         return _interrupt_for_approval(state, deps_factory=deps_factory, clock=clock)
 
     def routed(name: str, node: StateNode, destinations: tuple[str, ...]) -> None:
@@ -496,7 +513,7 @@ def build_replanning_graph(
         destinations=("replan", END),
     )
     routed("replan", _make_replan_node(deps_factory, clock), ("check_plan",))
-    routed("check_plan", _make_check_replan_node(deps_factory), ("diff",))
+    routed("check_plan", _make_check_replan_node(deps_factory), ("diff", "check_plan"))
     graph.add_node(
         "diff",
         _guarded(_make_diff_node(), then="explain"),
@@ -512,8 +529,9 @@ def build_replanning_graph(
         _guarded(cast(StateNode, propose_plan), then="interrupt_approval"),
         destinations=("interrupt_approval", END),
     )
-    graph.add_node("interrupt_approval", interrupt_approval)
+    graph.add_node(
+        "interrupt_approval", interrupt_approval, destinations=(EDIT_REENTRY, END)
+    )
 
     graph.add_edge(START, "load_plan")
-    graph.add_edge("interrupt_approval", END)
     return graph.compile(checkpointer=checkpointer or default_checkpointer())

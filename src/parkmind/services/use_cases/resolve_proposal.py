@@ -17,17 +17,48 @@ A rejected or superseded proposal leaves no state behind.
 A proposal can stop being PENDING while the guests are still deciding: a
 significant event supersedes it (section 9 [C18], P0-33). Deciding on it then
 raises ``ProposalNoLongerPendingError`` and changes nothing.
+
+Every decision writes one ``BehaviorEntry`` per guest of the party, in the same
+transaction (section 23: "behavior log: ACCEPTED / EDITED / REJECTED"). The log is
+keyed by guest, and a party's guest ids (``g1``, ``g2``) are only unique within its
+thread, so each guest is registered as ``party_guest_id(thread_id, guest_id)`` --
+with its role only, never its height (section 12). ``entry_id`` is the
+proposal and the decision, so a decision applied twice is logged once; a
+superseded proposal logs nothing.
 """
 
+from collections.abc import Sequence
 from datetime import datetime
+from typing import Literal
 
-from parkmind.core.contracts import ApprovalStatus, Proposal, RejectionReason
+from parkmind.core.contracts import (
+    ApprovalStatus,
+    BehaviorEntry,
+    BehaviorEventType,
+    Guest,
+    Proposal,
+    RejectionReason,
+)
 from parkmind.services.ports import InvalidStateTransitionError
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
     default_planning_deps,
     open_deps,
 )
+
+_LOGGED: dict[
+    ApprovalStatus,
+    tuple[BehaviorEventType, Literal["ACCEPTED", "REJECTED", "EDITED"]],
+] = {
+    ApprovalStatus.APPROVED: (BehaviorEventType.PROPOSAL_ACCEPTED, "ACCEPTED"),
+    ApprovalStatus.REJECTED: (BehaviorEventType.PROPOSAL_REJECTED, "REJECTED"),
+    ApprovalStatus.EDITED: (BehaviorEventType.PROPOSAL_EDITED, "EDITED"),
+}
+
+
+def party_guest_id(thread_id: str, guest_id: str) -> str:
+    """The guest's id in the behavior log: unique across parties."""
+    return f"{thread_id}:{guest_id}"
 
 
 class ProposalNoLongerPendingError(RuntimeError):
@@ -51,8 +82,17 @@ class ResolveProposalUseCase:
         status: ApprovalStatus,
         *,
         at: datetime,
+        guests: Sequence[Guest],
         rejection_reason: RejectionReason | None = None,
+        attraction_ids: Sequence[str] = (),
     ) -> Proposal:
+        """``guests`` is the party (at least one: every decision is logged per guest);
+        ``attraction_ids`` is what the decision was about: the plan's attractions, or
+        for an edit what changed (section 23)."""
+        if status not in _LOGGED:
+            raise ValueError(f"{status.value} is not a decision")
+        if not guests:
+            raise ValueError("a decision is logged per guest: the party's guests are required")
         with open_deps(self._deps_factory) as deps, deps.transaction():
             stored = deps.proposals.get(proposal_id)
             if (
@@ -79,4 +119,19 @@ class ResolveProposalUseCase:
                                 update={"plan_id": proposal.candidate_plan_id}
                             )
                         )
+            event_type, decision = _LOGGED[status]
+            entry = BehaviorEntry(
+                entry_id=f"{proposal_id}:{decision}",
+                event_type=event_type,
+                proposal_id=proposal_id,
+                plan_id=proposal.candidate_plan_id,
+                decision=decision,
+                rejection_reason=rejection_reason,
+                attraction_ids=list(attraction_ids),
+                timestamp=at,
+            )
+            for guest in guests:
+                scoped = party_guest_id(thread_id, guest.guest_id)
+                deps.guests.save(Guest(guest_id=scoped, role=guest.role))
+                deps.behavior.append(scoped, entry)
         return proposal
