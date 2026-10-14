@@ -1,6 +1,6 @@
 # ADR 0003 — Observability: Langfuse for traces, LangSmith off by default
 
-- **Status:** Proposed (2026-10-14)
+- **Status:** Accepted (2026-10-14, team decision)
 - **Backlog:** issue #5 (evaluate LangSmith); informs P1-18 (Langfuse observability)
 - **Architecture:** §42 (Observability), §40 (groundedness score), §45 (metrics), C19 (raw user turns masked in traces)
 
@@ -10,7 +10,7 @@
 
 Three facts about the code today shape the decision:
 
-1. **No observability is wired.** No callback or tracer is configured anywhere in `src/`. `langfuse` is declared (`pyproject.toml`, `>=2.0`; the lock pins 4.15.3, whose API is not v2's) but unused. `langsmith` 0.12.5 comes in only as a dependency of `langchain-core`.
+1. **No observability is wired.** No callback or tracer is configured anywhere in `src/` or in `server.py`. `langfuse` is declared (`pyproject.toml`, `>=2.0`; the lock pins 4.15.3, whose API is not v2's) but unused. `langsmith` 0.12.5 comes in only as a dependency of `langchain-core`.
 2. **LangSmith traces with no code.** When `LANGSMITH_TRACING=true` (or the legacy `LANGCHAIN_TRACING_V2=true`) and an API key are in the environment, `langchain-core` adds a `LangChainTracer` to every run by itself (`langchain_core/tracers/context.py`). The repository loads `.env` from `config/settings.py`, the e2e harness and `langgraph.json`. So **two lines in `.env` would send every graph run to LangSmith Cloud, raw guest messages included**, with nothing masking them:
    - the raw turns are in `ParkMindState.messages`, recorded as node inputs and as the final state;
    - they are also copied into the elicit prompt (`"Guest messages, oldest first: …"`).
@@ -40,13 +40,17 @@ Sources: official documentation and pricing pages, read 2026-10-13. Prices chang
 2. **LangSmith is optional for local development only, never with real guest data.**
    - Studio (`langgraph dev`) works with tracing off.
    - LangSmith's pytest/evaluation tooling may be used for **offline** evaluation on fixture scenarios only (`tests/fixtures/elicit/scenarios.json` and the e2e scenarios). It is opt-in per developer.
-3. **Tracing is refused until masking exists.** Until P1-18 wires a tested C19 masking hook, the application refuses to start or build a graph when LangSmith or Langfuse tracing is switched on through the environment (`config.tracing_guard`). `.env.example` sets `LANGSMITH_TRACING=false` with a comment.
+3. **Tracing is refused until masking exists.** Until P1-18 wires a tested C19 masking hook, no graph is built, and so the API server (`server.py`) does not start, while LangSmith tracing is switched on through the environment (`config.tracing.tracing_guard`). `.env.example` sets `LANGSMITH_TRACING=false` with a comment.
+   - The guard checks LangSmith's switches only. Those are the ones that trace with no code: `langchain-core` installs the tracer by itself.
+   - Langfuse traces only through a `CallbackHandler` that our code passes in, and nothing passes one yet. P1-18 adds it together with the masking, so Langfuse keys in `.env` alone send nothing.
 4. **P1-18 must land with one redaction function and its test:**
    - the function drops `HumanMessage` content and the elicit prompt's guest block, and keeps the typed outputs (`PartyConstraints`, `Event`, plan ids, check results);
    - it is installed through `Langfuse(mask=… / mask_otel_spans=…)`;
    - a canary test runs a graph with a unique string in a guest turn and asserts it never reaches the exporter.
 
    The same function can back LangSmith's `hide_inputs` / `hide_outputs` if a developer turns LangSmith on.
+
+   **Where the handler goes:** every API turn runs through one call, `ConversationService._run` → `invoke(graph_input, config=config)` (`graph/conversation.py`). P1-18 adds the `CallbackHandler` to that `config`, with `thread_id` as the Langfuse session. LangChain passes the config down to every node and LLM call inside the graph.
 5. **Housekeeping for P1-18:** raise the `langfuse` floor to `^4` (the lock already pins 4.15.3); `>=2.0` suggests an API the code would not use.
 
 ## Consequences
