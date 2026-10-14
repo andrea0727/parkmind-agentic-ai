@@ -12,9 +12,13 @@ the span is exported. The mask is strict (the decision of 2026-10-14):
 - every chat message keeps only its role, type, name and id. Its text, tool calls
   and extra fields are masked, for guests' turns (C19: raw user turns are masked)
   and for AI replies alike, since those can echo the guests' words or names;
+- a Command's ``resume``: an answer to a clarifying question resumes the graph as plain
+  text, alone or under its interrupt id, and that text is the guests' words;
 - correction text, ``Guest.label``, the confirmation echo and explanations (they
   can carry a label), and every accessibility field are masked wherever they
   appear;
+- an error's text: a paused graph's ``Interrupt`` carries its question, which repeats
+  the guests' unmatched attraction names, so a status message keeps only the error's type;
 - the elicit prompt's guest block is masked if it shows up as a plain string.
 
 Everything else -- constraints, plans, events, check results, ids -- is traced as
@@ -26,6 +30,7 @@ added by ``langchain-core`` from the environment and never passes through this m
 """
 
 import dataclasses
+import functools
 import os
 from collections.abc import Mapping
 from typing import Any
@@ -83,13 +88,29 @@ def _masked(value: Any, *, depth: int) -> Any:
         if _looks_like_message(value):
             return {k: v for k, v in value.items() if k in _MESSAGE_KEPT}
         return {
-            k: MASKED if k in _MASKED_KEYS else _masked(v, depth=deeper)
+            k: MASKED
+            if k in _MASKED_KEYS
+            else _masked_resume(v, depth=deeper)
+            if k == "resume"
+            else _masked(v, depth=deeper)
             for k, v in value.items()
         }
     if isinstance(value, (list, tuple, set, frozenset)):
         return [_masked(v, depth=deeper) for v in value]
     # Anything else (an arbitrary object) is traced by its type name only.
     return f"<{type(value).__name__}>"
+
+
+def _masked_resume(value: Any, *, depth: int) -> Any:
+    """A Command's ``resume``: a bare string, alone or under its interrupt id, is an answer."""
+    if isinstance(value, str):
+        return MASKED
+    if isinstance(value, Mapping):
+        return {
+            k: MASKED if isinstance(v, str) else _masked(v, depth=depth + 1)
+            for k, v in value.items()
+        }
+    return _masked(value, depth=depth)
 
 
 def _looks_like_message(value: Mapping[str, Any]) -> bool:
@@ -127,7 +148,6 @@ def langfuse_callbacks(env: Mapping[str, str] | None = None) -> list[Any]:
             f"PARKMIND_TRACING=langfuse needs {', '.join(missing)} (see .env.example)"
         )
     from langfuse import Langfuse
-    from langfuse.langchain import CallbackHandler
 
     global _client
     if _client is None:
@@ -139,7 +159,27 @@ def langfuse_callbacks(env: Mapping[str, str] | None = None) -> list[Any]:
             environment=env.get("PARKMIND_TRACING_ENVIRONMENT", "local").strip()
             or "local",
         )
-    return [CallbackHandler(public_key=public_key)]
+    return [_masked_handler_class()(public_key=public_key)]
+
+
+@functools.cache
+def _masked_handler_class() -> Any:
+    """The SDK handler, with the error text it records reduced to the error's type.
+
+    The SDK stores ``str(error)`` as the observation's status message and never runs
+    the mask over it. A paused graph raises an ``Interrupt`` whose text holds its
+    payload, the question and the guests' unmatched attraction names.
+    """
+    from langfuse.langchain import CallbackHandler
+
+    class MaskedCallbackHandler(CallbackHandler):
+        def _get_error_level_and_status_message(
+            self, error: BaseException
+        ) -> tuple[Any, str]:
+            level, _ = super()._get_error_level_and_status_message(error)
+            return level, type(error).__name__
+
+    return MaskedCallbackHandler
 
 
 def flush_tracing() -> None:

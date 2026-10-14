@@ -78,6 +78,21 @@ def test_a_resume_with_a_correction_is_masked_inside_the_command():
     assert CANARY not in _dumped(resume)
 
 
+@pytest.mark.parametrize(
+    "resume",
+    [CANARY, {"interrupt-1": CANARY}],
+    ids=["plain_text", "text_under_its_interrupt_id"],
+)
+def test_an_answers_text_is_masked_inside_the_resume(resume):
+    assert CANARY not in _dumped(Command(resume=resume))
+
+
+def test_a_resume_keeps_its_typed_values():
+    resume = {"interrupt-1": {"decision": "approve", "confirmed": True}}
+
+    assert mask_for_trace(data=Command(resume=resume))["resume"] == resume
+
+
 def test_the_elicit_prompts_guest_block_is_masked_as_a_plain_string():
     prompt = f"Guest messages, oldest first:\n1. {CANARY}"
 
