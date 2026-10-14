@@ -34,7 +34,7 @@ function Dialog({ id, className, open, labelledBy, focus, children }: DialogProp
       const timer = window.setTimeout(() => {
         const el = ref.current;
         if (!el) return;
-        (el.querySelector<HTMLElement>(focus ?? FOCUSABLE) ?? el.querySelector<HTMLElement>(FOCUSABLE))?.focus();
+        (el.querySelector<HTMLElement>(focus ?? FOCUSABLE) ?? el.querySelector<HTMLElement>(FOCUSABLE))?.focus({ preventScroll: true });
       }, 320);
       wasOpen.current = true;
       return () => window.clearTimeout(timer);
@@ -42,7 +42,7 @@ function Dialog({ id, className, open, labelledBy, focus, children }: DialogProp
     if (!open && wasOpen.current) {
       wasOpen.current = false;
       const back = lastFocus.current;
-      if (back && document.contains(back)) back.focus();
+      if (back && document.contains(back)) back.focus({ preventScroll: true });
     }
     return undefined;
   }, [open, focus]);
