@@ -10,8 +10,12 @@ Demo switches, honoured only with PARKMIND_DEMO=1 (the server refuses to start w
 PARKMIND_PLAN_FROM_STORED=1 (plan from the latest stored snapshot, no provider call: for demos
 pinned to a snapshot taken during park hours), E2E_NOW=HH:MM (fixed park clock for demos).
 PARKMIND_HOUSEHOLDS_FILE (default demo/households.json): parties saved per username.
+Tracing (ADR 0003): PARKMIND_TRACING=langfuse with LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY and
+LANGFUSE_BASE_URL traces every graph run to Langfuse, masked (C19); off by default. The server
+refuses to start with LangSmith tracing on (`tracing_guard`).
 """
 
+import atexit
 import os
 import sys
 from dataclasses import replace
@@ -35,6 +39,10 @@ from parkmind.graph.initial_planning_graph import (
     park_clock,
 )
 from parkmind.graph.replanning_graph import build_replanning_graph
+from parkmind.services.clients.observability.langfuse_tracing import (
+    flush_tracing,
+    langfuse_callbacks,
+)
 from parkmind.services.use_cases.describe_plan import DescribePlanUseCase
 from parkmind.services.use_cases.load_households import load_households
 from parkmind.services.use_cases.park_status import ParkStatusUseCase
@@ -142,7 +150,13 @@ def build_app():
         o for o in os.environ.get("PARKMIND_CORS_ORIGINS", "http://localhost:5173").split(",") if o
     ]
     return create_app(
-        ConversationService(initial, replanning, deps_factory=deps_factory, clock=clock),
+        ConversationService(
+            initial,
+            replanning,
+            deps_factory=deps_factory,
+            clock=clock,
+            callbacks=langfuse_callbacks(),
+        ),
         DescribePlanUseCase(deps_factory),
         park_status=ParkStatusUseCase(deps_factory),
         clock=clock,
@@ -160,5 +174,6 @@ def build_app():
 
 
 if __name__ == "__main__":
+    atexit.register(flush_tracing)  # send buffered traces before the process exits
     ensure_single_worker()
     uvicorn.run(build_app(), host="0.0.0.0", port=int(os.environ.get("PORT", "8000")))

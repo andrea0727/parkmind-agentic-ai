@@ -8,6 +8,10 @@ refuses an answer that does not fit (``NotExpectedError``) instead of resuming b
 
 Calls on one thread are serialized; different threads run in parallel. State lives in this
 process (``default_checkpointer`` is in-memory), which is why the API runs one worker.
+
+Tracing (ADR 0003): the ``callbacks`` given at construction -- the masked Langfuse handler,
+when ``server.py`` switches it on -- go into every graph run's config, with the thread as
+the Langfuse session and the graph as a tag. Nodes and LLM calls inherit them.
 """
 
 import logging
@@ -98,6 +102,7 @@ class ConversationService:
         deps_factory: DepsFactory = default_planning_deps,
         new_thread_id: Callable[[], str] = _new_thread_id,
         clock: Callable[[], datetime] = park_clock,
+        callbacks: Sequence[Any] = (),
     ) -> None:
         self._graphs: dict[Owner, Any] = {
             "initial": initial_graph,
@@ -110,6 +115,7 @@ class ConversationService:
         self._pending = PendingProposalUseCase(deps_factory)
         self._active = ActivePlanUseCase(deps_factory)
         self._new_thread_id = new_thread_id
+        self._callbacks = list(callbacks)
         self._threads: dict[str, _Thread] = {}
         self._registry_lock = threading.Lock()
 
@@ -346,6 +352,12 @@ class ConversationService:
 
     def _run(self, thread_id: str, thread: _Thread, owner: Owner, graph_input: Any) -> Turn:
         config: Any = {"configurable": {"thread_id": thread_id}}
+        if self._callbacks:
+            config["callbacks"] = list(self._callbacks)
+            config["metadata"] = {
+                "langfuse_session_id": thread_id,
+                "langfuse_tags": [owner],
+            }
         try:
             result = self._graphs[owner].invoke(graph_input, config=config)
         except PlanningUnavailableError as exc:
