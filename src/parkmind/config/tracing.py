@@ -6,9 +6,11 @@ switched on through the environment (``LANGSMITH_TRACING=true``, or the legacy
 the guests' raw messages -- in ``ParkMindState.messages`` and in the elicit prompt --
 to a third-party cloud, while C19 requires raw user turns to be masked in traces.
 
-Until P1-18 installs a tested masking hook (ADR 0003), building a graph refuses to
-run with tracing switched on. Langfuse needs explicit code to trace (a callback
-handler), so its keys alone send nothing and are not refused here.
+That tracer never passes through ParkMind's masking, so building a graph refuses to
+run with LangSmith tracing switched on (ADR 0003). Tracing goes to Langfuse instead,
+masked and opt-in (``PARKMIND_TRACING=langfuse``, see
+``services/clients/observability/langfuse_tracing.py``); Langfuse keys alone send
+nothing and are not refused here.
 """
 
 import os
@@ -37,6 +39,6 @@ def tracing_guard(environ: Mapping[str, str] | None = None) -> None:
         pronoun = "it" if len(switched_on) == 1 else "them"
         raise UnmaskedTracingError(
             f"{', '.join(switched_on)} would send the guests' raw messages to LangSmith "
-            f"unmasked [C19]. Set {pronoun} to false: tracing waits for P1-18's masking "
-            "(docs/decisions/0003-observability-langsmith-vs-langfuse.md)."
+            f"unmasked [C19]. Set {pronoun} to false and trace with PARKMIND_TRACING=langfuse, "
+            "which masks first (docs/decisions/0003-observability-langsmith-vs-langfuse.md)."
         )
