@@ -59,12 +59,16 @@ def test_only_validate_constraints_marks_the_constraints_valid():
                     if (path.name, func.name) == OWNER:
                         owner_sets_true = owner_sets_true or not _is_false(value)
                     elif not _is_false(value):
-                        offenders.append(f"{path.relative_to(SOURCE)}:{line} ({func.name})")
+                        offenders.append(
+                            f"{path.relative_to(SOURCE)}:{line} ({func.name})"
+                        )
             outside = [n for n in module.body if not isinstance(n, ast.FunctionDef)]
             for node in outside:
                 for line, value in _writes(node):
                     if not _is_false(value):
-                        offenders.append(f"{path.relative_to(SOURCE)}:{line} (module scope)")
+                        offenders.append(
+                            f"{path.relative_to(SOURCE)}:{line} (module scope)"
+                        )
 
     assert owner_sets_true, "_validate_constraints no longer sets constraints_valid"
     assert not offenders, (

@@ -3,6 +3,9 @@
 Without tools there is no loop and nothing to call: the worst a model can do is fill
 one form badly, and that form is validated (ADR 0004). A real tool, a second schema
 or a free tool choice would break that, so it is pinned here for every LLM client.
+
+P1-22's context loader will be the one LLM with real tools: read-only ones, from its
+allowlist. When it lands, this file pins that it binds exactly that subset (ADR 0004, L10).
 """
 
 from typing import Any, ClassVar
@@ -45,7 +48,9 @@ def recording_chat(monkeypatch):
     ],
     ids=["elicit", "explain"],
 )
-def test_each_llm_gets_exactly_one_output_schema_forced_and_no_real_tool(client, schema):
+def test_each_llm_gets_exactly_one_output_schema_forced_and_no_real_tool(
+    client, schema
+):
     client()._runnable()  # what every call goes through
 
     [(tools, choice)] = _RecordingChat.bound
