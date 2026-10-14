@@ -63,3 +63,19 @@ def test_every_graph_builds_with_tracing_off():
     build_elicitation_graph(checkpointer=MemorySaver(), names=make_names())
     build_initial_planning_graph(checkpointer=MemorySaver(), names=make_names())
     build_replanning_graph(MemorySaver())
+
+
+def test_the_api_server_refuses_to_start_while_tracing_is_on(monkeypatch):
+    """The HTTP entrypoint builds its graphs through the guarded builders."""
+    import server
+
+    # build_app loads .env, which could set a demo switch again.
+    monkeypatch.setattr(server, "load_dotenv", lambda: None)
+    for name in server.DEMO_SWITCHES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("PARKMIND_AUTH_DISABLED", "1")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("LANGSMITH_TRACING", "true")
+
+    with pytest.raises(UnmaskedTracingError):
+        server.build_app()
