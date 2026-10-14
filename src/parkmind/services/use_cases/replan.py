@@ -15,14 +15,15 @@ decides whether it may be proposed and ``ProposePlanUseCase`` stores it.
 
 Two things the graph's state cannot hold are derived here from the repositories:
 
-* **Progress.** The party's execution state is read from the repository. When it
-  records no completed or skipped stop (nobody reported progress), the party is
-  assumed to be on schedule: stops that should have ended by ``now`` count as done and
-  are frozen, so the replan neither re-sends the party to them nor forgets what they
-  walked. ``as_of`` never lies before ``now``. That assumption is made again on every
-  replan, from the plan being replanned and the clock: it is never stored, so a later
-  replan never inherits an earlier, stale one (``ResolveProposalUseCase`` carries over
-  only what was reported, on approval).
+* **Progress.** The party's execution state is read from the repository. A stop
+  reported completed or skipped is taken as reported. Any other stop that should have
+  ended by ``now`` is assumed done, as for an on-schedule party, and frozen, so the
+  replan neither re-sends the party to it nor forgets what they walked; a partial
+  report doesn't change that for the stops it doesn't name (a stop that wasn't done
+  must be reported skipped). ``as_of`` never lies before ``now``. The assumption is made
+  again on every replan, from the plan being replanned and the clock: it is never
+  stored, so a later replan never inherits an earlier, stale one
+  (``ResolveProposalUseCase`` carries over only what was reported, on approval).
 * **Reported availability.** A report the thread recorded after the context's
   snapshot (for example a guest saying a ride is closed) is applied to the context's
   statuses, so the replan and the CHECK that follows see the same attractions as
@@ -84,12 +85,24 @@ logger = logging.getLogger(__name__)
 def effective_execution_state(
     plan: Plan, stored: PlanExecutionState | None, now: datetime
 ) -> PlanExecutionState:
-    """The progress to replan from: what is stored, else an on-schedule party."""
+    """The progress to replan from: what was reported, and the schedule for the rest.
+
+    A stop reported completed or skipped is taken as reported. A stop nobody reported
+    whose departure time has passed is assumed done, as for an on-schedule party, so a
+    partial report never makes a replan put the past back in the plan. A stop that
+    wasn't done has to be reported as skipped.
+    """
     state = stored or PlanExecutionState(plan_id=plan.plan_id, as_of=now)
-    if not state.completed_stop_ids and not state.skipped_stop_ids:
-        done = [stop.node_id for stop in plan.stops if stop.departure_time <= now]
-        state = state.model_copy(update={"completed_stop_ids": done})
-    return state.model_copy(update={"as_of": max(state.as_of, now)})
+    reported = {*state.completed_stop_ids, *state.skipped_stop_ids}
+    assumed = [
+        stop.node_id
+        for stop in plan.stops
+        if stop.departure_time <= now and stop.node_id not in reported
+    ]
+    completed = [*state.completed_stop_ids, *dict.fromkeys(assumed)]
+    return state.model_copy(
+        update={"completed_stop_ids": completed, "as_of": max(state.as_of, now)}
+    )
 
 
 def with_event_statuses(

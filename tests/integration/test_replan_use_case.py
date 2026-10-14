@@ -116,16 +116,25 @@ def test_progress_is_assumed_on_schedule_when_nobody_reported_it(r) -> None:
     assert outcome.execution_state.as_of >= later
 
 
-def test_reported_progress_is_trusted_over_the_schedule(r) -> None:
-    first = r.active.stops[0].node_id
+def test_reported_progress_is_kept_and_the_rest_of_the_past_is_assumed_done(r) -> None:
+    first, second = (s.node_id for s in r.active.stops[:2])
     stored = factories.execution_state(
-        plan_id=r.active.plan_id, as_of=NOW, completed_stop_ids=[first]
+        plan_id=r.active.plan_id,
+        as_of=NOW,
+        completed_stop_ids=[first],
+        skipped_stop_ids=[second],
     )
     r.deps.execution_states.save(stored)
+    later = NOW + timedelta(hours=3)
 
-    outcome = _use_case(r).execute(_request(r, now=NOW + timedelta(hours=3)))
+    outcome = _use_case(r).execute(_request(r, now=later))
 
-    assert outcome.execution_state.completed_stop_ids == [first]
+    departed = [s.node_id for s in r.active.stops if s.departure_time <= later]
+    state = outcome.execution_state
+    assert state.completed_stop_ids == [first] + [
+        n for n in dict.fromkeys(departed) if n not in (first, second)
+    ]
+    assert state.skipped_stop_ids == [second]
 
 
 def _propose_replan(r: _Replanning, plan: Any) -> None:
@@ -187,7 +196,8 @@ def test_reported_progress_survives_the_plan_swap_and_is_still_trusted(r) -> Non
         _request(r, plan=first.result.plan, now=NOW + timedelta(hours=4))
     )
 
-    assert second.execution_state.completed_stop_ids == [done]
+    completed = second.execution_state.completed_stop_ids
+    assert completed[0] == done and completed.count(done) == 1
 
 
 def test_a_guest_with_no_stored_requirements_never_gets_a_valid_replan(r) -> None:

@@ -183,9 +183,8 @@ def test_nothing_is_recorded_for_a_thread_without_an_active_plan():
     assert raised.value.problem is ProgressProblem.NOT_THE_ACTIVE_PLAN
 
 
-def test_a_replan_starts_from_the_reported_progress_not_an_assumed_one(deps):
-    """Before any report the replanner assumes an on-schedule party; after one, it
-    keeps what the guests reported."""
+def test_a_partial_report_never_puts_departed_stops_back_in_a_replan(deps):
+    """Reporting only a2 as skipped keeps a1 and lunch, which have departed, as done."""
     later = NOW + timedelta(hours=3)  # every stop of PLAN has departed by then
     assumed = effective_execution_state(PLAN, None, later)
     assert assumed.completed_stop_ids == ["a1", "a2", "lunch"]
@@ -195,7 +194,8 @@ def test_a_replan_starts_from_the_reported_progress_not_an_assumed_one(deps):
     reported = effective_execution_state(
         PLAN, deps.execution_states.get("plan_1"), later
     )
-    assert (reported.completed_stop_ids, reported.skipped_stop_ids) == ([], ["a2"])
+    assert reported.completed_stop_ids == ["a1", "lunch"]
+    assert reported.skipped_stop_ids == ["a2"]
 
 
 def test_progress_is_logged_per_guest_so_the_party_is_required(deps):
