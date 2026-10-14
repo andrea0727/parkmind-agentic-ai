@@ -1,5 +1,5 @@
 """
-Initial planning graph (P0-30).
+Initial planning graph.
 
 Workflow::
 
@@ -8,7 +8,7 @@ Workflow::
            +-> EXPLAIN -> PROPOSE -> APPROVAL                                 (check passed)
            +-> NO VALID PLAN -> END, nothing explained or proposed            (check failed)
 
-The elicitation graph (P0-29) is reused as is; the planning chain is its
+The elicitation graph is reused as is; the planning chain is its
 ``downstream`` stage, compiled as a subgraph that shares ``ParkMindState`` and the
 parent's checkpointer. Context is loaded before the group is resolved [C23].
 
@@ -76,9 +76,11 @@ from parkmind.config.tracing import tracing_guard
 from parkmind.core.contracts import (
     PARK_TZ,
     ApprovalStatus,
+    GuestRole,
     PartyConstraints,
     Plan,
     RejectionReason,
+    RuleId,
     StopKind,
 )
 from parkmind.core.language import DEFAULT_LANGUAGE, text
@@ -378,6 +380,8 @@ def _no_valid_plan(state: ParkMindState) -> Command[Any]:
     lang = language_of(state)
     lines = [text("no_valid_plan", lang)]
     lines += reasons
+    if check is not None and any(v.rule is RuleId.SHOW_ARRIVAL for v in check.violations):
+        lines.append(text("shows_not_plannable", lang))
     lines.append(text("relax_hint", lang, solo=solo_of(state)))
     return Command(
         update={
@@ -391,7 +395,7 @@ def _no_valid_plan(state: ParkMindState) -> Command[Any]:
 def _make_explain_node(
     deps_factory: DepsFactory, narrator: PlanNarrator | None
 ) -> StateNode:
-    """EXPLAIN (section 40, P0-31): the narrator's grounded text, else the template."""
+    """EXPLAIN: the narrator's grounded text, else the template."""
     use_case = ExplainPlanUseCase(deps_factory)
 
     def explain(state: ParkMindState) -> dict[str, Any]:
@@ -528,6 +532,10 @@ def _attraction_ids(plan: Plan) -> list[str]:
     ]
 
 
+def _has_adult(constraints: PartyConstraints) -> bool:
+    return any(guest.role is GuestRole.ADULT for guest in constraints.guests)
+
+
 def _interrupt_for_approval(
     state: ParkMindState,
     *,
@@ -552,7 +560,7 @@ def _interrupt_for_approval(
     the checker like any plan. If no valid plan fits the edit, the plan before it is
     checked again and re-offered (``before_edit_update``).
 
-    A proposal superseded while the guests were deciding (P0-33) is not decided:
+    A proposal superseded while the guests were deciding is not decided:
     the guests are told and asked to request a new plan, the candidate and the
     proposal are dropped and ``current_plan`` is kept.
     """
@@ -573,12 +581,16 @@ def _interrupt_for_approval(
         if not isinstance(parsed, str):
             status, given_reason, edit = parsed
             if edit is None:
-                break
-            edited = _apply_edit(state, plan, edit, deps_factory)
-            if not isinstance(edited, str):
-                applied = edited
-                break
-            parsed = edited
+                if status is ApprovalStatus.APPROVED and not _has_adult(constraints):
+                    parsed = text("approval_needs_adult", language_of(state))
+                else:
+                    break
+            else:
+                edited = _apply_edit(state, plan, edit, deps_factory)
+                if not isinstance(edited, str):
+                    applied = edited
+                    break
+                parsed = edited
         payload = {**payload, "error": parsed}
     rejection_reason: RejectionReason | None = None
     if status is ApprovalStatus.REJECTED:

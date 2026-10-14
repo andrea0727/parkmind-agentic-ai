@@ -31,6 +31,7 @@ class CatalogUnavailableError(PlanningUnavailableError):
 class ResolvedAttraction:
     node_id: str
     name: str
+    height_restriction_cm: int | None = None
 
 
 @dataclass(frozen=True)
@@ -94,7 +95,11 @@ class AttractionNameResolver:
         for name in distinct:
             matches = _match(name, catalog)
             if len(matches) == 1:
-                resolved[name] = ResolvedAttraction(matches[0].node_id, matches[0].name)
+                resolved[name] = ResolvedAttraction(
+                    matches[0].node_id,
+                    matches[0].name,
+                    matches[0].height_restriction_cm,
+                )
             elif matches:
                 ambiguous[name] = tuple(sorted(a.name for a in matches))
             else:

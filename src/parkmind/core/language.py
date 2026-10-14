@@ -115,6 +115,62 @@ _CATALOG: dict[str, dict[Language, str]] = {
             "¿Cuánto mides, en cm (entre 50 y 250)?"
         ),
     },
+    "q_height_needed": {
+        "en": (
+            "Some of the rides you want have a minimum height: {rides}. "
+            "How tall is each guest, in cm (between 50 and 250)?"
+        ),
+        "es": (
+            "Algunas de las atracciones que quieren tienen una estatura mínima: {rides}. "
+            "¿Cuánto mide cada persona, en cm (entre 50 y 250)?"
+        ),
+    },
+    "q_height_needed_solo": {
+        "en": (
+            "Some of the rides you want have a minimum height: {rides}. "
+            "How tall are you, in cm (between 50 and 250)?"
+        ),
+        "es": (
+            "Algunas de las atracciones que quieres tienen una estatura mínima: {rides}. "
+            "¿Cuánto mides, en cm (entre 50 y 250)?"
+        ),
+    },
+    "height_minimum": {
+        "en": "{name} (minimum {cm} cm)",
+        "es": "{name} (mínimo {cm} cm)",
+    },
+    "q_party_too_large": {
+        "en": (
+            "That is a big group: {size} people. I can plan for up to {max} people at once, "
+            "so everyone's needs are covered. Could you tell me about a smaller group, "
+            "or split yours into groups of up to {max}?"
+        ),
+        "es": (
+            "Es un grupo muy grande: {size} personas. Puedo planear para un máximo de {max} "
+            "personas a la vez, para cubrir las necesidades de todos. ¿Pueden contarme de un "
+            "grupo más pequeño, o dividir el suyo en grupos de hasta {max}?"
+        ),
+    },
+    "approval_needs_adult": {
+        "en": (
+            "This plan can't be approved: the group has no adult. "
+            "A responsible adult has to be part of the group before a plan is approved."
+        ),
+        "es": (
+            "Este plan no se puede aprobar: el grupo no tiene ningún adulto. "
+            "Debe haber un adulto responsable en el grupo antes de aprobar un plan."
+        ),
+    },
+    "shows_not_plannable": {
+        "en": (
+            "Parades and fireworks run at fixed showtimes, so they can't be planned as "
+            "stops. Plan your rides without them and watch the show when it starts."
+        ),
+        "es": (
+            "Los desfiles y los fuegos artificiales tienen horario fijo, así que no se pueden "
+            "planear como paradas. Planeen sus atracciones sin ellos y vean el show cuando empiece."
+        ),
+    },
     "q_unverified_departure": {
         "en": (
             "I couldn't match the departure time I understood to what you wrote. "

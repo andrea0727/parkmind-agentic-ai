@@ -82,9 +82,11 @@ __all__ = [
     "build_party_constraints",
     "conflicting_names",
     "extract_with_recovery",
+    "heights_needed",
     "human_texts",
     "make_elicit_node",
     "missing_information",
+    "oversized_party",
     "pending_confirmations",
     "ungrounded_heights",
     "ungrounded_times",
@@ -275,6 +277,8 @@ _UNKNOWN_ATTRACTION = "unknown_attraction:"
 _AMBIGUOUS_ATTRACTION = "ambiguous_attraction:"
 _CONFLICTING_ATTRACTION = "conflicting_attraction:"
 _UNVERIFIED_HEIGHT = "height_unverified:"
+_HEIGHT_NEEDED = "height_needed:"
+_PARTY_TOO_LARGE = "party_too_large:"
 _UNVERIFIED_DEPARTURE = "departure_unverified"
 _UNVERIFIED_LUNCH = "lunch_window_unverified"
 _UNVERIFIED_WALKING_BUDGET = "walking_budget_unverified"
@@ -370,6 +374,32 @@ def unresolved_names(resolution: NameResolution) -> list[str]:
     ]
 
 
+def oversized_party(extraction: ElicitationExtraction) -> list[str]:
+    """``party_too_large:<size>`` when the party is over ``settings.MAX_PARTY_SIZE``, else nothing."""
+    size = max(extraction.party_size or 0, len(extraction.guests))
+    return [f"{_PARTY_TOO_LARGE}{size}"] if size > settings.MAX_PARTY_SIZE else []
+
+
+def heights_needed(
+    extraction: ElicitationExtraction, resolution: NameResolution
+) -> list[str]:
+    """Missing-information keys for must-do rides with a minimum height while a guest's height is unknown.
+
+    Only asked about must-dos: the checker fails closed for a guest without a
+    height, so a must-do ride they might not clear would leave no valid plan.
+    Avoided rides are never planned, so their height limit is irrelevant.
+    """
+    if not any(guest.height_cm is None for guest in extraction.guests):
+        return []
+    restricted = dict.fromkeys(
+        resolution.resolved[name].name
+        for name in extraction.must_do
+        if name in resolution.resolved
+        and resolution.resolved[name].height_restriction_cm is not None
+    )
+    return [f"{_HEIGHT_NEEDED}{name}" for name in restricted]
+
+
 def conflicting_names(
     extraction: ElicitationExtraction, resolution: NameResolution
 ) -> list[str]:
@@ -407,8 +437,41 @@ def _question_for(
         label = labels[index] if 0 <= index < len(labels) else None
         return guest_ref(lang, number, label, start=start)
 
+    minimum_by_name = (
+        {
+            r.name: r.height_restriction_cm
+            for r in resolution.resolved.values()
+            if r.height_restriction_cm is not None
+        }
+        if resolution is not None
+        else {}
+    )
+    height_question_added = False
     for key in missing:
-        if key.startswith("guest_role:"):
+        if key.startswith(_HEIGHT_NEEDED):
+            if height_question_added:
+                continue
+            height_question_added = True
+            rides = ", ".join(
+                text("height_minimum", lang, name=name, cm=minimum_by_name[name])
+                for name in (
+                    k.removeprefix(_HEIGHT_NEEDED)
+                    for k in missing
+                    if k.startswith(_HEIGHT_NEEDED)
+                )
+                if name in minimum_by_name
+            )
+            questions.append(text("q_height_needed", lang, solo=solo, rides=rides))
+        elif key.startswith(_PARTY_TOO_LARGE):
+            questions.append(
+                text(
+                    "q_party_too_large",
+                    lang,
+                    size=key.removeprefix(_PARTY_TOO_LARGE),
+                    max=settings.MAX_PARTY_SIZE,
+                )
+            )
+        elif key.startswith("guest_role:"):
             if solo:
                 questions.append(text("q_guest_role_solo", lang))
             else:
@@ -642,6 +705,19 @@ def _asked_for_departure(state: ParkMindState) -> bool:
     )
 
 
+def _asked_for_heights(state: ParkMindState) -> bool:
+    """Heights are asked once: a guest who does not answer is left to the checker, which fails closed."""
+    return any(
+        getattr(m, "type", None) == "ai"
+        and any(
+            str(key).startswith(_HEIGHT_NEEDED)
+            for key in getattr(m, "additional_kwargs", {}).get("missing_information")
+            or ()
+        )
+        for m in state.get("messages", [])
+    )
+
+
 def _with_clock_answer(
     outcome: ExtractionOutcome, state: ParkMindState, answer: str
 ) -> ExtractionOutcome:
@@ -723,6 +799,8 @@ def make_elicit_node(
         resolution = NameResolution()
         if outcome.extraction is None:
             missing = ["unreadable_response"]
+        elif oversized := oversized_party(outcome.extraction):
+            missing = oversized
         else:
             try:
                 resolution = names.resolve(
@@ -737,6 +815,11 @@ def make_elicit_node(
                 + ungrounded_times(outcome.extraction, texts, clock_answer=clock_answer)
                 + unresolved_names(resolution)
                 + conflicting_names(outcome.extraction, resolution)
+                + (
+                    []
+                    if _asked_for_heights(state)
+                    else heights_needed(outcome.extraction, resolution)
+                )
             )
         if outcome.extraction is None or missing:
             return {

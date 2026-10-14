@@ -1,5 +1,5 @@
 """
-End-to-end initial planning graph (P0-30), with every port faked: no Postgres, no
+End-to-end initial planning graph, with every port faked: no Postgres, no
 network, no MCP server.
 
 natural language -> confirm hard constraints -> LOAD CONTEXT -> RESOLVE GROUP ->
@@ -246,7 +246,7 @@ def test_stages_run_in_order_and_explain_follows_check(monkeypatch):
 
 
 def test_approving_a_proposal_superseded_meanwhile_activates_nothing(monkeypatch):
-    """A significant event supersedes the proposal while the guests decide (P0-33)."""
+    """A significant event supersedes the proposal while the guests decide."""
     h = _Harness(monkeypatch)
     h.confirm()
     pending = h.state()
@@ -722,7 +722,7 @@ def test_an_edit_that_does_not_fit_asks_again_and_changes_nothing(monkeypatch, e
     assert h.deps.guests.list_all() == []
 
 
-# --- EXPLAIN through the grounded narrator (P0-31) ------------------------------------
+# --- EXPLAIN through the grounded narrator ------------------------------------
 
 
 def test_a_grounded_narration_is_what_the_guests_read(monkeypatch):
@@ -1082,3 +1082,84 @@ def test_the_plan_records_which_elicit_prompt_read_the_constraints(monkeypatch):
         h.state()["candidate_plan"].provenance.prompt_versions["elicit"]
         == ipg.ELICIT_PROMPT_VERSION
     )
+
+
+def _fail_check_with(monkeypatch: pytest.MonkeyPatch, rule: RuleId, message: str) -> None:
+    result = CheckResult(
+        valid=False, violations=[ConstraintViolation(rule=rule, message=message)]
+    )
+    monkeypatch.setattr(ipg.CheckPlanUseCase, "execute", lambda *a, **k: result)
+
+
+def test_an_empty_plan_for_a_show_must_do_explains_that_shows_have_fixed_showtimes(
+    monkeypatch,
+):
+    _fail_check_with(
+        monkeypatch,
+        RuleId.SHOW_ARRIVAL,
+        "No scheduled showtime for id-parade within the stop window",
+    )
+    h = _Harness(monkeypatch)
+
+    result = h.confirm()
+
+    message = h.state()["messages"][-1].content
+    assert "__interrupt__" not in result
+    assert "No scheduled showtime for id-parade" in message
+    assert "fixed showtimes" in message
+    assert "can't be planned as stops" in message
+    assert h.state().get("proposal") is None
+
+
+def test_the_show_explanation_is_only_given_for_show_violations(monkeypatch):
+    _fail_check_with(monkeypatch, RuleId.MUST_DO, "nothing fits")
+    h = _Harness(monkeypatch)
+
+    h.confirm()
+
+    assert "fixed showtimes" not in h.state()["messages"][-1].content
+
+
+def _only_children() -> dict[str, Any]:
+    extraction = dict(COMPLETE["extraction"])
+    extraction["guests"] = [{"role": "child"} for _ in extraction["guests"]]
+    extraction["accessibility"] = []
+    return extraction
+
+
+def test_a_plan_for_a_group_without_an_adult_cannot_be_approved(monkeypatch):
+    h = _Harness(monkeypatch, extraction=_only_children())
+    h.confirm()
+
+    again = h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
+
+    payload = again["__interrupt__"][0].value
+    assert payload["kind"] == "plan_approval"
+    assert "no adult" in payload["error"]
+    assert not any(e.startswith("resolve:") for e in h.events)
+    assert [p.approval_status.value for p in h.proposals] == ["PENDING"]
+    assert h.deps.plans.get_active("t1") is None
+
+
+def test_a_group_without_an_adult_can_still_reject_its_plan(monkeypatch):
+    h = _Harness(monkeypatch, extraction=_only_children())
+    h.confirm()
+
+    h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
+    h.graph.invoke(
+        Command(resume={"decision": "REJECTED", "rejection_reason": "OTHER"}),
+        config=CONFIG,
+    )
+
+    assert h.state()["approval"] == "REJECTED"
+    assert h.deps.plans.get_active("t1") is None
+
+
+def test_a_group_with_an_adult_is_not_blocked_from_approving(monkeypatch):
+    h = _Harness(monkeypatch)
+    h.confirm()
+
+    final = h.graph.invoke(Command(resume={"decision": "APPROVED"}), config=CONFIG)
+
+    assert "__interrupt__" not in final
+    assert h.deps.plans.get_active("t1") is not None

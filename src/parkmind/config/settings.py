@@ -23,6 +23,7 @@ class Settings:
     # G12: LLM calls (retries included) one thread may make; past it the agents use
     # their deterministic path (elicit asks again, explain writes the template).
     LLM_CALLS_PER_THREAD = max(1, int(os.getenv("PARKMIND_LLM_CALLS_PER_THREAD", "40")))
+    MAX_PARTY_SIZE = max(1, int(os.getenv("PARKMIND_MAX_PARTY_SIZE", "10")))
     DATABASE_URL = os.getenv(
         "DATABASE_URL", "postgresql://parkmind:parkmind@localhost:5432/parkmind"
     )
@@ -32,11 +33,11 @@ class Settings:
     OPEN_METEO_BASE_URL = os.getenv(
         "OPEN_METEO_BASE_URL", "https://api.open-meteo.com/v1"
     )
-    # LOAD CONTEXT transport (P0-24): "in_process" (the direct snapshot path) or
+    # LOAD CONTEXT transport: "in_process" (the direct snapshot path) or
     # "mcp" (data.*/knowledge.* through parkmind-mcp at MCP_URL, in-process fallback).
     CONTEXT_TRANSPORT = os.getenv("PARKMIND_CONTEXT_TRANSPORT", "in_process")
     MCP_URL = os.getenv("PARKMIND_MCP_URL", "http://127.0.0.1:8765/mcp")
-    # Knowledge store (P0-26): "pgvector" (semantic) or "in_memory" (keyword only).
+    # Knowledge store: "pgvector" (semantic) or "in_memory" (keyword only).
     KNOWLEDGE_BACKEND = os.getenv("PARKMIND_KNOWLEDGE_BACKEND", "pgvector")
     EMBEDDING_MODEL = os.getenv(
         "PARKMIND_EMBEDDING_MODEL",
