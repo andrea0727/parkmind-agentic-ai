@@ -107,3 +107,15 @@ def test_an_edit_carries_ids_only():
     """No times, waits or walks: the planner computes those, never the guests."""
     with pytest.raises(ValidationError):
         PlanEdit.model_validate({"remove": ["id-tron"], "stops": [{"wait": 0}]})
+
+
+def test_an_edit_cannot_carry_a_height_and_keeps_the_guests_as_confirmed(use_case):
+    with pytest.raises(ValidationError):
+        PlanEdit.model_validate({"add": ["id-teacups"], "height_cm": 150})
+
+    short = factories.guest(guest_id="g1", height_cm=95)
+    constraints = factories.party_constraints(guests=[short])
+
+    applied = use_case.execute(constraints, PLAN, PlanEdit(add=["id-teacups"]))
+
+    assert applied.constraints.guests == [short]

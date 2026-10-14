@@ -739,3 +739,89 @@ def test_high_preference_score_cannot_override_a_hard_restriction():
 
     assert result.valid is False
     assert any(v.rule == RuleId.RIDE_RESTRICTION for v in result.violations)
+
+
+def test_stop_starting_before_now_is_a_violation():
+    checker = ConstraintChecker()
+    late = NOW + timedelta(hours=2)
+    result = _check(checker, now=late)
+    assert any(
+        v.rule == RuleId.OPENING_HOURS and "before the current time" in v.message
+        for v in result.violations
+    )
+
+
+def test_departure_time_already_passed_is_a_violation_even_for_an_empty_plan():
+    checker = ConstraintChecker()
+    constraints = party_constraints(departure_time=NOW - timedelta(hours=1))
+    result = _check(checker, plan_=plan(stops=[]), constraints=constraints)
+    assert any(
+        v.rule == RuleId.DEPARTURE and "already passed" in v.message
+        for v in result.violations
+    )
+
+
+def _height_violations(result):
+    return [v for v in result.violations if v.rule == RuleId.HEIGHT]
+
+
+def _restricted(limit=112):
+    return {"a1": attraction(height_restriction_cm=limit)}
+
+
+def test_unknown_height_blocks_only_the_guest_who_is_served():
+    unknown = guest(guest_id="g2", height_cm=None)
+    constraints = party_constraints(party_size=2, guests=[guest(height_cm=175), unknown])
+
+    served = _check(
+        ConstraintChecker(),
+        plan_=plan(stops=[stop(served_guests=["g1", "g2"])]),
+        constraints=constraints,
+        attractions=_restricted(),
+    )
+    excluded = _check(
+        ConstraintChecker(),
+        plan_=plan(stops=[stop(served_guests=["g1"])]),
+        constraints=constraints,
+        attractions=_restricted(),
+    )
+
+    assert "Guest g2 height unknown" in _height_violations(served)[0].message
+    assert _height_violations(excluded) == []
+
+
+def test_empty_served_guests_means_the_whole_party_for_the_height_rule():
+    constraints = party_constraints(
+        party_size=2, guests=[guest(height_cm=175), guest(guest_id="g2", height_cm=90)]
+    )
+
+    result = _check(
+        ConstraintChecker(),
+        plan_=plan(stops=[stop(served_guests=[])]),
+        constraints=constraints,
+        attractions=_restricted(),
+    )
+
+    assert [v.message for v in _height_violations(result)] == [
+        "Guest g2 does not meet the height requirement for stop a1"
+    ]
+
+
+def test_a_served_guest_who_is_not_in_the_party_fails_closed():
+    result = _check(
+        ConstraintChecker(),
+        plan_=plan(stops=[stop(served_guests=["ghost"])]),
+        attractions=_restricted(),
+    )
+
+    assert "Guest ghost height unknown" in _height_violations(result)[0].message
+
+
+def test_an_unrestricted_attraction_ignores_unknown_height():
+    result = _check(
+        ConstraintChecker(),
+        constraints=party_constraints(guests=[guest(height_cm=None)]),
+        attractions=_restricted(limit=None),
+    )
+
+    assert _height_violations(result) == []

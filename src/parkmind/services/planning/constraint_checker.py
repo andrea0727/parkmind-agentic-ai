@@ -81,14 +81,14 @@ class ConstraintChecker:
 
         violations: list[ConstraintViolation] = []
         violations += self._check_data_freshness(live_context, now)
-        violations += self._check_opening_hours(plan, park, live_context)
+        violations += self._check_opening_hours(plan, park, live_context, now)
         violations += self._check_height(plan, constraints, attractions, all_guest_ids)
         violations += self._check_show_arrival(plan, live_context)
         violations += self._check_must_do(plan, constraints, live_context)
         violations += self._check_avoid(plan, constraints)
         violations += self._check_walking_budget(plan, constraints, walking_done_minutes)
         violations += self._check_lunch_window(plan, constraints)
-        violations += self._check_departure(plan, constraints)
+        violations += self._check_departure(plan, constraints, now)
         violations += self._check_accessibility(
             plan,
             accessibility_by_guest,
@@ -199,10 +199,19 @@ class ConstraintChecker:
         ]
 
     def _check_opening_hours(
-        self, plan: Plan, park: Park, live_context: LiveContext
+        self, plan: Plan, park: Park, live_context: LiveContext, now: datetime
     ) -> list[ConstraintViolation]:
         violations = []
         for stop in plan.stops:
+            if stop.arrival_time < now:
+                violations.append(
+                    ConstraintViolation(
+                        rule=RuleId.OPENING_HOURS,
+                        message=f"Stop {stop.node_id} starts before the current time",
+                        stop_id=stop.node_id,
+                        suggestion=f"Reschedule stop {stop.node_id} from now onwards or remove it.",
+                    )
+                )
             if (
                 stop.arrival_time < park.opening_time
                 or stop.departure_time > park.closing_time
@@ -429,8 +438,16 @@ class ConstraintChecker:
         ]
 
     def _check_departure(
-        self, plan: Plan, constraints: PartyConstraints
+        self, plan: Plan, constraints: PartyConstraints, now: datetime
     ) -> list[ConstraintViolation]:
+        if constraints.departure_time <= now:
+            return [
+                ConstraintViolation(
+                    rule=RuleId.DEPARTURE,
+                    message="The party's departure time has already passed",
+                    suggestion="Ask the guests for a departure time later than now.",
+                )
+            ]
         if not plan.stops:
             return []
         last_departure = max(stop.departure_time for stop in plan.stops)
