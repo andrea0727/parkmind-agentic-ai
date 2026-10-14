@@ -34,8 +34,9 @@ def tracing_guard(environ: Mapping[str, str] | None = None) -> None:
         name for name in TRACING_SWITCHES if env.get(name, "").strip().lower() == "true"
     ]
     if switched_on:
+        pronoun = "it" if len(switched_on) == 1 else "them"
         raise UnmaskedTracingError(
             f"{', '.join(switched_on)} would send the guests' raw messages to LangSmith "
-            "unmasked [C19]. Set it to false: tracing waits for P1-18's masking "
+            f"unmasked [C19]. Set {pronoun} to false: tracing waits for P1-18's masking "
             "(docs/decisions/0003-observability-langsmith-vs-langfuse.md)."
         )

@@ -73,6 +73,7 @@ from parkmind.agents.explain_agent import (
     PlanNarrator,
     explain_grounded,
 )
+from parkmind.config.tracing import tracing_guard
 from parkmind.core.contracts import (
     PARK_TZ,
     ApprovalStatus,
@@ -629,8 +630,10 @@ def build_planning_stage(
 
     Built on its own, the stage's EXPLAIN uses the template unless a ``narrator`` is
     given; ``build_initial_planning_graph``, the graph the app runs, passes Claude by
-    default.
+    default. Refuses to build with tracing switched on (``tracing_guard``), like
+    every graph builder.
     """
+    tracing_guard()
     graph = StateGraph(ParkMindState)
 
     def propose_plan(state: ParkMindState) -> ParkMindState:

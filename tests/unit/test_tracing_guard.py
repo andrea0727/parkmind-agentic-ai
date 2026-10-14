@@ -10,7 +10,10 @@ from parkmind.config.tracing import (
     tracing_guard,
 )
 from parkmind.graph.elicitation_graph import build_elicitation_graph
-from parkmind.graph.initial_planning_graph import build_initial_planning_graph
+from parkmind.graph.initial_planning_graph import (
+    build_initial_planning_graph,
+    build_planning_stage,
+)
 from parkmind.graph.replanning_graph import build_replanning_graph
 
 
@@ -33,6 +36,38 @@ def test_tracing_switched_off_or_unset_is_allowed(value):
     tracing_guard({})
 
 
+def test_the_error_names_every_switch_that_is_on():
+    with pytest.raises(UnmaskedTracingError) as raised:
+        tracing_guard({"LANGSMITH_TRACING": "true", "LANGCHAIN_TRACING_V2": "true"})
+
+    message = str(raised.value)
+    assert "LANGSMITH_TRACING, LANGCHAIN_TRACING_V2" in message
+    assert "Set them to false" in message
+
+
+@pytest.mark.parametrize("name", TRACING_SWITCHES)
+@pytest.mark.parametrize(
+    "value", ["true", "True", "TRUE", " true", "1", "yes", "on", "t", "y", "enabled"]
+)
+def test_the_guard_refuses_whatever_the_installed_langsmith_would_trace_with(
+    monkeypatch, name, value
+):
+    """If a langsmith upgrade starts tracing on "1" or "yes", this fails until the
+    guard follows: the guard must never be narrower than langsmith itself."""
+    from langsmith import utils as ls_utils
+
+    monkeypatch.setenv(name, value)
+    ls_utils.get_env_var.cache_clear()
+    try:
+        traces = ls_utils.tracing_is_enabled() is True
+    finally:
+        ls_utils.get_env_var.cache_clear()
+
+    if traces:
+        with pytest.raises(UnmaskedTracingError):
+            tracing_guard({name: value})
+
+
 def test_langfuse_keys_alone_are_allowed():
     """Langfuse traces only through an explicit callback handler, which nothing installs."""
     tracing_guard({"LANGFUSE_PUBLIC_KEY": "pk", "LANGFUSE_SECRET_KEY": "sk"})
@@ -46,8 +81,9 @@ def test_langfuse_keys_alone_are_allowed():
             checkpointer=MemorySaver(), names=make_names()
         ),
         lambda: build_replanning_graph(MemorySaver()),
+        build_planning_stage,
     ],
-    ids=["elicitation", "initial_planning", "replanning"],
+    ids=["elicitation", "initial_planning", "replanning", "planning_stage"],
 )
 @pytest.mark.parametrize("switch", ["LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2"])
 def test_no_graph_is_built_while_tracing_would_ship_raw_guest_turns(
