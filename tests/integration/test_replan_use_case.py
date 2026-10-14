@@ -142,7 +142,11 @@ def _propose_replan(r: _Replanning, plan: Any) -> None:
 
 def _approve_replan(r: _Replanning, plan: Any) -> None:
     ResolveProposalUseCase(factory_for(r.deps)).execute(
-        "t1", f"prop_{plan.plan_id}", ApprovalStatus.APPROVED, at=NOW
+        "t1",
+        f"prop_{plan.plan_id}",
+        ApprovalStatus.APPROVED,
+        at=NOW,
+        guests=r.h.state()["constraints"].guests,
     )
 
 

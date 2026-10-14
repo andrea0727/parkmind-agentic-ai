@@ -440,8 +440,57 @@ LOAD PLAN → HANDLE EVENTS (dedup · apply execution updates · EventPolicy)
   requirements from the SessionStore.
 - **Known limits.** After a replan finds no valid plan the events stay recorded, so a
   duplicate report does not retry it (a new event does). REJECT's "update
-  preferences" step is not implemented (the reason is stored on the proposal); EDIT
-  is P0-32. An in-progress stop is treated as still ahead.
+  preferences" step is not implemented (the reason is stored on the proposal and in
+  the behavior log; P1-03). An in-progress stop is treated as still ahead.
+
+### Human approval: approve / edit / reject (P0-32)
+
+Both planning graphs pause at the same approval interrupt
+(`"kind": "plan_approval"`). Resume it with one of:
+
+```python
+{"decision": "APPROVED"}
+{"decision": "REJECTED", "rejection_reason": "TOO_MUCH_WALKING"}   # reason optional (OTHER)
+{"decision": "EDITED", "edit": {"remove": ["<stop node id>"], "add": ["<attraction node id>"]}}
+```
+
+The reason is read only with `REJECTED`, and an `edit` is only accepted with
+`EDITED`. Resume by interrupt id (`Command(resume={interrupt.id: value})`): if a run
+fails after the answer was taken (missing park data, say), LangGraph keeps the
+answer and `invoke(None, config)` retries with it. Inside the planning subgraph, a
+plain resume value kept that way would also answer the *next* interrupt.
+
+- **Approve** activates the candidate through `PlanRepository.activate`, which
+  atomically requires an `APPROVED` proposal. **Reject** stores the reason category
+  and keeps the current plan (if any).
+- **Edit is never a plan.** The guests say which stops to drop and which
+  attractions to add, nothing else (no times or waits). `ApplyEditUseCase`
+  turns that into the party's constraints, with the dropped stops avoided and the
+  added attractions as must-dos (`constraints_version` + 1). The edited proposal is
+  marked `EDITED` and never activates anything. Planning then starts again at LOAD
+  CONTEXT, so the new candidate is built (or replanned) from fresh data, checked,
+  explained and proposed as a new `PENDING` proposal. An edit that does not fit the
+  plan (unknown id, a meal stop, a stop already done…) is answered with the same
+  interrupt plus an `"error"`, and nothing changes.
+- **An edit that cannot be planned gives back what the guests had.** If no valid
+  plan fits the edit (for example an open attraction added when the day has no
+  room left), the guests are told why, and the plan before the edit, with the
+  constraints before it, is checked again on the fresh data and proposed anew, under
+  a new plan id (it is explained again, and a stored plan body never changes). If it
+  no longer passes either, nothing is proposed, as after any failed check. An
+  attraction that is down is not a failed edit: it is planned as an unmet must-do
+  ("could not fit today").
+- **Known limit: missing park data while an edit is re-planned.** The run ends with
+  the usual "planning unavailable" message and nothing is re-offered: the edited
+  proposal is already `EDITED`, and the constraints keep the edit, so the next
+  attempt plans with it.
+- **Behavior log.** Every decision writes one `BehaviorEntry` per guest, in the
+  same transaction (§23). The log is keyed by guest, and `g1`, `g2` are only unique
+  within a party, so each guest is registered as `"{thread_id}:{guest_id}"`, with
+  its role only (no height). A superseded proposal logs nothing, and a decision
+  applied twice is logged once (`entry_id` is the proposal and the decision). A
+  decision without the party's guests is refused. An edit's `attraction_ids` mixes
+  what was removed and what was added; the direction is a P1-01 follow-up (#51).
 
 ### Explanations (P0-31)
 
@@ -565,7 +614,7 @@ All four of the above run on every pull request via `.github/workflows/ci.yml` (
 |---|---|---|
 | **LangGraph State v2** | ✅ Done | Typed ParkMindState, state helpers, message reducer |
 | **Preference Resolution** | ✅ Done | Weighted aggregation from GuestProfile (queue, walking, categories) |
-| **Plan Synthesis** | ✅ Initial planning graph [P0-30] | ELICIT → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED. Runs on in-process use cases, no MCP server. EDITED approvals [P0-32] are a follow-up. |
+| **Plan Synthesis** | ✅ Initial planning graph [P0-30] | ELICIT → CONFIRM → LOAD CONTEXT → RESOLVE GROUP → BUILD PLAN → CHECK → EXPLAIN → PROPOSE → APPROVAL. A candidate is proposed (and explained) only after it passes the ConstraintChecker; it is activated only when the human approval interrupt resumes with APPROVED. Runs on in-process use cases, no MCP server. APPROVE / EDIT / REJECT [P0-32]: an edit is re-planned, re-checked and proposed again. |
 | **Explanations** | ✅ P0-31 | Claude explains the validated plan from a payload only (plan, diff, provenance, stated/learned preference weights); every numeral is checked against the payload, one retry, then the deterministic template. |
 | **Event monitor** | ✅ P0-33 | Snapshot-to-event detector with per-reading freshness, `EventPolicy` (§25 table, confirmation gate, fatigue walking cap), cross-source dedup, supersede on significant events, `scripts/run_monitor.py`. Consumed by the replanning graph [P0-34]. |
 | **MCP capability boundary** | ✅ P0-24..P0-27 | `parkmind-mcp`: 15 typed tools (`data.*`, `knowledge.*` with pgvector semantic search, `planner.*`); LOAD CONTEXT can read through it with in-process fallback. `planner.replan` takes the plan, its progress and the events inline (§31), so a client without a stored plan can replan. |

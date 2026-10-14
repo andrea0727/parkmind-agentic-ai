@@ -12,8 +12,11 @@ from typing import Any
 
 from parkmind.core.contracts import (
     ApprovalStatus,
+    BehaviorEntry,
+    BehaviorLog,
     DataSource,
     Event,
+    Guest,
     LiveContext,
     Plan,
     PlanExecutionState,
@@ -29,6 +32,41 @@ from parkmind.services.ports import (
     PlanImmutableError,
     SnapshotMeta,
 )
+
+
+class InMemoryGuestRepository:
+    def __init__(self) -> None:
+        self.rows: dict[str, Guest] = {}
+
+    def save(self, guest: Guest) -> None:
+        self.rows[guest.guest_id] = guest
+
+    def get(self, guest_id: str) -> Guest | None:
+        return self.rows.get(guest_id)
+
+    def list_all(self) -> list[Guest]:
+        return [self.rows[guest_id] for guest_id in sorted(self.rows)]
+
+
+class InMemoryBehaviorLogRepository:
+    """Like the table: a guest must exist (the foreign key), ``entry_id`` is idempotent."""
+
+    def __init__(self, guests: InMemoryGuestRepository) -> None:
+        self._guests = guests
+        self.rows: dict[str, list[BehaviorEntry]] = {}
+
+    def append(self, guest_id: str, entry: BehaviorEntry) -> bool:
+        if self._guests.get(guest_id) is None:
+            raise NotFoundError(f"guest {guest_id} not found")
+        entries = self.rows.setdefault(guest_id, [])
+        if any(e.entry_id == entry.entry_id for e in entries):
+            return False
+        entries.append(entry)
+        return True
+
+    def get(self, guest_id: str) -> BehaviorLog:
+        entries = sorted(self.rows.get(guest_id, []), key=lambda e: (e.timestamp, e.entry_id))
+        return BehaviorLog(guest_id=guest_id, entries=entries)
 
 
 class InMemoryIdMappingRepository:

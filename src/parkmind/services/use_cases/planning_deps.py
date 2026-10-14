@@ -24,8 +24,10 @@ from parkmind.services.clients.knowledge import magic_kingdom_knowledge_store
 from parkmind.services.clients.open_meteo_client import OpenMeteoClient
 from parkmind.services.clients.postgres import (
     PostgresAttractionRepository,
+    PostgresBehaviorLogRepository,
     PostgresEventRepository,
     PostgresExecutionStateRepository,
+    PostgresGuestRepository,
     PostgresIdMappingRepository,
     PostgresPlanRepository,
     PostgresProposalRepository,
@@ -38,8 +40,10 @@ from parkmind.services.clients.themeparks_client import ThemeParksClient
 from parkmind.services.clients.themeparks_errors import ThemeParksClientError
 from parkmind.services.ports import (
     AttractionRepository,
+    BehaviorLogRepository,
     EventRepository,
     ExecutionStateRepository,
+    GuestRepository,
     IdMappingRepository,
     KnowledgeStore,
     PlanRepository,
@@ -95,6 +99,9 @@ class PlanningDeps:
     proposals: ProposalRepository
     events: EventRepository
     execution_states: ExecutionStateRepository
+    guests: GuestRepository
+    """Where a decision registers the party's guests (``party_guest_id``) for the behavior log."""
+    behavior: BehaviorLogRepository
     collector: SnapshotCollecting | None = None
     """``None`` plans from the latest stored snapshot only (no provider call)."""
     transaction: Callable[[], AbstractContextManager[Any]] = field(default=nullcontext)
@@ -126,6 +133,8 @@ def default_planning_deps(database_url: str | None = None) -> Iterator[PlanningD
             proposals=PostgresProposalRepository(conn),
             events=PostgresEventRepository(conn),
             execution_states=PostgresExecutionStateRepository(conn),
+            guests=PostgresGuestRepository(conn),
+            behavior=PostgresBehaviorLogRepository(conn),
             collector=SnapshotCollector(parks, weather, snapshots, id_mappings),
             transaction=lambda: conn.transaction(),
             park_data=parks,
