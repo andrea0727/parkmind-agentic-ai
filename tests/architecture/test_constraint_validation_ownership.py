@@ -66,25 +66,36 @@ def _top_level_functions(module: ast.Module) -> list[ast.FunctionDef]:
     return [node for node in module.body if isinstance(node, ast.FunctionDef)]
 
 
+def _scan(module: ast.Module, filename: str) -> tuple[list[str], bool]:
+    """The writes of the key that are not ``False`` outside the owner, and whether the
+    owner (when ``filename`` is its file) sets it to something other than ``False``."""
+    offenders: list[str] = []
+    owner_sets_true = False
+    aliases = _aliases(module)
+    for func in _top_level_functions(module):
+        for line, value in _writes(func, aliases):
+            if (filename, func.name) == OWNER:
+                owner_sets_true = owner_sets_true or not _is_false(value)
+            elif not _is_false(value):
+                offenders.append(f"{filename}:{line} ({func.name})")
+    outside = [n for n in module.body if not isinstance(n, ast.FunctionDef)]
+    for node in outside:
+        for line, value in _writes(node, aliases):
+            if not _is_false(value):
+                offenders.append(f"{filename}:{line} (module scope)")
+    return offenders, owner_sets_true
+
+
 def test_only_validate_constraints_marks_the_constraints_valid():
     offenders: list[str] = []
     owner_sets_true = False
     for path in sorted(SOURCE.rglob("*.py")):
         module = ast.parse(path.read_text(encoding="utf-8"))
-        aliases = _aliases(module)
-        for func in _top_level_functions(module):
-            for line, value in _writes(func, aliases):
-                if (path.name, func.name) == OWNER:
-                    owner_sets_true = owner_sets_true or not _is_false(value)
-                elif not _is_false(value):
-                    offenders.append(f"{path.relative_to(SOURCE)}:{line} ({func.name})")
-        outside = [n for n in module.body if not isinstance(n, ast.FunctionDef)]
-        for node in outside:
-            for line, value in _writes(node, aliases):
-                if not _is_false(value):
-                    offenders.append(
-                        f"{path.relative_to(SOURCE)}:{line} (module scope)"
-                    )
+        found, sets_true = _scan(module, path.name)
+        offenders += [
+            o.replace(path.name, str(path.relative_to(SOURCE)), 1) for o in found
+        ]
+        owner_sets_true = owner_sets_true or sets_true
 
     assert owner_sets_true, "_validate_constraints no longer sets constraints_valid"
     assert not offenders, (
@@ -114,14 +125,8 @@ class Node:
 async def node(state):
     state["constraints_valid"] = True
 """
-    module = ast.parse(code)
-    outside = [n for n in module.body if not isinstance(n, ast.FunctionDef)]
-    lines = [
-        line
-        for node in outside
-        for line, value in _writes(node)
-        if not _is_false(value)
-    ]
+    offenders, _ = _scan(ast.parse(code), "node.py")
+    lines = [int(o.split(":")[1].split(" ")[0]) for o in offenders]
 
     assert sorted(lines) == [4, 7]
 

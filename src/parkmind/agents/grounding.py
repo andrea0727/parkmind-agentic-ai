@@ -241,13 +241,14 @@ def _number_at(tokens: Sequence[str], i: int, v: _Vocabulary) -> tuple[int, int]
         if after < len(tokens) and tokens[after] in v.multipliers:
             total += value * v.multipliers[tokens[after]]
             j = after + 1
+            joiner = v.hundred_joiner or v.tens_joiner
             if (
-                v.hundred_joiner
+                joiner
                 and j + 1 < len(tokens)
-                and tokens[j] == v.hundred_joiner
+                and tokens[j] == joiner
                 and _below_thousand(tokens, j + 1, v, after_multiplier=True)
             ):
-                j += 1  # "two thousand and five"
+                j += 1  # "two thousand and five", "dos mil y cinco"
             continue
         total += value
         j = after

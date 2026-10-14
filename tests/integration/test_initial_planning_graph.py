@@ -1078,4 +1078,7 @@ def test_the_plan_records_which_elicit_prompt_read_the_constraints(monkeypatch):
 
     [proposal] = h.proposals
     assert proposal.provenance.prompt_versions["elicit"] == ipg.ELICIT_PROMPT_VERSION
-    assert h.state()["candidate_plan"].provenance.prompt_versions["elicit"] == ipg.ELICIT_PROMPT_VERSION
+    assert (
+        h.state()["candidate_plan"].provenance.prompt_versions["elicit"]
+        == ipg.ELICIT_PROMPT_VERSION
+    )

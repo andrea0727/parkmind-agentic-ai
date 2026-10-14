@@ -42,7 +42,6 @@ def test_a_number_word_in_a_stop_name_is_grounded_by_the_payload():
 
 
 @pytest.mark.parametrize(
-
     ("text", "language", "value"),
     [
         ("a forty minute wait", "en", "40"),
@@ -88,6 +87,7 @@ def test_hundreds_are_one_number_so_a_part_cannot_ground_the_whole():
         ("a thousand steps", "en", "1000"),
         ("a million steps", "en", "1000000"),
         ("dos mil doscientos pasos", "es", "2200"),
+        ("dos mil y cinco pasos", "es", "2005"),
         ("mil pasos", "es", "1000"),
         ("dos millones trescientos mil pasos", "es", "2300000"),
     ],

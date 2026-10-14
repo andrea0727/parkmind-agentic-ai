@@ -299,7 +299,9 @@ def _with_elicit_version(plan: Plan) -> Plan:
     provenance = plan.provenance
     versions = {**provenance.prompt_versions, "elicit": ELICIT_PROMPT_VERSION}
     return plan.model_copy(
-        update={"provenance": provenance.model_copy(update={"prompt_versions": versions})}
+        update={
+            "provenance": provenance.model_copy(update={"prompt_versions": versions})
+        }
     )
 
 

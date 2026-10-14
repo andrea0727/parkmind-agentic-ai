@@ -267,7 +267,9 @@ def _last_message(result: dict[str, Any]) -> str:
 
 
 def test_an_unreachable_model_ends_the_turn_without_the_raw_error() -> None:
-    graph, _, _, downstream, _ = _graph(FakeExtractor(ExtractorUnavailableError("ConnectError")))
+    graph, _, _, downstream, _ = _graph(
+        FakeExtractor(ExtractorUnavailableError("ConnectError"))
+    )
 
     result = _start(graph, *COMPLETE["messages"])
 
@@ -282,7 +284,8 @@ def test_an_unreachable_model_is_reported_in_the_guests_language() -> None:
     graph, *_ = _graph(FakeExtractor(ExtractorUnavailableError("ConnectError")))
 
     result = _start(
-        graph, "Hola, somos cuatro y queremos ir al parque. Salimos a las 8 de la noche."
+        graph,
+        "Hola, somos cuatro y queremos ir al parque. Salimos a las 8 de la noche.",
     )
 
     assert "no se planeó nada" in _last_message(result)
