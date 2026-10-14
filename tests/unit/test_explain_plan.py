@@ -36,7 +36,9 @@ def test_explaining_an_unvalidated_plan_raises():
 
 
 def test_the_explanation_lists_each_stop_with_its_name_wait_and_walk():
-    text = explain_plan(factories.plan(), CheckResult(valid=True), {"a1": "Space Mountain"})
+    text = explain_plan(
+        factories.plan(), CheckResult(valid=True), {"a1": "Space Mountain"}
+    )
 
     assert "Space Mountain (20 min wait, 5 min walk)" in text
     assert text.startswith("1 stops, 20 min of waiting and 5 min of walking")
@@ -54,7 +56,9 @@ def test_the_use_case_resolves_names_from_the_catalog():
     plan = factories.plan(stops=[factories.stop(node_id="id-tron")])
 
     text = (
-        ExplainPlanUseCase(factory_for(make_deps())).prepare(plan, CheckResult(valid=True)).template
+        ExplainPlanUseCase(factory_for(make_deps()))
+        .prepare(plan, CheckResult(valid=True))
+        .template
     )
 
     assert "TRON" in text
@@ -64,7 +68,9 @@ def test_a_meal_without_a_restaurant_reads_as_lunch_not_as_a_placeholder_id():
     from parkmind.core.contracts import StopKind
     from parkmind.services.planning.optimizer import MEAL_VENUE_TBD
 
-    plan = factories.plan(stops=[factories.stop(node_id=MEAL_VENUE_TBD, kind=StopKind.MEAL)])
+    plan = factories.plan(
+        stops=[factories.stop(node_id=MEAL_VENUE_TBD, kind=StopKind.MEAL)]
+    )
 
     text = explain_plan(plan, CheckResult(valid=True), {})
 
@@ -138,7 +144,9 @@ def test_a_guest_with_unknown_height_who_does_not_ride_is_named_too():
 
 def test_the_use_case_reads_the_height_limits_from_the_catalog():
     plan = _restricted_plan(["g1"])
-    catalog = PlanningAttractionRepository([factories.attraction(height_restriction_cm=112)])
+    catalog = PlanningAttractionRepository(
+        [factories.attraction(height_restriction_cm=112)]
+    )
 
     text = (
         ExplainPlanUseCase(factory_for(make_deps(attractions=catalog)))
@@ -221,7 +229,9 @@ def test_who_sits_out_a_ride_is_in_the_payload_but_never_the_guests_height():
     )
 
     [facts] = payload.stops
-    assert [(o.guest, o.minimum_height_cm) for o in facts.sitting_out] == [("Guest 2", 112)]
+    assert [(o.guest, o.minimum_height_cm) for o in facts.sitting_out] == [
+        ("Guest 2", 112)
+    ]
     assert "90" not in payload.to_json() and "175" not in payload.to_json()
 
 
@@ -242,6 +252,24 @@ def test_the_narrator_payload_never_carries_a_guests_free_text_label():
     assert "hijo" not in payload.to_json()
     assert [o.guest for o in payload.stops[0].sitting_out] == ["Guest 2"]
     assert "tu hijo" in template
+
+
+def test_a_guest_id_that_is_not_gN_is_numbered_by_position_never_passed_through():
+    """An id could carry a name ("maria-lopez"): the narrator gets "Guest N" instead."""
+    kid = factories.guest(guest_id="maria-lopez", role="child", height_cm=90)
+    plan = _restricted_plan(["g1"])
+
+    payload = _payload(plan=plan, guests=[ADULT, kid], height_limits={"a1": 112})
+    template = explain_plan(
+        plan,
+        CheckResult(valid=True),
+        {"a1": "Space Mountain"},
+        guests=[ADULT, kid],
+        height_limits={"a1": 112},
+    )
+
+    assert [o.guest for o in payload.stops[0].sitting_out] == ["Guest 2"]
+    assert "maria" not in payload.to_json() and "maria" not in template
 
 
 def test_a_replan_payload_carries_its_reason_and_the_named_changes():

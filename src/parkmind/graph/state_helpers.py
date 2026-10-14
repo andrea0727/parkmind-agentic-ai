@@ -8,6 +8,7 @@ across the workflow. All functions assume state is valid
 
 from typing import Any
 
+from parkmind.agents.explain_agent import GroundedExplanation
 from parkmind.core.contracts import (
     GuestProfile,
     LiveContext,
@@ -105,3 +106,23 @@ def discarded_proposal_update() -> dict[str, Any]:
     The active plan is untouched: only an approval ever replaces it.
     """
     return {"candidate_plan": None, "proposal": None, "approval": None}
+
+
+def explained(plan: Plan, result: GroundedExplanation) -> dict[str, Any]:
+    """EXPLAIN's state update: the text, and which prompt wrote it in the plan's provenance.
+
+    ``prompt_versions["explain"]`` is ``explain-v1`` for grounded LLM text and
+    ``template`` for the fallback; it travels to the proposal with the plan.
+    """
+    provenance = plan.provenance
+    versions = {**provenance.prompt_versions, "explain": result.prompt_version}
+    return {
+        "explanation": result.text,
+        "candidate_plan": plan.model_copy(
+            update={
+                "provenance": provenance.model_copy(
+                    update={"prompt_versions": versions}
+                )
+            }
+        ),
+    }

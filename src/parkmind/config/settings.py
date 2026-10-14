@@ -16,6 +16,10 @@ class Settings:
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
     ELICIT_MODEL = os.getenv("ELICIT_MODEL", "claude-haiku-4-5-20251001")
     EXPLAIN_MODEL = os.getenv("EXPLAIN_MODEL", ELICIT_MODEL)
+    # EXPLAIN is on the plan's path: seconds per request and the client's own retries
+    # (the attempt loop already retries once, so 0 by default).
+    EXPLAIN_TIMEOUT_SECONDS = float(os.getenv("EXPLAIN_TIMEOUT_SECONDS", "20"))
+    EXPLAIN_SDK_RETRIES = int(os.getenv("EXPLAIN_SDK_RETRIES", "0"))
     DATABASE_URL = os.getenv(
         "DATABASE_URL", "postgresql://parkmind:parkmind@localhost:5432/parkmind"
     )

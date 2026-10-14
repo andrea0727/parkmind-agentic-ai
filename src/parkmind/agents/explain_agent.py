@@ -9,9 +9,11 @@ the payload (``agents/grounding.py``).
 ``explain_grounded`` is section 40's safety path [C17]: at most two calls -- a
 schema failure, an ungrounded numeral or a preference figure without its right
 stated/learned label gets one retry, with the errors listed -- then the
-deterministic template. A narrator that cannot be
-called (no key, a network error, anything) goes straight to the template, so
-EXPLAIN never fails a plan. Logs carry counts and error types, never the payload
+deterministic template. A narrator that cannot be called (no key, a network error,
+a reply with no structured output -- ``tool_choice`` is forced, so a retry would
+not change it) goes straight to the template, so EXPLAIN never fails a plan.
+At most ``MAX_ATTEMPTS`` x (1 + ``EXPLAIN_SDK_RETRIES``) requests are made, each
+bounded by ``EXPLAIN_TIMEOUT_SECONDS``. Logs carry counts and error types, never the payload
 or the model's text [C19].
 """
 
@@ -55,10 +57,13 @@ MAX_ATTEMPTS = 2
 """One call and one retry (section 40)."""
 TEMPLATE_VERSION = "template"
 """``Provenance.prompt_versions["explain"]`` when the template was used."""
-EXPLAIN_TIMEOUT_SECONDS = 20.0
-"""Per request. EXPLAIN is on the plan's path: a hung call must end in the template."""
-EXPLAIN_SDK_RETRIES = 1
-"""The client's own retries per call, on top of ``MAX_ATTEMPTS``."""
+EXPLAIN_TIMEOUT_SECONDS = settings.EXPLAIN_TIMEOUT_SECONDS
+"""Per request (env ``EXPLAIN_TIMEOUT_SECONDS``, default 20). EXPLAIN is on the plan's
+path: a hung call must end in the template."""
+EXPLAIN_SDK_RETRIES = settings.EXPLAIN_SDK_RETRIES
+"""The client's own retries per call (env ``EXPLAIN_SDK_RETRIES``, default 0: the
+attempt loop already retries), so the guests wait at most
+``MAX_ATTEMPTS`` x (1 + retries) x timeout."""
 
 
 class NarratorUnavailableError(RuntimeError):
@@ -80,8 +85,8 @@ class PlanNarrator(Protocol):
 class AnthropicNarrator:
     """Claude tool-calling narrator. The client is built on first use.
 
-    Unlike elicit's extractor, every request is bounded (``timeout``, a single SDK
-    retry): the guests are waiting for their plan, and the template can stand in.
+    Unlike elicit's extractor, every request is bounded (``timeout``, no SDK retry
+    by default): the guests are waiting for their plan, and the template can stand in.
     """
 
     def __init__(
@@ -169,8 +174,9 @@ def _with_previous(text: str, problem: str) -> str:
 
 
 def _preference_labels(payload: ExplanationPayload) -> tuple[dict[str, str], set[str]]:
-    """Each stated/learned weight's figure -> its source, and the figures too ambiguous
-    to check: also a stop figure, or shared by weights of different sources."""
+    """Each weight's figure -> its source (stated, learned or default), and the figures
+    too ambiguous to check: also a stop figure, or shared by weights of different
+    sources. A stop's ``preference_score`` is a utility, never labelled."""
     others = numerals(replace(payload, preferences=[]).to_json())
     sources: dict[str, set[str]] = {}
     for signal in payload.preferences:
@@ -181,8 +187,8 @@ def _preference_labels(payload: ExplanationPayload) -> tuple[dict[str, str], set
     for value, found in sources.items():
         if value in others or len(found) > 1:
             ambiguous.add(value)
-        elif (source := next(iter(found))) in ("stated", "learned"):
-            labelled[value] = source
+        else:
+            labelled[value] = next(iter(found))
     return labelled, ambiguous
 
 

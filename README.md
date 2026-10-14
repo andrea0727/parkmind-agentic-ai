@@ -516,20 +516,28 @@ lets it invent a figure (Architecture §40, C17):
   preference weights that drove the plan, each labelled `stated`, `learned` or
   `default`. The prompt is `agents/explain_prompt.py` (`explain-v1`).
 - **Deterministic grounding.** `agents/grounding.py` extracts every number and clock
-  time from the answer; each must appear in the payload exactly (`25` = `25.0`, but a
-  bare `14` is not grounded by `14:05`, and no rounding). A figure that is a `stated` or
-  `learned` weight must carry that label in its sentence. No LLM judge.
+  time from the answer (and number words such as "ten" or "half"); each must appear in
+  the payload exactly (`25` = `25.0`, but a bare `14` is not grounded by `14:05`, and no
+  rounding). It is a subset test: it rejects an invented figure, but `3 PM`, `½` or a
+  swapped pair of figures pass when those numbers are already in the payload. A figure
+  that is a `stated` or `learned` weight must carry that label in its sentence (or its
+  list header), and a `default` weight must carry neither. A stop's `preference_score` is
+  not a weight and is never labelled. No LLM judge.
 - **One retry, then the template.** A schema failure, an ungrounded number or a wrong
-  label gets one retry with the errors listed (each request is capped at 20 s); after that, or without an
-  `ANTHROPIC_API_KEY`, the guests read the deterministic template, which only prints
-  figures from the payload. The proposal's provenance records which one wrote it
-  (`prompt_versions["explain"]`: `explain-v1` or `template`).
+  label gets one retry with the errors listed; after that, without an
+  `ANTHROPIC_API_KEY`, or if the model returns no structured output or the call fails,
+  the guests read the deterministic template, which only prints figures from the payload.
+  Each request is capped at `EXPLAIN_TIMEOUT_SECONDS` (20 s) and the client does not
+  retry on its own (`EXPLAIN_SDK_RETRIES=0`), so the guests wait at most 2 x 20 s = 40 s;
+  with `EXPLAIN_SDK_RETRIES=1` it would be up to 80 s. The proposal's provenance records
+  which one wrote it (`prompt_versions["explain"]`: `explain-v1` or `template`).
 - **English only for now.** The narrator writes English; with `lang` other than `en` (for
   example Spanish) the guests read the localized deterministic template, so the same
   grounding guarantees hold but the wording is fixed. The narrator payload names a guest
   who sits a ride out as `Guest N`, never by their free-text label ("tu mamá"); only the
   template, which stays in the process, uses the label.
-- **Model:** `EXPLAIN_MODEL` (defaults to `ELICIT_MODEL`). Tests inject a fake
+- **Settings:** `EXPLAIN_MODEL` (defaults to `ELICIT_MODEL`), `EXPLAIN_TIMEOUT_SECONDS`,
+  `EXPLAIN_SDK_RETRIES`. Tests inject a fake
   narrator (`tests/explain_support.py`), so they never call Claude, even with a key in
   `.env`.
 
