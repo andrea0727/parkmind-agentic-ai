@@ -561,9 +561,9 @@ def _interrupt_for_approval(
             at=clock(),
             rejection_reason=rejection_reason,
             guests=constraints.guests,
-            attraction_ids=(
-                applied.changed_ids if applied is not None else _attraction_ids(plan)
-            ),
+            attraction_ids=_attraction_ids(plan),
+            removed_attraction_ids=applied.removed if applied is not None else (),
+            added_attraction_ids=applied.added if applied is not None else (),
         )
     except ProposalNoLongerPendingError as exc:
         if exc.status is not status:

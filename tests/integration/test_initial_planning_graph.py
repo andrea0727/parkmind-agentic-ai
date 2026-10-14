@@ -598,7 +598,15 @@ def test_every_decision_is_in_the_behavior_log_of_each_guest(monkeypatch):
         logged = {e.decision: e for e in h.deps.behavior.get(f"t1:{guest.guest_id}").entries}
         assert set(logged) == {"EDITED", "REJECTED"}
         assert logged["EDITED"].proposal_id == first["proposal"].proposal_id
-        assert logged["EDITED"].attraction_ids == edit["remove"] + edit["add"]
+        assert logged["EDITED"].attraction_ids == [
+            s.node_id
+            for s in first["candidate_plan"].stops
+            if s.kind.value in ("ATTRACTION", "SHOW")
+        ]
+        assert logged["EDITED"].removed_attraction_ids == edit["remove"]
+        assert logged["EDITED"].added_attraction_ids == edit["add"]
+        assert logged["REJECTED"].removed_attraction_ids == []
+        assert logged["REJECTED"].added_attraction_ids == []
         assert logged["REJECTED"].proposal_id != first["proposal"].proposal_id
         assert logged["REJECTED"].rejection_reason.value == "BAD_TIMING"
 
