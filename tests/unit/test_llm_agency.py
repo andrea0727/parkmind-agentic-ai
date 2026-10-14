@@ -8,6 +8,8 @@ P1-22's context loader will be the one LLM with real tools: read-only ones, from
 allowlist. When it lands, this file pins that it binds exactly that subset (ADR 0004, L10).
 """
 
+import ast
+from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
@@ -57,3 +59,40 @@ def test_each_llm_gets_exactly_one_output_schema_forced_and_no_real_tool(
     assert tools == [schema]
     assert isinstance(tools[0], type) and issubclass(tools[0], BaseModel)
     assert choice == schema.__name__
+
+
+# Every module that builds an LLM client, and so must be pinned by the test above.
+PINNED_CLIENT_MODULES = {"agents/elicit_agent.py", "agents/explain_agent.py"}
+_LLM_ENTRY_POINTS = {
+    "ChatAnthropic",
+    "ChatOpenAI",
+    "ChatNVIDIA",
+    "init_chat_model",
+    "Anthropic",
+    "AsyncAnthropic",
+    "bind_tools",
+    "with_structured_output",
+}
+
+
+def _called_name(call: ast.Call) -> str | None:
+    func = call.func
+    if isinstance(func, ast.Name):
+        return func.id
+    return func.attr if isinstance(func, ast.Attribute) else None
+
+
+def test_no_llm_client_is_built_outside_the_modules_this_file_pins():
+    """A third LLM client (the P1-22 context loader, say) fails here until its
+    binding is pinned above and its module added to ``PINNED_CLIENT_MODULES``."""
+    source = Path(__file__).resolve().parents[2] / "src" / "parkmind"
+    builders: set[str] = set()
+    for path in source.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        if any(
+            isinstance(node, ast.Call) and _called_name(node) in _LLM_ENTRY_POINTS
+            for node in ast.walk(tree)
+        ):
+            builders.add(path.relative_to(source).as_posix())
+
+    assert builders == PINNED_CLIENT_MODULES
