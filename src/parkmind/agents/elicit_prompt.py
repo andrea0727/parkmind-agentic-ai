@@ -1,6 +1,6 @@
 """Versioned system prompt of the ``elicit`` step."""
 
-ELICIT_PROMPT_VERSION = "elicit-v6"
+ELICIT_PROMPT_VERSION = "elicit-v8"
 
 ELICIT_SYSTEM_PROMPT = """\
 You extract structured planning information for a theme-park visit from what the \
@@ -28,7 +28,11 @@ accessibility need or a must-do/avoid attraction from it; those only count when 
 guests write them.
 - List one entry in `guests` per person, in the order mentioned, with `role` \
 (adult or child) when stated. Set `party_size` only if stated or countable.
-- `guest_ref` in `accessibility` is the 1-based position of the guest in `guests`.
+- When the person writing is part of the party ("me and my father", "I'm going \
+with my kids") they are guest 1 and the others follow in the order mentioned: \
+"me and my father" -> guest 1 is the writer, guest 2 is the father.
+- `guest_ref` in `accessibility` is the 1-based position of the guest in `guests`, \
+so a need of "my father" in that party is `guest_ref` 2, never 1.
 - `label` is how the guests call that person, only when they say it: a \
 relationship in the second person and the guests' language ("mi mamá" -> \
 "tu mamá", "my daughter" -> "your daughter") or a first name ("Lucas"). Keep \
@@ -53,6 +57,9 @@ preference on the guest. Copy an attraction name only when the guests actually \
 wrote one.
 - `departure_time` ("HH:MM", 24h park-local time) and `lunch_window` \
 ("HH:MM" start/end; "lunch around 1 PM" -> 12:30 to 13:30).
+- A time range for the visit ("from 9 to 17", "de 9 a 17", "9am-5pm") gives \
+the day's end as `departure_time` (17:00). The start of the range is when the \
+party arrives, never the departure.
 - `party_walking_budget_minutes` when the party states a total walking limit.
 - `height_cm` on a guest, only when the guests state it ("he is about 4 feet \
 tall" -> 122). Convert to centimetres. Never estimate it from age or role. It \

@@ -3,11 +3,11 @@
 RoutingClient (services/clients/routing_client.py) implements this today.
 The planning core (ParkGraph, Optimizer, ConstraintChecker) depends on this
 protocol only, never on concrete routing clients or external routing providers.
-See P0-09 Done-when: "walk_minutes(a, b) is available through a port. The core
-does not know which routing provider is used."
+``walk_minutes(a, b)`` is available through a port; the core
+does not know which routing provider is used.
 
-``WalkEstimator`` is the published side of the same adapter (P0-25
-``data.get_walking_time``): it says *how* a number was obtained, and answers
+``WalkEstimator`` is the published side of the same adapter
+(``data.get_walking_time``): it says *how* a number was obtained, and answers
 ``None`` instead of a default when it has no basis for one. It is a separate
 protocol so the core keeps depending on ``walk_minutes`` alone.
 """

@@ -84,7 +84,8 @@ This ADR lists what enforces that rule today, why each guardrail is enough for w
 
 **Follow-ups** (tracked in issue #88, section 9):
 - **G12:** a per-session or per-thread LLM call budget. PR #91's API limits per user; the graph has no limit.
-- **G13:** ground departure, lunch window and walking budget like heights (today they are only confirmed).
+- **G13:** departure and lunch window are grounded like heights: a time the model reports without a clock time in the guests' words is asked about, never planned (`departure_unverified`). It fails closed on purpose, so "until closing" is asked too: the elicit node has no park hours to resolve it against. A lunch window that starts after the departure is asked as well. The walking budget is still only confirmed.
+- **Party limits are deterministic, not the model's call:** above `PARKMIND_MAX_PARTY_SIZE` (default 10) the guests are asked to split the group, and a plan for a group with no adult cannot be approved (`REJECTED` and `EDITED` stay available). Both are checked in code, so a prompt change cannot lift them.
 - **Interpret, when it lands:** don't trust a model-reported `confidence`, and widen which event types count as hard-constraint-adjacent.
 - **G14:** authenticate the MCP server before it may listen beyond loopback.
 

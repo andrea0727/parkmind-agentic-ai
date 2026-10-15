@@ -1,8 +1,8 @@
-"""ThemeParks.wiki raw payload -> ParkMind contracts, with no HTTP (backlog P0-10).
+"""ThemeParks.wiki raw payload -> ParkMind contracts, with no HTTP.
 
 Pure functions over the provider's JSON, used by ``ThemeParksClient`` after it
 fetches a payload, and usable on a stored raw payload so a snapshot can be
-re-normalized instead of re-collected (Architecture section 41, C21; P0-11).
+re-normalized instead of re-collected.
 
 Canonical values produced here:
 - **Timezone:** a payload's top-level ``timezone`` must be the park's
@@ -98,7 +98,7 @@ def entity_kind(entity: Mapping[str, Any]) -> EntityKind | None:
 def standby_wait(entity: Mapping[str, Any]) -> float | None:
     """The STANDBY wait, or ``None`` when there is no standby queue or no value.
 
-    "Standby queues only for planning; other queue types kept raw" (P0-07):
+    "Standby queues only for planning; other queue types kept raw":
     RETURN_TIME / PAID_RETURN_TIME are never read here. A wait that isn't a
     non-negative number (a string, a bool, an object) raises instead of being
     coerced.

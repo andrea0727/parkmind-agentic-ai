@@ -1,4 +1,4 @@
-"""Open-Meteo raw payload -> ``WeatherHour`` contracts, with no HTTP (backlog P0-11).
+"""Open-Meteo raw payload -> ``WeatherHour`` contracts, with no HTTP.
 
 Pure function over the provider's JSON, used by ``OpenMeteoClient`` after it
 fetches a payload, and usable on a stored raw payload so a snapshot can be

@@ -57,6 +57,7 @@ from parkmind.services.personalization.preference_scorer import (
 from parkmind.services.personalization.preference_scorer import (
     per_guest_satisfaction as scorer_satisfaction,
 )
+from parkmind.services.planning.constraint_checker import SHOW_ARRIVAL_BUFFER_MINUTES
 from parkmind.services.planning.forecast_service import (
     TYPICAL_WAIT,
     ForecastService,
@@ -110,12 +111,14 @@ class GreedyInsertionOptimizer:
         default_meal_duration_minutes: float = _DEFAULT_MEAL_DURATION_MIN,
         default_rest_duration_minutes: float = _DEFAULT_REST_DURATION_MIN,
         default_show_duration_minutes: float = _DEFAULT_SHOW_DURATION_MIN,
+        show_arrival_buffer_minutes: float = SHOW_ARRIVAL_BUFFER_MINUTES,
     ) -> None:
         self._graph = park_graph
         self._attraction_dur = default_attraction_duration_minutes
         self._meal_dur = default_meal_duration_minutes
         self._rest_dur = default_rest_duration_minutes
         self._show_dur = default_show_duration_minutes
+        self._show_buffer = timedelta(minutes=show_arrival_buffer_minutes)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -165,7 +168,7 @@ class GreedyInsertionOptimizer:
         group_objective:
             Resolved group objective; used for per-guest eligible sets.
         forecast_service:
-            Expected waits per stop time (P0-18). Without it, the posted wait
+            Expected waits per stop time. Without it, the posted wait
             is charged at every hour, as before.
         now:
             The planning moment, required with ``forecast_service``; the
@@ -198,7 +201,7 @@ class GreedyInsertionOptimizer:
                     f"only scored {sorted(scored - party)}, only in constraints {sorted(party - scored)}"
                 )
         start_time = self._resolve_start_time(park, context, now)
-        end_time = constraints.departure_time
+        end_time = self._resolve_end_time(park, constraints)
 
         # Effective rest frequency — minimum across all guests [C19]
         rest_freq = self._resolve_effective_rest_frequency(accessibility_reqs)
@@ -240,28 +243,28 @@ class GreedyInsertionOptimizer:
         # ---- Phase 0: Collect fixed-window anchors -----------------------
         anchors: list[Stop] = []
 
-        # Show anchors from must_do that have showtimes
+        # Show anchors from must_do that have showtimes. A show stop starts when the party
+        # has to arrive (the showtime less the buffer rule 3 asks for) and ends with the show.
+        show_times: dict[str, list[datetime]] = {}
         for show_id in constraints.must_do:
-            if context.showtimes.get(show_id):
-                best_time = self._pick_best_showtime(
-                    context.showtimes[show_id],
-                    start_time,
-                    end_time,
-                )
-                if best_time is not None:
-                    dur = self._show_dur
-                    anchors.append(
-                        Stop(
-                            node_id=show_id,
-                            kind=StopKind.SHOW,
-                            arrival_time=best_time,
-                            departure_time=best_time + timedelta(minutes=dur),
-                            expected_wait_minutes=0.0,
-                            walking_minutes=0.0,  # placeholder, recomputed later
-                            utility=utilities.get(show_id, 0.0),
-                            served_guests=guest_ids,
-                        )
+            times = context.showtimes.get(show_id)
+            if not times:
+                continue
+            show_times[show_id] = sorted(times)
+            first = self._next_showtime(show_times[show_id], start_time, end_time)
+            if first is not None:
+                anchors.append(
+                    Stop(
+                        node_id=show_id,
+                        kind=StopKind.SHOW,
+                        arrival_time=first - self._show_buffer,
+                        departure_time=first + timedelta(minutes=self._show_dur),
+                        expected_wait_minutes=0.0,
+                        walking_minutes=0.0,  # placeholder, recomputed later
+                        utility=utilities.get(show_id, 0.0),
+                        served_guests=guest_ids,
                     )
+                )
 
         # Lunch anchor placeholder
         meal_anchor: Stop | None = None
@@ -298,6 +301,78 @@ class GreedyInsertionOptimizer:
         cursor_node = start_location_node_id or _PARK_ENTRANCE_NODE
         active_minutes_since_rest = 0.0
 
+        def place_anchor(anchor: Stop, *, rest_before: bool) -> None:
+            """Put the show at the first of its showtimes the party can still reach.
+
+            The stop arrives one buffer before the showtime and leaves when the show ends,
+            as rule 3 requires. A party that is late for the showtime planned for it takes
+            a later one; with none left the show stays out of the plan (unmet).
+            """
+            nonlocal cursor_time, cursor_node, active_minutes_since_rest
+            walk = self._walk_time(cursor_node, anchor.node_id)
+            if rest_before and rest_freq is not None:
+                cursor_time, cursor_node, active_minutes_since_rest = (
+                    self._maybe_insert_rest(
+                        stops,
+                        cursor_time,
+                        cursor_node,
+                        active_minutes_since_rest,
+                        rest_freq,
+                        walk + self._show_dur,
+                        guest_ids,
+                        end_time,
+                    )
+                )
+                walk = self._walk_time(cursor_node, anchor.node_id)
+            showtime = self._next_showtime(
+                show_times[anchor.node_id],
+                cursor_time + timedelta(minutes=walk),
+                end_time,
+            )
+            if showtime is None:
+                return
+            departure = showtime + timedelta(minutes=self._show_dur)
+            stops.append(
+                anchor.model_copy(
+                    update={
+                        "arrival_time": showtime - self._show_buffer,
+                        "departure_time": departure,
+                        "walking_minutes": walk,
+                    }
+                )
+            )
+            visited.add(anchor.node_id)
+            cursor_time = departure
+            cursor_node = anchor.node_id
+            active_minutes_since_rest += walk + self._show_dur
+
+        def show_would_cut_lunch(anchor: Stop) -> bool:
+            """The next showtime would end after the lunch window while lunch can still be had.
+
+            Lunch goes first then, and the show takes a later showtime.
+            """
+            lunch_win = constraints.lunch_window
+            if meal_anchor is None or meal_inserted or lunch_win is None:
+                return False
+            walk = self._walk_time(cursor_node, anchor.node_id)
+            showtime = self._next_showtime(
+                show_times[anchor.node_id],
+                cursor_time + timedelta(minutes=walk),
+                end_time,
+            )
+            if showtime is None:
+                return False
+            meal_arrival = max(
+                cursor_time
+                + timedelta(minutes=self._walk_to_meal(cursor_node, meal_anchor)),
+                lunch_win.start,
+            )
+            return (
+                showtime + timedelta(minutes=self._show_dur) > lunch_win.end
+                and meal_arrival <= lunch_win.end
+                and meal_arrival + timedelta(minutes=self._meal_dur) <= end_time
+            )
+
         if rest_first:
             rest_end = cursor_time + timedelta(minutes=self._rest_dur)
             if rest_end <= end_time:
@@ -325,41 +400,7 @@ class GreedyInsertionOptimizer:
                 walk_to_anchor = self._walk_time(cursor_node, curr_anchor.node_id)
                 earliest_arrival = cursor_time + timedelta(minutes=walk_to_anchor)
                 if earliest_arrival >= curr_anchor.arrival_time:
-                    # Anchor is due now
-                    if rest_freq is not None:
-                        cursor_time, cursor_node, active_minutes_since_rest = (
-                            self._maybe_insert_rest(
-                                stops,
-                                cursor_time,
-                                cursor_node,
-                                active_minutes_since_rest,
-                                rest_freq,
-                                walk_to_anchor + self._show_dur,
-                                guest_ids,
-                                end_time,
-                            )
-                        )
-                        walk_to_anchor = self._walk_time(
-                            cursor_node, curr_anchor.node_id
-                        )
-                    actual_arrival = max(
-                        cursor_time + timedelta(minutes=walk_to_anchor),
-                        curr_anchor.arrival_time,
-                    )
-                    show_departure = actual_arrival + timedelta(minutes=self._show_dur)
-                    if show_departure <= end_time:
-                        anchor_stop = curr_anchor.model_copy(
-                            update={
-                                "arrival_time": actual_arrival,
-                                "departure_time": show_departure,
-                                "walking_minutes": walk_to_anchor,
-                            }
-                        )
-                        stops.append(anchor_stop)
-                        visited.add(curr_anchor.node_id)
-                        cursor_time = show_departure
-                        cursor_node = curr_anchor.node_id
-                        active_minutes_since_rest += walk_to_anchor + self._show_dur
+                    place_anchor(curr_anchor, rest_before=True)
                     anchor_idx += 1
                     continue
 
@@ -564,41 +605,10 @@ class GreedyInsertionOptimizer:
                 continue
 
             # 5. If no candidate fits: advance to anchor or lunch if possible
-            if anchor_idx < len(anchors):
-                curr_anchor = anchors[anchor_idx]
-                walk_to_anchor = self._walk_time(cursor_node, curr_anchor.node_id)
-                if rest_freq is not None:
-                    cursor_time, cursor_node, active_minutes_since_rest = (
-                        self._maybe_insert_rest(
-                            stops,
-                            cursor_time,
-                            cursor_node,
-                            active_minutes_since_rest,
-                            rest_freq,
-                            walk_to_anchor + self._show_dur,
-                            guest_ids,
-                            end_time,
-                        )
-                    )
-                    walk_to_anchor = self._walk_time(cursor_node, curr_anchor.node_id)
-                actual_arrival = max(
-                    cursor_time + timedelta(minutes=walk_to_anchor),
-                    curr_anchor.arrival_time,
-                )
-                show_departure = actual_arrival + timedelta(minutes=self._show_dur)
-                if show_departure <= end_time:
-                    anchor_stop = curr_anchor.model_copy(
-                        update={
-                            "arrival_time": actual_arrival,
-                            "departure_time": show_departure,
-                            "walking_minutes": walk_to_anchor,
-                        }
-                    )
-                    stops.append(anchor_stop)
-                    visited.add(curr_anchor.node_id)
-                    cursor_time = show_departure
-                    cursor_node = curr_anchor.node_id
-                    active_minutes_since_rest += walk_to_anchor + self._show_dur
+            if anchor_idx < len(anchors) and not show_would_cut_lunch(
+                anchors[anchor_idx]
+            ):
+                place_anchor(anchors[anchor_idx], rest_before=True)
                 anchor_idx += 1
                 continue
 
@@ -635,25 +645,7 @@ class GreedyInsertionOptimizer:
 
         # Flush any remaining anchors (in case any was left)
         while anchor_idx < len(anchors):
-            curr_anchor = anchors[anchor_idx]
-            walk_to_anchor = self._walk_time(cursor_node, curr_anchor.node_id)
-            actual_arrival = max(
-                cursor_time + timedelta(minutes=walk_to_anchor),
-                curr_anchor.arrival_time,
-            )
-            show_departure = actual_arrival + timedelta(minutes=self._show_dur)
-            if show_departure <= end_time:
-                anchor_stop = curr_anchor.model_copy(
-                    update={
-                        "arrival_time": actual_arrival,
-                        "departure_time": show_departure,
-                        "walking_minutes": walk_to_anchor,
-                    }
-                )
-                stops.append(anchor_stop)
-                visited.add(curr_anchor.node_id)
-                cursor_time = show_departure
-                cursor_node = curr_anchor.node_id
+            place_anchor(anchors[anchor_idx], rest_before=False)
             anchor_idx += 1
 
         # ---- Phase 3: Totals and satisfaction ----------------------------
@@ -713,6 +705,18 @@ class GreedyInsertionOptimizer:
         if now is not None:
             return max(now, base_time)
         return base_time
+
+    @staticmethod
+    def _resolve_end_time(park: Park | None, constraints: PartyConstraints) -> datetime:
+        """The party's departure, never later than the park closes.
+
+        The checker rejects any stop that ends after ``park.closing_time`` (rule 1),
+        so the optimizer must not plan into those hours even when the party would
+        stay longer.
+        """
+        if park is None:
+            return constraints.departure_time
+        return min(constraints.departure_time, park.closing_time)
 
     @staticmethod
     def _resolve_effective_rest_frequency(
@@ -788,15 +792,19 @@ class GreedyInsertionOptimizer:
                 return self._show_dur
         return self._attraction_dur
 
-    @staticmethod
-    def _pick_best_showtime(
-        times: list[datetime],
-        start: datetime,
-        end: datetime,
+    def _next_showtime(
+        self, times: list[datetime], ready: datetime, end: datetime
     ) -> datetime | None:
-        """Earliest showtime that falls inside ``[start, end)``."""
-        valid = [t for t in sorted(times) if start <= t < end]
-        return valid[0] if valid else None
+        """First showtime the party can make: it arrives a buffer before and the show ends by ``end``."""
+        return next(
+            (
+                t
+                for t in times
+                if t - self._show_buffer >= ready
+                and t + timedelta(minutes=self._show_dur) <= end
+            ),
+            None,
+        )
 
     def _walk_to_meal(self, origin: str, meal_anchor: Stop) -> float:
         if meal_anchor.node_id == MEAL_VENUE_TBD:

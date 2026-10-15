@@ -1,4 +1,4 @@
-"""P0-11 Done-when 1 and 2, against the real ``snapshots`` and ``id_mapping`` tables.
+"""The snapshot collector, against the real ``snapshots`` and ``id_mapping`` tables.
 
 1. "Re-running the same snapshot does not create unintended duplicates."
 2. "Each snapshot has retrieval time, provenance and raw payload."
@@ -78,7 +78,7 @@ def test_snapshot_stores_raw_payload_sources_and_retrieved_at(
 
 
 def test_every_seen_entity_is_recorded_in_id_mapping(conn: psycopg.Connection) -> None:
-    """Provenance of ids: each live entity's provider id is traceable (P0-10)."""
+    """Provenance of ids: each live entity's provider id is traceable."""
     result = _collector(conn, Provider()).collect(now=NOW)
     assert result.live_context is not None
 

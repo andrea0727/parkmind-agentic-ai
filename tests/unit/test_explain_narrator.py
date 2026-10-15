@@ -1,4 +1,4 @@
-"""The Claude narrator of EXPLAIN (P0-31): no key, no call."""
+"""The Claude narrator of EXPLAIN: no key, no call."""
 
 from typing import Any, ClassVar
 
@@ -19,9 +19,22 @@ def test_without_an_api_key_nothing_is_sent():
         AnthropicNarrator(api_key="").narrate('{"stops": []}')
 
 
+def test_the_request_bounds_come_from_settings_and_a_retry_is_not_doubled():
+    from parkmind.config.settings import settings
+
+    assert settings.EXPLAIN_TIMEOUT_SECONDS == EXPLAIN_TIMEOUT_SECONDS > 0
+    assert settings.EXPLAIN_SDK_RETRIES == EXPLAIN_SDK_RETRIES
+
+
 def test_the_prompt_is_versioned_and_states_the_grounding_and_labelling_rules():
     assert EXPLAIN_PROMPT_VERSION == "explain-v1"
-    for rule in ("exactly as given", "(stated)", "(learned)", "unmet_must_do"):
+    for rule in (
+        "exactly as given",
+        "(stated)",
+        "(learned)",
+        "unmet_must_do",
+        "default",
+    ):
         assert rule in EXPLAIN_SYSTEM_PROMPT, rule
 
 
@@ -65,7 +78,7 @@ def test_every_request_is_bounded_in_time_and_retries(fake_chat):
     AnthropicNarrator(api_key="k").narrate("{}")
 
     assert fake_chat.built["timeout"] == EXPLAIN_TIMEOUT_SECONDS
-    assert fake_chat.built["max_retries"] == EXPLAIN_SDK_RETRIES
+    assert fake_chat.built["max_retries"] == 0  # retried by the counted loop [G12]
     assert fake_chat.built["temperature"] == 0
 
 

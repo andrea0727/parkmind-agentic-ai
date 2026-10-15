@@ -508,7 +508,7 @@ class BehaviorEntry(ParkMindBaseModel):
     decision, the stop's for a completed or skipped attraction. An edit also says
     what it removed and what it added, kept apart because they are opposite
     signals for learning (a removal is a rejection, an addition is interest); only
-    a ``PROPOSAL_EDITED`` entry may carry them (P1-01).
+    a ``PROPOSAL_EDITED`` entry may carry them.
 
     §23, §33 [C12]
     """

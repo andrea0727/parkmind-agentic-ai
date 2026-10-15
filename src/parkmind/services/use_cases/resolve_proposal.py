@@ -15,7 +15,7 @@ stored: it is derived again from the new plan and the clock on the next replan.
 A rejected or superseded proposal leaves no state behind.
 
 A proposal can stop being PENDING while the guests are still deciding: a
-significant event supersedes it (section 9 [C18], P0-33). Deciding on it then
+significant event supersedes it (section 9 [C18]). Deciding on it then
 raises ``ProposalNoLongerPendingError`` and changes nothing.
 
 Every decision writes one ``BehaviorEntry`` per guest of the party, in the same
@@ -25,7 +25,7 @@ thread, so each guest is registered as ``party_guest_id(thread_id, guest_id)`` -
 with its role only, never its height (section 12). ``entry_id`` is the
 proposal and the decision, so a decision applied twice is logged once; a
 superseded proposal logs nothing. An edit's entry also records, apart, what the
-edit removed and what it added (P1-01): for learning they are opposite signals.
+edit removed and what it added: for learning they are opposite signals.
 """
 
 from collections.abc import Sequence
@@ -103,6 +103,16 @@ class ResolveProposalUseCase:
                 and stored.approval_status is not ApprovalStatus.PENDING
             ):
                 raise ProposalNoLongerPendingError(proposal_id, stored.approval_status)
+            if (
+                status is ApprovalStatus.APPROVED
+                and stored is not None
+                and stored.base_plan_id != stored.candidate_plan_id
+            ):
+                # The carry-over below reads the base plan's progress and copies it:
+                # a report or event being written at the same time must finish first.
+                # The plan's lock comes before the proposal's row (as in HandleEvents),
+                # so the two never wait on each other.
+                deps.execution_states.lock(stored.base_plan_id)
             try:
                 proposal = deps.proposals.resolve(
                     proposal_id, status, at=at, rejection_reason=rejection_reason

@@ -1,4 +1,4 @@
-"""Snapshot-to-event detection (P0-33): transitions, freshness, determinism."""
+"""Snapshot-to-event detection: transitions, freshness, determinism."""
 
 import json
 from datetime import datetime, timedelta

@@ -118,7 +118,7 @@ class ParkGraph:
     def showtimes(self, show_id: str) -> list[datetime]:
         """Return a fresh list of showtimes for ``show_id``, empty if unknown.
 
-        Showtimes come from ``LiveContext`` (source of truth per P0-11); the
+        Showtimes come from ``LiveContext`` (the source of truth); the
         curated catalog does not carry permanent show programming yet.
         """
         return list(self.showtimes_by_node.get(show_id, ()))
@@ -129,10 +129,10 @@ class ParkGraph:
         Returns the alphabetically-first attraction node of the resolved
         land (by ``Attraction.name``), not a dedicated land node. This is a
         deviation from baseline §16/§25, which model each land as its own
-        graph node (e.g. ``"frontierland"``); P0-13's Done-when only
+        graph node (e.g. ``"frontierland"``); the port only
         requires "returns a node id", so the representative-attraction
         approach satisfies it, but ``current_location_node_id`` consumers
-        (e.g. the ``PARTY_RELOCATED`` event in P0-22) will measure walks
+        (e.g. the ``PARTY_RELOCATED`` event) will measure walks
         from that attraction, not from a land-central point. Returns
         ``None`` when the alias is unknown or when the resolved land has no
         catalog nodes (explicit miss).

@@ -20,9 +20,10 @@ from dataclasses import dataclass, field
 
 from parkmind.core.contracts import Attraction, AttractionCategory
 from parkmind.services.ports import AttractionRepository
+from parkmind.services.use_cases.planning_deps import PlanningUnavailableError
 
 
-class CatalogUnavailableError(RuntimeError):
+class CatalogUnavailableError(PlanningUnavailableError):
     """The park has no catalog to resolve names against (an infrastructure problem)."""
 
 
@@ -30,6 +31,7 @@ class CatalogUnavailableError(RuntimeError):
 class ResolvedAttraction:
     node_id: str
     name: str
+    height_restriction_cm: int | None = None
 
 
 @dataclass(frozen=True)
@@ -93,7 +95,11 @@ class AttractionNameResolver:
         for name in distinct:
             matches = _match(name, catalog)
             if len(matches) == 1:
-                resolved[name] = ResolvedAttraction(matches[0].node_id, matches[0].name)
+                resolved[name] = ResolvedAttraction(
+                    matches[0].node_id,
+                    matches[0].name,
+                    matches[0].height_restriction_cm,
+                )
             elif matches:
                 ambiguous[name] = tuple(sorted(a.name for a in matches))
             else:

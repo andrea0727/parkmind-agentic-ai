@@ -1,4 +1,4 @@
-"""Magic Kingdom safety-notice corpus, version 2026-10-01 (section 30 [C14], P0-26a, #69).
+"""Magic Kingdom safety-notice corpus, version 2026-10-01 (section 30 [C14]).
 
 Every entry is read from the entity's official page on
 disneyworld.disney.go.com ("Safety, accessibility and guest policies" block;

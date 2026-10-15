@@ -1,4 +1,4 @@
-"""Migration 0003 on a server without pgvector: an actionable refusal (P0-26).
+"""Migration 0003 on a server without pgvector: an actionable refusal.
 
 CI's and compose's Postgres always have pgvector, so the guard is exercised here
 against a stub connection that reports no ``vector`` extension available.

@@ -1,4 +1,4 @@
-"""The deterministic numeral check behind EXPLAIN (P0-31 Done-when: "No numerical value
+"""The deterministic numeral check behind EXPLAIN ("No numerical value
 can be introduced unless present in the supplied data")."""
 
 import json
@@ -32,6 +32,13 @@ def test_numbers_clock_times_and_number_words_are_numerals():
         "0.8",
         "2",
     }
+
+
+def test_a_number_word_in_a_stop_name_is_grounded_by_the_payload():
+    payload = '{"name": "Seven Dwarfs Mine Train"}'
+
+    assert ungrounded_numerals("Seven Dwarfs Mine Train next.", payload) == []
+    assert ungrounded_numerals("Seven Dwarfs, then four more rides.", payload) == ["4"]
 
 
 @pytest.mark.parametrize(
@@ -80,6 +87,7 @@ def test_hundreds_are_one_number_so_a_part_cannot_ground_the_whole():
         ("a thousand steps", "en", "1000"),
         ("a million steps", "en", "1000000"),
         ("dos mil doscientos pasos", "es", "2200"),
+        ("dos mil y cinco pasos", "es", "2005"),
         ("mil pasos", "es", "1000"),
         ("dos millones trescientos mil pasos", "es", "2300000"),
     ],
@@ -286,6 +294,19 @@ def test_fixture_label_cases_get_exactly_the_expected_verdict(case):
 
 # --- review #90: fractions, full-width digits, 12-hour times -----------------------
 
+# A realistic payload: 3 stops, a 3 minute wait, a 0.5 weight, 45 and 25 minute waits.
+REALISTIC = json.dumps(
+    {
+        "total_stops": 3,
+        "stops": [
+            {"name": "A", "arrives": "09:05", "wait_minutes": 3},
+            {"name": "B", "arrives": "10:00", "wait_minutes": 45},
+            {"name": "C", "arrives": "11:00", "wait_minutes": 25},
+        ],
+        "preferences": [{"weight": "lambda_queue", "value": 0.5, "source": "stated"}],
+    }
+)
+
 
 def test_a_vulgar_fraction_is_a_numeral_by_its_value():
     assert numerals("a ½ hour wait") == {"0.5"}
@@ -297,12 +318,76 @@ def test_full_width_digits_are_ordinary_digits():
     assert ungrounded_numerals("at 14:０５, a ２５ minute wait", PAYLOAD) == []
 
 
-def test_a_12_hour_time_is_not_grounded_by_the_24_hour_one():
-    payload = '{"arrives": "15:00"}'
+def test_a_12_hour_time_is_rejected_only_when_its_number_is_not_in_the_payload():
+    assert ungrounded_numerals("Meet at 3 PM.", '{"arrives": "15:00"}') == ["3"]
+    # Known gap: with a 3 elsewhere in the payload (3 stops) it is read as that 3.
+    assert ungrounded_numerals("Meet at 3 PM.", REALISTIC) == []
 
-    assert ungrounded_numerals("Meet at 3 PM.", payload) == ["3"]
+
+def test_a_fraction_passes_when_the_payload_has_that_value():
+    """Known gap: the check compares values, not how they were written."""
+    assert ungrounded_numerals("a ½ weight", REALISTIC) == []
 
 
-def test_grouped_thousands_can_only_be_rejected():
-    """Read as 1 and 500: safe, it never lets a figure through."""
+def test_swapped_figures_pass_when_both_are_in_the_payload():
+    """Known gap: a subset check cannot tell which stop the 45 belongs to."""
+    text = "B has a 25 minute wait, C a 45 minute wait"
+
+    assert ungrounded_numerals(text, REALISTIC) == []
+
+
+def test_grouped_thousands_and_exponents_are_read_as_separate_numbers():
     assert numerals("1,500 steps") == {"1", "500"}
+    assert numerals("1e3") == {"1", "3"}
+    assert ungrounded_numerals("1,500 steps", REALISTIC) == ["1", "500"]
+    # Known gap: pieces that are already in the payload pass.
+    assert ungrounded_numerals("1e3 steps", REALISTIC) == ["1"]
+    assert ungrounded_numerals("a 3,25 wait", REALISTIC) == []
+
+
+# --- default weights, stop scores and lists (review #90 follow-ups) ----------------
+
+WEIGHTS = {"0.8": "stated", "0.33": "learned", "0.5": "default"}
+
+
+def test_a_default_weight_called_stated_or_learned_is_caught():
+    assert mislabelled_preferences("Walking weighs 0.5 (stated).", WEIGHTS) == [
+        "0.5 is default, not stated"
+    ]
+    assert mislabelled_preferences(
+        "Walking weighs 0.5, which we learned.", WEIGHTS
+    ) == ["0.5 is default, not learned"]
+
+
+def test_a_default_weight_without_a_label_is_fine():
+    assert mislabelled_preferences("Walking weighs 0.5 by default.", WEIGHTS) == []
+    assert mislabelled_preferences("Walking weighs 0.5.", WEIGHTS) == []
+
+
+def test_a_stop_score_with_or_without_a_label_is_not_checked():
+    """0.81 is a stop's preference_score, not a weight: it is never in the labels."""
+    assert mislabelled_preferences("Space Mountain scores 0.81.", WEIGHTS) == []
+    assert (
+        mislabelled_preferences("Space Mountain scores 0.81 (stated).", WEIGHTS) == []
+    )
+
+
+def test_list_items_inherit_the_label_of_their_header():
+    text = "Your stated priorities:\n- thrill 0.8\n- more thrill 0.33\nDone."
+
+    assert mislabelled_preferences(text, WEIGHTS) == ["0.33 is learned, not stated"]
+    assert (
+        mislabelled_preferences("Your stated priorities:\n- thrill 0.8", WEIGHTS) == []
+    )
+
+
+def test_a_list_item_with_its_own_label_keeps_it():
+    text = "Your priorities:\n- thrill 0.8 (stated)\n- queues 0.33 (learned)"
+
+    assert mislabelled_preferences(text, WEIGHTS) == []
+
+
+def test_a_list_without_a_labelled_header_still_needs_labels():
+    assert mislabelled_preferences("Priorities:\n- thrill 0.8", WEIGHTS) == [
+        "0.8 needs its label (stated)"
+    ]

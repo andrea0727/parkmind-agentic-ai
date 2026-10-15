@@ -1,1 +1,1 @@
-"""MCP client adapters (P0-24): ports answered through parkmind-mcp."""
+"""MCP client adapters: ports answered through parkmind-mcp."""

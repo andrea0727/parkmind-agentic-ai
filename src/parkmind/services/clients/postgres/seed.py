@@ -1,4 +1,4 @@
-"""Reproducible development scenario (backlog P0-12 Done-when).
+"""Reproducible development scenario.
 
 Architecture section 38: same park, same day, same constraints -- only the
 profiles differ. A relaxed family and an adult maximizer share Magic Kingdom

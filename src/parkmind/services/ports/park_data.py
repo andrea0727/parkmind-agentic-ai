@@ -2,8 +2,8 @@
 
 ThemeParksClient (services/clients/themeparks_client.py) implements this
 today. Every method returns ParkMind's internal typed contracts only —
-never raw provider JSON/dicts. See P0-07 Done-when: "Raw provider schema
-does not leak into core."
+never raw provider JSON/dicts. The raw provider schema
+does not leak into core.
 """
 
 from datetime import date, datetime

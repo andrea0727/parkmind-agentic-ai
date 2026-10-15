@@ -1,4 +1,4 @@
-"""Use case: what a plan's stops are called, for showing a plan or a proposal to the guests (P0-35).
+"""Use case: what a plan's stops are called, for showing a plan or a proposal to the guests.
 
 A ``Plan`` and a ``PlanDiff`` only carry node ids. The catalog gives them names; the base
 plan of a replan gives the diff something to compare the candidate with.

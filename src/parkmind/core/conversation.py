@@ -1,4 +1,4 @@
-"""The conversation the HTTP layer talks to: one party's dialogue with the planner (P0-35).
+"""The conversation the HTTP layer talks to: one party's dialogue with the planner.
 
 The API never touches a graph. It holds a ``Conversation`` and passes what the guests said
 or decided; the implementation (``graph/conversation.py``) runs the right graph and reports
@@ -46,6 +46,10 @@ class UnknownAttractionError(ConversationError):
 
 class StaleProposalError(ConversationError):
     """The decision names a proposal that is no longer the one waiting for the guests."""
+
+
+class ServiceUnavailableError(Exception):
+    """A service the planner needs is down; the message is safe to show the guests."""
 
 
 @dataclass(frozen=True)

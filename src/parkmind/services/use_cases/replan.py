@@ -1,4 +1,4 @@
-"""Use case: REPLAN the rest of the day for the active plan (P0-23, P0-34).
+"""Use case: REPLAN the rest of the day for the active plan.
 
 Composes the deterministic core exactly as ``BuildPlanUseCase`` does for the initial
 plan -- ``ParkGraph``, ``PreferenceScorer``, ``GreedyInsertionOptimizer`` and the
@@ -29,7 +29,7 @@ Two things the graph's state cannot hold are derived here from the repositories:
   statuses, so the replan and the CHECK that follows see the same attractions as
   unavailable, until a newer snapshot says otherwise.
 
-A caller without the graph's thread -- ``planner.replan`` (P0-27), whose clients
+A caller without the graph's thread -- ``planner.replan``, whose clients
 send the plan, its progress and the events inline (section 31) -- passes them in
 ``ReplanRequest.execution_state`` and ``ReplanRequest.events``: the given progress
 replaces the repository's (the on-schedule assumption still applies to it), and the
@@ -80,6 +80,40 @@ from parkmind.services.use_cases.planning_deps import (
 from parkmind.services.use_cases.score_preferences import ScorePreferencesUseCase
 
 logger = logging.getLogger(__name__)
+
+
+ProgressSource = Literal["sent", "stored", "assumed"]
+
+
+def _reports_stops(state: PlanExecutionState | None) -> bool:
+    return state is not None and bool(
+        state.completed_stop_ids or state.skipped_stop_ids
+    )
+
+
+def check_progress_of_plan(plan: Plan, state: PlanExecutionState) -> None:
+    """Progress must be for this plan and only about its stops: an unknown stop id is a
+    client mistake, refused instead of silently ignored."""
+    if state.plan_id != plan.plan_id:
+        raise ValueError(
+            f"execution_state is for plan {state.plan_id}, not {plan.plan_id}"
+        )
+    stops = {s.node_id for s in plan.stops}
+    if not {*state.completed_stop_ids, *state.skipped_stop_ids} <= stops:
+        raise ValueError("completed and skipped stops must be stops of the plan")
+
+
+def progress_source(state: PlanExecutionState | None, *, sent: bool) -> ProgressSource:
+    """Where the progress comes from, as ``effective_execution_state`` takes it.
+
+    ``sent`` and ``stored`` mean stops were reported (the ended ones nobody reported are
+    still assumed done). ``assumed`` also covers a state that was sent or stored without
+    completed or skipped stops: its location and walking are kept, but the stops done
+    are the on-schedule ones.
+    """
+    if not _reports_stops(state):
+        return "assumed"
+    return "sent" if sent else "stored"
 
 
 def effective_execution_state(
@@ -148,14 +182,8 @@ class ReplanRequest:
     """Events to apply on top of the ones the thread recorded (a caller without the thread)."""
 
     def __post_init__(self) -> None:
-        state = self.execution_state
-        if state is not None and state.plan_id != self.plan.plan_id:
-            raise ValueError(
-                f"execution_state is for plan {state.plan_id}, not {self.plan.plan_id}"
-            )
-
-
-ProgressSource = Literal["sent", "stored", "assumed"]
+        if self.execution_state is not None:
+            check_progress_of_plan(self.plan, self.execution_state)
 
 
 @dataclass(frozen=True)
@@ -204,14 +232,7 @@ class ReplanUseCase:
                 else deps.execution_states.get(request.plan.plan_id)
             )
             execution_state = effective_execution_state(request.plan, stored, request.now)
-            progress_source: ProgressSource = (
-                "assumed"
-                if stored is None
-                or not (stored.completed_stop_ids or stored.skipped_stop_ids)
-                else "sent"
-                if request.execution_state is not None
-                else "stored"
-            )
+            source = progress_source(stored, sent=request.execution_state is not None)
             live_context = with_checks(
                 with_events(request.live_context),
                 party_checks(requirements, catalog, deps.knowledge),
@@ -256,13 +277,14 @@ class ReplanUseCase:
             )
         if not result.valid:
             logger.info("replan of %s found no valid plan", request.plan.plan_id)
-        return ReplanOutcome(result, state_context, execution_state, progress_source)
+        return ReplanOutcome(result, state_context, execution_state, source)
 
 
 __all__: list[Any] = [
     "ReplanOutcome",
     "ReplanRequest",
     "ReplanUseCase",
+    "check_progress_of_plan",
     "effective_execution_state",
     "with_event_statuses",
 ]

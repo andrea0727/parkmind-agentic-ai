@@ -1,4 +1,4 @@
-"""Re-normalization: rebuild stored snapshots from their raw payloads (P0-11, C21).
+"""Re-normalization: rebuild stored snapshots from their raw payloads.
 
 "Snapshots store the raw provider payload beside the normalized rows, so an
 ID-mapping bug can be re-normalized instead of re-collected" (Architecture 41).

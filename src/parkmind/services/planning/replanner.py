@@ -1,9 +1,9 @@
 """
-Replanner Service (P0-23).
+Replanner Service.
 
 Handles the deterministic re-optimization of a guest's itinerary
 mid-execution, based on their PlanExecutionState and current LiveContext.
-Enforces P0-12 (immutable plan IDs) and P0-22 (PlanDiffModel generation).
+Enforces immutable plan IDs and generates the PlanDiffModel.
 
 A replan is returned valid only when the whole day (completed stops + new horizon)
 passes the same ConstraintChecker rules as an initial plan: the day's walking limits
@@ -141,7 +141,7 @@ class Replanner:
                 fatal_error="Could not schedule a rest before the rest of the day.",
             )
 
-        # 5. Assemble the new aggregate Plan (P0-12)
+        # 5. Assemble the new aggregate Plan
         new_stops = completed_stops + resolve_result.plan.stops
         new_plan_id = f"plan_{uuid.uuid4().hex[:12]}"
         
@@ -186,7 +186,7 @@ class Replanner:
                 check=full_check,
             )
 
-        # 6. Calculate the delta for the UI / Concierge (P0-22)
+        # 6. Calculate the delta for the UI / Concierge
         diff = diff_plans(old_plan=current_plan, new_plan=new_plan)
 
         return ReplanResult(

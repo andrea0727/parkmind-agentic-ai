@@ -1,4 +1,4 @@
-"""P0-12: attraction data, ID mappings and provenance repositories."""
+"""Attraction data, ID mappings and provenance repositories."""
 
 from datetime import UTC, date, datetime, timedelta
 

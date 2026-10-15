@@ -1,4 +1,4 @@
-"""P0-11: both adapters expose the raw payload, and parsing it is a pure function.
+"""Both adapters expose the raw payload, and parsing it is a pure function.
 
 The snapshot collector stores raw provider payloads verbatim (Architecture 41,
 C21) and must be able to re-normalize them later without HTTP. Fixtures are the

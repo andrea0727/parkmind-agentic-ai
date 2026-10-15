@@ -1,4 +1,4 @@
-"""P0-33 on real tables: idempotent recording, supersede and execution state in one transaction."""
+"""Event handling on real tables: idempotent recording, supersede and execution state in one transaction."""
 
 from dataclasses import replace
 from datetime import datetime, timedelta

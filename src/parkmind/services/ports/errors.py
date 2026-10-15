@@ -51,7 +51,7 @@ class IdMappingConflictError(ConflictError):
     """A provider id is already mapped to a different internal id.
 
     Surfaced instead of overwritten so duplicate mappings are never silently
-    merged (backlog P0-10).
+    merged.
     """
 
 

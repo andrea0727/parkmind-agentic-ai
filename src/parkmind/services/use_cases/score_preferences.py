@@ -1,4 +1,4 @@
-"""Use case: thin wrapper around PreferenceScorer (P0-17).
+"""Use case: thin wrapper around PreferenceScorer.
 
 Keeps services.personalization (pure deterministic core, no I/O) decoupled
 from the agents/graph layer: graph nodes and tools reach the scorer only

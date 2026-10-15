@@ -108,7 +108,9 @@ def auth_from_env(env=os.environ) -> AuthConfig | None:
             "or PARKMIND_AUTH_DISABLED=1 for a local demo"
         )
     hours = _positive(env, "PARKMIND_TOKEN_TTL_HOURS", "2", float)
-    return AuthConfig(parse_users(users), secret, token_ttl_seconds=max(1, int(hours * 3600)))
+    return AuthConfig(
+        parse_users(users), secret, token_ttl_seconds=max(1, int(hours * 3600))
+    )
 
 
 def _positive(env, name: str, default: str, cast):
@@ -123,7 +125,9 @@ def _positive(env, name: str, default: str, cast):
 
 def limits_from_env(env=os.environ) -> Limits:
     return Limits(
-        messages_per_user_day=_positive(env, "PARKMIND_MESSAGES_PER_USER_DAY", "300", int),
+        messages_per_user_day=_positive(
+            env, "PARKMIND_MESSAGES_PER_USER_DAY", "300", int
+        ),
         messages_global_day=_positive(env, "PARKMIND_MESSAGES_GLOBAL_DAY", "2000", int),
     )
 
@@ -144,10 +148,16 @@ def build_app():
         deps_factory=deps_factory,
         clock=clock,
     )
-    replanning = build_replanning_graph(checkpointer, deps_factory=deps_factory, clock=clock)
+    replanning = build_replanning_graph(
+        checkpointer, deps_factory=deps_factory, clock=clock
+    )
     ui_dir = Path(os.environ.get("PARKMIND_UI_DIR", ROOT / "ui" / "web" / "dist"))
     origins = [
-        o for o in os.environ.get("PARKMIND_CORS_ORIGINS", "http://localhost:5173").split(",") if o
+        o
+        for o in os.environ.get("PARKMIND_CORS_ORIGINS", "http://localhost:5173").split(
+            ","
+        )
+        if o
     ]
     return create_app(
         ConversationService(
@@ -167,7 +177,11 @@ def build_app():
         saved_parties={
             name: household.as_message()
             for name, household in load_households(
-                Path(os.environ.get("PARKMIND_HOUSEHOLDS_FILE", ROOT / "demo" / "households.json"))
+                Path(
+                    os.environ.get(
+                        "PARKMIND_HOUSEHOLDS_FILE", ROOT / "demo" / "households.json"
+                    )
+                )
             ).items()
         },
     )

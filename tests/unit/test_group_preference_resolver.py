@@ -1,4 +1,4 @@
-"""Tests for GroupPreferenceResolver (P0-16).
+"""Tests for GroupPreferenceResolver.
 
 Covers every "done when" bullet from the ticket:
 - individual hard constraints preserved as a union

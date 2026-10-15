@@ -1,4 +1,4 @@
-"""Semantic search over pgvector (P0-26; Architecture section 30 [C21], migration 0003).
+"""Semantic search over pgvector (Architecture section 30 [C21], migration 0003).
 
 Implements ``KnowledgeSearch``: passages of the reviewed corpus ranked by cosine
 distance between their stored embedding and the query's. Rows are keyed by
@@ -9,8 +9,7 @@ different models are never compared -- no such rows means
 
 Each query runs in its own savepoint (``conn.transaction()``): a retrieval
 failure rolls back only that savepoint, never the caller's open transaction,
-so it cannot corrupt guest state written on the same connection (P0-26
-Done-when). Every failure surfaces as ``KnowledgeUnavailableError``.
+so it cannot corrupt guest state written on the same connection. Every failure surfaces as ``KnowledgeUnavailableError``.
 
 Search is exact nearest-neighbour, by design (ADR 0002). Measured with
 ``EXPLAIN ANALYZE`` on the 134-passage corpus (pgvector 0.8.7): the rows of this

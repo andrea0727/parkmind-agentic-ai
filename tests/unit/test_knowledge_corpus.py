@@ -1,4 +1,4 @@
-"""The reviewed knowledge corpus (P0-26 Done-when: "A small seed corpus is
+"""The reviewed knowledge corpus ("A small seed corpus is
 indexed; the corpus has a version and a coverage report over the attraction
 catalog")."""
 

@@ -1,10 +1,10 @@
-"""Use case: record that the party completed or skipped a stop of its active plan (P1-01).
+"""Use case: record that the party completed or skipped a stop of its active plan.
 
 One report updates two aggregates in one transaction (``PlanExecutionState`` and the
 ``BehaviorLog``, section 33 [C12, C13]):
 - the stored progress: the stop joins ``completed_stop_ids`` or
   ``skipped_stop_ids``. That progress is what the replanner keeps, and what
-  ``BEHIND_SCHEDULE`` reads (P0-33). A replan takes reported stops as reported and
+  ``BEHIND_SCHEDULE`` reads. A replan takes reported stops as reported and
   still assumes the unreported, departed ones done
   (``replan.effective_execution_state``), so a stop that wasn't done is reported
   skipped;
@@ -19,7 +19,7 @@ time (``entry_id`` is the plan, the stop and the outcome, and the entries were w
 with the first report, in the same transaction). A stop can't be both completed and
 skipped, and only a stop of the thread's *active* plan can be reported: a candidate
 is not being walked yet. Walking minutes are not part of a report; they stay with the
-events that carry them (P0-33).
+events that carry them.
 
 The party is checked against the active plan, which names its guests
 (``per_guest_satisfaction`` and each stop's ``served_guests``): a guest the plan
@@ -29,9 +29,12 @@ caller can't log behavior for an invented party. Every refusal is an
 
 Concurrency: the read-modify-write of the plan's progress holds the plan's lock
 (``ExecutionStateRepository.lock``) until the transaction ends, so two reports at
-once, or a report and an event (``HandleEventsUseCase``), never overwrite each other.
+once, a report and an event (``HandleEventsUseCase``), or a report and the approval
+of a replan (``ResolveProposalUseCase``) never overwrite each other. The lock is taken
+before the plan is checked to be the active one: a report that waited sees the plan
+as the writer ahead of it left it.
 
-No API exposes this yet (P0-35b).
+No API exposes this yet.
 """
 
 from collections.abc import Sequence
@@ -46,7 +49,7 @@ from parkmind.core.contracts import (
     PlanExecutionState,
     StopKind,
 )
-from parkmind.services.ports import party_guest_id
+from parkmind.services.ports import NotFoundError, party_guest_id
 from parkmind.services.use_cases.planning_deps import (
     DepsFactory,
     default_planning_deps,
@@ -117,6 +120,16 @@ class RecordProgressUseCase:
                 ProgressProblem.NAIVE_TIME, "the report time needs a timezone"
             )
         with open_deps(self._deps_factory) as deps, deps.transaction():
+            # Lock first, check after: a report that waited here must see the plan
+            # as it is once the writer ahead of it finished (an approval may have
+            # replaced the active plan meanwhile).
+            try:
+                deps.execution_states.lock(plan_id)
+            except NotFoundError:
+                raise InvalidProgressError(
+                    ProgressProblem.NOT_THE_ACTIVE_PLAN,
+                    f"{plan_id} is not the active plan of this thread",
+                ) from None
             active = deps.plans.get_active(thread_id)
             if active is None or active.plan_id != plan_id:
                 raise InvalidProgressError(
@@ -139,7 +152,6 @@ class RecordProgressUseCase:
                     f"({', '.join(sorted(named))})",
                 )
 
-            deps.execution_states.lock(plan_id)
             state = deps.execution_states.get(plan_id) or PlanExecutionState(
                 plan_id=plan_id, as_of=at
             )

@@ -1,4 +1,4 @@
-"""The pgvector knowledge store on a real Postgres (P0-26).
+"""The pgvector knowledge store on a real Postgres.
 
 Indexed with the deterministic ``HashingEmbedder`` (lexical, no model download),
 so the rankings below are stable on every machine and in CI. The real
@@ -98,7 +98,7 @@ class _BrokenQueryEmbedder(HashingEmbedder):
 def test_retrieval_failure_leaves_guest_state_intact(
     indexed: PgvectorKnowledgeSearch, conn: psycopg.Connection
 ) -> None:
-    """P0-26 Done-when: a failed search inside an open transaction must not undo it."""
+    """A failed search inside an open transaction must not undo it."""
     conn.execute("INSERT INTO guests (guest_id, role) VALUES ('g1', 'adult')")
     broken = PgvectorKnowledgeSearch(conn, _BrokenQueryEmbedder())
 

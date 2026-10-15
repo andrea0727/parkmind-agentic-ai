@@ -1,4 +1,4 @@
-"""Versioned system prompt of the ``explain`` step (section 40, P0-31)."""
+"""Versioned system prompt of the ``explain`` step."""
 
 EXPLAIN_PROMPT_VERSION = "explain-v1"
 
@@ -23,10 +23,11 @@ Rules:
 payload exactly as given (for example `25`, `0.8`, `14:05`). Never compute, \
 round, add, convert or estimate a figure. Never write a time or a number that \
 is not in the payload. If a figure is not there, say it without the figure.
-2. STATED OR LEARNED. Whenever you mention a preference weight or a preference \
-score, say where it comes from: "(stated)" if its source is `stated`, \
-"(learned)" if `learned`. A `default` weight is not the guests' preference; do \
-not present it as one.
+2. STATED OR LEARNED. Whenever you mention a number from `preferences`, say \
+where it comes from: "(stated)" if its source is `stated`, "(learned)" if \
+`learned`. A `default` weight is not the guests' preference: do not call it \
+stated or learned, and do not present it as theirs. A stop's `preference_score` \
+is not a weight: never label it stated or learned.
 3. WHY. Say why the must-dos are where they are, and name every entry of \
 `unmet_must_do` and say it could not fit today. For an updated plan, start with \
 the `reason`, then what changed.

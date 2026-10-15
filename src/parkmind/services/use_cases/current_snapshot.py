@@ -1,4 +1,4 @@
-"""The park snapshot to answer from at ``now`` (Architecture section 43, P0-11).
+"""The park snapshot to answer from at ``now``.
 
 One function, shared by LOAD CONTEXT (``load_context``) and the ``data.*`` tools
 (``park_data_queries``), so both read the same snapshot the same way.

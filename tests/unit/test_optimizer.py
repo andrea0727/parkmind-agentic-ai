@@ -1,4 +1,4 @@
-"""Unit tests for GreedyInsertionOptimizer (P0-19).
+"""Unit tests for GreedyInsertionOptimizer.
 
 Coverage:
   - Basic greedy flow with chronological ordering
@@ -24,6 +24,7 @@ from parkmind.core.contracts import (
     Attraction,
     AttractionCategory,
     AttractionStatus,
+    ConstraintViolation,
     CoverageReport,
     DataSource,
     EventThresholds,
@@ -35,7 +36,9 @@ from parkmind.core.contracts import (
     LiveContext,
     Park,
     PartyConstraints,
+    Plan,
     Provenance,
+    RuleId,
     StopKind,
     TimeWindow,
     WaitEstimate,
@@ -45,6 +48,10 @@ from parkmind.services.personalization.preference_scorer import (
     PREFERENCE_SCORER_VERSION,
     PreferenceScorer,
     per_guest_satisfaction,
+)
+from parkmind.services.planning.constraint_checker import (
+    SHOW_ARRIVAL_BUFFER_MINUTES,
+    ConstraintChecker,
 )
 from parkmind.services.planning.forecast_service import ForecastService
 from parkmind.services.planning.optimizer import (
@@ -659,7 +666,95 @@ class TestShowAnchors:
         show_stops = [s for s in plan.stops if s.kind == StopKind.SHOW]
         assert len(show_stops) == 1
         assert show_stops[0].node_id == SHOW_1
-        assert show_stops[0].arrival_time >= show_time
+        assert show_stops[0].arrival_time == show_time - timedelta(
+            minutes=SHOW_ARRIVAL_BUFFER_MINUTES
+        )
+        assert show_stops[0].departure_time >= show_time
+
+    def _show_plan(
+        self,
+        showtimes: list[datetime],
+        *,
+        waits: float = 10.0,
+        departure_hour: int = 22,
+        lunch_window: TimeWindow | None = None,
+    ) -> tuple[Plan, LiveContext, PartyConstraints]:
+        context = _live_context(
+            waits={A1: waits, A2: waits},
+            statuses={
+                A1: AttractionStatus.OPERATING,
+                A2: AttractionStatus.OPERATING,
+                SHOW_1: AttractionStatus.OPERATING,
+            },
+            showtimes={SHOW_1: showtimes},
+        )
+        constraints = _constraints(
+            must_do=[SHOW_1], departure_hour=departure_hour, lunch_window=lunch_window
+        )
+        plan = _build_optimizer().build_plan(
+            constraints=constraints,
+            context=context,
+            utilities={A1: 3.0, A2: 3.0, SHOW_1: 2.0},
+            park=_park(),
+            catalog=_catalog(),
+            restaurant_node_ids=[RESTAURANT_1],
+        )
+        return plan, context, constraints
+
+    @staticmethod
+    def _show_arrival_violations(
+        plan: Plan, context: LiveContext, constraints: PartyConstraints
+    ) -> list[ConstraintViolation]:
+        result = ConstraintChecker().check(
+            plan=plan,
+            constraints=constraints,
+            accessibility=[],
+            attractions={a.node_id: a for a in _catalog()},
+            park=_park(),
+            live_context=context,
+            now=DAY.replace(hour=9),
+        )
+        return [v for v in result.violations if v.rule is RuleId.SHOW_ARRIVAL]
+
+    def test_the_show_stop_passes_the_checkers_arrival_rule(self) -> None:
+        plan, context, constraints = self._show_plan(
+            [DAY.replace(hour=11), DAY.replace(hour=15)]
+        )
+
+        assert any(s.kind == StopKind.SHOW for s in plan.stops)
+        assert self._show_arrival_violations(plan, context, constraints) == []
+
+    def test_a_show_that_would_cut_the_lunch_window_goes_after_lunch(self) -> None:
+        """Lunch is had first and the show takes its later showtime, not the reverse."""
+        lunch = TimeWindow(
+            start=DAY.replace(hour=11), end=DAY.replace(hour=11, minute=30)
+        )
+        plan, context, constraints = self._show_plan(
+            [DAY.replace(hour=11, minute=20), DAY.replace(hour=15)],
+            lunch_window=lunch,
+        )
+
+        kinds = [s.kind for s in plan.stops if s.kind in (StopKind.MEAL, StopKind.SHOW)]
+        assert kinds == [StopKind.MEAL, StopKind.SHOW]
+        meal = next(s for s in plan.stops if s.kind == StopKind.MEAL)
+        assert lunch.start <= meal.arrival_time <= lunch.end
+        assert plan.unmet_must_do == []
+        assert self._show_arrival_violations(plan, context, constraints) == []
+
+    def test_lunch_is_kept_when_the_only_showtime_falls_in_its_window(self) -> None:
+        lunch = TimeWindow(
+            start=DAY.replace(hour=11), end=DAY.replace(hour=11, minute=30)
+        )
+        plan, _, _ = self._show_plan([DAY.replace(hour=11, minute=20)], lunch_window=lunch)
+
+        assert any(s.kind == StopKind.MEAL for s in plan.stops)
+        assert SHOW_1 in plan.unmet_must_do
+
+    def test_a_show_with_no_showtime_left_to_make_stays_unmet(self) -> None:
+        plan, _, _ = self._show_plan([DAY.replace(hour=9, minute=3)])
+
+        assert all(s.kind != StopKind.SHOW for s in plan.stops)
+        assert SHOW_1 in plan.unmet_must_do
 
 
 class TestProvenanceStrategy:
@@ -1412,7 +1507,7 @@ class TestForecastInputsAndEdges:
 
 
 class TestReplanKnobs:
-    """``rest_first`` and ``walking_budget_minutes`` (P0-23 follow-up, P0-34)."""
+    """``rest_first`` and ``walking_budget_minutes`` ."""
 
     @staticmethod
     def _build(optimizer: GreedyInsertionOptimizer, **kwargs):
@@ -1471,3 +1566,128 @@ class TestReplanKnobs:
         plan = self._build(_build_optimizer(), walking_budget_minutes=0.0)
 
         assert [s for s in plan.stops if s.kind is StopKind.ATTRACTION] == []
+
+
+class TestParkHoursAndClock:
+    """B11 / B2: the plan stays inside the hours the checker enforces and never starts in the past."""
+
+    def _plan(self, *, park, now=None, departure_hour=22):  # type: ignore[no-untyped-def]
+        statuses = {A1: AttractionStatus.OPERATING, A2: AttractionStatus.OPERATING}
+        return _build_optimizer().build_plan(
+            constraints=_constraints(departure_hour=departure_hour),
+            context=_live_context(waits={A1: 10.0, A2: 10.0}, statuses=statuses),
+            utilities={A1: 1.0, A2: 1.0},
+            park=park,
+            catalog=_catalog(),
+            now=now,
+        )
+
+    def test_plan_ends_by_closing_time_when_the_party_leaves_after_it(self) -> None:
+        park = _park().model_copy(update={"closing_time": DAY.replace(hour=9, minute=45)})
+
+        plan = self._plan(park=park, departure_hour=22)
+
+        assert plan.stops
+        assert all(s.departure_time <= park.closing_time for s in plan.stops)
+
+    def test_checker_finds_no_opening_hours_violation_in_the_optimizers_plan(
+        self,
+    ) -> None:
+        from parkmind.services.planning.constraint_checker import ConstraintChecker
+
+        park = _park().model_copy(update={"closing_time": DAY.replace(hour=9, minute=45)})
+        statuses = {A1: AttractionStatus.OPERATING, A2: AttractionStatus.OPERATING}
+        context = _live_context(waits={A1: 10.0, A2: 10.0}, statuses=statuses)
+        constraints = _constraints(departure_hour=22)
+        plan = _build_optimizer().build_plan(
+            constraints=constraints,
+            context=context,
+            utilities={A1: 1.0, A2: 1.0},
+            park=park,
+            catalog=_catalog(),
+        )
+
+        result = ConstraintChecker().check(
+            plan,
+            constraints,
+            [],
+            {a.node_id: a for a in _catalog()},
+            park,
+            context,
+            DAY.replace(hour=9),
+        )
+
+        assert not any(v.rule.value == "OPENING_HOURS" for v in result.violations)
+
+    def test_plan_starts_at_now_when_the_park_opened_earlier(self) -> None:
+        now = DAY.replace(hour=15, minute=7)
+
+        plan = self._plan(park=_park(), now=now)
+
+        assert plan.stops[0].arrival_time >= now
+
+    def test_plan_starts_at_opening_when_now_is_before_it(self) -> None:
+        park = _park(opening_hour=9)
+
+        plan = self._plan(park=park, now=DAY.replace(hour=7))
+
+        assert plan.stops[0].arrival_time >= park.opening_time
+
+    def test_now_in_another_timezone_is_compared_by_instant(self) -> None:
+        from datetime import UTC
+
+        now = DAY.replace(hour=15).astimezone(UTC)
+
+        plan = self._plan(park=_park(), now=now)
+
+        assert plan.stops[0].arrival_time >= now
+
+    def test_nothing_is_planned_when_the_departure_is_already_past(self) -> None:
+        plan = self._plan(park=_park(), now=DAY.replace(hour=15), departure_hour=14)
+
+        assert plan.stops == []
+
+
+class TestUnknownHeight:
+    """Height review (a): a guest of unknown height is left off a height-restricted ride."""
+
+    def test_the_guest_is_not_served_the_restricted_ride_and_the_checker_agrees(self) -> None:
+        from parkmind.services.planning.constraint_checker import ConstraintChecker
+
+        guests = [
+            Guest(guest_id="known", role=GuestRole.ADULT, height_cm=175.0),
+            Guest(guest_id="unknown", role=GuestRole.CHILD, height_cm=None),
+        ]
+        constraints = _constraints(guests=guests)
+        context = _live_context(waits={A3: 5.0}, statuses={A3: AttractionStatus.OPERATING})
+        objective = GroupObjective(
+            objective_version="v1",
+            weights={"queue": 0.5},
+            per_guest_eligible={"known": [A3], "unknown": []},
+            hard_constraints=HardConstraintSet(),
+            fairness=FairnessConfig(lambda_fairness=0.1, min_satisfaction_floor=0.0),
+            event_thresholds=EventThresholds(),
+        )
+        catalog = _catalog()
+
+        plan = _build_optimizer().build_plan(
+            constraints=constraints,
+            context=context,
+            utilities={A3: 5.0},
+            park=_park(),
+            catalog=catalog,
+            group_objective=objective,
+        )
+
+        stop = next(s for s in plan.stops if s.node_id == A3)
+        assert stop.served_guests == ["known"]
+        result = ConstraintChecker().check(
+            plan,
+            constraints,
+            [],
+            {a.node_id: a for a in catalog},
+            _park(),
+            context,
+            DAY.replace(hour=9),
+        )
+        assert not any(v.rule.value == "HEIGHT" for v in result.violations)

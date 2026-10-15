@@ -1,4 +1,4 @@
-"""``parkmind-mcp``: the tool registry served over MCP (P0-24).
+"""``parkmind-mcp``: the tool registry served over MCP.
 
 One server, three namespaces (``data.*``, ``knowledge.*``, ``planner.*``;
 Architecture section 28). MCP is a transport, not the critical path (section
@@ -33,7 +33,9 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field
 from pydantic.fields import FieldInfo
 
+from parkmind.tools.contracts import ToolErrorCode
 from parkmind.tools.errors import ToolFailure
+from parkmind.tools.mcp_auth import ASGIApp, BearerAuthMiddleware, RateLimiter
 from parkmind.tools.registry import ToolRegistry, ToolSpec, build_registry
 
 SERVER_NAME = "parkmind-mcp"
@@ -84,10 +86,20 @@ def _published_annotation(info: FieldInfo, schema: dict[str, Any]) -> Any:
     return Annotated[info.annotation, published]
 
 
-def _tool_function(registry: ToolRegistry, spec: ToolSpec) -> Any:
+def _tool_function(
+    registry: ToolRegistry, spec: ToolSpec, limiter: RateLimiter | None = None
+) -> Any:
     """A function the SDK can introspect: flat keyword parameters, envelope return type."""
 
     def call(**arguments: Any) -> Any:
+        if limiter is not None and not limiter.allow():
+            return _error_result(
+                ToolFailure.of(
+                    ToolErrorCode.UNAVAILABLE,
+                    "Too many calls; try again shortly.",
+                    retryable=True,
+                )
+            )
         try:
             return registry.call(spec.qualified_name, arguments)
         except ToolFailure as failure:
@@ -116,13 +128,25 @@ def _tool_function(registry: ToolRegistry, spec: ToolSpec) -> Any:
     return call
 
 
-def create_server(registry: ToolRegistry | None = None) -> MCPServer:
-    """An MCP server publishing every tool of ``registry`` (the default one if omitted)."""
+def create_server(
+    registry: ToolRegistry | None = None,
+    *,
+    capture_rate_limit: RateLimiter | None = None,
+) -> MCPServer:
+    """An MCP server publishing every tool of ``registry`` (the default one if omitted).
+
+    ``capture_rate_limit`` caps the ``planner.*`` and ``data.*`` calls (both can
+    trigger a park snapshot capture) and is shared by all of them [G14].
+    """
     tools = registry if registry is not None else build_registry()
     server = MCPServer(SERVER_NAME, instructions=INSTRUCTIONS)
     for spec in tools:
         server.add_tool(
-            _tool_function(tools, spec),
+            _tool_function(
+                tools,
+                spec,
+                capture_rate_limit if spec.namespace in ("planner", "data") else None,
+            ),
             name=spec.qualified_name,
             title=spec.qualified_name,
             description=spec.description,
@@ -134,3 +158,9 @@ def create_server(registry: ToolRegistry | None = None) -> MCPServer:
             structured_output=True,
         )
     return server
+
+
+def create_http_app(server: MCPServer, *, host: str, token: str | None) -> ASGIApp:
+    """The streamable-HTTP app of ``server``; every request needs ``token`` if one is given."""
+    app: ASGIApp = server.streamable_http_app(host=host)
+    return BearerAuthMiddleware(app, token) if token else app

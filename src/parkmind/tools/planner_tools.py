@@ -1,4 +1,4 @@
-"""``planner.*`` tools (P0-27; Architecture section 31).
+"""``planner.*`` tools.
 
 ``build_plan``, ``check_plan``, ``replan``, ``score_preferences``,
 ``forecast_waits``. Each handler is one call to ``PlannerQueries``, which
@@ -16,7 +16,9 @@ read from the SessionStore server-side [C19]; no requirement value is accepted o
 returned, and ``replan`` returns the progress it started from without its walking
 minutes (with the fatigue cap they would give a limit back). A residual risk
 remains, as for ``check_plan``: a client that varies what it sends (walked minutes,
-stops) and watches which answers fail can narrow a guest's limit down. What bounds
+stops) and watches which answers fail can narrow a guest's limit down; and, as in
+``build_plan``, a plan bounded by the guest's remaining walking budget is itself an
+answer to the limit, without varying anything. What bounds
 it is who can call at all: the server has no authentication and serves only this
 machine (README, "Trust model").
 They have no effect on guest, plan or proposal state, so they are read-only; the
@@ -52,6 +54,7 @@ from parkmind.core.contracts import (
     PlanExecutionState,
 )
 from parkmind.services.use_cases.planner_queries import ContextStamp, PlannerQueries
+from parkmind.services.use_cases.replan import check_progress_of_plan
 from parkmind.tools.contracts import ToolProvenance, ToolResult
 from parkmind.tools.spec import ToolContext, ToolSpec
 
@@ -139,7 +142,11 @@ class ReplanToolRequest(CheckPlanRequest):
         default_factory=list,
         description=(
             "What happened since the plan was made, applied on top of the events the "
-            "session recorded: a closure or a reopening changes which rides are available."
+            "session recorded: a closure or a reopening changes which rides are available. "
+            "Whatever their timestamp, they override the snapshot's status of that ride "
+            "(a closure sent here wins over a snapshot that says the ride reopened, and "
+            "a reopening over one that says it is down). Only availability is read: "
+            "severity and requires_replan are ignored."
         ),
     )
     rest_first: bool = Field(
@@ -147,21 +154,25 @@ class ReplanToolRequest(CheckPlanRequest):
         description="Open the new horizon with a rest (a confirmed guest fatigue report).",
     )
 
+    @field_validator("events")
+    @classmethod
+    def _availability_reports_only(cls, events: list[Event]) -> list[Event]:
+        """``severity`` and ``requires_replan`` are EventPolicy's to set [Invariant #4]: a
+        client's are dropped, since a replan reads only availability from its events."""
+        return [
+            Event.model_validate(e.model_dump(exclude={"severity", "requires_replan"}))
+            for e in events
+        ]
+
     @field_validator("execution_state")
     @classmethod
     def _progress_of_this_plan(
         cls, state: PlanExecutionState | None, info: ValidationInfo
     ) -> PlanExecutionState | None:
-        """For the plan that is sent, and only about its stops: an unknown stop id is a
-        client mistake, refused instead of silently ignored."""
+        """The use case checks it too; here a wrong one is the ``execution_state`` field's."""
         plan = info.data.get("plan")
-        if state is None or plan is None:
-            return state
-        if state.plan_id != plan.plan_id:
-            raise ValueError("execution_state must be for the plan that is sent")
-        stops = {s.node_id for s in plan.stops}
-        if not {*state.completed_stop_ids, *state.skipped_stop_ids} <= stops:
-            raise ValueError("completed and skipped stops must be stops of the plan")
+        if state is not None and plan is not None:
+            check_progress_of_plan(plan, state)
         return state
 
 
@@ -223,7 +234,12 @@ class ReplanProgressData(BaseModel):
     current_location_node_id: str | None
     as_of: datetime
     source: Literal["sent", "stored", "assumed"] = Field(
-        description="Sent by the client, stored for the plan, or assumed on schedule."
+        description=(
+            "sent: the client reported completed or skipped stops. stored: they were "
+            "stored for the plan. Either way an ended stop nobody reported is assumed "
+            "done. assumed: no completed or skipped stop was reported (even if a "
+            "location or walking was), so the party is taken to be on schedule."
+        )
     )
 
 
@@ -471,7 +487,9 @@ def planner_tools(ctx: ToolContext) -> list[ToolSpec]:
             "replan",
             "Replan the rest of the day from a current plan, its progress and what happened "
             "(closures, reopenings): completed stops are kept, the new horizon is re-solved and "
-            "the whole day is checked against the 11 rules. Returns a candidate and its diff; "
+            "the whole day is checked against the 11 rules. Events sent here override the "
+            "snapshot's availability whatever their timestamp; their severity and "
+            "requires_replan are ignored. Returns a candidate and its diff; "
             "never proposes or activates it.",
             ReplanToolRequest,
             ReplanData,

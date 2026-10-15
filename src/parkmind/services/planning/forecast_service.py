@@ -1,4 +1,4 @@
-"""ForecastService -- expected standby waits for a stop's time, with fallback (section 18, P0-18).
+"""ForecastService -- expected standby waits for a stop's time, with fallback.
 
 A plan places each stop at a future time, so the queue the optimizer charges
 (section 19, ``lambda_q * queue``) should be the one expected *then*, not the one

@@ -38,5 +38,18 @@ def test_a_version_1_snapshot_is_rebuilt_without_meet_and_greet_windows() -> Non
     assert [(o.snapshot_id, o.status) for o in report.outcomes] == [(sid, "rebuilt")]
     rebuilt = snapshots.get(sid)
     assert rebuilt is not None and MEET_ARIEL not in rebuilt.showtimes
-    assert snapshots.rows[sid]["version"] == NORMALIZER_VERSION == 2
+    assert snapshots.rows[sid]["version"] == NORMALIZER_VERSION == 3
     assert stale_snapshot_ids(snapshots) == []
+
+
+def test_the_accessibility_gap_text_and_the_normalizer_version_change_together() -> (
+    None
+):
+    """``load_context`` filters stored coverage gaps by equality with this text: a new
+    wording needs a new ``NORMALIZER_VERSION`` so older snapshots are rebuilt."""
+    from parkmind.services.use_cases.snapshot_normalization import ACCESSIBILITY_GAP
+
+    assert (NORMALIZER_VERSION, ACCESSIBILITY_GAP) == (
+        3,
+        "accessibility checks are per party: done by load_context, not the collector",
+    )

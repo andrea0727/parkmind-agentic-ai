@@ -1,7 +1,8 @@
-"""EXPLAIN's safety path (section 40 [C17], P0-31): grounded LLM text or the template."""
+"""EXPLAIN's safety path (section 40 [C17]): grounded LLM text or the template."""
 
 import logging
 from collections.abc import Mapping
+from dataclasses import replace
 from typing import Any
 
 import factories
@@ -10,6 +11,7 @@ import pytest
 from parkmind.agents.explain_agent import (
     EXPLAIN_PROMPT_VERSION,
     TEMPLATE_VERSION,
+    NarratorOutputError,
     NarratorUnavailableError,
     explain_grounded,
 )
@@ -100,6 +102,16 @@ def test_a_narrator_that_cannot_answer_never_breaks_the_plan(failure: Exception)
     assert result.source == "template"
 
 
+def test_an_answer_without_structured_output_goes_straight_to_the_template():
+    """tool_choice is forced, so a second call would not change it: no retry."""
+    narrator = _Scripted(NarratorOutputError("no tool call"), {"text": GROUNDED})
+
+    result = explain_grounded(narrator, _prepared())
+
+    assert (result.source, result.attempts) == ("template", 1)
+    assert len(narrator.hints) == 1
+
+
 def test_without_a_narrator_the_template_is_used():
     assert explain_grounded(None, _prepared()).source == "template"
 
@@ -130,7 +142,7 @@ def _prepared_with_preferences() -> PreparedExplanation:
 
     objective = GroupObjective(
         objective_version="t",
-        weights={"affinity:thrill": 0.8, "lambda_queue": 0.33},
+        weights={"affinity:thrill": 0.8, "lambda_queue": 0.33, "lambda_walk": 0.5},
         weight_provenance={
             "affinity:thrill": PreferenceSource.STATED,
             "lambda_queue": PreferenceSource.LEARNED,
@@ -165,3 +177,43 @@ def test_a_correctly_labelled_answer_is_used():
     result = explain_grounded(_Scripted({"text": right}), _prepared_with_preferences())
 
     assert result.source == "llm"
+
+
+def test_a_default_weight_called_stated_is_retried_with_the_figure_named():
+    wrong = "Space Mountain first, and walking weighs 0.5 (stated)."
+    narrator = _Scripted({"text": wrong}, {"text": wrong})
+
+    result = explain_grounded(narrator, _prepared_with_preferences())
+
+    assert result.source == "template"
+    assert (
+        narrator.hints[1] is not None
+        and "0.5 is default, not stated" in narrator.hints[1]
+    )
+
+
+def test_a_default_weight_without_a_label_is_used():
+    text = "Space Mountain first: walking weighs 0.5 by default."
+
+    result = explain_grounded(_Scripted({"text": text}), _prepared_with_preferences())
+
+    assert result.source == "llm"
+
+
+@pytest.mark.parametrize("label", ["", " (stated)", " (learned)"])
+def test_a_stop_score_is_never_checked_for_a_label(label: str):
+    """A stop's preference_score (1.5 here) is a utility, not a weight."""
+    text = f"Space Mountain first, a 1.5{label} fit for you."
+
+    result = explain_grounded(_Scripted({"text": text}), _prepared_with_preferences())
+
+    assert result.source == "llm"
+
+
+def test_a_weight_that_is_also_a_stop_score_is_not_checked():
+    prepared = _prepared_with_preferences()
+    stops = [replace(stop, preference_score=0.33) for stop in prepared.payload.stops]
+    prepared = replace(prepared, payload=replace(prepared.payload, stops=stops))
+    text = "Space Mountain first, a 0.33 fit for you."
+
+    assert explain_grounded(_Scripted({"text": text}), prepared).source == "llm"

@@ -1,7 +1,7 @@
 """Use case: judge a party's events, record them, and supersede a stale proposal
-(sections 24-25, 9 [C18], 36; backlog P0-33).
+(sections 24-25, 9 [C18], 36).
 
-The replanning graph's EVENT POLICY step (P0-34) calls this with what its
+The replanning graph's EVENT POLICY step calls this with what its
 state holds -- the active plan, the constraints and the group objective --
 because those live in the thread's checkpoints, not in a repository. The
 park-wide candidates come from ``MonitorEventsUseCase.detect`` or from a

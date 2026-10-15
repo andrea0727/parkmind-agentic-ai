@@ -38,7 +38,11 @@ class RecordingExtractor:
         self._inner = AnthropicExtractor()
 
     def extract(self, human_messages: Sequence[str], repair_hint: str | None = None) -> Mapping[str, Any]:
-        args = self._inner.extract(human_messages, repair_hint)
+        try:
+            args = self._inner.extract(human_messages, repair_hint)
+        except Exception as exc:
+            LLM_CALLS.append({"hint": repair_hint, "calls": [], "error": f"{type(exc).__name__}: {str(exc)[:500]}"})
+            raise
         LLM_CALLS.append({"hint": repair_hint, "calls": [{"args": args}]})
         return args
 

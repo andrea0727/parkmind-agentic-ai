@@ -1,4 +1,4 @@
-"""P0-14: GuestProfileService's merge/update semantics against real PostgreSQL.
+"""GuestProfileService's merge/update semantics against real PostgreSQL.
 
 `test_repositories_roundtrip.py` covers `PostgresProfileRepository`'s own
 save/get contract; this file wires that repository into `GuestProfileService`

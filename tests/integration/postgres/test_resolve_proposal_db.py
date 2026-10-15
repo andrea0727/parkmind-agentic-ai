@@ -1,4 +1,4 @@
-"""P0-32 on real tables: a live party's decision lands in the behavior log.
+"""Proposal resolution on real tables: a live party's decision lands in the behavior log.
 
 The party's guests (``g1``, ``g2`` from elicitation) are not in ``guests``, and
 ``behavior_entries.guest_id`` references it: the decision registers them under their
@@ -38,7 +38,9 @@ def _thread_with_a_pending_proposal(conn: psycopg.Connection, thread: str) -> No
     PostgresProposalRepository(conn).save(
         thread,
         factories.proposal(
-            proposal_id=f"prop_{thread}", candidate_plan_id=f"plan_{thread}"
+            proposal_id=f"prop_{thread}",
+            base_plan_id=f"plan_{thread}",
+            candidate_plan_id=f"plan_{thread}",
         ),
     )
 

@@ -1,4 +1,4 @@
-"""EventPolicy (P0-33): section 25's table, the confirmation gate, execution updates."""
+"""EventPolicy: section 25's table, the confirmation gate, execution updates."""
 
 from datetime import datetime, timedelta
 

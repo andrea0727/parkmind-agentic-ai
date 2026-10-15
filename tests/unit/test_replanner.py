@@ -1,5 +1,5 @@
 """
-Unit tests for Replanner service (P0-23).
+Unit tests for Replanner service.
 Ensures completed stops freeze, location fallback works, and PlanDiff generates correctly.
 """
 
@@ -237,3 +237,43 @@ def test_replanner_fails_closed_safely_if_future_is_infeasible(mock_resolve_loop
     assert result.diff is None
     assert result.unmet_must_do == ["some_ride"]
     assert result.fatal_error == "Infeasible constraints"
+
+
+def test_replanner_hands_the_confirmed_guests_to_the_resolve_loop_unchanged(
+    mock_resolve_loop, mock_park_graph, base_context
+):
+    """No height enters a replan: the guests come from the confirmed constraints, as they were."""
+    from parkmind.core.contracts import Guest
+
+    replanner = Replanner(resolve_loop=mock_resolve_loop, park_graph=mock_park_graph)
+    guests = [
+        Guest(guest_id="g1", role="child", height_cm=95.0),
+        Guest(guest_id="g2", role="adult"),
+    ]
+    constraints = PartyConstraints(
+        party_size=2,
+        guests=guests,
+        must_do=["done", "todo"],
+        departure_time=DAY.replace(hour=20),
+        constraints_version=1,
+    )
+    current_plan = _plan([_stop("done", 10)])
+
+    replanner.replan(
+        current_plan=current_plan,
+        execution_state=PlanExecutionState(
+            plan_id=current_plan.plan_id,
+            as_of=DAY.replace(hour=13),
+            completed_stop_ids=["done"],
+        ),
+        context=base_context,
+        constraints=constraints,
+        utilities={},
+        park=MagicMock(),
+        catalog=[],
+    )
+
+    _, kwargs = mock_resolve_loop.resolve.call_args
+    assert kwargs["constraints"].guests == guests
+    assert [g.height_cm for g in kwargs["constraints"].guests] == [95.0, None]
+    assert kwargs["constraints"].must_do == ["todo"]

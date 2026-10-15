@@ -1,13 +1,13 @@
-# Agent graph flow (ParkMind)
+# Agent workflow (ParkMind)
 
 Static companion to the interactive pages. Open them in a browser:
 
-- [`agent-graph.html`](agent-graph.html): the animated agent graph. replayable scenarios, step-by-step, with a live state panel.
-- [`architecture.html`](architecture.html): the animated architecture stack, with flows, boundaries, implementation status and a "Safety & control" overlay showing which components enforce each control.
+- [`agent-workflow.html`](agent-workflow.html): the animated agent graph. replayable scenarios, step-by-step, with a live state panel.
+- [`system-architecture.html`](system-architecture.html): the animated architecture stack, with flows, boundaries, implementation status and a "Safety & control" overlay showing which components enforce each control.
 
 Green = implemented, dashed yellow = target / stub.
 
-## 1. Initial planning graph (implemented: P0-29 + P0-30)
+## 1. Initial planning graph
 
 `build_initial_planning_graph()` compiles the elicitation graph and mounts the planning stage as its `downstream` subgraph. Both share `ParkMindState` and the parent's checkpointer.
 
@@ -29,7 +29,7 @@ flowchart TD
     LC["load_context<br/>snapshot + weather, reads accessibility by thread_id"]:::impl --> RG["resolve_group<br/>GroupObjective"]:::impl
     RG --> BP["build_plan<br/>resolver + forecast + optimizer + repair loop"]:::impl
     BP --> CK{"check_plan<br/>ConstraintChecker"}:::impl
-    CK -- valid --> EX["explain"]:::impl
+    CK -- valid --> EX["explain<br/>grounded narrator, else template"]:::impl
     EX --> PR["propose_plan<br/>persist PENDING proposal"]:::impl
     PR --> IN{"interrupt_approval<br/>human decision"}:::impl
     CK -- invalid --> NV["no_valid_plan<br/>explains why, nothing proposed"]:::impl
@@ -37,6 +37,8 @@ flowchart TD
 
   IN -- APPROVED --> OK["ResolveProposalUseCase: plan ACTIVE"]:::impl
   IN -- REJECTED --> RJ["REJECTED + rejection_reason"]:::impl
+  IN -- EDITED --> ED["ApplyEditUseCase<br/>edit becomes party constraints, proposal EDITED"]:::impl
+  ED --> LC
   IN -- malformed value --> IN
   OK --> Z([END])
   RJ --> Z
@@ -51,10 +53,11 @@ Notes:
 
 - `propose_plan` is reachable only through the valid edge of `check_plan` and re-asserts `check_result.valid`.
 - Nothing before an `interrupt()` has a side effect: LangGraph re-runs a node from the top on resume.
-- `EDITED` decisions are rejected with an error until P0-32.
+- `EDITED` never activates anything: the edit is applied as party constraints, the proposal is resolved as `EDITED` and planning re-enters at `load_context`. If the edit leaves no valid plan, the previous plan is checked again and re-offered (`before_edit_update`).
+- `explain` uses a narrator whose numerals must all appear in the plan or check result (grounding), with the stated and learned preferences labelled; anything ungrounded falls back to the deterministic template. English only for now.
 - State holds only `accessibility_ref` (guest ids) [C19].
 
-## 2. Replanning graph (implemented: P0-34)
+## 2. Replanning graph
 
 `build_replanning_graph()` runs on the thread of the initial plan with `{"thread_id", "events"}` as input. Constraints, profiles, `accessibility_ref` and the group objective come from that thread's checkpoint; the active plan comes from the repository. A replan is a new `plan_id`, checked by the same `ConstraintChecker` as an initial plan (`check_replan`: the whole day, counting what was already walked). Only the resumed approval interrupt activates it; rejecting keeps the current plan.
 
@@ -77,10 +80,12 @@ flowchart TD
   RP -- no valid replan --> NV([END: nothing proposed]):::impl
   RP --> CK{"check_plan<br/>check_replan"}:::impl
   CK -- invalid --> NV
-  CK -- valid --> DF["diff"]:::impl --> EX["explain"]:::impl --> PR["propose_plan<br/>PENDING proposal, base_plan_id"]:::impl
+  CK -- valid --> DF["diff"]:::impl --> EX["explain<br/>grounded narrator, else template"]:::impl --> PR["propose_plan<br/>PENDING proposal, base_plan_id"]:::impl
   PR --> IN{"interrupt_approval<br/>human decision"}:::impl
   IN -- APPROVED --> OK["ResolveProposalUseCase: new plan ACTIVE"]:::impl
   IN -- REJECTED --> RJ["REJECTED: current plan unchanged"]:::impl
+  IN -- EDITED --> ED["ApplyEditUseCase<br/>log behavior, edited constraints"]:::impl
+  ED --> LC
   IN -- malformed value --> IN
   OK --> Z
   RJ --> Z
@@ -91,4 +96,5 @@ flowchart TD
 Notes:
 
 - `GUEST_FATIGUE` (confirmed) sets the walking cap and makes the new horizon open with a `REST` stop; if it cannot fit, the replan fails closed.
-- Not implemented: REJECT's "update preferences" step; `EDITED` decisions (P0-32); the user-report interpretation front (`INTERPRET`, `SCHEMA VALIDATE`) is upstream of this graph's `events` input.
+- `EDITED` goes back to `load_context` with the edited constraints: the replan is rebuilt from the active plan and the execution state (a stop already done cannot be removed), checked over the whole day and proposed again. The active plan stays until a proposal is approved.
+- Not implemented: REJECT's "update preferences" step; the user-report interpretation front (`INTERPRET`, `SCHEMA VALIDATE`) is upstream of this graph's `events` input.

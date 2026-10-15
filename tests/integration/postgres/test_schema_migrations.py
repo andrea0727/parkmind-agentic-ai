@@ -1,4 +1,4 @@
-"""P0-12 Done-when: "Fresh database migrations create the complete MVP schema."
+"""Fresh database migrations create the complete MVP schema.
 
 Also pins the structural half of the C19 privacy promise: the accessibility
 table cannot physically hold a `session_only` or unconsented record.
@@ -30,7 +30,7 @@ MVP_TABLES = {
     "accessibility_requirements",
 }
 
-# P0-26 (migration 0003): the knowledge store's embeddings, on pgvector.
+# Migration 0003: the knowledge store's embeddings, on pgvector.
 KNOWLEDGE_TABLES = {"knowledge_chunks"}
 
 SCHEMA_TABLES = MVP_TABLES | KNOWLEDGE_TABLES | {"alembic_version"}
@@ -122,7 +122,7 @@ def test_downgrade_then_upgrade_is_clean(empty_database_url: str) -> None:
     assert _tables(empty_database_url) == SCHEMA_TABLES
 
 
-# -- pgvector (P0-26 Done-when: "Compose and CI run a pgvector-enabled Postgres image")
+# -- pgvector ("Compose and CI run a pgvector-enabled Postgres image")
 
 _DIMENSION = 384
 

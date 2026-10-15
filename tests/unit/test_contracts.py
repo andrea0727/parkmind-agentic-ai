@@ -532,7 +532,7 @@ class TestBehaviorLog:
             )
 
     def test_an_entry_stored_before_the_edit_fields_still_reads(self, aware_datetime):
-        """Entries logged by P0-32 have no removed / added fields; they still validate."""
+        """Entries logged before edits recorded their direction have no removed / added fields; they still validate."""
         stored = {
             "entry_id": "prop_1:EDITED",
             "event_type": "PROPOSAL_EDITED",

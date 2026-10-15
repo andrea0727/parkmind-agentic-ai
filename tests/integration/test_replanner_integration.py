@@ -1,5 +1,5 @@
 """
-Integration tests for the Replanner (P0-23).
+Integration tests for the Replanner.
 Exercises the real interaction between Replanner, PlannerResolveLoop,
 GreedyInsertionOptimizer, and ConstraintChecker to guarantee Done-when criteria.
 """
@@ -131,7 +131,7 @@ def test_replanner_integration_done_when_criteria(real_replanner: Replanner) -> 
     assert result.valid is True
     new_plan = result.plan
     assert new_plan is not None
-    assert new_plan.plan_id != "plan_old" # P0-12 Immutable
+    assert new_plan.plan_id != "plan_old" # immutable plan IDs
     
     # A) Preserves completed stops exactly
     assert new_plan.stops[0].node_id == "attr_a"

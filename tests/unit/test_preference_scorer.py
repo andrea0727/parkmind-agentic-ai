@@ -1,4 +1,4 @@
-"""PreferenceScorer (P0-17): utility per attraction from the group objective and each profile."""
+"""PreferenceScorer: utility per attraction from the group objective and each profile."""
 
 import ast
 import random
@@ -800,7 +800,7 @@ def test_use_case_forwards_the_origin_graph_and_base_plan() -> None:
     assert with_extras != ScorePreferencesUseCase().execute(**kwargs)
 
 
-# --- Real data: the P0-26a notices over the curated Magic Kingdom catalog ---------------
+# --- Real data: the published notices over the curated Magic Kingdom catalog ---------------
 
 
 def test_real_notices_mark_five_rides_as_highly_intense() -> None:

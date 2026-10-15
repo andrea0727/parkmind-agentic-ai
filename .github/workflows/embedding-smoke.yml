@@ -1,6 +1,6 @@
 name: Embedding smoke
 
-# P0-26: the `requires_model` tests with the real multilingual embedding model.
+# The `requires_model` tests with the real multilingual embedding model.
 # Manual on purpose: the PR CI never downloads the model (its tests use the
 # deterministic HashingEmbedder), so a Hugging Face outage can never fail a PR.
 # Run it from the Actions tab after changing the corpus, the model or the

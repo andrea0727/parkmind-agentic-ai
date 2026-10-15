@@ -1,4 +1,4 @@
-"""Raw snapshot payload -> ``LiveContext`` (backlog P0-11).
+"""Raw snapshot payload -> ``LiveContext``.
 
 The one place a stored raw payload becomes a normalized ``LiveContext``. The
 collector uses it when a snapshot is taken, and the re-normalization command
@@ -43,7 +43,7 @@ from parkmind.services.ports import IdMappingRepository
 from parkmind.services.use_cases.id_resolution import ANCHOR_PROVIDER, IdResolver
 
 RAW_SCHEMA = 1
-ACCESSIBILITY_GAP = "accessibility checks are per party: done by load_context (P0-30), not the collector"
+ACCESSIBILITY_GAP = "accessibility checks are per party: done by load_context, not the collector"
 
 
 class RawSnapshotError(ValueError):
@@ -150,10 +150,10 @@ def reading_times(
     """Each entity's provider reading time (``lastUpdated``) in one stored raw payload.
 
     Keyed by internal id, like the snapshot's ``LiveContext``; ``None`` where the
-    provider gave no time. This is what per-reading freshness reads (P0-33): the
+    provider gave no time. This is what per-reading freshness reads: the
     normalized ``LiveContext`` keeps no reading times, the raw payload does (C21).
 
-    Read-only: ids are looked up with ``id_mappings.resolve`` and no sighting is
+    Read-only: ids are looked up with one ``id_mappings.resolve_many`` and no sighting is
     recorded (``IdResolver`` records one; a monitor re-reading old snapshots must
     not). An unmapped id of the anchor provider is its own internal id, as in
     ``IdResolver``; two provider ids landing on one internal id are both left
@@ -168,10 +168,12 @@ def reading_times(
     except ThemeParksClientError as exc:
         raise RawSnapshotError(f"unreadable live payload: {exc}") from None
     times: dict[str, list[datetime | None]] = {}
+    mapped = id_mappings.resolve_many(
+        ANCHOR_PROVIDER.value,
+        [(provider_id, entity.kind) for provider_id, entity in live.entities.items()],
+    )
     for provider_id, entity in live.entities.items():
-        internal_id = id_mappings.resolve(
-            ANCHOR_PROVIDER.value, provider_id, entity.kind
-        )
+        internal_id = mapped.get((provider_id, str(entity.kind)))
         times.setdefault(internal_id or provider_id, []).append(entity.observed_at)
     return {
         internal_id: seen[0] for internal_id, seen in times.items() if len(seen) == 1
@@ -217,7 +219,7 @@ def coverage_report(
 ) -> CoverageReport:
     """The coverage report over one context's statuses, showtimes and weather.
 
-    Public because LOAD CONTEXT assembled from ``data.*`` tools (P0-24) must judge
+    Public because LOAD CONTEXT assembled from ``data.*`` tools must judge
     coverage by this same rule, not a copy of it.
     """
     # Which entities run on scheduled starts comes from curated data, never from

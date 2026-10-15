@@ -1,12 +1,13 @@
-"""parkmind-mcp over the real MCP protocol (P0-24).
+"""parkmind-mcp over the real MCP protocol.
 
 Most tests connect an MCP ``Client`` to the server in-process; one launches
 ``scripts/run_mcp_server.py`` as a subprocess over stdio, exactly as an external
-client (the LLM-only baseline harness, P1-15) would. No MCP server needs to be
+client (the LLM-only baseline harness) would. No MCP server needs to be
 running beforehand.
 """
 
 import asyncio
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -18,7 +19,8 @@ from pydantic import BaseModel, Field
 
 from parkmind.services.use_cases.planning_deps import ContextUnavailableError
 from parkmind.tools.contracts import ToolProvenance, ToolResult
-from parkmind.tools.mcp_server import SERVER_NAME, create_server
+from parkmind.tools.mcp_auth import RateLimiter
+from parkmind.tools.mcp_server import SERVER_NAME, create_http_app, create_server
 from parkmind.tools.registry import ToolRegistry, ToolSpec, build_registry
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -261,16 +263,72 @@ def test_every_tool_publishes_its_request_models_limits() -> None:
             ), f"{spec.qualified_name}.{field}"
 
 
-def test_http_refuses_a_host_other_than_loopback() -> None:
-    """No authentication, so no network: the script exits before binding anything."""
-    run = subprocess.run(
-        [sys.executable, str(SERVER_SCRIPT), "--http", "--host", "0.0.0.0"],
+def _run_script(*args: str, token: str | None) -> "subprocess.CompletedProcess[str]":
+    env = {k: v for k, v in os.environ.items() if k != "PARKMIND_MCP_TOKEN"}
+    if token is not None:
+        env["PARKMIND_MCP_TOKEN"] = token
+    return subprocess.run(
+        [sys.executable, str(SERVER_SCRIPT), *args],
         cwd=REPO_ROOT,
+        env=env,
         check=False,
         capture_output=True,
         text=True,
         timeout=60,
     )
 
+
+def test_http_refuses_a_host_other_than_loopback_without_a_token() -> None:
+    """No authentication, so no network: the script exits before binding anything."""
+    run = _run_script("--http", "--host", "0.0.0.0", token=None)
+
     assert run.returncode == 2
     assert "not a loopback address" in run.stderr
+
+
+def test_http_refuses_a_weak_token() -> None:
+    run = _run_script("--http", "--host", "0.0.0.0", token="short")
+
+    assert run.returncode == 2
+    assert "PARKMIND_MCP_TOKEN" in run.stderr
+    assert "short" not in run.stderr.replace("PARKMIND_MCP_TOKEN", "")
+
+
+def test_the_http_app_requires_the_token() -> None:
+    from parkmind.tools.mcp_auth import BearerAuthMiddleware
+
+    server = create_server(REGISTRY)
+
+    assert isinstance(
+        create_http_app(server, host="127.0.0.1", token="t" * 40), BearerAuthMiddleware
+    )
+    assert not isinstance(
+        create_http_app(server, host="127.0.0.1", token=None), BearerAuthMiddleware
+    )
+
+
+def test_planner_and_data_calls_share_a_rate_limit_and_get_a_retryable_error() -> None:
+    async def calls(client: Client) -> list[Any]:
+        args = {"attraction_ids": ["a"]}
+        return [
+            await client.call_tool("planner.build_plan", args),
+            await client.call_tool("data.get_live_waits", args),
+            await client.call_tool(
+                "knowledge.search_policies", {"query": "height limits"}
+            ),
+        ]
+
+    async def run() -> list[Any]:
+        server = create_server(REGISTRY, capture_rate_limit=RateLimiter(1))
+        async with Client(server) as client:
+            return await calls(client)
+
+    first, limited, knowledge = asyncio.run(run())
+
+    assert not first.is_error
+    assert limited.is_error
+    error = limited.structured_content["error"]
+    assert error["code"] == "UNAVAILABLE" and error["retryable"] is True
+    assert "Too many calls" not in str(
+        knowledge.structured_content
+    )  # knowledge.* is not limited

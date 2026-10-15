@@ -1,4 +1,4 @@
-"""P0-12 Done-when: "Active plan vs candidate/proposal state is persisted distinctly."
+"""Active plan vs candidate/proposal state is persisted distinctly.
 
 Architecture section 23: Approve -> active plan; nothing else activates one, and
 the LLM has no path to it. Section 43 [C18]: a concurrent event supersedes the

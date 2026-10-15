@@ -12,6 +12,7 @@ still missing. It never decides what the checker enforces:
   written to state, and never stored as soft preferences [C15, C19].
 """
 
+import logging
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -24,6 +25,17 @@ from pydantic import SecretStr, ValidationError
 from parkmind.agents.clock_answer import parse_clock
 from parkmind.agents.elicit_prompt import ELICIT_PROMPT_VERSION, ELICIT_SYSTEM_PROMPT
 from parkmind.agents.elicit_schema import ElicitationExtraction, normalize_name
+from parkmind.agents.llm_budget import (
+    LlmBudgetExhaustedError,
+    LlmCallBudget,
+    bound_to_thread,
+    invoke_counted,
+)
+from parkmind.agents.time_grounding import (
+    departure_is_grounded,
+    lunch_window_is_grounded,
+    walking_budget_is_grounded,
+)
 from parkmind.config.settings import settings
 from parkmind.core.contracts import (
     PARK_TZ,
@@ -52,6 +64,7 @@ from parkmind.services.use_cases.confirmation_echo import (
     ACCESSIBILITY_PREFIX,
     HEIGHT_PREFIX,
 )
+from parkmind.services.use_cases.planning_deps import PlanningUnavailableError
 from parkmind.services.use_cases.resolve_attraction_names import (
     AttractionNameResolver,
     NameResolution,
@@ -63,17 +76,24 @@ __all__ = [
     "ElicitNode",
     "ExtractionOutcome",
     "ExtractorOutputError",
+    "ExtractorUnavailableError",
     "GuestInfoExtractor",
     "build_guest_profiles",
     "build_party_constraints",
     "conflicting_names",
     "extract_with_recovery",
+    "heights_needed",
     "human_texts",
     "make_elicit_node",
     "missing_information",
+    "oversized_party",
     "pending_confirmations",
+    "ungrounded_heights",
+    "ungrounded_times",
     "unresolved_names",
 ]
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_ATTEMPTS = 2
 _DEFAULT_TOLERANCE = 0.5
@@ -92,6 +112,10 @@ class ElicitNode(Protocol):
 
 class ExtractorOutputError(ValueError):
     """The extractor returned no usable structured output (retried like a schema failure)."""
+
+
+class ExtractorUnavailableError(RuntimeError):
+    """The model could not be reached (not a bad answer): retrying the same call will not help."""
 
 
 class GuestInfoExtractor(Protocol):
@@ -127,12 +151,23 @@ def without_empty_accessibility(args: Mapping[str, Any]) -> Mapping[str, Any]:
     return {**args, "accessibility": kept}
 
 
+SDK_RETRIES = 2
+"""Transient-failure retries per extraction (counted, like any call, against the thread's budget)."""
+
+
 class AnthropicExtractor:
     """Claude tool-calling extractor. The client is built on first use."""
 
-    def __init__(self, model: str | None = None, api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        model: str | None = None,
+        api_key: str | None = None,
+        *,
+        budget: LlmCallBudget | None = None,
+    ) -> None:
         self._model = model or settings.ELICIT_MODEL
         self._api_key = api_key or settings.ANTHROPIC_API_KEY
+        self._budget = budget
         self._llm: Any = None
 
     def _runnable(self) -> Any:
@@ -145,7 +180,7 @@ class AnthropicExtractor:
                 temperature=0,
                 max_tokens_to_sample=1500,
                 timeout=60,
-                max_retries=2,
+                max_retries=0,  # retried in invoke_counted, so every call is counted [G12]
                 stop=None,
             )
             self._llm = chat.bind_tools(
@@ -165,9 +200,17 @@ class AnthropicExtractor:
                 "\n\nYour previous output was rejected by validation. Fix exactly these "
                 f"problems and return the full corrected output:\n{repair_hint}"
             )
-        response = self._runnable().invoke(
-            [SystemMessage(ELICIT_SYSTEM_PROMPT), HumanMessage(content)]
-        )
+        try:
+            response = invoke_counted(
+                self._runnable(),
+                [SystemMessage(ELICIT_SYSTEM_PROMPT), HumanMessage(content)],
+                retries=SDK_RETRIES,
+                budget=self._budget,
+            )
+        except LlmBudgetExhaustedError:
+            raise
+        except Exception as exc:
+            raise ExtractorUnavailableError(type(exc).__name__) from exc
         calls = getattr(response, "tool_calls", None) or []
         if not calls:
             raise ExtractorOutputError("the model returned no structured output")
@@ -234,6 +277,12 @@ _UNKNOWN_ATTRACTION = "unknown_attraction:"
 _AMBIGUOUS_ATTRACTION = "ambiguous_attraction:"
 _CONFLICTING_ATTRACTION = "conflicting_attraction:"
 _UNVERIFIED_HEIGHT = "height_unverified:"
+_HEIGHT_NEEDED = "height_needed:"
+_PARTY_TOO_LARGE = "party_too_large:"
+_UNVERIFIED_DEPARTURE = "departure_unverified"
+_UNVERIFIED_LUNCH = "lunch_window_unverified"
+_UNVERIFIED_WALKING_BUDGET = "walking_budget_unverified"
+_LUNCH_AFTER_DEPARTURE = "lunch_after_departure:"
 
 _HEIGHT_TOLERANCE_CM = 1.5
 _CM_PER_FOOT = 30.48
@@ -289,11 +338,80 @@ def ungrounded_heights(
     ]
 
 
+def ungrounded_times(
+    extraction: ElicitationExtraction,
+    texts: Sequence[str],
+    *,
+    clock_answer: str | None = None,
+) -> list[str]:
+    """Missing-information keys for a departure time, lunch window or walking budget the guests never wrote [G13].
+
+    ``clock_answer`` is the departure read straight from a bare reply to "what
+    time do you leave?"; it is the guests' own answer, so it is grounded by construction.
+    """
+    missing: list[str] = []
+    departure = extraction.departure_time
+    if (
+        departure is not None
+        and departure != clock_answer
+        and not departure_is_grounded(departure, texts)
+    ):
+        missing.append(_UNVERIFIED_DEPARTURE)
+    window = extraction.lunch_window
+    if window is not None and not lunch_window_is_grounded(
+        window.start, window.end, texts
+    ):
+        missing.append(_UNVERIFIED_LUNCH)
+    budget = extraction.party_walking_budget_minutes
+    if budget is not None and not walking_budget_is_grounded(budget, texts):
+        missing.append(_UNVERIFIED_WALKING_BUDGET)
+    return missing
+
+
+def lunch_after_departure(extraction: ElicitationExtraction) -> list[str]:
+    """``lunch_after_departure:<start>|<end>|<departure>`` when lunch starts once the party has left.
+
+    The two times contradict each other, so the guests are asked which one to
+    change instead of finding out at the plan check. "HH:MM" strings are zero-padded,
+    so they compare as times.
+    """
+    window, departure = extraction.lunch_window, extraction.departure_time
+    if window is None or departure is None or window.start < departure:
+        return []
+    return [f"{_LUNCH_AFTER_DEPARTURE}{window.start}|{window.end}|{departure}"]
+
+
 def unresolved_names(resolution: NameResolution) -> list[str]:
     """Missing-information keys for must-do/avoid names that match no single attraction."""
     return [f"{_UNKNOWN_ATTRACTION}{name}" for name in resolution.unknown] + [
         f"{_AMBIGUOUS_ATTRACTION}{name}" for name in resolution.ambiguous
     ]
+
+
+def oversized_party(extraction: ElicitationExtraction) -> list[str]:
+    """``party_too_large:<size>`` when the party is over ``settings.MAX_PARTY_SIZE``, else nothing."""
+    size = max(extraction.party_size or 0, len(extraction.guests))
+    return [f"{_PARTY_TOO_LARGE}{size}"] if size > settings.MAX_PARTY_SIZE else []
+
+
+def heights_needed(
+    extraction: ElicitationExtraction, resolution: NameResolution
+) -> list[str]:
+    """Missing-information keys for must-do rides with a minimum height while a guest's height is unknown.
+
+    Only asked about must-dos: the checker fails closed for a guest without a
+    height, so a must-do ride they might not clear would leave no valid plan.
+    Avoided rides are never planned, so their height limit is irrelevant.
+    """
+    if not any(guest.height_cm is None for guest in extraction.guests):
+        return []
+    restricted = dict.fromkeys(
+        resolution.resolved[name].name
+        for name in extraction.must_do
+        if name in resolution.resolved
+        and resolution.resolved[name].height_restriction_cm is not None
+    )
+    return [f"{_HEIGHT_NEEDED}{name}" for name in restricted]
 
 
 def conflicting_names(
@@ -333,8 +451,41 @@ def _question_for(
         label = labels[index] if 0 <= index < len(labels) else None
         return guest_ref(lang, number, label, start=start)
 
+    minimum_by_name = (
+        {
+            r.name: r.height_restriction_cm
+            for r in resolution.resolved.values()
+            if r.height_restriction_cm is not None
+        }
+        if resolution is not None
+        else {}
+    )
+    height_question_added = False
     for key in missing:
-        if key.startswith("guest_role:"):
+        if key.startswith(_HEIGHT_NEEDED):
+            if height_question_added:
+                continue
+            height_question_added = True
+            rides = ", ".join(
+                text("height_minimum", lang, name=name, cm=minimum_by_name[name])
+                for name in (
+                    k.removeprefix(_HEIGHT_NEEDED)
+                    for k in missing
+                    if k.startswith(_HEIGHT_NEEDED)
+                )
+                if name in minimum_by_name
+            )
+            questions.append(text("q_height_needed", lang, solo=solo, rides=rides))
+        elif key.startswith(_PARTY_TOO_LARGE):
+            questions.append(
+                text(
+                    "q_party_too_large",
+                    lang,
+                    size=key.removeprefix(_PARTY_TOO_LARGE),
+                    max=settings.MAX_PARTY_SIZE,
+                )
+            )
+        elif key.startswith("guest_role:"):
             if solo:
                 questions.append(text("q_guest_role_solo", lang))
             else:
@@ -356,9 +507,17 @@ def _question_for(
                 if resolution is not None
                 else ""
             )
-            suggestions = text("attraction_options", lang, groups=groups) if groups else ""
+            suggestions = (
+                text("attraction_options", lang, groups=groups) if groups else ""
+            )
             questions.append(
-                text("q_unknown_attraction", lang, solo=solo, name=name, options=suggestions)
+                text(
+                    "q_unknown_attraction",
+                    lang,
+                    solo=solo,
+                    name=name,
+                    options=suggestions,
+                )
             )
         elif key.startswith(_AMBIGUOUS_ATTRACTION):
             name = key.removeprefix(_AMBIGUOUS_ATTRACTION)
@@ -373,10 +532,32 @@ def _question_for(
             )
         elif key.startswith(_UNVERIFIED_HEIGHT):
             guest = key.removeprefix(_UNVERIFIED_HEIGHT)
-            questions.append(text("q_unverified_height", lang, solo=solo, who=who(guest)))
+            questions.append(
+                text("q_unverified_height", lang, solo=solo, who=who(guest))
+            )
+        elif key == _UNVERIFIED_DEPARTURE:
+            questions.append(text("q_unverified_departure", lang, solo=solo))
+        elif key == _UNVERIFIED_LUNCH:
+            questions.append(text("q_unverified_lunch", lang, solo=solo))
+        elif key == _UNVERIFIED_WALKING_BUDGET:
+            questions.append(text("q_unverified_walking_budget", lang, solo=solo))
+        elif key.startswith(_LUNCH_AFTER_DEPARTURE):
+            start, end, departure = key.removeprefix(_LUNCH_AFTER_DEPARTURE).split("|")
+            questions.append(
+                text(
+                    "q_lunch_after_departure",
+                    lang,
+                    solo=solo,
+                    start=start,
+                    end=end,
+                    departure=departure,
+                )
+            )
         elif key.startswith(_CONFLICTING_ATTRACTION):
             name = key.removeprefix(_CONFLICTING_ATTRACTION)
-            questions.append(text("q_conflicting_attraction", lang, solo=solo, name=name))
+            questions.append(
+                text("q_conflicting_attraction", lang, solo=solo, name=name)
+            )
         elif key in _MISSING_QUESTIONS:
             questions.append(text(_MISSING_QUESTIONS[key], lang, solo=solo))
         else:
@@ -545,7 +726,22 @@ def _asked_for_departure(state: ParkMindState) -> bool:
     messages = state.get("messages", [])
     last = messages[-2] if len(messages) >= 2 else None
     asked = getattr(last, "additional_kwargs", {}).get("missing_information") or ()
-    return getattr(last, "type", None) == "ai" and "departure_time" in asked
+    return getattr(last, "type", None) == "ai" and (
+        "departure_time" in asked or _UNVERIFIED_DEPARTURE in asked
+    )
+
+
+def _asked_for_heights(state: ParkMindState) -> bool:
+    """Heights are asked once: a guest who does not answer is left to the checker, which fails closed."""
+    return any(
+        getattr(m, "type", None) == "ai"
+        and any(
+            str(key).startswith(_HEIGHT_NEEDED)
+            for key in getattr(m, "additional_kwargs", {}).get("missing_information")
+            or ()
+        )
+        for m in state.get("messages", [])
+    )
 
 
 def _with_clock_answer(
@@ -558,7 +754,27 @@ def _with_clock_answer(
     hhmm = parse_clock(answer)
     if hhmm is None:
         return outcome
-    return replace(outcome, extraction=extraction.model_copy(update={"departure_time": hhmm}))
+    return replace(
+        outcome, extraction=extraction.model_copy(update={"departure_time": hhmm})
+    )
+
+
+UNAVAILABLE_FLAG = "unavailable"
+
+
+def _unavailable(key: str, lang: Language) -> dict[str, Any]:
+    """End the turn with a plain message: a service is down, so there is nothing to ask."""
+    return {
+        "language": lang,
+        "constraints": None,
+        "constraints_valid": False,
+        "pending_hard_constraint_confirmation": None,
+        "messages": [
+            AIMessage(
+                content=text(key, lang), additional_kwargs={UNAVAILABLE_FLAG: True}
+            )
+        ],
+    }
 
 
 def make_elicit_node(
@@ -593,20 +809,47 @@ def make_elicit_node(
         # Anything staged by an earlier pass is stale: this extraction replaces it.
         intake.discard(session_id)
 
-        outcome = extract_with_recovery(extractor, texts, max_attempts=max_attempts)
+        try:
+            with bound_to_thread(session_id):
+                outcome = extract_with_recovery(
+                    extractor, texts, max_attempts=max_attempts
+                )
+        except LlmBudgetExhaustedError:
+            # No model left for this thread: ask again, deterministically [G12].
+            outcome = ExtractionOutcome(None, 0)
+        except ExtractorUnavailableError:
+            logger.exception("the extractor is unavailable")
+            return _unavailable("assistant_unavailable", lang)
         outcome = _with_clock_answer(outcome, state, texts[-1])
+        clock_answer = parse_clock(texts[-1]) if _asked_for_departure(state) else None
         resolution = NameResolution()
         if outcome.extraction is None:
             missing = ["unreadable_response"]
+        elif oversized := oversized_party(outcome.extraction):
+            missing = oversized
         else:
-            resolution = names.resolve(
-                [*outcome.extraction.must_do, *outcome.extraction.avoid]
+            try:
+                resolution = names.resolve(
+                    [*outcome.extraction.must_do, *outcome.extraction.avoid]
+                )
+            except PlanningUnavailableError:
+                logger.exception("attraction names cannot be resolved")
+                return _unavailable("unavailable", lang)
+            unverified_times = ungrounded_times(
+                outcome.extraction, texts, clock_answer=clock_answer
             )
             missing = (
                 missing_information(outcome.extraction)
                 + ungrounded_heights(outcome.extraction, texts)
+                + unverified_times
+                + ([] if unverified_times else lunch_after_departure(outcome.extraction))
                 + unresolved_names(resolution)
                 + conflicting_names(outcome.extraction, resolution)
+                + (
+                    []
+                    if _asked_for_heights(state)
+                    else heights_needed(outcome.extraction, resolution)
+                )
             )
         if outcome.extraction is None or missing:
             return {

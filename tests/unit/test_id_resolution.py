@@ -1,4 +1,4 @@
-"""P0-10: stable internal ids, and mapping problems surfaced instead of merged.
+"""Stable internal ids, and mapping problems surfaced instead of merged.
 
 ``IdMappingRepository`` is the only thing faked (a port): the fake keeps the
 Postgres adapter's documented semantics -- a first sighting inserts, the same
@@ -9,6 +9,7 @@ resolver against the real adapter.
 
 import copy
 import json
+from collections.abc import Iterable
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -60,6 +61,16 @@ class InMemoryIdMappingRepository:
     def resolve(self, provider: str, provider_id: str, entity_kind: str) -> str | None:
         row = self.rows.get((provider, provider_id, str(entity_kind)))
         return None if row is None else str(row["internal_id"])
+
+    def resolve_many(
+        self, provider: str, keys: Iterable[tuple[str, str]]
+    ) -> dict[tuple[str, str], str]:
+        found = {}
+        for provider_id, kind in keys:
+            row = self.rows.get((provider, provider_id, str(kind)))
+            if row is not None:
+                found[(provider_id, str(kind))] = str(row["internal_id"])
+        return found
 
     def provider_ids_for(self, internal_id: str) -> list[tuple[str, str, str]]:
         return sorted(

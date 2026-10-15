@@ -1,4 +1,4 @@
-"""ReplanUseCase on a thread that has an approved plan (P0-34).
+"""ReplanUseCase on a thread that has an approved plan.
 
 The plan, constraints, profiles and objective come from the initial planning graph's
 checkpoint, exactly as the replanning graph reads them; the use case runs against the
@@ -268,7 +268,7 @@ def test_a_stale_context_is_refreshed_and_the_fresh_one_is_kept_for_state(r, mon
     assert outcome.live_context.snapshot_id == "fresh"
 
 
-# -- a caller without the thread (planner.replan, P0-27) ------------------------------
+# -- a caller without the thread (planner.replan) ------------------------------
 
 
 def test_progress_sent_inline_replaces_the_stored_one(r) -> None:

@@ -1,4 +1,4 @@
-"""Provider ids -> stable internal ids (backlog P0-10).
+"""Provider ids -> stable internal ids.
 
 **The internal id of an entity is the ThemeParks entity UUID it had when it was
 first seen.** ThemeParks is the *anchor* provider: an unseen ThemeParks id mints

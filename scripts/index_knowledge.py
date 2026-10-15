@@ -1,4 +1,4 @@
-"""Indexes the reviewed knowledge corpus into pgvector (backlog P0-26).
+"""Indexes the reviewed knowledge corpus into pgvector.
 
     poetry run python scripts/index_knowledge.py            # the configured model (fetch it first)
     poetry run python scripts/index_knowledge.py --hashing  # deterministic dev embedder, no model

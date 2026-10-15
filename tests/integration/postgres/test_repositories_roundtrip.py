@@ -1,4 +1,4 @@
-"""P0-12: every repository builds from a bare connection and round-trips its aggregate.
+"""Every repository builds from a bare connection and round-trips its aggregate.
 
 The connection is the only collaborator -- no HTTP layer, no graph, no LLM
 (see tests/architecture/test_repository_independence.py).

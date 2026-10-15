@@ -1,4 +1,4 @@
-"""Use case: the thread's active plan, the one a replan starts from (P0-34).
+"""Use case: the thread's active plan, the one a replan starts from.
 
 The plan repository is the only source of truth for what is active: graph state
 never holds an active plan of its own to trust (``current_plan`` is written only

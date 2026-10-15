@@ -1,5 +1,5 @@
-"""P0-12 Done-when: "A `session_only` accessibility record is absent from every
-persisted table after the session ends (test)."
+"""A `session_only` accessibility record is absent from every
+persisted table after the session ends (test).
 
 Architecture section 12 / C19: the graph state carries ids only and the flags
 live in a session store honoring `retention_policy` -- the checkpointer, which

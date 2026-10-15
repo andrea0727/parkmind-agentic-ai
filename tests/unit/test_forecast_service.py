@@ -1,4 +1,4 @@
-"""ForecastStrategy port and ForecastService (P0-18)."""
+"""ForecastStrategy port and ForecastService."""
 
 import ast
 import dataclasses

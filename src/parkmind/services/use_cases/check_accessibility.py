@@ -1,6 +1,5 @@
 """check_accessibility -- match a guest's derived flags against the park's
-published safety notices (section 30, section 12 [C15], section 20 rule 10;
-backlog P0-26a).
+published safety notices (section 30, section 12 [C15], section 20 rule 10).
 
 This is matching, not medicine (section 12 "What this is not"): both sides are
 closed ``RideRestriction`` sets and the check is their intersection. A notice
@@ -90,7 +89,7 @@ def check_flags(
     """``check_accessibility`` on a guest's already derived flags (section 30's input).
 
     The same fail-closed matching: no flags is eligible everywhere; flags and no
-    notice on file is not eligible. ``knowledge.check_accessibility`` (P0-26)
+    notice on file is not eligible. ``knowledge.check_accessibility``
     calls this, so the MCP tool never re-implements the rule.
     """
     notice = store.notice_for(attraction_id)

@@ -1,5 +1,5 @@
 """
-Replanning graph end to end (P0-34): approved plan -> event -> policy -> replan -> check ->
+Replanning graph end to end: approved plan -> event -> policy -> replan -> check ->
 diff -> explain -> propose -> interrupt -> approve / reject.
 
 Real use cases, planner, checker and in-memory ports; only the clock is fixed. The thread is
@@ -7,6 +7,7 @@ first brought to an approved active plan by the initial planning graph, then the
 graph runs on the same thread with the new events as input.
 """
 
+import itertools
 import json
 from datetime import timedelta
 from typing import Any
@@ -39,7 +40,11 @@ class _Replanning:
     """An approved plan on thread t1 plus the replanning graph over the same ports."""
 
     def __init__(
-        self, monkeypatch: pytest.MonkeyPatch, *, approve: bool = True, narrator: Any = None
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        *,
+        approve: bool = True,
+        narrator: Any = None,
     ) -> None:
         self.h = _Harness(monkeypatch)
         self.h.confirm()
@@ -65,10 +70,14 @@ class _Replanning:
         return self.h.proposals
 
     def pending(self) -> list[Any]:
-        return [p for p in self.proposals if p.approval_status is ApprovalStatus.PENDING]
+        return [
+            p for p in self.proposals if p.approval_status is ApprovalStatus.PENDING
+        ]
 
     def send(self, *events: Any) -> Any:
-        return self.graph.invoke({"thread_id": "t1", "events": list(events)}, config=CONFIG)
+        return self.graph.invoke(
+            {"thread_id": "t1", "events": list(events)}, config=CONFIG
+        )
 
     def resume(self, value: Any) -> Any:
         return self.graph.invoke(Command(resume=value), config=CONFIG)
@@ -94,12 +103,15 @@ def _down(node_id: str, event_id: str = "ev_down", minutes: int = 1) -> Any:
     )
 
 
-def _recorded(r: "_Replanning", event_type: EventType, attraction_id: str | None = None) -> list[Any]:
+def _recorded(
+    r: "_Replanning", event_type: EventType, attraction_id: str | None = None
+) -> list[Any]:
     """The thread's stored events of a type: ids are rewritten to the cross-source id."""
     return [
         e
         for e in r.deps.events.list_for_thread("t1")
-        if e.type is event_type and (attraction_id is None or e.attraction_id == attraction_id)
+        if e.type is event_type
+        and (attraction_id is None or e.attraction_id == attraction_id)
     ]
 
 
@@ -128,7 +140,9 @@ def test_a_significant_event_creates_a_pending_proposal_waiting_for_approval(r) 
     assert payload["kind"] == "plan_approval"
     [proposal] = r.pending()
     assert proposal.base_plan_id == before.plan_id
-    assert proposal.candidate_plan_id != before.plan_id  # a replan is a new plan_id [C23]
+    assert (
+        proposal.candidate_plan_id != before.plan_id
+    )  # a replan is a new plan_id [C23]
     [recorded] = _recorded(r, EventType.ATTRACTION_DOWN, r.stop_node())
     assert proposal.triggering_event_id == recorded.event_id
     assert proposal.reason
@@ -141,7 +155,9 @@ def test_the_replanned_plan_avoids_the_closed_attraction(r) -> None:
     r.send(_down(closed))
 
     candidate = r.deps.plans.get(r.pending()[0].candidate_plan_id)
-    assert closed not in [s.node_id for s in candidate.stops if s.kind is StopKind.ATTRACTION]
+    assert closed not in [
+        s.node_id for s in candidate.stops if s.kind is StopKind.ATTRACTION
+    ]
 
 
 def test_the_proposal_changes_nothing_until_a_human_decides(r) -> None:
@@ -166,9 +182,13 @@ def test_an_insignificant_event_is_ignored(r) -> None:
     result = r.send(unrelated)
 
     assert "__interrupt__" not in result
-    assert r.proposals and all(p.approval_status is ApprovalStatus.APPROVED for p in r.proposals)
+    assert r.proposals and all(
+        p.approval_status is ApprovalStatus.APPROVED for p in r.proposals
+    )
     assert r.active == before
-    [recorded] = _recorded(r, EventType.ATTRACTION_DOWN, "id-not-in-plan-and-not-a-must-do")
+    [recorded] = _recorded(
+        r, EventType.ATTRACTION_DOWN, "id-not-in-plan-and-not-a-must-do"
+    )
     assert recorded.requires_replan is False
 
 
@@ -220,7 +240,11 @@ def test_a_replan_that_fails_the_gate_is_never_proposed(r, monkeypatch) -> None:
         return result.model_copy(
             update={
                 "valid": False,
-                "violations": [ConstraintViolation(rule=RuleId.DATA_FRESHNESS, message="stale data")],
+                "violations": [
+                    ConstraintViolation(
+                        rule=RuleId.DATA_FRESHNESS, message="stale data"
+                    )
+                ],
             }
         )
 
@@ -362,7 +386,9 @@ def test_a_new_significant_event_supersedes_the_pending_proposal(r) -> None:
     assert second.proposal_id != first.proposal_id
     [second_event] = _recorded(r, EventType.ATTRACTION_DOWN, second_stop)
     assert second.triggering_event_id == second_event.event_id
-    assert second.base_plan_id == r.active.plan_id  # still the plan in force, not the first candidate
+    assert (
+        second.base_plan_id == r.active.plan_id
+    )  # still the plan in force, not the first candidate
 
 
 def test_approving_after_supersession_activates_only_the_newest(r) -> None:
@@ -377,7 +403,9 @@ def test_approving_after_supersession_activates_only_the_newest(r) -> None:
     assert r.active.plan_id != stale.candidate_plan_id
 
 
-def test_an_insignificant_event_leaves_the_pending_proposal_open_for_a_decision(r) -> None:
+def test_an_insignificant_event_leaves_the_pending_proposal_open_for_a_decision(
+    r,
+) -> None:
     r.send(_down(r.stop_node()))
     [pending] = r.pending()
     noise = factories.event(
@@ -441,6 +469,29 @@ def test_confirmed_fatigue_proposes_a_plan_that_opens_with_a_rest(r) -> None:
     assert r.active.plan_id != candidate.plan_id
 
 
+def test_a_rest_first_replan_passes_its_check_while_the_clock_keeps_advancing(
+    r,
+) -> None:
+    """The check reads the progress report's time, not the clock: a clock that moves on
+    between BUILD and CHECK must not make the rest-first plan start in the past."""
+    ticks = iter(NOW + timedelta(minutes=2 * i) for i in itertools.count())
+    r.graph = rg.build_replanning_graph(
+        r.h.checkpointer,
+        deps_factory=factory_for(r.deps),
+        clock=lambda: next(ticks),
+        narrator=NoNarrator(),
+    )
+
+    result = r.send(_unsure_fatigue(r))
+    assert _interrupt(result)["kind"] == rg.EVENT_CONFIRMATION_INTERRUPT_KIND
+    result = r.resume({"confirmed": True})
+
+    assert _interrupt(result)["kind"] == "plan_approval"
+    candidate = r.deps.plans.get(r.pending()[0].candidate_plan_id)
+    first_ahead = next(s for s in candidate.stops if s.arrival_time >= NOW)
+    assert first_ahead.kind is StopKind.REST
+
+
 # --- event confirmation --------------------------------------------------------------------------
 
 
@@ -485,7 +536,10 @@ def test_a_dismissed_report_leaves_no_trace(r) -> None:
     assert r.values()["event_confirmation"] == "DISMISSED"
 
 
-@pytest.mark.parametrize("bad", ["yes", 1, {"confirmed": "yes"}, {"confirmed": None}, {"decision": "APPROVED"}])
+@pytest.mark.parametrize(
+    "bad",
+    ["yes", 1, {"confirmed": "yes"}, {"confirmed": None}, {"decision": "APPROVED"}],
+)
 def test_an_invalid_confirmation_asks_again_and_records_nothing(r, bad) -> None:
     r.send(_unsure_fatigue(r))
 
@@ -522,7 +576,10 @@ def test_with_no_active_plan_there_is_nothing_to_replan(monkeypatch) -> None:
 def test_a_thread_that_never_planned_has_nothing_to_replan(monkeypatch) -> None:
     h = _Harness(monkeypatch)
     graph = rg.build_replanning_graph(
-        h.checkpointer, deps_factory=factory_for(h.deps), clock=lambda: NOW, narrator=NoNarrator()
+        h.checkpointer,
+        deps_factory=factory_for(h.deps),
+        clock=lambda: NOW,
+        narrator=NoNarrator(),
     )
 
     result = graph.invoke(
@@ -533,7 +590,9 @@ def test_a_thread_that_never_planned_has_nothing_to_replan(monkeypatch) -> None:
     assert _last_message(result) == rg.NOTHING_TO_REPLAN_MESSAGE
 
 
-def test_an_unavailable_port_ends_with_a_message_and_keeps_the_plan(r, monkeypatch) -> None:
+def test_an_unavailable_port_ends_with_a_message_and_keeps_the_plan(
+    r, monkeypatch
+) -> None:
     before = r.active
 
     def down(*_a: Any, **_k: Any) -> Any:
@@ -548,7 +607,9 @@ def test_an_unavailable_port_ends_with_a_message_and_keeps_the_plan(r, monkeypat
     assert r.active == before
 
 
-def test_a_replan_with_no_valid_result_says_so_and_proposes_nothing(r, monkeypatch) -> None:
+def test_a_replan_with_no_valid_result_says_so_and_proposes_nothing(
+    r, monkeypatch
+) -> None:
     from parkmind.services.planning.replanner import ReplanResult
 
     original = rg.ReplanUseCase.execute
@@ -557,7 +618,11 @@ def test_a_replan_with_no_valid_result_says_so_and_proposes_nothing(r, monkeypat
         outcome = original(this, request)
         return type(outcome)(
             ReplanResult(
-                valid=False, plan=None, diff=None, unmet_must_do=["id-tron"], fatal_error="no fit"
+                valid=False,
+                plan=None,
+                diff=None,
+                unmet_must_do=["id-tron"],
+                fatal_error="no fit",
             ),
             outcome.live_context,
             outcome.execution_state,
@@ -576,7 +641,9 @@ def test_a_replan_with_no_valid_result_says_so_and_proposes_nothing(r, monkeypat
     assert r.active == before
 
 
-def test_a_failed_replan_supersedes_the_old_proposal_and_clears_it_from_state(r, monkeypatch) -> None:
+def test_a_failed_replan_supersedes_the_old_proposal_and_clears_it_from_state(
+    r, monkeypatch
+) -> None:
     r.send(_down(r.stop_node(0)))
     [first] = r.pending()
     from parkmind.services.planning.replanner import ReplanResult
@@ -586,7 +653,13 @@ def test_a_failed_replan_supersedes_the_old_proposal_and_clears_it_from_state(r,
     def fail(this: Any, request: Any) -> Any:
         outcome = original(this, request)
         return type(outcome)(
-            ReplanResult(valid=False, plan=None, diff=None, unmet_must_do=[], fatal_error="no fit"),
+            ReplanResult(
+                valid=False,
+                plan=None,
+                diff=None,
+                unmet_must_do=[],
+                fatal_error="no fit",
+            ),
             outcome.live_context,
             outcome.execution_state,
         )
@@ -622,7 +695,7 @@ def test_the_state_tells_the_guests_what_changed(r) -> None:
     assert r.stop_node() in values["diff"].stops_removed
 
 
-# --- editing a replan (P0-32) ------------------------------------------------------------------
+# --- editing a replan ------------------------------------------------------------------
 
 
 def _optional_stop(plan: Any, *, besides: tuple[str, ...] = ()) -> str:
@@ -635,7 +708,9 @@ def _optional_stop(plan: Any, *, besides: tuple[str, ...] = ()) -> str:
     )
 
 
-def test_an_edited_replan_is_checked_again_and_proposed_against_the_active_plan(r) -> None:
+def test_an_edited_replan_is_checked_again_and_proposed_against_the_active_plan(
+    r,
+) -> None:
     before = r.active
     r.send(_down(r.stop_node()))
     [first] = r.pending()
@@ -686,7 +761,9 @@ def test_a_reopened_proposal_can_be_edited(r) -> None:
 def test_a_stop_already_done_cannot_be_edited_out(r) -> None:
     done = r.active.stops[0].node_id
     r.deps.execution_states.save(
-        factories.execution_state(plan_id=r.active.plan_id, as_of=NOW, completed_stop_ids=[done])
+        factories.execution_state(
+            plan_id=r.active.plan_id, as_of=NOW, completed_stop_ids=[done]
+        )
     )
     r.send(_down(r.stop_node(1)))
     [pending] = r.pending()
@@ -697,8 +774,10 @@ def test_a_stop_already_done_cannot_be_edited_out(r) -> None:
     assert [p.proposal_id for p in r.pending()] == [pending.proposal_id]
 
 
-def test_the_replan_narrator_explains_from_the_reason_and_the_changes(monkeypatch) -> None:
-    """P0-31: an updated plan is explained from why it changed and what changed."""
+def test_the_replan_narrator_explains_from_the_reason_and_the_changes(
+    monkeypatch,
+) -> None:
+    """An updated plan is explained from why it changed and what changed."""
     narrator = ScriptedNarrator("Your plan changed because a ride closed.")
     r = _Replanning(monkeypatch, narrator=narrator)
 
@@ -725,7 +804,9 @@ def test_an_edited_replan_that_cannot_be_planned_gives_back_the_replan_before_it
         result = check(this, **kwargs)
         if dropped in {s.node_id for s in kwargs["plan"].stops}:
             return result
-        violation = ConstraintViolation(rule=RuleId.MUST_DO, message="the edit does not fit")
+        violation = ConstraintViolation(
+            rule=RuleId.MUST_DO, message="the edit does not fit"
+        )
         return result.model_copy(update={"valid": False, "violations": [violation]})
 
     monkeypatch.setattr(rg.CheckPlanUseCase, "execute_replan", refuse_without_dropped)
@@ -741,12 +822,18 @@ def test_an_edited_replan_that_cannot_be_planned_gives_back_the_replan_before_it
     assert offered["constraints"] == constraints
     assert offered.get("plan_before_edit") is None
     said = [str(m.content) for m in offered["messages"]]
-    assert any(ipg.EDIT_DID_NOT_FIT_MESSAGE in m and "the edit does not fit" in m for m in said)
+    assert any(
+        ipg.EDIT_DID_NOT_FIT_MESSAGE in m and "the edit does not fit" in m for m in said
+    )
     assert r.active == before
 
 
-def test_a_replan_is_re_offered_even_when_its_new_explanation_is_the_template(monkeypatch) -> None:
-    narrator = ScriptedNarrator("Your plan changed because a ride closed.", "A 999 wait.", "999.")
+def test_a_replan_is_re_offered_even_when_its_new_explanation_is_the_template(
+    monkeypatch,
+) -> None:
+    narrator = ScriptedNarrator(
+        "Your plan changed because a ride closed.", "A 999 wait.", "999."
+    )
     r = _Replanning(monkeypatch, narrator=narrator)
     r.send(_down(r.stop_node()))
     original = r.values()["candidate_plan"]
@@ -758,7 +845,9 @@ def test_a_replan_is_re_offered_even_when_its_new_explanation_is_the_template(mo
         result = check(this, **kwargs)
         if dropped in {s.node_id for s in kwargs["plan"].stops}:
             return result
-        violation = ConstraintViolation(rule=RuleId.MUST_DO, message="the edit does not fit")
+        violation = ConstraintViolation(
+            rule=RuleId.MUST_DO, message="the edit does not fit"
+        )
         return result.model_copy(update={"valid": False, "violations": [violation]})
 
     monkeypatch.setattr(rg.CheckPlanUseCase, "execute_replan", refuse_without_dropped)
@@ -767,13 +856,18 @@ def test_a_replan_is_re_offered_even_when_its_new_explanation_is_the_template(mo
 
     assert _interrupt(result)["kind"] == "plan_approval"
     [second] = r.pending()
-    assert r.values()["candidate_plan"].provenance.prompt_versions["explain"] == "template"
+    assert (
+        r.values()["candidate_plan"].provenance.prompt_versions["explain"] == "template"
+    )
     assert r.deps.plans.get(second.candidate_plan_id).stops == original.stops
 
 
 def test_nothing_is_proposed_for_a_party_without_guests(r) -> None:
     r.send(_down(r.stop_node()))
-    state = {**r.values(), "constraints": r.values()["constraints"].model_copy(update={"guests": []})}
+    state = {
+        **r.values(),
+        "constraints": r.values()["constraints"].model_copy(update={"guests": []}),
+    }
     before = len(r.proposals)
 
     with pytest.raises(ValueError, match="party's guests"):

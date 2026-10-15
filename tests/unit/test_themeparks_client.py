@@ -209,7 +209,7 @@ class TestGetLiveWaits:
         assert waits == {}
 
     def test_foreign_timezone_payload_raises_schema_error(self):
-        """P0-10: a live payload in another timezone is contract drift."""
+        """A live payload in another timezone is contract drift."""
         client = _client(
             {
                 f"/entity/{PARK_ID}/live": _load_fixture(
@@ -221,7 +221,7 @@ class TestGetLiveWaits:
             client.get_live_waits(["b2260923-9315-40fd-9c6b-44dd811dbe64"])
 
     def test_duplicated_id_is_excluded_not_last_wins(self):
-        """P0-10: two different readings for one id are both dropped, never picked."""
+        """Two different readings for one id are both dropped, never picked."""
         client = _client(
             {
                 f"/entity/{PARK_ID}/live": _load_fixture(

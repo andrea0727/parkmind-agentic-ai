@@ -1,14 +1,14 @@
-"""Use case: the event monitor (section 24, backlog P0-33).
+"""Use case: the event monitor.
 
 "The monitor runs independently of the agent" and "does not wake the LLM for
 every snapshot": it compares the two most recent stored snapshots with the
 deterministic ``event_detector`` and returns park-wide candidate events. The
-snapshots themselves are taken by the collector (P0-11; ``scripts/run_monitor.py``
+snapshots themselves are taken by the collector (``scripts/run_monitor.py``
 collects, then detects).
 
 Candidates carry no ``severity`` or ``requires_replan``: those depend on the
 party, so ``HandleEventsUseCase`` judges them per thread with EventPolicy.
-Waking each thread's replanning graph is P0-34.
+Waking each thread's replanning graph is the replanning graph's job.
 
 Per-reading freshness: reading times come from the current snapshot's raw
 payload (``snapshot_normalization.reading_times``). A snapshot whose raw payload
@@ -41,6 +41,9 @@ from parkmind.services.use_cases.snapshot_normalization import (
 
 logger = logging.getLogger(__name__)
 
+BASELINE_SNAPSHOTS = 8
+"""Newest snapshots read per run: the pair compared, plus the wait-spike baseline."""
+
 
 @dataclass(frozen=True)
 class MonitorResult:
@@ -64,12 +67,12 @@ class MonitorEventsUseCase:
     def detect(self, *, now: datetime) -> MonitorResult:
         """Candidate events between the two most recent valid snapshots, at ``now``."""
         with open_deps(self._deps_factory) as deps:
-            latest = _latest_two(deps.snapshots, self._lookback)
+            latest = _latest_valid(deps.snapshots, self._lookback, BASELINE_SNAPSHOTS)
             if len(latest) < 2:
                 return MonitorResult(
                     current_snapshot_id=latest[0].snapshot_id if latest else None
                 )
-            current, previous = latest
+            current, previous, *earlier = latest
             raw = deps.snapshots.get_raw_payload(current.snapshot_id)
             try:
                 times = reading_times(raw, deps.id_mappings) if raw is not None else {}
@@ -82,15 +85,22 @@ class MonitorEventsUseCase:
                 times = {}
         return MonitorResult(
             candidates=detect_events(
-                previous, current, now=now, reading_times=times, config=self._config
+                previous,
+                current,
+                now=now,
+                reading_times=times,
+                earlier=earlier,
+                config=self._config,
             ),
             current_snapshot_id=current.snapshot_id,
             previous_snapshot_id=previous.snapshot_id,
         )
 
 
-def _latest_two(snapshots: SnapshotRepository, lookback: int) -> list[LiveContext]:
-    """The newest two snapshots that still validate, newest first.
+def _latest_valid(
+    snapshots: SnapshotRepository, lookback: int, count: int
+) -> list[LiveContext]:
+    """The newest ``count`` snapshots that still validate, newest first.
 
     A row that no longer validates is skipped, as in ``latest_valid_snapshot``.
     """
@@ -103,6 +113,6 @@ def _latest_two(snapshots: SnapshotRepository, lookback: int) -> list[LiveContex
             continue
         if context is not None:
             found.append(context)
-        if len(found) == 2:
+        if len(found) == count:
             break
     return found

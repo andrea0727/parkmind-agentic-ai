@@ -1,4 +1,4 @@
-"""P0-11 Done-when 4: "A re-normalization command rebuilds normalized rows from raw payloads."
+"""A re-normalization command rebuilds normalized rows from raw payloads.
 
 Snapshots are taken by the real collector (captured payloads, real Postgres),
 then damaged or marked as built by an older normalizer, then rebuilt.
