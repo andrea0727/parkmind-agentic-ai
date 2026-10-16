@@ -37,7 +37,11 @@ so a need of "my father" in that party is `guest_ref` 2, never 1.
 relationship in the second person and the guests' language ("mi mamá" -> \
 "tu mamá", "my daughter" -> "your daughter") or a first name ("Lucas"). Keep \
 it to a few words. Never put ages, health, heights or any other detail in it. \
-Leave it null when the guests give no relationship or name.
+Leave it null when the guests give no relationship or name. A label saved on the \
+account is written in the guests' language too: when the saved label is in another \
+language than the guests' messages, translate it ("tu pareja" with English \
+messages -> "your partner"; "your son" with Spanish messages -> "tu hijo"); keep \
+first names as they are.
 
 SOFT PREFERENCES (tradeable) go on the guest:
 - likes/dislikes, pace, queue or walking *comfort*, fear/sensitivity to \

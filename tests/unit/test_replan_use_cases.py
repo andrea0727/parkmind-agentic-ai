@@ -199,13 +199,20 @@ def test_a_report_newer_than_the_snapshot_marks_the_attraction_down():
     assert context.statuses["a2"] is AttractionStatus.OPERATING  # the input is not mutated
 
 
-def test_a_report_not_newer_than_the_snapshot_is_ignored():
+def test_a_report_older_than_the_snapshot_is_ignored():
+    context = _context()
+
+    older = with_event_statuses(context, [_event(minutes=-5, attraction_id="a2")])
+
+    assert older is context  # unchanged context is returned as is
+
+
+def test_a_report_made_at_the_instant_of_the_snapshot_is_applied():
     context = _context()
 
     same = with_event_statuses(context, [_event(minutes=0, attraction_id="a2")])
-    older = with_event_statuses(context, [_event(minutes=-5, attraction_id="a2")])
 
-    assert same is context and older is context  # unchanged context is returned as is
+    assert same.statuses["a2"] is AttractionStatus.DOWN
 
 
 def test_the_latest_report_wins():
