@@ -75,10 +75,9 @@ def _park_is_closed(entities: list[dict[str, Any]]) -> bool:
 
 def _drop_closed_snapshot(original: Any) -> bool:
     """A snapshot is reused for its whole collection window, so one taken while the park was closed would hide the open feed."""
+    from e2e.kit.env import e2e_now
     from parkmind.services.use_cases.collect_snapshot import snapshot_id_for
     from parkmind.services.use_cases.planning_deps import MAGIC_KINGDOM_PARK_ID
-
-    from e2e.kit.env import e2e_now
 
     with ThemeParksClient(MAGIC_KINGDOM_PARK_ID) as client:
         closed = _park_is_closed(original(client)["liveData"])
@@ -93,9 +92,8 @@ def _drop_closed_snapshot(original: Any) -> bool:
 
 
 def _collect_open_snapshot() -> None:
-    from parkmind.services.use_cases.planning_deps import default_planning_deps
-
     from e2e.kit.env import e2e_now
+    from parkmind.services.use_cases.planning_deps import default_planning_deps
 
     with default_planning_deps() as deps:
         assert deps.collector is not None
