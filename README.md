@@ -30,11 +30,12 @@ approval before it's ever applied.
 
 [Prerequisites](#prerequisites) · [Getting started](#getting-started) ·
 [Demo app](#demo-app-api--react-ui) · [Planning rules](#planning-rules-the-guests-will-notice) ·
-[E2E](#e2e-on-real-ports-live-llm) · [Langfuse](#observability-langfuse-local) ·
+[E2E](#e2e-on-real-ports-live-llm) · [Live evals](#live-conversation-evals) · [Langfuse](#observability-langfuse-local) ·
 [Database](#database) · [Snapshots](#snapshots) · [Event monitor](#event-monitor) ·
 [Replanning](#replanning-graph) · [Approval](#human-approval-approve--edit--reject) ·
 [Explanations](#explanations) · [MCP](#mcp-capability-boundary) ·
 [Configuration](#configuration-reference) · [Tests and checks](#tests-and-checks) ·
+[Switching provider](#switching-the-llm-provider) · [Running every check](#running-every-check) ·
 [Troubleshooting](#troubleshooting) · [Status](#implementation-status)
 
 ## Project structure
@@ -77,13 +78,24 @@ parkmind-agentic-ai/
 ├── tests/
 │   ├── unit/                     # one file per service/model, isolated
 │   ├── integration/              # full graphs, API, MCP, Postgres, agent quality checks
-│   └── architecture/             # import boundaries and ownership rules (who may validate, who sets event policy)
+│   ├── architecture/             # import boundaries and ownership rules (who may validate, who sets event policy)
+│   ├── e2e/                      # layer 1: whole journeys from a shared scenario catalog, live on real ports
+│   ├── workflow/                 # layer 2: the same journeys replayed offline (routing, state, interrupts)
+│   ├── evals/                    # layer 3: quality of the LLM output, plus the live conversation evals
+│   ├── observability/            # layer 4: traces, spans and masking reach Langfuse
+│   └── resilience/, security/, performance/   # layer 5: failure injection, hostile input, latency and cost budgets
 │
 ├── docs/
 │   ├── evaluation/               # methodology behind the metrics
+│   ├── testing/                  # test taxonomy and scenario matrix
 │   ├── e2e/                      # live-run scenarios (SCENARIOS.md); raw/ and REPORT.md are generated
-│   ├── diagrams/                 # system-architecture.html, agent-workflow.html
+│   ├── diagrams/                 # system-architecture.html, agent-workflow.html, and draw.io files
+│   │                             # (architecture overview, layers and MCP rules, testing with Docker)
 │   └── context/, decisions/
+│
+├── .claude/
+│   ├── skills/parkmind-evals/    # workflow for running and reading the live evals
+│   └── agents/                   # eval-triage (classifies failures), scenario-writer (proposes new dialogues)
 │
 ├── notebooks/                     # exploratory only, nothing imported by the app
 ├── scripts/                        # seed_db, collect_snapshot, renormalize_snapshots, run_monitor,
@@ -283,8 +295,9 @@ the itinerary.
 ### E2E on real ports (live LLM)
 
 `scripts/e2e/` runs the initial planning graph against **real** Postgres, ThemeParks,
-Open-Meteo and Anthropic (33 scenarios, ~35 LLM calls, ~15 minutes; costs API credit).
-Not part of CI. Needs `ANTHROPIC_API_KEY` and `DATABASE_URL` in `.env`, a migrated
+Open-Meteo and the chosen LLM provider (33 scenarios, ~35 LLM calls, ~15 minutes; costs API credit).
+Not part of CI. Needs the key of the chosen provider (`ANTHROPIC_API_KEY` by default; see
+[Switching the LLM provider](#switching-the-llm-provider)) and `DATABASE_URL` in `.env`, a migrated
 database, and (for two scenarios) the throwaway `parkmind_edge` database; details in
 `scripts/e2e/README.md`, scenario tables in `docs/e2e/SCENARIOS.md`.
 
@@ -306,6 +319,39 @@ Captures go to `docs/e2e/raw/` and reports to `build/e2e/` (both git-ignored). E
 report run is kept with its Allure history, so the trend across runs is visible.
 Optional: `E2E_NOW=HH:MM` (park clock, default 10:00), `E2E_EDGE_DATABASE_URL`,
 `E2E_RAW_DIR`, `E2E_BAD_DATABASE_URL`.
+
+### Live conversation evals
+
+`tests/evals/` also plays scripted guest dialogues against the real models and scores each
+conversation: no repeated question, no echo of the guests' words, and a naturalness score per
+turn from a DeepEval decision tree. Every dialogue runs several times in two arms, the fixed
+question template and the LLM question writer, and the pass rate over runs is the headline number.
+Not part of CI; costs API credit. Needs the key of the chosen provider in `.env`, `ANTHROPIC_API_KEY` as well
+for the Claude judge, and `poetry install --with eval`.
+
+```bash
+set -a; . ./.env; set +a
+env -u ANTHROPIC_BASE_URL -u ANTHROPIC_AUTH_TOKEN PYTHONPATH=src:tests .venv/bin/python -m evals.run_live --runs 5
+PARKMIND_RUN_LIVE=1 poetry run pytest tests/evals -m live    # the same checks as pytest assertions
+```
+
+Results are appended to `build/evals/results.jsonl` and `build/evals/dashboard.html` is rebuilt
+(pass rate per arm and dialogue, history by prompt version, every transcript with the judge's
+reason per turn). With the `LANGFUSE_*` variables set, each conversation is also sent to Langfuse
+as a trace with the scores `conversation_passed`, `flow_ok` and `naturalness`. The judge model is
+`PARKMIND_JUDGE_MODEL` (default `claude-sonnet-5`), deliberately not the model that writes the
+questions. Details in `tests/evals/README.md`. For Claude Code, the `parkmind-evals` skill describes
+the workflow, the `eval-triage` agent classifies each failing conversation, and `scenario-writer`
+proposes harder dialogues.
+
+**Changing the provider.** The agents (ELICIT, ASK, EXPLAIN) follow `LLM_PROVIDER`: set it, put
+the matching key in `.env`, and install the extra once (`poetry install -E openai` or `-E google`);
+the default models change with it unless you set `ELICIT_MODEL`, `ASK_MODEL` or `EXPLAIN_MODEL`.
+The evals then judge the new provider's conversations. The judge does **not** follow
+`LLM_PROVIDER`: it is Claude through `ChatAnthropic` (`tests/evals/eval_judge.py`), so
+`ANTHROPIC_API_KEY` is still required to score them even when the agents run on OpenAI or Google.
+Keeping one fixed judge also keeps the pass rates comparable across providers. Moving the judge
+to another provider means replacing `ClaudeJudge`, not setting a variable.
 
 ### Observability: Langfuse (local)
 
@@ -822,6 +868,9 @@ default). The ones you will touch:
 | `PARKMIND_EMBEDDING_MODEL`, `PARKMIND_EMBEDDING_CACHE` | MiniLM multilingual, `~/.cache/parkmind/fastembed` | Local embedding model |
 | `PARKMIND_TRACING`, `LANGFUSE_*`, `PARKMIND_TRACING_ENVIRONMENT` | `off` | Masked Langfuse tracing |
 | `PARKMIND_TEST_DATABASE_URL` | – | Postgres server for the `db` tests |
+| `PARKMIND_RUN_LIVE` | off | `1` runs the tests marked `live` (same as `pytest --live`) |
+| `PARKMIND_JUDGE_MODEL` | `claude-sonnet-5` | Model that judges the evals |
+| `PARKMIND_EVAL_RUNS` / `PARKMIND_CONVERSATION_RUNS` | `3` / `5` | Repetitions of the live consistency check / live conversations per dialogue and arm |
 | `PARKMIND_WORKERS` / `WEB_CONCURRENCY` | `1` | Must stay at 1 (sessions live in memory) |
 
 ## Tests and checks
@@ -839,8 +888,43 @@ PYTHONPATH=src poetry run lint-imports              # import boundaries (.import
 
 Markers (`pytest.ini`): `db` needs a real Postgres (skipped locally when unreachable,
 **fails** when `CI` is set); `requires_model` needs the local embedding model (skipped when
-it is not cached; the manual **Embedding smoke** workflow runs it). Most tests use a fake LLM;
-the few live Anthropic tests need `ANTHROPIC_API_KEY`. The full live check is the e2e above.
+it is not cached; the manual **Embedding smoke** workflow runs it); `live` calls real services
+and is skipped unless `--live` or `PARKMIND_RUN_LIVE=1`. Every test also gets a layer marker from
+its folder (`e2e`, `workflow`, `llm_eval`, `observability`, `reliability`, `security`,
+`performance`), so `pytest -m workflow` or `pytest -m "not live"` work. Most tests use a fake LLM;
+the live ones need the key of the chosen provider (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or
+`GOOGLE_API_KEY`). The full live checks are the e2e and the live conversation evals above;
+the taxonomy is in `docs/testing/README.md`.
+
+### Switching the LLM provider
+
+The agents (ELICIT, ASK, EXPLAIN) run on `anthropic` (default), `openai` or `google`. To switch:
+
+```bash
+poetry install -E openai            # or -E google; anthropic needs no extra
+# .env
+LLM_PROVIDER=openai                 # or google
+OPENAI_API_KEY=sk-...               # or GOOGLE_API_KEY
+# optional: ELICIT_MODEL / ASK_MODEL / EXPLAIN_MODEL (defaults: gpt-4o-mini, gemini-2.5-flash)
+```
+
+Nothing else changes: the demo app, the e2e and the evals read the same settings. Keep
+`ANTHROPIC_API_KEY` too if you run the evals, because the judge is always Claude.
+
+### Running every check
+
+| What | Command | Needs |
+|---|---|---|
+| Offline suite (unit, integration, workflow, evals, observability, resilience, security, performance) | `poetry run pytest -m "not live and not db"` | nothing |
+| Plus the Postgres tests | `poetry run pytest` (after `docker compose up -d`) | Postgres |
+| Lint, types, import boundaries | `poetry run ruff check . && poetry run mypy src && PYTHONPATH=src poetry run lint-imports` | nothing |
+| One layer | `poetry run pytest -m workflow` (or `e2e`, `llm_eval`, `observability`, `reliability`, `security`, `performance`) | nothing for the offline ones |
+| E2E on real ports | `poetry run python scripts/e2e/capture.py`, then `build_report.py` ([E2E](#e2e-on-real-ports-live-llm)) | provider key, Postgres, `parkmind_edge` |
+| Live tests through pytest | `PARKMIND_RUN_LIVE=1 poetry run pytest -m live` | provider key, Postgres, and `ANTHROPIC_API_KEY` for the judge |
+| Live conversation evals and dashboard | `python -m evals.run_live --runs 5` ([Live evals](#live-conversation-evals)) | provider key, `ANTHROPIC_API_KEY` for the judge, `poetry install --with eval` |
+| Langfuse traces | `docker compose -f docker-compose.langfuse.yml up -d` ([Langfuse](#observability-langfuse-local)) | Docker |
+
+If your shell exports `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`, unset them before any live run.
 
 ## Troubleshooting
 
