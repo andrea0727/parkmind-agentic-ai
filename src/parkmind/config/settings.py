@@ -11,15 +11,35 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# provider -> (env var that holds its API key, model used when no *_MODEL is set)
+PROVIDERS = {
+    "anthropic": ("ANTHROPIC_API_KEY", "claude-haiku-4-5-20251001"),
+    "openai": ("OPENAI_API_KEY", "gpt-4o-mini"),
+    "google": ("GOOGLE_API_KEY", "gemini-2.5-flash"),
+}
+
+_provider = os.getenv("LLM_PROVIDER", "anthropic").strip().lower()
+if _provider not in PROVIDERS:
+    raise ValueError(
+        f"LLM_PROVIDER={_provider!r} is not supported; use one of {sorted(PROVIDERS)}"
+    )
+
 
 class Settings:
+    # Which LLM provider backs the agents (see agents/llm_client.py).
+    LLM_PROVIDER = _provider
+    LLM_API_KEY_ENV = PROVIDERS[_provider][0]
+    LLM_API_KEY = os.getenv(LLM_API_KEY_ENV, "")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-    ELICIT_MODEL = os.getenv("ELICIT_MODEL", "claude-haiku-4-5-20251001")
+    ELICIT_MODEL = os.getenv("ELICIT_MODEL", PROVIDERS[_provider][1])
     EXPLAIN_MODEL = os.getenv("EXPLAIN_MODEL", ELICIT_MODEL)
     # EXPLAIN is on the plan's path: seconds per request and the client's own retries
     # (the attempt loop already retries once, so 0 by default).
     EXPLAIN_TIMEOUT_SECONDS = float(os.getenv("EXPLAIN_TIMEOUT_SECONDS", "20"))
     EXPLAIN_SDK_RETRIES = int(os.getenv("EXPLAIN_SDK_RETRIES", "0"))
+    # ASK words the next question to the guests; it falls back to the fixed question.
+    ASK_MODEL = os.getenv("ASK_MODEL", ELICIT_MODEL)
+    ASK_TIMEOUT_SECONDS = float(os.getenv("ASK_TIMEOUT_SECONDS", "10"))
     # G12: LLM calls (retries included) one thread may make; past it the agents use
     # their deterministic path (elicit asks again, explain writes the template).
     LLM_CALLS_PER_THREAD = max(1, int(os.getenv("PARKMIND_LLM_CALLS_PER_THREAD", "40")))

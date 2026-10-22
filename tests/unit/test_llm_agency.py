@@ -15,6 +15,8 @@ from typing import Any, ClassVar
 import pytest
 from pydantic import BaseModel
 
+from parkmind.agents.ask_agent import AnthropicQuestionWriter
+from parkmind.agents.ask_schema import QuestionDraft
 from parkmind.agents.elicit_agent import AnthropicExtractor
 from parkmind.agents.elicit_schema import ElicitationExtraction
 from parkmind.agents.explain_agent import AnthropicNarrator
@@ -47,8 +49,9 @@ def recording_chat(monkeypatch):
     [
         (lambda: AnthropicExtractor(api_key="k"), ElicitationExtraction),
         (lambda: AnthropicNarrator(api_key="k"), ExplanationDraft),
+        (lambda: AnthropicQuestionWriter(api_key="k"), QuestionDraft),
     ],
-    ids=["elicit", "explain"],
+    ids=["elicit", "explain", "ask"],
 )
 def test_each_llm_gets_exactly_one_output_schema_forced_and_no_real_tool(
     client, schema
@@ -61,15 +64,19 @@ def test_each_llm_gets_exactly_one_output_schema_forced_and_no_real_tool(
     assert choice == schema.__name__
 
 
-# Every module that builds an LLM client, and so must be pinned by the test above.
-PINNED_CLIENT_MODULES = {"agents/elicit_agent.py", "agents/explain_agent.py"}
-# Modules that import a provider SDK without building a client: llm_budget reads the
-# SDK's exception types to decide which failures are worth a retry (G12).
-PROVIDER_IMPORT_ONLY_MODULES = {"agents/llm_budget.py"}
+# Every module that builds or binds an LLM client, and so must be pinned by the test above.
+# Only llm_client imports a provider package: the agents get their model from it.
+PINNED_CLIENT_MODULES = {
+    "agents/ask_agent.py",
+    "agents/elicit_agent.py",
+    "agents/explain_agent.py",
+    "agents/llm_client.py",
+}
 _LLM_ENTRY_POINTS = {
     "ChatAnthropic",
     "ChatOpenAI",
     "ChatNVIDIA",
+    "ChatGoogleGenerativeAI",
     "init_chat_model",
     "Anthropic",
     "AsyncAnthropic",
@@ -144,7 +151,7 @@ def test_no_llm_client_is_built_outside_the_modules_this_file_pins():
             importers.add(name)
 
     assert builders == PINNED_CLIENT_MODULES
-    assert importers == PINNED_CLIENT_MODULES | PROVIDER_IMPORT_ONLY_MODULES
+    assert importers == {"agents/llm_client.py"}
 
 
 @pytest.mark.parametrize(

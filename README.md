@@ -67,7 +67,7 @@ parkmind-agentic-ai/
 │       │   │                    # never planning/personalization directly
 │       │   └── evaluation/      # baselines + metrics (the eval harness)
 │       │
-│       ├── agents/               # elicit agent (Anthropic extractor, closed schema),
+│       ├── agents/               # elicit agent (LLM extractor, closed schema),
 │       │                         # concierge, plan synthesis, preference resolver
 │       ├── graph/                 # LangGraph state, the two graphs, ConversationService
 │       ├── api/                   # FastAPI app: routes, auth/limits (security.py), schemas
@@ -147,7 +147,7 @@ and `agent.py` both add it to the import path, so
 | [Poetry](https://python-poetry.org) | 2.x | dependencies and every `poetry run ...` command |
 | Docker (with Compose) | recent | Postgres + pgvector, the demo app, Langfuse |
 | Node.js | 22 (what the Dockerfile builds with) | only to run the React UI in dev mode (`ui/web`) |
-| Anthropic API key | | reading the guests' messages and writing explanations; the live e2e |
+| LLM API key (Anthropic by default; OpenAI or Google with `LLM_PROVIDER`) | | reading the guests' messages and writing explanations; the live e2e |
 | [Allure CLI](https://allurereport.org) (`brew install allure`) | | only to render the interactive e2e report |
 
 ## Getting started
@@ -194,12 +194,14 @@ One container serves the FastAPI API and the built React UI on http://localhost:
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...
+# LLM_PROVIDER=openai or google (default anthropic): set OPENAI_API_KEY or GOOGLE_API_KEY instead,
+# and install the package once: poetry install -E openai  (or -E google)
 PARKMIND_AUTH_USERS=demo=ChangeMe1234        # name=password[,name2=password2]; 8+ chars, no commas
 PARKMIND_JWT_SECRET=<32+ random chars>       # python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
 Optional: `PARKMIND_TOKEN_TTL_HOURS` (default 2), `PARKMIND_MESSAGES_PER_USER_DAY` (300),
-`PARKMIND_MESSAGES_GLOBAL_DAY` (2000), `ELICIT_MODEL` (Anthropic model, default `claude-haiku-4-5-20251001`), `PARKMIND_AUTH_DISABLED=1` (local demo only: no login,
+`PARKMIND_MESSAGES_GLOBAL_DAY` (2000), `ELICIT_MODEL` (default per provider), `PARKMIND_AUTH_DISABLED=1` (local demo only: no login,
 every route open), `PARKMIND_PLAN_FROM_STORED=1` (plan from the latest stored snapshot),
 `E2E_NOW=HH:MM` (fixed park clock); both demo switches need `PARKMIND_DEMO=1` too, and the server refuses to start with one set alone. After editing `.env`: `docker compose up -d app`.
 
@@ -679,7 +681,7 @@ lets it invent a figure (Architecture §40, C17):
   not a weight and is never labelled. No LLM judge.
 - **One retry, then the template.** A schema failure, an ungrounded number or a wrong
   label gets one retry with the errors listed; after that, without an
-  `ANTHROPIC_API_KEY`, or if the model returns no structured output or the call fails,
+  API key for the chosen provider, or if the model returns no structured output or the call fails,
   the guests read the deterministic template, which only prints figures from the payload.
   Each request is capped at `EXPLAIN_TIMEOUT_SECONDS` (20 s) and the client does not
   retry on its own (`EXPLAIN_SDK_RETRIES=0`), so the guests wait at most 2 x 20 s = 40 s;
@@ -795,10 +797,13 @@ default). The ones you will touch:
 
 | Variable | Default | What it does |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | – | Reads the guests' messages (ELICIT) and writes explanations |
-| `ELICIT_MODEL` | `claude-haiku-4-5-20251001` | Anthropic model for elicitation |
+| `LLM_PROVIDER` | `anthropic` | LLM behind ELICIT, ASK and EXPLAIN: `anthropic`, `openai` or `google`. The last two are optional installs (`poetry install -E openai` / `-E google`) |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_API_KEY` | – | Key of the chosen provider; reads the guests' messages (ELICIT), words the questions (ASK) and writes explanations (EXPLAIN) |
+| `ELICIT_MODEL` | `claude-haiku-4-5-20251001`, `gpt-4o-mini` or `gemini-2.5-flash` | Model for elicitation (default depends on the provider) |
 | `EXPLAIN_MODEL` | `ELICIT_MODEL` | Model for explanations |
 | `EXPLAIN_TIMEOUT_SECONDS` / `EXPLAIN_SDK_RETRIES` | `20` / `0` | Explain request cap and client retries |
+| `ASK_MODEL` | `ELICIT_MODEL` | Model that words the questions to the guests |
+| `ASK_TIMEOUT_SECONDS` | `10` | Ask request cap; past it the fixed question is used |
 | `PARKMIND_LLM_CALLS_PER_THREAD` | `40` | LLM calls one conversation may make; past it the agents use their deterministic path |
 | `PARKMIND_MAX_PARTY_SIZE` | `10` | Largest party the planner accepts |
 | `DATABASE_URL` | `postgresql://parkmind:parkmind@localhost:5432/parkmind` | Postgres |
@@ -850,7 +855,7 @@ the few live Anthropic tests need `ANTHROPIC_API_KEY`. The full live check is th
 | Port 5432 or 8000 already in use | Stop the other service, or change the host port in `docker-compose.yml`. |
 | `knowledge.search_policies` says `degraded` | Model or index missing: run `fetch_embedding_model.py` and `index_knowledge.py`. |
 | The Allure report is blank | Serve it over HTTP (`python -m http.server`); `index.html` does not work from `file://`. |
-| Replies are in the template wording | No `ANTHROPIC_API_KEY`, the per-thread call cap was reached, or the model output failed grounding twice. |
+| Replies are in the template wording | No key for the chosen provider, the per-thread call cap was reached, or the model output failed grounding twice. |
 
 ## Implementation Status
 

@@ -18,6 +18,8 @@ python = "^3.12"
 pydantic = ">=2.6"
 langgraph = ">=0.2"
 langchain-anthropic = ">=0.2"
+langchain-openai = {version = ">=0.3", optional = true}
+langchain-google-genai = {version = ">=2.1", optional = true}
 streamlit = ">=1.38"
 httpx = ">=0.27"
 psycopg = {extras = ["binary"], version = ">=3.2"}
@@ -32,6 +34,10 @@ fastapi = "^0.143.0"
 uvicorn = {extras = ["standard"], version = "^0.54.0"}
 pyjwt = "^2.10"
 langchain = "^1"
+
+[tool.poetry.extras]
+openai = ["langchain-openai"]
+google = ["langchain-google-genai"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0"

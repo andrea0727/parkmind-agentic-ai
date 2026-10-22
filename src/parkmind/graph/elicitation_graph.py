@@ -39,6 +39,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
+from parkmind.agents.ask_agent import AnthropicQuestionWriter, QuestionWriter
 from parkmind.agents.elicit_agent import (
     UNAVAILABLE_FLAG,
     AnthropicExtractor,
@@ -253,8 +254,13 @@ def build_elicitation_graph(
     downstream: StateNode = _proceed,
     *,
     names: AttractionNameResolver,
+    asker: QuestionWriter | None = None,
 ) -> Any:
     """Compile the elicit -> confirm -> validate graph.
+
+    ``asker`` rewords the questions to the guests; with the default extractor it is
+    the Claude question writer, and with an injected extractor none is used unless
+    given, so tests never reach the network.
 
     ``names`` turns the must-do/avoid names the guests say into catalog
     ``node_id``s; the confirmed ``constraints.must_do``/``avoid`` hold ids.
@@ -269,8 +275,11 @@ def build_elicitation_graph(
     intake = intake or AccessibilityIntakeUseCase()
     graph = StateGraph(ParkMindState)
 
+    if asker is None and extractor is None:
+        asker = AnthropicQuestionWriter()
     graph.add_node(
-        "elicit", make_elicit_node(extractor or AnthropicExtractor(), intake, names)
+        "elicit",
+        make_elicit_node(extractor or AnthropicExtractor(), intake, names, asker=asker),
     )
     graph.add_node("ask_missing", _ask_missing)
     graph.add_node("confirm_hard_constraints", _make_confirm_node(intake))

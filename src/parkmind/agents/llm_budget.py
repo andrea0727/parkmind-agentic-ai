@@ -24,6 +24,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
 
+from parkmind.agents.llm_client import is_retryable
 from parkmind.config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -85,17 +86,6 @@ def bound_to_thread(thread_id: str | None) -> Iterator[None]:
         _current_thread.reset(token)
 
 
-def _retryable() -> tuple[type[Exception], ...]:
-    """What the SDK itself used to retry: no connection, timeout, rate limit, server error."""
-    import anthropic
-
-    return (
-        anthropic.APIConnectionError,
-        anthropic.RateLimitError,
-        anthropic.InternalServerError,
-    )
-
-
 def invoke_counted(
     runnable: Any,
     messages: Sequence[Any],
@@ -117,8 +107,8 @@ def invoke_counted(
             raise LlmBudgetExhaustedError("the thread's LLM call budget is spent")
         try:
             return runnable.invoke(messages)
-        except _retryable():
-            if attempt == attempts - 1:
+        except Exception as exc:
+            if not is_retryable(exc) or attempt == attempts - 1:
                 raise
             time.sleep(min(_BACKOFF_SECONDS * 2**attempt, _MAX_BACKOFF_SECONDS))
     raise AssertionError("unreachable")  # pragma: no cover

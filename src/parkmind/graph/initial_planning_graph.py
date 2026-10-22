@@ -66,6 +66,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 from pydantic import ValidationError
 
+from parkmind.agents.ask_agent import QuestionWriter
 from parkmind.agents.elicit_agent import ELICIT_PROMPT_VERSION, GuestInfoExtractor
 from parkmind.agents.explain_agent import (
     AnthropicNarrator,
@@ -732,6 +733,7 @@ def build_initial_planning_graph(
     clock: Clock = park_clock,
     names: AttractionNameResolver | None = None,
     narrator: PlanNarrator | None = None,
+    asker: QuestionWriter | None = None,
 ) -> Any:
     """Compile the end-to-end initial planning graph.
 
@@ -752,4 +754,5 @@ def build_initial_planning_graph(
             build_planning_stage(deps_factory, clock, narrator or AnthropicNarrator()),
         ),
         names=resolver,
+        asker=asker,
     )

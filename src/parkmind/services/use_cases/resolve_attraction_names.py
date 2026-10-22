@@ -59,6 +59,11 @@ _PUNCTUATION = re.compile(r"[^\w\s]")
 _REPEATED_LETTER = re.compile(r"([^\W\d_])\1+")
 
 
+_GENERIC_WORDS = frozenset(
+    {"fireworks", "firework", "show", "ride", "attraction", "coaster"}
+)
+
+
 def _normalize(text: str) -> str:
     """Case, possessive 's, punctuation and doubled letters do not tell attractions apart.
 
@@ -134,4 +139,10 @@ def _match(name: str, catalog: list[Attraction]) -> list[Attraction]:
     if exact:
         return exact
     words = set(wanted.split())
-    return [a for a in catalog if words <= set(_normalize(a.name).split())]
+    partial = [a for a in catalog if words <= set(_normalize(a.name).split())]
+    if partial:
+        return partial
+    core = words - _GENERIC_WORDS
+    if not core or core == words:
+        return []
+    return [a for a in catalog if core <= set(_normalize(a.name).split())]

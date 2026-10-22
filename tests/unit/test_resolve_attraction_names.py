@@ -111,6 +111,37 @@ def test_a_spelling_variant_does_not_hide_an_ambiguous_name() -> None:
     )
 
 
+def test_a_generic_descriptor_does_not_stop_a_unique_match() -> None:
+    catalog = [
+        make_attraction("id-hea", "Happily Ever After"),
+        make_attraction("id-tron", "TRON Lightcycle / Run"),
+    ]
+
+    resolution = make_names(catalog).resolve(["Happily Ever After fireworks"])
+
+    assert resolution.resolved["Happily Ever After fireworks"].node_id == "id-hea"
+
+
+def test_a_generic_descriptor_never_resolves_an_ambiguous_name() -> None:
+    catalog = [
+        make_attraction("id-a", "Peter Pan's Flight"),
+        make_attraction("id-b", "Peter Pan Mini Golf"),
+    ]
+
+    resolution = make_names(catalog).resolve(["Peter Pan ride"])
+
+    assert resolution.resolved == {}
+    assert "Peter Pan ride" in resolution.ambiguous
+
+
+def test_only_descriptors_resolve_to_nothing() -> None:
+    resolution = make_names([make_attraction("id-a", "Fireworks Cafe")]).resolve(
+        ["the show"]
+    )
+
+    assert resolution.resolved == {}
+
+
 def test_node_ids_are_deduplicated_in_order() -> None:
     resolution = make_names().resolve(["tron", "TRON", "Teacups"])
 

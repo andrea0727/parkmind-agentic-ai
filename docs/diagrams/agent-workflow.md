@@ -15,7 +15,7 @@ The LLM only proposes. A hard constraint does not reach the checker until a pers
 
 ```mermaid
 flowchart TD
-  S([START]) --> EL["elicit<br/>LLM extraction (AnthropicExtractor)"]:::impl
+  S([START]) --> EL["elicit<br/>LLM extraction + ask wording (LLM_PROVIDER)"]:::impl
   EL -- missing information --> AM["ask_missing<br/>interrupt()"]:::impl
   AM --> EL
   EL -- new input --> EL

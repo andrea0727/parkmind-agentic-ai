@@ -23,7 +23,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Literal, Protocol
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import SecretStr, ValidationError
+from pydantic import ValidationError
 
 from parkmind.agents.explain_prompt import EXPLAIN_PROMPT_VERSION, EXPLAIN_SYSTEM_PROMPT
 from parkmind.agents.explain_schema import ExplanationDraft
@@ -38,6 +38,7 @@ from parkmind.agents.llm_budget import (
     bound_to_thread,
     invoke_counted,
 )
+from parkmind.agents.llm_client import build_chat_model
 from parkmind.config.settings import settings
 from parkmind.services.use_cases.explain_plan import (
     ExplanationPayload,
@@ -89,7 +90,7 @@ class PlanNarrator(Protocol):
 
 
 class AnthropicNarrator:
-    """Claude tool-calling narrator. The client is built on first use.
+    """Tool-calling narrator. The client is built on first use.
 
     Unlike elicit's extractor, every request is bounded (``timeout``, no SDK retry
     by default): the guests are waiting for their plan, and the template can stand in.
@@ -105,7 +106,7 @@ class AnthropicNarrator:
         budget: LlmCallBudget | None = None,
     ) -> None:
         self._model = model or settings.EXPLAIN_MODEL
-        self._api_key = api_key if api_key is not None else settings.ANTHROPIC_API_KEY
+        self._api_key = api_key if api_key is not None else settings.LLM_API_KEY
         self._timeout = timeout
         self._max_retries = max_retries
         self._budget = budget
@@ -113,18 +114,16 @@ class AnthropicNarrator:
 
     def _runnable(self) -> Any:
         if not self._api_key:
-            raise NarratorUnavailableError("no ANTHROPIC_API_KEY is configured")
+            raise NarratorUnavailableError(
+                f"no {settings.LLM_API_KEY_ENV} is configured"
+            )
         if self._llm is None:
-            from langchain_anthropic import ChatAnthropic
-
-            chat = ChatAnthropic(
-                model_name=self._model,
-                api_key=SecretStr(self._api_key),
+            chat = build_chat_model(
+                model=self._model,
+                api_key=self._api_key,
                 temperature=0,
-                max_tokens_to_sample=1500,
+                max_tokens=1500,
                 timeout=self._timeout,
-                max_retries=0,  # retried in invoke_counted, so every call is counted [G12]
-                stop=None,
             )
             self._llm = chat.bind_tools(
                 [ExplanationDraft], tool_choice=ExplanationDraft.__name__

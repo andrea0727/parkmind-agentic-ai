@@ -2,7 +2,7 @@
 
 ONE process, ONE worker: sessions (the checkpointer) and session-only data are in memory.
 Env: PORT, PARKMIND_UI_DIR (built UI, default ui/web/dist), PARKMIND_CORS_ORIGINS (comma list),
-ANTHROPIC_API_KEY (the LLM key),
+LLM_PROVIDER (anthropic, openai or google; default anthropic) and that provider's key (ANTHROPIC_API_KEY, OPENAI_API_KEY or GOOGLE_API_KEY),
 PARKMIND_AUTH_USERS ("user=password,user2=password2") and PARKMIND_JWT_SECRET (>= 32 chars) are REQUIRED: the server refuses to start without them. PARKMIND_AUTH_DISABLED=1 opts out
 (local demos only; every route is then open). PARKMIND_TOKEN_TTL_HOURS (default 2).
 LLM caps (per user and global per 24 h): PARKMIND_MESSAGES_PER_USER_DAY (300), PARKMIND_MESSAGES_GLOBAL_DAY (2000).
@@ -27,10 +27,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 import uvicorn
 from dotenv import load_dotenv
 
+from parkmind.agents.ask_agent import AnthropicQuestionWriter
 from parkmind.agents.elicit_agent import AnthropicExtractor
+from parkmind.agents.llm_client import check_provider_installed
 from parkmind.api.app import create_app
 from parkmind.api.guard import ensure_single_worker
 from parkmind.api.security import AuthConfig, AuthConfigError, Limits, parse_users
+from parkmind.config.settings import settings
 from parkmind.core.contracts import PARK_TZ
 from parkmind.graph.checkpointing import default_checkpointer
 from parkmind.graph.conversation import ConversationService
@@ -139,14 +142,16 @@ def build_app():
     deps_factory = _deps_factory()
     clock = _clock()
     checkpointer = default_checkpointer()
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise RuntimeError("ANTHROPIC_API_KEY is required: set it in .env")
+    check_provider_installed()
+    if not os.environ.get(settings.LLM_API_KEY_ENV):
+        raise RuntimeError(f"{settings.LLM_API_KEY_ENV} is required: set it in .env")
     extractor = AnthropicExtractor()
     initial = build_initial_planning_graph(
         extractor,
         checkpointer=checkpointer,
         deps_factory=deps_factory,
         clock=clock,
+        asker=AnthropicQuestionWriter(),
     )
     replanning = build_replanning_graph(
         checkpointer, deps_factory=deps_factory, clock=clock

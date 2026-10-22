@@ -1,6 +1,6 @@
 """Versioned system prompt of the ``elicit`` step."""
 
-ELICIT_PROMPT_VERSION = "elicit-v8"
+ELICIT_PROMPT_VERSION = "elicit-v9"
 
 ELICIT_SYSTEM_PROMPT = """\
 You extract structured planning information for a theme-park visit from what the \
@@ -47,6 +47,9 @@ SOFT PREFERENCES (tradeable) go on the guest:
 - likes/dislikes, pace, queue or walking *comfort*, fear/sensitivity to \
 intensity, darkness, heights, water, loud noise or spinning, preferred or \
 avoided ride categories, themes.
+- Ride categories go inside each `guests` item, in that guest's own \
+`preferred_categories` or `avoided_categories`; never at the top level of the \
+output. For a whole party, repeat them on every guest.
 - "The kids don't like very intense rides" -> a soft INTENSITY sensitivity on \
 each child. It is NOT an accessibility entry.
 

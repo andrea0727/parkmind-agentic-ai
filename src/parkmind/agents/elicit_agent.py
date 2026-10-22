@@ -20,8 +20,10 @@ from datetime import date, datetime, time
 from typing import Any, Protocol
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from pydantic import SecretStr, ValidationError
+from pydantic import ValidationError
 
+from parkmind.agents.ask_agent import QuestionWriter, Turn, word_question
+from parkmind.agents.ask_template import plain_question
 from parkmind.agents.clock_answer import parse_clock
 from parkmind.agents.elicit_prompt import ELICIT_PROMPT_VERSION, ELICIT_SYSTEM_PROMPT
 from parkmind.agents.elicit_schema import ElicitationExtraction, normalize_name
@@ -31,6 +33,7 @@ from parkmind.agents.llm_budget import (
     bound_to_thread,
     invoke_counted,
 )
+from parkmind.agents.llm_client import build_chat_model
 from parkmind.agents.time_grounding import (
     departure_is_grounded,
     lunch_window_is_grounded,
@@ -156,7 +159,7 @@ SDK_RETRIES = 2
 
 
 class AnthropicExtractor:
-    """Claude tool-calling extractor. The client is built on first use."""
+    """Tool-calling extractor. The client is built on first use."""
 
     def __init__(
         self,
@@ -166,22 +169,18 @@ class AnthropicExtractor:
         budget: LlmCallBudget | None = None,
     ) -> None:
         self._model = model or settings.ELICIT_MODEL
-        self._api_key = api_key or settings.ANTHROPIC_API_KEY
+        self._api_key = api_key or settings.LLM_API_KEY
         self._budget = budget
         self._llm: Any = None
 
     def _runnable(self) -> Any:
         if self._llm is None:
-            from langchain_anthropic import ChatAnthropic
-
-            chat = ChatAnthropic(
-                model_name=self._model,
-                api_key=SecretStr(self._api_key),
+            chat = build_chat_model(
+                model=self._model,
+                api_key=self._api_key,
                 temperature=0,
-                max_tokens_to_sample=1500,
+                max_tokens=1500,
                 timeout=60,
-                max_retries=0,  # retried in invoke_counted, so every call is counted [G12]
-                stop=None,
             )
             self._llm = chat.bind_tools(
                 [ElicitationExtraction], tool_choice=ElicitationExtraction.__name__
@@ -777,11 +776,23 @@ def _unavailable(key: str, lang: Language) -> dict[str, Any]:
     }
 
 
+def _turns(state: ParkMindState) -> list[Turn]:
+    """The conversation so far as (role, text), for wording the next question."""
+    turns: list[Turn] = []
+    for message in state.get("messages") or []:
+        kind = getattr(message, "type", None)
+        content = getattr(message, "content", None)
+        if isinstance(content, str) and content.strip() and kind in ("human", "ai"):
+            turns.append(("guest" if kind == "human" else "assistant", content))
+    return turns
+
+
 def make_elicit_node(
     extractor: GuestInfoExtractor,
     intake: AccessibilityIntakeUseCase,
     names: AttractionNameResolver,
     *,
+    asker: QuestionWriter | None = None,
     today: Callable[[], date] = lambda: datetime.now(PARK_TZ).date(),
     now: Callable[[], datetime] = lambda: datetime.now(PARK_TZ),
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
@@ -793,6 +804,7 @@ def make_elicit_node(
       not exactly one catalog attraction, or one attraction that is both must-do
       and avoid -> ``constraints=None`` plus an AI
       question (its ``additional_kwargs["missing_information"]`` lists the keys);
+      the question is the fixed text, reworded by ``asker`` when there is one;
     * otherwise ``constraints``, ``guest_profiles``, ``constraints_valid=False``
       and ``pending_hard_constraint_confirmation``.
     """
@@ -842,7 +854,11 @@ def make_elicit_node(
                 missing_information(outcome.extraction)
                 + ungrounded_heights(outcome.extraction, texts)
                 + unverified_times
-                + ([] if unverified_times else lunch_after_departure(outcome.extraction))
+                + (
+                    []
+                    if unverified_times
+                    else lunch_after_departure(outcome.extraction)
+                )
                 + unresolved_names(resolution)
                 + conflicting_names(outcome.extraction, resolution)
                 + (
@@ -852,6 +868,33 @@ def make_elicit_node(
                 )
             )
         if outcome.extraction is None or missing:
+            fixed = _question_for(
+                missing,
+                resolution,
+                lang,
+                len(outcome.extraction.guests) if outcome.extraction else 0,
+                [g.label for g in outcome.extraction.guests]
+                if outcome.extraction
+                else (),
+            )
+            plain = plain_question(
+                missing[0] if missing else None,
+                fixed,
+                _turns(state),
+                lang,
+                solo=bool(outcome.extraction and len(outcome.extraction.guests) == 1),
+            )
+            if asker is not None:
+                with bound_to_thread(session_id):
+                    fixed = word_question(
+                        asker,
+                        fixed=fixed,
+                        turns=_turns(state),
+                        language=lang,
+                        fallback=plain,
+                    )
+            else:
+                fixed = plain
             return {
                 "language": lang,
                 "constraints": None,
@@ -859,15 +902,7 @@ def make_elicit_node(
                 "pending_hard_constraint_confirmation": None,
                 "messages": [
                     AIMessage(
-                        content=_question_for(
-                            missing,
-                            resolution,
-                            lang,
-                            len(outcome.extraction.guests) if outcome.extraction else 0,
-                            [g.label for g in outcome.extraction.guests]
-                            if outcome.extraction
-                            else (),
-                        ),
+                        content=fixed,
                         additional_kwargs={"missing_information": missing},
                     )
                 ],
