@@ -73,13 +73,45 @@ def _park_is_closed(entities: list[dict[str, Any]]) -> bool:
     return len(operating) < len(rides) / 2
 
 
+def _drop_closed_snapshot(original: Any) -> bool:
+    """A snapshot is reused for its whole collection window, so one taken while the park was closed would hide the open feed."""
+    from parkmind.services.use_cases.collect_snapshot import snapshot_id_for
+    from parkmind.services.use_cases.planning_deps import MAGIC_KINGDOM_PARK_ID
+
+    from e2e.kit.env import e2e_now
+
+    with ThemeParksClient(MAGIC_KINGDOM_PARK_ID) as client:
+        closed = _park_is_closed(original(client)["liveData"])
+    if not closed:
+        return False
+    import psycopg
+
+    snapshot_id = snapshot_id_for(MAGIC_KINGDOM_PARK_ID, e2e_now())
+    with psycopg.connect(settings.DATABASE_URL, autocommit=True) as connection:
+        connection.execute("delete from snapshots where snapshot_id = %s", (snapshot_id,))
+    return True
+
+
+def _collect_open_snapshot() -> None:
+    from parkmind.services.use_cases.planning_deps import default_planning_deps
+
+    from e2e.kit.env import e2e_now
+
+    with default_planning_deps() as deps:
+        assert deps.collector is not None
+        deps.collector.collect(now=e2e_now())
+
+
 @contextlib.contextmanager
 def park_open() -> Iterator[None]:
     """Outside park hours the live feed reports every ride closed; show it open with a standby wait.
 
     The schedule is untouched, and a feed that already shows the park open is passed through.
+    The window's snapshot is taken again through the open feed, so scenarios that run with the
+    provider down still find a stored snapshot of an open park.
     """
     original = ThemeParksClient.fetch_live_payload
+    was_closed = _drop_closed_snapshot(original)
 
     def open_feed(self: ThemeParksClient) -> dict[str, Any]:
         payload = original(self)
@@ -87,7 +119,7 @@ def park_open() -> Iterator[None]:
         if not _park_is_closed(entities):
             return payload
         for entity in entities:
-            if entity.get("entityType") not in ("ATTRACTION", "SHOW"):
+            if entity.get("entityType") != "ATTRACTION":
                 continue
             if entity.get("status") == "CLOSED":
                 entity["status"] = "OPERATING"
@@ -98,6 +130,8 @@ def park_open() -> Iterator[None]:
 
     ThemeParksClient.fetch_live_payload = open_feed  # type: ignore[method-assign]
     try:
+        if was_closed:
+            _collect_open_snapshot()
         yield
     finally:
         ThemeParksClient.fetch_live_payload = original  # type: ignore[method-assign]

@@ -61,7 +61,7 @@ SCENARIOS: tuple[Scenario, ...] = (
                 "Buzz Lightyear, Tiana's Bayou Adventure. We leave at 10 PM."
             ),
         ),
-        expected="Every must-do is in the plan, or the missing ones are reported.",
+        expected="Every must-do is in the plan, or nothing is proposed and the guests are told which must-do did not fit.",
         judge=j_mustdos(
             [
                 "Space Mountain",
@@ -206,7 +206,7 @@ SCENARIOS: tuple[Scenario, ...] = (
                 "Happily Ever After fireworks. We leave at 11 PM."
             ),
         ),
-        expected="The guests get a clear explanation that shows have fixed showtimes and cannot be planned as stops.",
+        expected="Shows are planned only at their published showtimes, or the guests are told that shows have fixed showtimes; a show that does not fit is reported.",
         judge=j_show,
         why="",
         criteria=Criteria(

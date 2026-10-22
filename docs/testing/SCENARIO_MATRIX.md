@@ -215,7 +215,7 @@ A mark means the scenario carries a criterion at that layer. The criteria follow
 
 ### 25. Guests ask for 12 must-do rides (`doce_mustdo`)
 
-- **E2E:** Every must-do is in the plan, or the missing ones are reported.
+- **E2E:** Every must-do is in the plan, or nothing is proposed and the guests are told which must-do did not fit.
 - **Observability:** One trace for the run with a span per executed node; the pause for the guests is not an error
 - **Business rules:** Every must-do is planned or reported as unmet; none is dropped silently
 
@@ -248,7 +248,7 @@ A mark means the scenario carries a criterion at that layer. The criteria follow
 
 ### 30. Guests ask for the parade and fireworks as must-dos (`show_como_mustdo`)
 
-- **E2E:** The guests get a clear explanation that shows have fixed showtimes and cannot be planned as stops.
+- **E2E:** Shows are planned only at their published showtimes, or the guests are told that shows have fixed showtimes; a show that does not fit is reported.
 - **LLM eval:** The explanation says why shows are not plannable stops and does not invent a showtime
 - **Observability:** One trace for the run with a span per executed node; the pause for the guests is not an error
 - **Business rules:** Shows have fixed showtimes and are not plannable stops

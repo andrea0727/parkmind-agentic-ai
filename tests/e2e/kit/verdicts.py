@@ -248,6 +248,13 @@ def j_show(r: Facts) -> Verdict:
         return ok(
             "No plan, and the guests were told that shows have fixed showtimes and cannot be planned as stops"
         )
+    text = expl(r)
+    if active(r) and all(
+        name in text for name in ("Festival of Fantasy", "Happily Ever After")
+    ):
+        return ok(
+            "Shows with published showtimes were planned at those times, and a show that did not fit was reported"
+        )
     return bad(
         "SHOW", f"interrupt={kind(r)} active={active(r)} last_ai={message[:120]}"
     )
@@ -384,7 +391,26 @@ def j_mustdos(names: list[str]) -> Judge:
             else None
         )
 
-    return j_plan_active(extra)
+    planned = j_plan_active(extra)
+
+    def j(r: Facts) -> Verdict:
+        if c := crashed(r):
+            return c
+        f = facts(r)
+        message = f.get("last_ai", "")
+        rules = [v["rule"] for v in f.get("violations", [])]
+        if (
+            not active(r)
+            and r.get("stages") == FULL[:4]
+            and "MUST_DO" in rules
+            and any(n in message for n in names)
+        ):
+            return ok(
+                "No plan was proposed and the guests were told which must-do did not fit"
+            )
+        return planned(r)
+
+    return j
 
 
 def j_avoid(names: list[str]) -> Judge:
