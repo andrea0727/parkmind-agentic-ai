@@ -30,10 +30,10 @@ jobs:
     runs-on: ubuntu-24.04
     services:
       postgres:
-        # Official Docker Hub image via its AWS ECR Public mirror: anonymous
-        # Docker Hub pulls from shared runners hit the rate limit / auth
-        # timeouts and fail the job before any check runs.
-        image: public.ecr.aws/docker/library/postgres:16
+        # Official Docker Hub image via Google's public mirror: anonymous pulls
+        # from Docker Hub and from AWS ECR Public hit rate limits on shared
+        # runners and fail the job before any check runs.
+        image: mirror.gcr.io/library/postgres:16
         env:
           POSTGRES_USER: parkmind
           POSTGRES_PASSWORD: parkmind
