@@ -1,6 +1,6 @@
 """Live hard/soft classification accuracy of the real model.
 
-Skipped without ANTHROPIC_API_KEY. Runs every labeled scenario through
+Opt-in (`pytest --live`, marker `live`) and skipped without ANTHROPIC_API_KEY. Runs every labeled scenario through
 ``AnthropicExtractor`` and measures accuracy against the hand labels.
 """
 
@@ -18,6 +18,7 @@ from parkmind.services.evaluation.metrics.extraction import (
 MIN_ACCURACY = 0.85
 
 
+@pytest.mark.live
 @pytest.mark.skipif(
     not os.getenv("ANTHROPIC_API_KEY"), reason="needs ANTHROPIC_API_KEY"
 )

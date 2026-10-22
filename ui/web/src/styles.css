@@ -28,13 +28,13 @@ button:focus-visible,[tabindex]:focus-visible,input:focus-visible,a:focus-visibl
 .ghost-btn:hover{opacity:1}
 
 .device{width:100%;max-width:390px;height:min(844px,calc(100dvh - 130px));min-height:480px;
-  background:#fff;border-radius:42px;position:relative;overflow:hidden;
+  background:#fff;border-radius:42px;position:relative;overflow:hidden;overflow:clip;
   box-shadow:0 0 0 11px #1B1626,0 0 0 13px #2E2840,0 36px 70px -24px rgba(26,16,60,.55);
   color:var(--ink);display:flex;flex-direction:column}
 .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:132px;height:28px;background:#1B1626;border-radius:0 0 17px 17px;z-index:60}
 .statusbar{flex:0 0 auto;height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:13px;font-weight:700;z-index:55;position:relative}
 .statusbar .sig{font-size:11px;letter-spacing:.08em}
-.viewport{flex:1 1 auto;position:relative;overflow:hidden}
+.viewport{flex:1 1 auto;position:relative;overflow:hidden;overflow:clip}
 .screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;padding:0 20px 18px;display:none}
 .screen.on{display:block}
 .screen::-webkit-scrollbar{width:0}

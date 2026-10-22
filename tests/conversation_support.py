@@ -15,6 +15,8 @@ from planning_support import (
     snapshot_context,
 )
 
+from parkmind.agents.ask_agent import QuestionWriter
+from parkmind.agents.elicit_agent import GuestInfoExtractor
 from parkmind.graph import initial_planning_graph as ipg
 from parkmind.graph import replanning_graph as rg
 from parkmind.graph.checkpointing import default_checkpointer
@@ -35,22 +37,28 @@ class Rig:
     intake: AccessibilityIntakeUseCase
 
 
-def make_rig(*extractions: Any, clock: Callable[[], datetime] | None = None) -> Rig:
-    """``clock`` replaces the fixed ``NOW`` in the graphs and the service."""
+def make_rig(
+    *extractions: Any,
+    clock: Callable[[], datetime] | None = None,
+    extractor: GuestInfoExtractor | None = None,
+    asker: QuestionWriter | None = None,
+) -> Rig:
+    """``clock`` replaces the fixed ``NOW``; ``extractor`` and ``asker`` replace the fake extractor and no question writer."""
     now = clock or (lambda: NOW)
     intake, sessions = make_intake()
     snapshots = InMemorySnapshotRepository()
     seed_snapshot(snapshots, snapshot_context(retrieved_at=NOW - timedelta(minutes=5)))
     deps = make_deps(sessions=sessions, snapshots=snapshots)
     checkpointer = default_checkpointer()
-    extractor = FakeExtractor(*(extractions or (COMPLETE["extraction"],)))
+    fake = FakeExtractor(*(extractions or (COMPLETE["extraction"],)))
     initial = ipg.build_initial_planning_graph(
-        extractor,
+        extractor or fake,
         intake,
         checkpointer,
         deps_factory=factory_for(deps),
         clock=now,
         names=make_names(),
+        asker=asker,
     )
     replanning = rg.build_replanning_graph(
         checkpointer, deps_factory=factory_for(deps), clock=now
@@ -61,4 +69,4 @@ def make_rig(*extractions: Any, clock: Callable[[], datetime] | None = None) -> 
         deps_factory=factory_for(deps),
         clock=now,
     )
-    return Rig(service, deps, extractor, intake)
+    return Rig(service, deps, fake, intake)

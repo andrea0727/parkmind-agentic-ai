@@ -65,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
                 "PARKMIND_MCP_PLANNER_CALLS_PER_MINUTE", DEFAULT_PLANNER_CALLS_PER_MINUTE
             )
         )
-        server = create_server(planner_rate_limit=RateLimiter(limit))
+        server = create_server(capture_rate_limit=RateLimiter(limit))
         app = create_http_app(server, host=args.host, token=token)
         uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     else:

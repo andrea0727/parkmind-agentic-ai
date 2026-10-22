@@ -8,7 +8,36 @@ always an afternoon or evening matter: a bare hour from 1 to 11 means PM.
 import re
 
 _FILLER = frozenset(
-    ["a", "las", "la", "at", "around", "about", "by", "like", "como", "tipo", "hacia", "sobre", "eso", "de", "en", "to", "the", "pues", "es", "seria", "sería", "salimos", "salgo", "salir", "leave", "leaving", "we", "i"]
+    [
+        "a",
+        "las",
+        "la",
+        "at",
+        "around",
+        "about",
+        "by",
+        "like",
+        "como",
+        "tipo",
+        "hacia",
+        "sobre",
+        "eso",
+        "de",
+        "en",
+        "to",
+        "the",
+        "pues",
+        "es",
+        "seria",
+        "sería",
+        "salimos",
+        "salgo",
+        "salir",
+        "leave",
+        "leaving",
+        "we",
+        "i",
+    ]
 )
 _TIME = re.compile(
     r"(?<![\d:.])(\d{1,2})(?:\s*[:.h]\s*(\d{2}))?(?:\s*(?:hs?|hrs?|horas?))?"
@@ -29,8 +58,10 @@ def parse_clock(answer: str) -> str | None:
     hour = int(found.group(1))
     minute = int(found.group(2)) if found.group(2) else 0
     marker = (found.group(3) or "").lower().replace(".", "").replace(" ", "")
-    explicit = found.group(2) is not None or bool(marker) or bool(
-        re.search(r"\d\s*(?:hs?|hrs?|horas?)\b", answer, re.IGNORECASE)
+    explicit = (
+        found.group(2) is not None
+        or bool(marker)
+        or bool(re.search(r"\d\s*(?:hs?|hrs?|horas?)\b", answer, re.IGNORECASE))
     )
     if not explicit:
         rest = _TIME.sub(" ", answer)

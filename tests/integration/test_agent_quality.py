@@ -2,18 +2,16 @@
 Agent quality checks — the 4 checks scoped for this project (see the wiki,
 "Quality & Testing" page, for the realistic-scope rationale).
 
-We deliberately do NOT build the full QA pipeline (DeepEval/Ragas scoring,
-garak/PyRIT adversarial/prompt-injection testing, CI regression suites).
-With one QA-capable person on a 3-person team in a 1-month build, these
-four checks are the representative set that catches the failure modes that
-actually matter: an agent that invents facts, an agent that silently drops
+These four checks are the fast, offline core. The scored LLM evaluation (DeepEval) lives in
+tests/evals, adversarial and prompt-injection tests in tests/security, and failure-injection
+tests in tests/resilience (see docs/testing/README.md). The four checks catch the failure modes
+that matter most: an agent that invents facts, an agent that silently drops
 a stated constraint, an agent that leaks one guest's data into another's
 session, and an agent that ignores the guest model it's supposedly built
 around.
 
 Each runs on the in-memory ports with scripted LLM stand-ins: no network, no
-database, no API key. Keep them this simple; they're not meant to grow into a
-framework.
+database, no API key. Keep them this simple.
 
 Mapping, so it's explicit where each concern lives:
 
