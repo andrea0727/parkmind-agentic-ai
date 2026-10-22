@@ -49,9 +49,58 @@ def database(url: str) -> Iterator[None]:
 
 
 @contextlib.contextmanager
-def provider_and_database(url: str) -> Iterator[None]:
-    with provider_down(), database(url):
+def empty_database(url: str) -> Iterator[None]:
+    """The edge database starts without catalog rows, so a previous run cannot fill it."""
+    if url == settings.DATABASE_URL:
+        raise RuntimeError("refusing to empty the main database")
+    import psycopg
+
+    with psycopg.connect(url, autocommit=True) as connection:
+        connection.execute("delete from attractions")
+    with database(url):
         yield
+
+
+@contextlib.contextmanager
+def provider_and_database(url: str) -> Iterator[None]:
+    with provider_down(), empty_database(url):
+        yield
+
+
+def _park_is_closed(entities: list[dict[str, Any]]) -> bool:
+    rides = [e for e in entities if e.get("entityType") == "ATTRACTION"]
+    operating = [e for e in rides if e.get("status") == "OPERATING"]
+    return len(operating) < len(rides) / 2
+
+
+@contextlib.contextmanager
+def park_open() -> Iterator[None]:
+    """Outside park hours the live feed reports every ride closed; show it open with a standby wait.
+
+    The schedule is untouched, and a feed that already shows the park open is passed through.
+    """
+    original = ThemeParksClient.fetch_live_payload
+
+    def open_feed(self: ThemeParksClient) -> dict[str, Any]:
+        payload = original(self)
+        entities = payload.get("liveData", [])
+        if not _park_is_closed(entities):
+            return payload
+        for entity in entities:
+            if entity.get("entityType") not in ("ATTRACTION", "SHOW"):
+                continue
+            if entity.get("status") == "CLOSED":
+                entity["status"] = "OPERATING"
+            standby = (entity.get("queue") or {}).get("STANDBY")
+            if standby is not None and standby.get("waitTime") is None:
+                standby["waitTime"] = 20
+        return payload
+
+    ThemeParksClient.fetch_live_payload = open_feed  # type: ignore[method-assign]
+    try:
+        yield
+    finally:
+        ThemeParksClient.fetch_live_payload = original  # type: ignore[method-assign]
 
 
 def inject(fault: Fault | None) -> contextlib.AbstractContextManager[None]:
@@ -61,7 +110,7 @@ def inject(fault: Fault | None) -> contextlib.AbstractContextManager[None]:
         case Fault.PROVIDER_DOWN:
             return provider_down()
         case Fault.EMPTY_CATALOG_DB:
-            return database(EDGE_URL)
+            return empty_database(EDGE_URL)
         case Fault.PROVIDER_DOWN_EMPTY_DB:
             return provider_and_database(EDGE_URL)
         case Fault.DB_DOWN:

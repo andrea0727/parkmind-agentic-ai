@@ -12,8 +12,17 @@ CONSISTENCY = 1.0
 TOOL_CORRECTNESS = 1.0
 """Exactly the extraction tool, once, with nothing extra: the forced tool call has no partial credit."""
 
+CONVERSATION_FLOW = 1.0
+"""A question asked twice in the same words, or the guests' sentence read back to them, is the robotic behaviour this check exists to catch."""
+
 JUDGED = 0.7
 """Judge scores are noisy and graded 0 to 1; 0.7 asks for clearly good, not perfect, and tolerates one rubric step of judge variance."""
 
 DEFAULT_RUNS = 3
 """Repetitions of the same extraction: enough to expose a flip at temperature 0 without a large live bill (env PARKMIND_EVAL_RUNS)."""
+
+CONVERSATION_RUNS = 5
+"""Live conversations per dialogue and arm: one judged run is an anecdote, five give a pass rate (env PARKMIND_CONVERSATION_RUNS)."""
+
+PASS_RATE = 0.8
+"""Share of runs that must pass: a model reply is not deterministic, so the claim is "at least four in five", not "always"."""

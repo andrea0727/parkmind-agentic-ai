@@ -1,13 +1,13 @@
 """The live runtime: real ports, the real Anthropic extractor and narrator, injected infrastructure faults."""
 
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, ExitStack
 from datetime import datetime
 from typing import Any
 
 from e2e.kit.driver import Built
 from e2e.kit.env import EDGE_URL, e2e_now, load_live_env
 from e2e.kit.facts import attraction_rows
-from e2e.kit.faults import inject
+from e2e.kit.faults import inject, park_open
 from e2e.kit.recorder import RecordingExtractor
 from e2e.model import Scenario
 
@@ -37,7 +37,10 @@ class LiveRuntime:
         return Built(graph, recorder, replanning)
 
     def context(self, scenario: Scenario) -> AbstractContextManager[Any]:
-        return inject(scenario.fault)
+        stack = ExitStack()
+        stack.enter_context(park_open())
+        stack.enter_context(inject(scenario.fault))
+        return stack
 
     def rows(self, scenario: Scenario) -> int | None:
         return attraction_rows(EDGE_URL) if scenario.id == CATALOG_FILLING else None
