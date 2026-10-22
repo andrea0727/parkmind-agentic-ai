@@ -31,6 +31,7 @@ poetry run pytest tests/e2e --live -k espanol       # one scenario
 python scripts/e2e/capture.py                       # all, skipping those already captured
 python scripts/e2e/capture.py espanol grupo_de_1    # only these
 FORCE=1 python scripts/e2e/capture.py               # capture everything again
+SCENARIO_TIMEOUT_SECONDS=600 python scripts/e2e/capture.py   # total time allowed per scenario (default 300); one that runs out is saved as a ScenarioTimeoutError
 python scripts/e2e/build_report.py                  # no credentials: raw captures -> docs/e2e/REPORT.md and Allure results
 PYTHONPATH=src:tests python -m e2e.cli list         # scenarios, layers and severity
 ```

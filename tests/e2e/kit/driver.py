@@ -4,10 +4,11 @@ The same driver serves the live layer (real ports, real LLM) and the workflow la
 ports, canned extraction): only the ``Runtime`` differs.
 """
 
+import signal
 import time
 import uuid
-from collections.abc import Callable
-from contextlib import AbstractContextManager
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Protocol
@@ -25,6 +26,32 @@ from e2e.kit.facts import (
 from e2e.kit.recorder import RecordingExtractor, StageSpy
 from e2e.model import Facts, FollowUp, Scenario
 from parkmind.core.contracts import Event, EventSource, EventType, StopKind
+
+
+class ScenarioTimeoutError(BaseException):
+    """The scenario used up its total time (LLM and database calls included).
+
+    A ``BaseException`` so that no ``except Exception`` along the way can swallow it.
+    """
+
+
+@contextmanager
+def time_limit(seconds: float | None) -> Iterator[None]:
+    """Raise ``ScenarioTimeoutError`` in the main thread once ``seconds`` have passed."""
+    if seconds is None:
+        yield
+        return
+
+    def expired(signum: int, frame: Any) -> None:
+        raise ScenarioTimeoutError(f"the scenario did not finish in {seconds:g}s")
+
+    previous = signal.signal(signal.SIGALRM, expired)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 @dataclass
@@ -45,9 +72,10 @@ class Runtime(Protocol):
 
 
 def _extracted(recorder: RecordingExtractor) -> dict[str, Any] | None:
-    if not recorder.calls:
+    answered = [call for call in recorder.calls if call["args"] is not None]
+    if not answered:
         return None
-    args = recorder.calls[0]["args"] or {}
+    args = answered[-1]["args"] or {}
     summary = {
         key: args.get(key)
         for key in ("party_size", "must_do", "avoid", "departure_time", "lunch_window")
@@ -120,7 +148,9 @@ def _follow_up(
     out["replan"] = replan
 
 
-def run_scenario(scenario: Scenario, runtime: Runtime) -> Facts:
+def run_scenario(
+    scenario: Scenario, runtime: Runtime, *, timeout: float | None = None
+) -> Facts:
     thread = f"{scenario.id}-{uuid.uuid4().hex[:6]}"
     now = runtime.now()
     out: Facts = {
@@ -139,7 +169,7 @@ def run_scenario(scenario: Scenario, runtime: Runtime) -> Facts:
     started = time.time()
     with StageSpy() as spy:
         try:
-            with runtime.context(scenario):
+            with runtime.context(scenario), time_limit(timeout):
                 result = graph.invoke(
                     {
                         "thread_id": thread,
@@ -148,6 +178,7 @@ def run_scenario(scenario: Scenario, runtime: Runtime) -> Facts:
                     config=config,
                 )
                 out["llm_calls"] = len(built.recorder.calls)
+                out["llm_attempts"] = jsonable(built.recorder.attempts())
                 extracted = _extracted(built.recorder)
                 if extracted is not None:
                     out["extracted"] = extracted
@@ -174,11 +205,13 @@ def run_scenario(scenario: Scenario, runtime: Runtime) -> Facts:
                         out["interrupt3"] = interrupt_view(result)
                         if scenario.follow_up is not None and out["plan_active"]:
                             _follow_up(scenario.follow_up, built, config, now, out)
-        except Exception as exc:  # noqa: BLE001
+        except (Exception, ScenarioTimeoutError) as exc:  # noqa: BLE001
             out["exception"] = {
                 "type": type(exc).__name__,
                 "message": scrub(str(exc))[:500],
             }
+            out["llm_calls"] = len(built.recorder.calls)
+            out["llm_attempts"] = jsonable(built.recorder.attempts())
     if rows_before is not None:
         out["attraction_rows"] = {
             "before": rows_before,

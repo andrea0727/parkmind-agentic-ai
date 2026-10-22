@@ -84,7 +84,7 @@ def replan_deps():
         factories.execution_state(plan_id="plan_0", completed_stop_ids=["a1"])
     )
     deps.plans.save("t1", factories.plan(plan_id="plan_1"))
-    deps.proposals.save("t1", factories.proposal())
+    deps.proposals.save("t1", factories.proposal(base_plan_id="plan_0"))
     return deps
 
 
@@ -114,6 +114,47 @@ def test_progress_reported_while_the_guests_decide_is_not_lost(replan_deps):
     )
 
     assert deps.execution_states.get("plan_1").completed_stop_ids == ["a1", "a2"]
+
+
+def test_approving_a_replan_locks_the_base_plan_before_the_proposal_row(
+    replan_deps, monkeypatch
+):
+    """Same order as HandleEvents (plan, then proposals), so the two never deadlock."""
+    deps = replan_deps
+    seen: list[list[str]] = []
+    real = deps.proposals.resolve
+
+    def resolve(*args, **kwargs):
+        seen.append(list(deps.execution_states.locked))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(deps.proposals, "resolve", resolve)
+
+    ResolveProposalUseCase(factory_for(deps)).execute(
+        "t1", "prop_1", ApprovalStatus.APPROVED, at=NOW, guests=PARTY
+    )
+
+    assert seen == [["plan_0"]]
+    assert deps.execution_states.locked == ["plan_0"]
+
+
+@pytest.mark.parametrize("decision", [ApprovalStatus.REJECTED, ApprovalStatus.EDITED])
+def test_a_decision_that_activates_nothing_takes_no_lock(replan_deps, decision):
+    edit = {"removed_attraction_ids": ["a1"]} if decision is ApprovalStatus.EDITED else {}
+
+    ResolveProposalUseCase(factory_for(replan_deps)).execute(
+        "t1", "prop_1", decision, at=NOW, guests=PARTY, **edit
+    )
+
+    assert replan_deps.execution_states.locked == []
+
+
+def test_approving_an_initial_plan_takes_no_lock(deps):
+    ResolveProposalUseCase(factory_for(deps)).execute(
+        "t1", "prop_1", ApprovalStatus.APPROVED, at=NOW, guests=PARTY
+    )
+
+    assert deps.execution_states.locked == []
 
 
 @pytest.mark.parametrize("decision", [ApprovalStatus.REJECTED, ApprovalStatus.SUPERSEDED])
@@ -168,7 +209,8 @@ def _decide(deps, status, **kwargs):
 def test_every_decision_writes_one_behavior_entry_per_guest(
     deps, status, event_type, decision
 ):
-    _decide(deps, status, attraction_ids=["a1"])
+    edit = {"removed_attraction_ids": ["a1"]} if status is ApprovalStatus.EDITED else {}
+    _decide(deps, status, attraction_ids=["a1"], **edit)
 
     for guest_id in ("t1:g1", "t1:g2"):
         (entry,) = deps.behavior.get(guest_id).entries
@@ -199,10 +241,43 @@ def test_a_rejection_logs_its_reason_and_activates_nothing(deps):
 
 
 def test_an_edited_proposal_activates_nothing(deps):
-    resolved = _decide(deps, ApprovalStatus.EDITED, attraction_ids=["a1", "a2"])
+    resolved = _decide(
+        deps, ApprovalStatus.EDITED, attraction_ids=["a1", "a2"], removed_attraction_ids=["a2"]
+    )
 
     assert resolved.approval_status is ApprovalStatus.EDITED
     assert deps.plans.get_active("t1") is None
+
+
+def test_an_edit_logs_what_it_removed_apart_from_what_it_added(deps):
+    _decide(
+        deps,
+        ApprovalStatus.EDITED,
+        attraction_ids=["a1", "a2"],
+        removed_attraction_ids=["a2"],
+        added_attraction_ids=["a3"],
+    )
+
+    (entry,) = deps.behavior.get("t1:g1").entries
+    assert entry.attraction_ids == ["a1", "a2"]
+    assert entry.removed_attraction_ids == ["a2"]
+    assert entry.added_attraction_ids == ["a3"]
+
+
+def test_an_edit_that_names_no_change_is_refused_and_changes_nothing(deps):
+    with pytest.raises(ValueError, match="removed and/or added"):
+        _decide(deps, ApprovalStatus.EDITED, attraction_ids=["a1"])
+
+    assert deps.proposals.get("prop_1").approval_status is ApprovalStatus.PENDING
+    assert deps.behavior.get("t1:g1").entries == []
+
+
+@pytest.mark.parametrize("status", [ApprovalStatus.APPROVED, ApprovalStatus.REJECTED])
+def test_only_an_edit_may_log_removed_or_added_attractions(deps, status):
+    with pytest.raises(ValueError, match="only an edit"):
+        _decide(deps, status, added_attraction_ids=["a3"])
+
+    assert deps.proposals.get("prop_1").approval_status is ApprovalStatus.PENDING
 
 
 def test_a_decision_applied_twice_is_logged_once(deps):

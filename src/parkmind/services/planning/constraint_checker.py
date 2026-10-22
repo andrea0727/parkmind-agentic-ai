@@ -356,6 +356,7 @@ class ConstraintChecker:
                     violations.append(
                         ConstraintViolation(
                             rule=RuleId.MUST_DO,
+                            stop_id=attraction_id,
                             message=(
                                 f"Must-do {attraction_id} is listed as unmet but its status "
                                 f"is {status.value if status else 'unknown'}, not confirmed "
@@ -371,6 +372,7 @@ class ConstraintChecker:
             violations.append(
                 ConstraintViolation(
                     rule=RuleId.MUST_DO,
+                    stop_id=attraction_id,
                     message=f"Must-do attraction {attraction_id} is missing from the plan",
                     suggestion=(
                         f"Insert a stop for {attraction_id}, or move it to unmet_must_do with "

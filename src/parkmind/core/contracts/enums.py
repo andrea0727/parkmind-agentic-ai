@@ -89,6 +89,7 @@ class BehaviorEventType(str, Enum):
     PROPOSAL_EDITED = "PROPOSAL_EDITED"
     ATTRACTION_COMPLETED = "ATTRACTION_COMPLETED"
     ATTRACTION_SKIPPED = "ATTRACTION_SKIPPED"
+    # No producer yet: no flow defines what asking for an alternative is.
     ALTERNATIVE_REQUESTED = "ALTERNATIVE_REQUESTED"
 
 

@@ -82,6 +82,7 @@ from parkmind.services.clients.postgres.snapshot_repository import (
 from parkmind.services.clients.themeparks_reference_data import (
     MAGIC_KINGDOM_ATTRACTION_METADATA,
 )
+from parkmind.services.ports import party_guest_id
 
 DEFAULT_AS_OF = datetime(2026, 9, 16, 8, 0, tzinfo=PARK_TZ)
 THREAD_ID = "thread_seed"
@@ -379,8 +380,11 @@ def seed_dev_scenario(
             walking_minutes_consumed={MAXIMIZER: 5.0},
         )
     )
+    # Keyed like a live party's decision (``party_guest_id``): role only, no height.
+    logged_maximizer = party_guest_id(THREAD_ID, MAXIMIZER)
+    guests.save(Guest(guest_id=logged_maximizer, role=GuestRole.ADULT))
     behavior.append(
-        MAXIMIZER,
+        logged_maximizer,
         BehaviorEntry(
             entry_id="seed_entry_1",
             event_type=BehaviorEventType.PROPOSAL_ACCEPTED,

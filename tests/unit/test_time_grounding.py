@@ -248,3 +248,61 @@ def test_a_bare_reply_to_the_departure_question_is_grounded() -> None:
 
     assert update["constraints"] is not None
     assert update["constraints"].departure_time.hour == 18
+
+
+def test_staying_until_closing_without_a_time_is_asked_not_assumed() -> None:
+    """The extractor returned the park's closing hour; the guests never wrote a clock time."""
+    update = _node(_extraction("22:00"))(
+        _state(HumanMessage(content="Just me, an adult. We stay until closing."))
+    )
+
+    assert update["constraints"] is None
+    message = update["messages"][0]
+    assert message.additional_kwargs["missing_information"] == ["departure_unverified"]
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        (
+            "Just me, an adult. Lunch 1-2 PM, leaving at 11 AM.",
+            "Your lunch window (13:00-14:00) starts after the time you plan to leave (11:00)",
+        ),
+        (
+            "Soy adulto. Almuerzo de 1 a 2 pm, salgo a las 11 am.",
+            "Tu horario de almuerzo (13:00-14:00) empieza después de la hora en que piensas salir (11:00)",
+        ),
+    ],
+)
+def test_a_lunch_window_after_the_departure_is_asked_before_confirming(
+    text: str, expected: str
+) -> None:
+    update = _node(_extraction("11:00", ("13:00", "14:00")))(
+        _state(HumanMessage(content=text))
+    )
+
+    assert update["constraints"] is None
+    assert update["pending_hard_constraint_confirmation"] is None
+    message = update["messages"][0]
+    assert message.additional_kwargs["missing_information"] == [
+        "lunch_after_departure:13:00|14:00|11:00"
+    ]
+    assert expected in message.content
+
+
+def test_a_lunch_window_before_the_departure_goes_to_confirmation() -> None:
+    update = _node(_extraction("18:00", ("13:00", "14:00")))(
+        _state(HumanMessage(content="I'm an adult. Lunch 1-2 PM, leaving at 6 PM."))
+    )
+
+    assert update["constraints"] is not None
+
+
+def test_an_unverified_departure_is_asked_before_any_contradiction() -> None:
+    update = _node(_extraction("11:00", ("13:00", "14:00")))(
+        _state(HumanMessage(content="I'm an adult. Lunch 1-2 PM."))
+    )
+
+    assert update["messages"][0].additional_kwargs["missing_information"] == [
+        "departure_unverified"
+    ]

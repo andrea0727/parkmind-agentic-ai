@@ -13,6 +13,7 @@ from e2e.kit.live import LiveRuntime
 from e2e.kit.matrix import render_matrix
 from e2e.kit.report import build_report
 
+TIMEOUT_SECONDS = float(os.environ.get("SCENARIO_TIMEOUT_SECONDS", "300"))
 MATRIX_PATH = REPO / "docs" / "testing" / "SCENARIO_MATRIX.md"
 
 
@@ -26,7 +27,7 @@ def capture(ids: Sequence[str]) -> None:
         if target.exists() and not os.environ.get("FORCE"):
             print(f"skip {scenario.id} (already captured)", flush=True)
             continue
-        out = run_scenario(scenario, runtime)
+        out = run_scenario(scenario, runtime, timeout=TIMEOUT_SECONDS)
         target.write_text(json.dumps(out, indent=2, default=str))
         exc = out.get("exception", {}).get("type")
         print(f"done {scenario.id} in {out['seconds']}s exc={exc}", flush=True)

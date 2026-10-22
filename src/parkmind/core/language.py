@@ -161,14 +161,14 @@ _CATALOG: dict[str, dict[Language, str]] = {
             "Debe haber un adulto responsable en el grupo antes de aprobar un plan."
         ),
     },
-    "shows_not_plannable": {
+    "show_not_fitted": {
         "en": (
-            "Parades and fireworks run at fixed showtimes, so they can't be planned as "
-            "stops. Plan your rides without them and watch the show when it starts."
+            "I couldn't fit a show at its showtime into the plan. Try another departure "
+            "time, or plan your rides without it and watch the show when it starts."
         ),
         "es": (
-            "Los desfiles y los fuegos artificiales tienen horario fijo, así que no se pueden "
-            "planear como paradas. Planeen sus atracciones sin ellos y vean el show cuando empiece."
+            "No logré encajar un show a su hora en el plan. Prueben con otra hora de "
+            "salida, o planeen sus atracciones sin él y vean el show cuando empiece."
         ),
     },
     "q_unverified_departure": {
@@ -229,6 +229,26 @@ _CATALOG: dict[str, dict[Language, str]] = {
         "es": (
             "No pude relacionar el límite de caminata que entendí con lo que escribiste. "
             "¿Cuántos minutos en total puedes caminar?"
+        ),
+    },
+    "q_lunch_after_departure": {
+        "en": (
+            "Your lunch window ({start}-{end}) starts after the time you plan to leave "
+            "({departure}). Which one should change: the lunch time or the departure?"
+        ),
+        "es": (
+            "Su horario de almuerzo ({start}-{end}) empieza después de la hora en que "
+            "piensan salir ({departure}). ¿Cuál quieren cambiar: el almuerzo o la salida?"
+        ),
+    },
+    "q_lunch_after_departure_solo": {
+        "en": (
+            "Your lunch window ({start}-{end}) starts after the time you plan to leave "
+            "({departure}). Which one should change: the lunch time or the departure?"
+        ),
+        "es": (
+            "Tu horario de almuerzo ({start}-{end}) empieza después de la hora en que "
+            "piensas salir ({departure}). ¿Cuál quieres cambiar: el almuerzo o la salida?"
         ),
     },
     "q_conflicting_attraction": {
@@ -508,6 +528,16 @@ _CATALOG: dict[str, dict[Language, str]] = {
     "no_valid_plan": {
         "en": "I couldn't build a plan that meets every requirement, so nothing was proposed.",
         "es": "No pude armar un plan que cumpla todos los requisitos, así que no propuse nada.",
+    },
+    "must_do_not_fitted": {
+        "en": (
+            "These must-dos didn't fit in the day without breaking a rule: {names}. "
+            "Try removing one or more of them, or staying later."
+        ),
+        "es": (
+            "Estos imprescindibles no caben en el día sin romper una regla: {names}. "
+            "Prueben quitando uno o más, o quedándose hasta más tarde."
+        ),
     },
     "relax_hint": {
         "en": (

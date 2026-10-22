@@ -38,7 +38,9 @@ def _thread_with_a_pending_proposal(conn: psycopg.Connection, thread: str) -> No
     PostgresProposalRepository(conn).save(
         thread,
         factories.proposal(
-            proposal_id=f"prop_{thread}", candidate_plan_id=f"plan_{thread}"
+            proposal_id=f"prop_{thread}",
+            base_plan_id=f"plan_{thread}",
+            candidate_plan_id=f"plan_{thread}",
         ),
     )
 
@@ -68,6 +70,11 @@ def test_an_unseeded_party_decision_is_logged_per_guest(
     conn, deps, status, reason, decision
 ) -> None:
     _thread_with_a_pending_proposal(conn, "t1")
+    edit = (
+        {"removed_attraction_ids": ["a1"], "added_attraction_ids": ["a2"]}
+        if status is ApprovalStatus.EDITED
+        else {}
+    )
 
     ResolveProposalUseCase(factory_for(deps)).execute(
         "t1",
@@ -77,6 +84,7 @@ def test_an_unseeded_party_decision_is_logged_per_guest(
         rejection_reason=reason,
         guests=PARTY,
         attraction_ids=["a1"],
+        **edit,
     )
 
     behavior = PostgresBehaviorLogRepository(conn)
@@ -85,6 +93,8 @@ def test_an_unseeded_party_decision_is_logged_per_guest(
         assert entry.decision == decision
         assert entry.rejection_reason is reason
         assert entry.attraction_ids == ["a1"]
+        assert entry.removed_attraction_ids == edit.get("removed_attraction_ids", [])
+        assert entry.added_attraction_ids == edit.get("added_attraction_ids", [])
     child = PostgresGuestRepository(conn).get("t1:g2")
     assert child is not None and child.role is GuestRole.CHILD and child.height_cm is None
 

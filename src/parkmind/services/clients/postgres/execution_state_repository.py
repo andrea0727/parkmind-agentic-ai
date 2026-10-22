@@ -3,6 +3,7 @@
 from parkmind.core.contracts import PlanExecutionState
 from parkmind.services.clients.postgres.codec import from_payload, to_jsonb
 from parkmind.services.clients.postgres.connection import PostgresRepositoryBase
+from parkmind.services.ports import NotFoundError
 
 
 class PostgresExecutionStateRepository(PostgresRepositoryBase):
@@ -24,6 +25,20 @@ class PostgresExecutionStateRepository(PostgresRepositoryBase):
                 (state.plan_id, state.as_of, to_jsonb(state)),
             )
             return cur.fetchone() is not None
+
+    def lock(self, plan_id: str) -> None:
+        # The plan row, not the state row: the state may not exist yet, and a row
+        # that doesn't exist can't be locked. The lock lasts until the caller's
+        # transaction ends (``_tx`` is a savepoint inside it). NO KEY UPDATE, not
+        # UPDATE: proposals, active_plans and execution_states reference the plan, and
+        # inserting one of those rows needs a KEY SHARE lock that UPDATE would block.
+        with self._tx() as cur:
+            cur.execute(
+                "SELECT plan_id FROM plans WHERE plan_id = %s FOR NO KEY UPDATE",
+                (plan_id,),
+            )
+            if cur.fetchone() is None:
+                raise NotFoundError(f"plan {plan_id} does not exist")
 
     def get(self, plan_id: str) -> PlanExecutionState | None:
         with self._tx() as cur:

@@ -108,7 +108,10 @@ from parkmind.services.use_cases.apply_edit import (
 )
 from parkmind.services.use_cases.build_plan import BuildPlanUseCase
 from parkmind.services.use_cases.check_plan import CheckPlanUseCase
-from parkmind.services.use_cases.explain_plan import ExplainPlanUseCase
+from parkmind.services.use_cases.explain_plan import (
+    ExplainPlanUseCase,
+    attraction_names,
+)
 from parkmind.services.use_cases.load_context import LoadContextUseCase
 from parkmind.services.use_cases.park_status import ParkClosedError, ParkStatusUseCase
 from parkmind.services.use_cases.planning_deps import (
@@ -367,10 +370,19 @@ def before_edit_update(
     }
 
 
-def _no_valid_plan(state: ParkMindState) -> Command[Any]:
+def _make_no_valid_plan_node(deps_factory: DepsFactory) -> StateNode:
+    def no_valid_plan(state: ParkMindState) -> Command[Any]:
+        return _no_valid_plan(state, deps_factory)
+
+    return cast(StateNode, no_valid_plan)
+
+
+def _no_valid_plan(state: ParkMindState, deps_factory: DepsFactory) -> Command[Any]:
     """Tell the user why nothing was proposed; ``check_result`` stays in state.
 
     A plan that failed after an edit gives way to the plan before the edit instead.
+    Must-dos the plan could not fit are named once, in the guest's words, instead of
+    one internal line each.
     """
     check = state.get("check_result")
     reasons = [f"- {v.message}" for v in check.violations] if check is not None else []
@@ -379,9 +391,21 @@ def _no_valid_plan(state: ParkMindState) -> Command[Any]:
         return Command(update=restored, goto="check_plan")
     lang = language_of(state)
     lines = [text("no_valid_plan", lang)]
-    lines += reasons
-    if check is not None and any(v.rule is RuleId.SHOW_ARRIVAL for v in check.violations):
-        lines.append(text("shows_not_plannable", lang))
+    violations = check.violations if check is not None else []
+    unfitted_ids = [
+        v.stop_id for v in violations if v.rule is RuleId.MUST_DO and v.stop_id
+    ]
+    lines += [
+        f"- {v.message}"
+        for v in violations
+        if not (v.rule is RuleId.MUST_DO and v.stop_id)
+    ]
+    if unfitted_ids:
+        names = attraction_names(deps_factory)
+        unfitted = [names.get(n, n) for n in dict.fromkeys(unfitted_ids)]
+        lines.append(text("must_do_not_fitted", lang, names=", ".join(unfitted)))
+    if any(v.rule is RuleId.SHOW_ARRIVAL for v in violations):
+        lines.append(text("show_not_fitted", lang))
     lines.append(text("relax_hint", lang, solo=solo_of(state)))
     return Command(
         update={
@@ -418,7 +442,6 @@ def _make_explain_node(
         return explained(
             plan,
             explain_grounded(active, prepared, thread_id=state["thread_id"]),
-            {"elicit": ELICIT_PROMPT_VERSION},
         )
 
     return explain
@@ -604,9 +627,9 @@ def _interrupt_for_approval(
             at=clock(),
             rejection_reason=rejection_reason,
             guests=constraints.guests,
-            attraction_ids=(
-                applied.changed_ids if applied is not None else _attraction_ids(plan)
-            ),
+            attraction_ids=_attraction_ids(plan),
+            removed_attraction_ids=applied.removed if applied is not None else (),
+            added_attraction_ids=applied.added if applied is not None else (),
         )
     except ProposalNoLongerPendingError as exc:
         if exc.status is not status:
@@ -684,7 +707,11 @@ def build_planning_stage(
     guarded_node("check_plan", _make_check_plan_node(deps_factory, clock), None)
     guarded_node("explain", _make_explain_node(deps_factory, narrator), "propose_plan")
     guarded_node("propose_plan", cast(StateNode, propose_plan), "interrupt_approval")
-    graph.add_node("no_valid_plan", _no_valid_plan, destinations=("check_plan", END))
+    graph.add_node(
+        "no_valid_plan",
+        _make_no_valid_plan_node(deps_factory),
+        destinations=("check_plan", END),
+    )
     graph.add_node(
         "interrupt_approval", interrupt_approval, destinations=(EDIT_REENTRY, END)
     )

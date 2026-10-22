@@ -234,10 +234,10 @@ A mark means the scenario carries a criterion at that layer. The criteria follow
 
 ### 28. Lunch window falls after the departure time (`almuerzo_tras_la_salida`)
 
-- **E2E:** The contradiction is detected and nothing is proposed.
-- **Workflow:** A lunch window after the departure time stops at the checker
+- **E2E:** The app asks which of the two times to change; no plan is built or proposed.
+- **Workflow:** A lunch window after the departure time stops at ELICIT with a question; no planning stage runs
 - **Observability:** One trace for the run with a span per executed node; the pause for the guests is not an error
-- **Business rules:** LUNCH_WINDOW: a contradiction between lunch and departure is detected
+- **Business rules:** A contradiction between lunch and departure is raised with the guests before planning
 
 ### 29. Impossible heights (400 cm and 20 cm) (`altura_absurda`)
 

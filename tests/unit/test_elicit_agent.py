@@ -803,3 +803,10 @@ def test_the_party_limit_message_is_in_the_guests_language() -> None:
     update = node(_state("Somos 30 adultos y queremos Dumbo. Salimos a las 6 de la tarde."))
 
     assert "máximo" in update["messages"][0].content.lower()
+
+
+def test_the_prompt_makes_the_writer_guest_one_so_a_relative_is_guest_two() -> None:
+    from parkmind.agents.elicit_prompt import ELICIT_SYSTEM_PROMPT
+
+    assert "they are guest 1" in ELICIT_SYSTEM_PROMPT
+    assert "`guest_ref` 2, never 1" in ELICIT_SYSTEM_PROMPT

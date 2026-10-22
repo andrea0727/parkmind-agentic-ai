@@ -60,7 +60,7 @@ class StageSpy:
 
 
 class RecordingExtractor:
-    """Wraps any extractor and keeps each call's arguments for the report."""
+    """Wraps any extractor and keeps each call's arguments, or its error, for the report."""
 
     def __init__(self, inner: Extractor) -> None:
         self._inner = inner
@@ -69,6 +69,23 @@ class RecordingExtractor:
     def extract(
         self, human_messages: Sequence[str], repair_hint: str | None = None
     ) -> Mapping[str, Any]:
-        args = self._inner.extract(human_messages, repair_hint)
+        try:
+            args = self._inner.extract(human_messages, repair_hint)
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {str(exc)[:500]}"
+            self.calls.append({"hint": repair_hint, "args": None, "error": error})
+            raise
         self.calls.append({"hint": repair_hint, "args": args})
         return args
+
+    def attempts(self) -> list[dict[str, Any]]:
+        """Every extractor call, the failed ones too, with the repair hint it got."""
+        return [
+            {
+                "attempt": index,
+                "repair_hint": call["hint"],
+                "error": call.get("error"),
+                "args": call["args"],
+            }
+            for index, call in enumerate(self.calls, start=1)
+        ]

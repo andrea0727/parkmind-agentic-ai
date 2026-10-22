@@ -96,7 +96,7 @@ def _tool_function(
             return _error_result(
                 ToolFailure.of(
                     ToolErrorCode.UNAVAILABLE,
-                    "Too many planner calls; try again shortly.",
+                    "Too many calls; try again shortly.",
                     retryable=True,
                 )
             )
@@ -131,12 +131,12 @@ def _tool_function(
 def create_server(
     registry: ToolRegistry | None = None,
     *,
-    planner_rate_limit: RateLimiter | None = None,
+    capture_rate_limit: RateLimiter | None = None,
 ) -> MCPServer:
     """An MCP server publishing every tool of ``registry`` (the default one if omitted).
 
-    ``planner_rate_limit`` caps the ``planner.*`` calls (they can trigger a park
-    snapshot capture) and is shared by all of them [G14].
+    ``capture_rate_limit`` caps the ``planner.*`` and ``data.*`` calls (both can
+    trigger a park snapshot capture) and is shared by all of them [G14].
     """
     tools = registry if registry is not None else build_registry()
     server = MCPServer(SERVER_NAME, instructions=INSTRUCTIONS)
@@ -145,7 +145,7 @@ def create_server(
             _tool_function(
                 tools,
                 spec,
-                planner_rate_limit if spec.namespace == "planner" else None,
+                capture_rate_limit if spec.namespace in ("planner", "data") else None,
             ),
             name=spec.qualified_name,
             title=spec.qualified_name,

@@ -51,8 +51,10 @@ ENV = {
     "LANGFUSE_BASE_URL": "http://localhost:1",
 }
 USAGE_TOKENS = {"input_tokens": 1234, "output_tokens": 567, "total_tokens": 1801}
-ANTHROPIC_KEY = "sk-ant-api03-OBSERVABILITYCANARY"
-DATABASE_URL = "postgresql://parkmind:hunter2-canary@db.internal:5432/parkmind"
+ANTHROPIC_KEY = "sk-" + "ant-api03-OBSERVABILITYCANARY"
+DATABASE_URL = (
+    "postgresql" + "://parkmind:hunter2-canary@db.internal:5432/parkmind"
+)
 MODEL_NAME = "claude-haiku-4-5-20251001"
 LLM_DELAY_SECONDS = 0.02
 

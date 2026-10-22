@@ -15,14 +15,15 @@ decides whether it may be proposed and ``ProposePlanUseCase`` stores it.
 
 Two things the graph's state cannot hold are derived here from the repositories:
 
-* **Progress.** The party's execution state is read from the repository. When it
-  records no completed or skipped stop (nobody reported progress), the party is
-  assumed to be on schedule: stops that should have ended by ``now`` count as done and
-  are frozen, so the replan neither re-sends the party to them nor forgets what they
-  walked. ``as_of`` never lies before ``now``. That assumption is made again on every
-  replan, from the plan being replanned and the clock: it is never stored, so a later
-  replan never inherits an earlier, stale one (``ResolveProposalUseCase`` carries over
-  only what was reported, on approval).
+* **Progress.** The party's execution state is read from the repository. A stop
+  reported completed or skipped is taken as reported. Any other stop that should have
+  ended by ``now`` is assumed done, as for an on-schedule party, and frozen, so the
+  replan neither re-sends the party to it nor forgets what they walked; a partial
+  report doesn't change that for the stops it doesn't name (a stop that wasn't done
+  must be reported skipped). ``as_of`` never lies before ``now``. The assumption is made
+  again on every replan, from the plan being replanned and the clock: it is never
+  stored, so a later replan never inherits an earlier, stale one
+  (``ResolveProposalUseCase`` carries over only what was reported, on approval).
 * **Reported availability.** A report the thread recorded after the context's
   snapshot (for example a guest saying a ride is closed) is applied to the context's
   statuses, so the replan and the CHECK that follows see the same attractions as
@@ -91,8 +92,8 @@ def _reports_stops(state: PlanExecutionState | None) -> bool:
 
 
 def check_progress_of_plan(plan: Plan, state: PlanExecutionState) -> None:
-    """Progress must be for this plan and only about its stops: an unknown stop id
-    would also switch off the on-schedule assumption without saying so."""
+    """Progress must be for this plan and only about its stops: an unknown stop id is a
+    client mistake, refused instead of silently ignored."""
     if state.plan_id != plan.plan_id:
         raise ValueError(
             f"execution_state is for plan {state.plan_id}, not {plan.plan_id}"
@@ -103,10 +104,12 @@ def check_progress_of_plan(plan: Plan, state: PlanExecutionState) -> None:
 
 
 def progress_source(state: PlanExecutionState | None, *, sent: bool) -> ProgressSource:
-    """Where the completed stops come from, as ``effective_execution_state`` takes them.
+    """Where the progress comes from, as ``effective_execution_state`` takes it.
 
-    ``assumed`` also covers a state that was sent or stored without completed or skipped
-    stops: its location and walking are kept, but the stops done are the on-schedule ones.
+    ``sent`` and ``stored`` mean stops were reported (the ended ones nobody reported are
+    still assumed done). ``assumed`` also covers a state that was sent or stored without
+    completed or skipped stops: its location and walking are kept, but the stops done
+    are the on-schedule ones.
     """
     if not _reports_stops(state):
         return "assumed"
@@ -116,18 +119,33 @@ def progress_source(state: PlanExecutionState | None, *, sent: bool) -> Progress
 def effective_execution_state(
     plan: Plan, stored: PlanExecutionState | None, now: datetime
 ) -> PlanExecutionState:
-    """The progress to replan from: what is stored, else an on-schedule party."""
+    """The progress to replan from: what was reported, and the schedule for the rest.
+
+    A stop reported completed or skipped is taken as reported. A stop nobody reported
+    whose departure time has passed is assumed done, as for an on-schedule party, so a
+    partial report never makes a replan put the past back in the plan. A stop that
+    wasn't done has to be reported as skipped.
+    """
     state = stored or PlanExecutionState(plan_id=plan.plan_id, as_of=now)
-    if not _reports_stops(state):
-        done = [stop.node_id for stop in plan.stops if stop.departure_time <= now]
-        state = state.model_copy(update={"completed_stop_ids": done})
-    return state.model_copy(update={"as_of": max(state.as_of, now)})
+    reported = {*state.completed_stop_ids, *state.skipped_stop_ids}
+    assumed = [
+        stop.node_id
+        for stop in plan.stops
+        if stop.departure_time <= now and stop.node_id not in reported
+    ]
+    completed = [*state.completed_stop_ids, *dict.fromkeys(assumed)]
+    return state.model_copy(
+        update={"completed_stop_ids": completed, "as_of": max(state.as_of, now)}
+    )
 
 
 def with_event_statuses(
     context: LiveContext, events: Iterable[Event], *, newer_only: bool = True
 ) -> LiveContext:
-    """``context`` with the availability reports newer than its snapshot applied.
+    """``context`` with the availability reports not older than its snapshot applied.
+
+    A report stamped at the snapshot's own instant is applied: the snapshot cannot be
+    known to reflect it, and ignoring a closure would send the party to a closed ride.
 
     ``newer_only=False`` applies them whatever their time: the events a caller sends
     with a replan say what happened for that replan, and a client's clock may lag
@@ -137,7 +155,7 @@ def with_event_statuses(
     for event in sorted(events, key=lambda e: (e.timestamp, e.event_id)):
         if event.attraction_id is None:
             continue
-        if newer_only and event.timestamp <= context.retrieved_at:
+        if newer_only and event.timestamp < context.retrieved_at:
             continue
         if event.type is EventType.ATTRACTION_DOWN:
             statuses[event.attraction_id] = AttractionStatus.DOWN

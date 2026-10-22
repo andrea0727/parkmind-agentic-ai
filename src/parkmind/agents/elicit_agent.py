@@ -282,6 +282,7 @@ _PARTY_TOO_LARGE = "party_too_large:"
 _UNVERIFIED_DEPARTURE = "departure_unverified"
 _UNVERIFIED_LUNCH = "lunch_window_unverified"
 _UNVERIFIED_WALKING_BUDGET = "walking_budget_unverified"
+_LUNCH_AFTER_DEPARTURE = "lunch_after_departure:"
 
 _HEIGHT_TOLERANCE_CM = 1.5
 _CM_PER_FOOT = 30.48
@@ -365,6 +366,19 @@ def ungrounded_times(
     if budget is not None and not walking_budget_is_grounded(budget, texts):
         missing.append(_UNVERIFIED_WALKING_BUDGET)
     return missing
+
+
+def lunch_after_departure(extraction: ElicitationExtraction) -> list[str]:
+    """``lunch_after_departure:<start>|<end>|<departure>`` when lunch starts once the party has left.
+
+    The two times contradict each other, so the guests are asked which one to
+    change instead of finding out at the plan check. "HH:MM" strings are zero-padded,
+    so they compare as times.
+    """
+    window, departure = extraction.lunch_window, extraction.departure_time
+    if window is None or departure is None or window.start < departure:
+        return []
+    return [f"{_LUNCH_AFTER_DEPARTURE}{window.start}|{window.end}|{departure}"]
 
 
 def unresolved_names(resolution: NameResolution) -> list[str]:
@@ -527,6 +541,18 @@ def _question_for(
             questions.append(text("q_unverified_lunch", lang, solo=solo))
         elif key == _UNVERIFIED_WALKING_BUDGET:
             questions.append(text("q_unverified_walking_budget", lang, solo=solo))
+        elif key.startswith(_LUNCH_AFTER_DEPARTURE):
+            start, end, departure = key.removeprefix(_LUNCH_AFTER_DEPARTURE).split("|")
+            questions.append(
+                text(
+                    "q_lunch_after_departure",
+                    lang,
+                    solo=solo,
+                    start=start,
+                    end=end,
+                    departure=departure,
+                )
+            )
         elif key.startswith(_CONFLICTING_ATTRACTION):
             name = key.removeprefix(_CONFLICTING_ATTRACTION)
             questions.append(
@@ -809,10 +835,14 @@ def make_elicit_node(
             except PlanningUnavailableError:
                 logger.exception("attraction names cannot be resolved")
                 return _unavailable("unavailable", lang)
+            unverified_times = ungrounded_times(
+                outcome.extraction, texts, clock_answer=clock_answer
+            )
             missing = (
                 missing_information(outcome.extraction)
                 + ungrounded_heights(outcome.extraction, texts)
-                + ungrounded_times(outcome.extraction, texts, clock_answer=clock_answer)
+                + unverified_times
+                + ([] if unverified_times else lunch_after_departure(outcome.extraction))
                 + unresolved_names(resolution)
                 + conflicting_names(outcome.extraction, resolution)
                 + (

@@ -133,8 +133,9 @@ class ReplanToolRequest(CheckPlanRequest):
         default=None,
         description=(
             "The plan's progress: completed or skipped stops, location, walking done. "
-            "Omit it to use the progress stored for this plan or, with none reported, "
-            "to assume the party is on schedule."
+            "Omit it to use the progress stored for this plan. Either way, a stop that "
+            "has already ended and isn't listed is assumed done (an on-schedule party): "
+            "list a stop that wasn't done as skipped."
         ),
     )
     events: Annotated[list[Event], Field(max_length=MAX_EVENTS)] = Field(
@@ -234,9 +235,10 @@ class ReplanProgressData(BaseModel):
     as_of: datetime
     source: Literal["sent", "stored", "assumed"] = Field(
         description=(
-            "sent: the client's stops done. stored: the stops done stored for the plan. "
-            "assumed: no completed or skipped stop was reported (even if a location or "
-            "walking was), so the party is taken to be on schedule."
+            "sent: the client reported completed or skipped stops. stored: they were "
+            "stored for the plan. Either way an ended stop nobody reported is assumed "
+            "done. assumed: no completed or skipped stop was reported (even if a "
+            "location or walking was), so the party is taken to be on schedule."
         )
     )
 

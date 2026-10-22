@@ -307,24 +307,28 @@ def test_the_http_app_requires_the_token() -> None:
     )
 
 
-def test_planner_calls_past_the_rate_limit_get_a_structured_retryable_error() -> None:
+def test_planner_and_data_calls_share_a_rate_limit_and_get_a_retryable_error() -> None:
     async def calls(client: Client) -> list[Any]:
         args = {"attraction_ids": ["a"]}
         return [
             await client.call_tool("planner.build_plan", args),
-            await client.call_tool("planner.build_plan", args),
             await client.call_tool("data.get_live_waits", args),
+            await client.call_tool(
+                "knowledge.search_policies", {"query": "height limits"}
+            ),
         ]
 
     async def run() -> list[Any]:
-        server = create_server(REGISTRY, planner_rate_limit=RateLimiter(1))
+        server = create_server(REGISTRY, capture_rate_limit=RateLimiter(1))
         async with Client(server) as client:
             return await calls(client)
 
-    first, limited, data = asyncio.run(run())
+    first, limited, knowledge = asyncio.run(run())
 
     assert not first.is_error
     assert limited.is_error
     error = limited.structured_content["error"]
     assert error["code"] == "UNAVAILABLE" and error["retryable"] is True
-    assert not data.is_error  # only planner.* is limited
+    assert "Too many calls" not in str(
+        knowledge.structured_content
+    )  # knowledge.* is not limited

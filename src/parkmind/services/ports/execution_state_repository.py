@@ -19,3 +19,15 @@ class ExecutionStateRepository(Protocol):
         ...
 
     def get(self, plan_id: str) -> PlanExecutionState | None: ...
+
+    def lock(self, plan_id: str) -> None:
+        """Hold ``plan_id``'s state for the rest of the caller's transaction.
+
+        A writer that reads the state, changes it and saves it calls this first, in the
+        same transaction (``PlanningDeps.transaction``): a second writer then waits and
+        reads what the first one saved, instead of overwriting it with a change of its
+        own made to the older state. Progress reports, event handling and the approval of
+        a replan (which copies this plan's progress to its successor) all take it, plan
+        first and proposal rows after. Raises ``NotFoundError`` if the plan was not saved.
+        """
+        ...

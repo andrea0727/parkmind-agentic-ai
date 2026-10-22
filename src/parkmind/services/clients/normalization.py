@@ -19,7 +19,7 @@ from enum import StrEnum
 from parkmind.core.contracts import Attraction, AttractionStatus, DataSource
 from parkmind.services.ports.id_mapping_repository import EntityKind
 
-NORMALIZER_VERSION = 2
+NORMALIZER_VERSION = 3
 """Version of the normalized output (``LiveContext``) the normalizers produce.
 
 Stored with every snapshot. Bump it whenever a normalizer change alters
@@ -29,7 +29,8 @@ raw payloads (Architecture 41, C21).
 
 History: 1 = first version. 2 = showtimes keep only ``Performance Time`` starts
 (meet-and-greet ``Operating`` windows and party-only times dropped) and show
-coverage is judged from the curated scheduled shows (issue #69).
+coverage is judged from the curated scheduled shows (issue #69). 3 = the accessibility
+coverage gap text changed, and ``load_context`` matches it by equality.
 """
 
 

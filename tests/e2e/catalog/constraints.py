@@ -1,7 +1,14 @@
 """Scenarios of the area: constraints."""
 
 from e2e.catalog._common import H, adult, extraction, soon
-from e2e.kit.verdicts import j_avoid, j_mustdos, j_past, j_show, j_stops_at_check
+from e2e.kit.verdicts import (
+    j_asks,
+    j_avoid,
+    j_mustdos,
+    j_past,
+    j_show,
+    j_stops_at_check,
+)
 from e2e.model import Criteria, Offline, Scenario
 
 SCENARIOS: tuple[Scenario, ...] = (
@@ -148,11 +155,10 @@ SCENARIOS: tuple[Scenario, ...] = (
         area="Constraints and feasibility",
         severity="normal",
         title="Lunch window falls after the departure time",
-        what="Constraints: lunch at 1-2 PM while leaving at 11 AM is a contradiction that must be detected.",
+        what="Constraints: lunch at 1-2 PM while leaving at 11 AM is a contradiction the app must raise with the guests.",
         steps=(
             "Guests (2 adults) want Dumbo, lunch 1-2 PM, leave at 11 AM",
-            "Guests confirm",
-            "The app builds and checks a plan",
+            "The app asks which of the two times should change",
         ),
         setup="Lunch 1-2 PM, leave at 11 AM",
         messages=(
@@ -162,14 +168,14 @@ SCENARIOS: tuple[Scenario, ...] = (
                 + "We want Dumbo. Lunch 1 PM to 2 PM. We leave at 11 AM."
             ),
         ),
-        expected="The contradiction is detected and nothing is proposed.",
-        judge=j_stops_at_check("LUNCH_WINDOW"),
+        expected="The app asks which of the two times to change; no plan is built or proposed.",
+        judge=j_asks,
         why="",
         criteria=Criteria(
-            workflow="A lunch window after the departure time stops at the checker",
+            workflow="A lunch window after the departure time stops at ELICIT with a question; no planning stage runs",
             llm_eval="",
             observability="One trace for the run with a span per executed node; the pause for the guests is not an error",
-            business_rules="LUNCH_WINDOW: a contradiction between lunch and departure is detected",
+            business_rules="A contradiction between lunch and departure is raised with the guests before planning",
         ),
         offline=Offline(
             extraction=extraction(

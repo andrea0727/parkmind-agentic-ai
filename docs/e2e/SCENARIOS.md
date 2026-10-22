@@ -51,7 +51,7 @@ Runner: `scripts/e2e/capture.py` (see `scripts/e2e/README.md`), real Postgres + 
 | 25 | 12 must-dos | Twelve major rides | Feasible or unmet must-dos reported | Checker valid, 21 stops, approved. Whether all 12 are in the plan was not printed | OK (partial) |
 | 26 | Leave in ~25 minutes | Departure = now + 25 min (20:46) | Short plan or refusal | Valid plan of 21 stops starting 08:05, approved and active | BUG B2 |
 | 27 | Lunch outside park hours | Lunch 3-4 AM | Rejected with a reason | Stops at CHECK with `LUNCH_WINDOW`; nothing proposed; message offers to relax a constraint | OK |
-| 28 | Lunch after departure | Lunch 1-2 PM, leave 11 AM | Contradiction detected | Same `LUNCH_WINDOW` stop at CHECK; the message does not name the cause (departure before lunch) | OK (see B9) |
+| 28 | Lunch after departure | Lunch 1-2 PM, leave 11 AM | The app raises the contradiction | Stops at ELICIT asking which one should change (lunch or departure); no plan is built | OK |
 | 29 | Absurd height | "400 cm and 20 cm" | Validation rejects | The LLM returned 200 and 200, so the user's values were silently replaced; the plan was valid and approved | BUG B10 |
 | 30 | Show/parade as must-do | Parade + fireworks | Timed event or clear limitation | No plan, and the message says parades and fireworks run at fixed showtimes and cannot be planned as stops | OK |
 | 31 | Contradictory times | "6 PM", then "10 PM. No wait, 8 PM." | Latest statement wins | `departure_time` 20:00 | OK |
