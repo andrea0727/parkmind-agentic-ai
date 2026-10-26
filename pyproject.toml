@@ -47,7 +47,9 @@ mypy = "^2.3.1"
 import-linter = "^2.15"
 
 # Optional: LLM-as-judge evaluation (tests/evals). Install with `poetry install --with eval`;
-# the eval tests skip themselves when it is absent.
+# the eval tests skip themselves when it is absent. Its DeepEval bounds resolve older click, rich and
+# huggingface-hub than the app alone (see poetry.lock), so CI and the Docker image leave the group out
+# on purpose and the app's runtime versions are not the ones the evals ran with.
 [tool.poetry.group.eval]
 optional = true
 

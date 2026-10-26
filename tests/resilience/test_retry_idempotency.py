@@ -228,13 +228,6 @@ def test_the_same_event_after_its_replan_was_approved_proposes_nothing_new(
     assert len(replanning.rig.proposals) == proposals
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "HandleEventsUseCase commits the event before the replan runs; when load_context then "
-        "fails, the same event is dropped as a duplicate and the replan is never retried"
-    ),
-)
 def test_an_event_whose_replan_failed_replans_when_it_is_sent_again(
     replanning: _Replanning,
 ) -> None:

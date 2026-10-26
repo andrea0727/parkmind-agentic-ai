@@ -27,6 +27,8 @@ from parkmind.agents.llm_client import build_chat_model
 from parkmind.config.settings import settings
 from parkmind.core.language import Language
 
+ASK_BUDGET = LlmCallBudget(settings.ASK_CALLS_PER_THREAD)
+
 __all__ = [
     "ASK_PROMPT_VERSION",
     "ASK_TIMEOUT_SECONDS",
@@ -83,7 +85,7 @@ class AnthropicQuestionWriter:
         self._model = model or settings.ASK_MODEL
         self._api_key = api_key if api_key is not None else settings.LLM_API_KEY
         self._timeout = timeout
-        self._budget = budget
+        self._budget = budget or ASK_BUDGET
         self._llm: Any = None
 
     def _runnable(self) -> Any:
@@ -249,7 +251,7 @@ def word_question(
         (text for role, text in reversed(recent) if role == "assistant"), None
     )
     said = next((text for role, text in reversed(recent) if role == "guest"), None)
-    known = "\n".join(text for _, text in recent)
+    known = "\n".join(text for role, text in recent if role == "guest")
     request = json.dumps(
         {
             "language": language,

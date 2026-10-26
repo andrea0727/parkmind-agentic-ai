@@ -9,15 +9,6 @@ from collections.abc import Callable
 from e2e.model import Facts, Judge, Verdict
 
 FULL = ["load_context", "resolve_group", "build_plan", "check", "explain", "propose"]
-RESTRICTED = [
-    "Barnstormer",
-    "Seven Dwarfs",
-    "Big Thunder",
-    "Speedway",
-    "Space Mountain",
-    "TRON",
-    "Tiana",
-]
 
 
 def facts(r: Facts) -> Facts:
@@ -196,14 +187,20 @@ def j_sin_alturas_sin_mustdo(r: Facts) -> Verdict:
             "PLAN",
             f"expected a plan; stages={r.get('stages')} last_ai={f.get('last_ai')}",
         )
-    present = [n for n in RESTRICTED if n in expl(r)]
+    restricted = set(r.get("height_restricted_nodes") or [])
+    if not restricted:
+        return bad(
+            "SAFETY",
+            "the catalog's height-restricted attractions were not recorded, so the plan cannot be judged",
+        )
+    present = sorted(restricted & set(f.get("stop_nodes") or []))
     if present:
         return bad(
             "SAFETY",
             f"height-restricted rides present without known heights: {present}",
         )
     return ok(
-        f"{f['n_stops']} stops, none of the 7 height-restricted rides included (silently excluded, the guests are not told)"
+        f"{f['n_stops']} stops, none of the {len(restricted)} height-restricted attractions included (silently excluded, the guests are not told)"
     )
 
 

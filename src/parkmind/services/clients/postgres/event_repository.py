@@ -1,5 +1,6 @@
 """PostgreSQL adapter for ``EventRepository`` (idempotent on ``event_id`` per thread)."""
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from parkmind.core.contracts import Event
@@ -27,6 +28,13 @@ class PostgresEventRepository(PostgresRepositoryBase):
                 ),
             )
             return cur.fetchone() is not None
+
+    def forget(self, thread_id: str, event_ids: Sequence[str]) -> None:
+        with self._tx() as cur:
+            cur.execute(
+                "DELETE FROM events WHERE thread_id = %s AND event_id = ANY(%s)",
+                (thread_id, list(event_ids)),
+            )
 
     def list_for_thread(
         self, thread_id: str, *, since: datetime | None = None

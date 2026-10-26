@@ -8,10 +8,13 @@ name: CI
 # `services: postgres:` container below. CI is set by GitHub Actions, so an
 # unreachable database FAILS those tests instead of skipping them.
 #
-# `pytest` runs every testing layer that needs no credentials (workflow, LLM
-# evaluation on deterministic metrics, observability, reliability, security,
+# `pytest` runs every testing layer that needs no credentials (workflow, the
+# deterministic part of LLM evaluation, observability, reliability, security,
 # performance; see docs/testing/README.md). Tests marked `live` call real
 # services and are skipped here; run them locally with `pytest --live`.
+# The DeepEval metrics of layer 3 (`tests/evals/test_*.py`) are skipped here too:
+# the optional `eval` Poetry group is not installed in CI (it pins older click, rich
+# and huggingface-hub than the app), so they run locally with `poetry install --with eval`.
 #
 # That Postgres gets pgvector installed by the first step; the
 # embedding model is never downloaded here (tests use a deterministic embedder).

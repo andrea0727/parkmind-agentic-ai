@@ -35,9 +35,7 @@ def build_chat_model(
     provider: str | None = None,
 ) -> Any:
     """A chat model with no client-side retries: ``invoke_counted`` retries, so each call is counted."""
-    provider = provider or settings.LLM_PROVIDER
-    if provider not in PROVIDERS:
-        raise ValueError(f"unsupported LLM_PROVIDER {provider!r}")
+    provider = _supported(provider or settings.LLM_PROVIDER)
     try:
         if provider == "anthropic":
             from langchain_anthropic import ChatAnthropic
@@ -76,9 +74,17 @@ def build_chat_model(
         raise _import_error(provider, exc) from exc
 
 
+def _supported(provider: str) -> str:
+    if provider not in PROVIDERS:
+        raise ValueError(
+            f"LLM_PROVIDER={provider!r} is not supported; use one of {sorted(PROVIDERS)}"
+        )
+    return provider
+
+
 def check_provider_installed(provider: str | None = None) -> None:
     """Fail at start-up, not on the first message, when the provider's package is missing."""
-    provider = provider or settings.LLM_PROVIDER
+    provider = _supported(provider or settings.LLM_PROVIDER)
     try:
         if provider == "anthropic":
             import langchain_anthropic  # noqa: F401

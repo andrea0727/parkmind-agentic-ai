@@ -2,7 +2,7 @@
 
 Re-send only the verdicts of every stored batch (the conversations are already there):
 
-    set -a; . ./.env; set +a; PYTHONPATH=src:tests .venv/bin/python -m evals.eval_langfuse
+    set -a; . ./.env; set +a; PARKMIND_TRACING=langfuse PYTHONPATH=src:tests .venv/bin/python -m evals.eval_langfuse
 """
 
 import os
@@ -16,7 +16,8 @@ from evals.eval_thresholds import PASS_RATE
 
 
 def configured() -> bool:
-    return all(
+    """Same opt-in as the app (ADR 0003): the keys alone send nothing, ``PARKMIND_TRACING=langfuse`` is needed too."""
+    return os.getenv("PARKMIND_TRACING", "").strip().lower() == "langfuse" and all(
         os.getenv(name)
         for name in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL")
     )
@@ -28,7 +29,11 @@ def _host_url() -> str:
 
 
 def publish(results: list[Result]) -> int:
-    """Returns how many conversations were sent; 0 when Langfuse is not configured."""
+    """Returns how many conversations were sent; 0 when Langfuse is not switched on.
+
+    The dialogues are synthetic (written by a generator model, never real guests), so
+    they are exported without ``mask_for_trace``; ADR 0003 records that exception.
+    """
     if not configured():
         return 0
     from langfuse import Langfuse, propagate_attributes

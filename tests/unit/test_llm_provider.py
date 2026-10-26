@@ -109,7 +109,7 @@ def test_a_missing_provider_package_says_how_to_install_it(monkeypatch):
 
 
 def test_an_unsupported_provider_is_refused():
-    with pytest.raises(ValueError, match="unsupported"):
+    with pytest.raises(ValueError, match="not supported"):
         llm_client.build_chat_model(
             model="m",
             api_key="k",
@@ -177,11 +177,16 @@ def test_an_explicit_model_wins_over_the_provider_default():
     assert out.stdout.split()[-1] == "gemini-x"
 
 
-def test_an_unknown_provider_stops_start_up():
+def test_an_unknown_provider_does_not_break_importing_the_settings():
     out = _settings_in_fresh_process(LLM_PROVIDER="nope")
 
-    assert out.returncode != 0
-    assert "LLM_PROVIDER" in out.stderr
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.split()[0] == "nope"
+
+
+def test_an_unknown_provider_stops_the_server_start_up():
+    with pytest.raises(ValueError, match="LLM_PROVIDER='nope'"):
+        llm_client.check_provider_installed("nope")
 
 
 def test_anthropic_errors_are_retryable_only_when_transient():

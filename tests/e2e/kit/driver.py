@@ -70,6 +70,8 @@ class Runtime(Protocol):
 
     def rows(self, scenario: Scenario) -> int | None: ...
 
+    def height_restricted(self) -> list[str]: ...
+
 
 def _extracted(recorder: RecordingExtractor) -> dict[str, Any] | None:
     answered = [call for call in recorder.calls if call["args"] is not None]
@@ -161,6 +163,7 @@ def run_scenario(
         "setup": scenario.fault.value if scenario.fault else None,
         "now": now.strftime("%H:%M"),
         "steps": [],
+        "height_restricted_nodes": runtime.height_restricted(),
     }
     built = runtime.build(scenario)
     graph = built.graph

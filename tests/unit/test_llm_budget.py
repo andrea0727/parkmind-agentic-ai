@@ -1,5 +1,6 @@
 """A thread that has spent its LLM call budget makes no more calls and still completes [G12]."""
 
+import contextlib
 from datetime import date, datetime
 from typing import Any
 
@@ -11,6 +12,7 @@ from elicit_support import make_intake, make_names
 from langchain_core.messages import HumanMessage
 
 from parkmind.agents import llm_budget
+from parkmind.agents.ask_agent import ASK_BUDGET, AnthropicQuestionWriter
 from parkmind.agents.elicit_agent import (
     AnthropicExtractor,
     ExtractorUnavailableError,
@@ -268,6 +270,36 @@ def test_explain_stops_retrying_when_the_budget_ends_mid_repair() -> None:
 
     assert result.source == "template" and llm.calls == 1
     assert budget.used("t1") == 1
+
+
+# --- ask has a budget of its own ---------------------------------------------------
+
+
+def test_the_question_writer_spends_its_own_budget_not_the_shared_one() -> None:
+    llm = _Llm(_Response([{"args": {}}]), _Response([{"args": {}}]))
+    writer = AnthropicQuestionWriter(api_key="k")
+    writer._runnable = lambda: llm  # type: ignore[method-assign]
+    before = (llm_budget.DEFAULT_BUDGET.used("ask-t"), ASK_BUDGET.used("ask-t"))
+
+    with bound_to_thread("ask-t"):
+        for _ in range(2):
+            with contextlib.suppress(Exception):
+                writer.write("{}")
+
+    assert llm.calls == 2
+    assert llm_budget.DEFAULT_BUDGET.used("ask-t") == before[0]
+    assert ASK_BUDGET.used("ask-t") == before[1] + 2
+
+
+def test_the_question_writer_stops_at_its_own_budget() -> None:
+    llm = _Llm(_Response([{"args": {}}]))
+    writer = AnthropicQuestionWriter(api_key="k", budget=_spent("t1", 1))
+    writer._runnable = lambda: llm  # type: ignore[method-assign]
+
+    with bound_to_thread("t1"), pytest.raises(LlmBudgetExhaustedError):
+        writer.write("{}")
+
+    assert llm.calls == 0
 
 
 def test_the_counts_are_logged_without_the_thread(

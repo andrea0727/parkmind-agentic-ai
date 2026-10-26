@@ -18,11 +18,13 @@ from observability.obs_support import (
     Tracing,
     attribute_text,
     claude_planner,
+    claude_replies,
     plan_scenario,
     planner,
     scenario,
     tracing_to,
 )
+from parkmind.agents.ask_agent import AnthropicQuestionWriter
 from parkmind.services.clients.observability.langfuse_tracing import MASKED
 
 THREAD_ID = "thread-masking"
@@ -40,7 +42,13 @@ PRIVATE = [
     ),
     pytest.param(
         "stated_child_height",
-        ("he is about 4 feet tall", "4 feet", "hates waiting"),
+        (
+            "he is about 4 feet tall",
+            "4 feet",
+            "hates waiting",
+            '"height_cm": 122',
+            "height:g2: 122",
+        ),
         id="stated_height",
     ),
     pytest.param(
@@ -142,4 +150,32 @@ def test_secrets_in_the_environment_never_reach_a_span(
         ENV["LANGFUSE_SECRET_KEY"],
         tracing.env["LANGFUSE_PUBLIC_KEY"],
     ):
+        assert secret not in text, f"{secret!r} reached an exported span"
+
+
+def test_the_question_writer_exports_neither_the_request_nor_its_question(
+    tracing: Tracing, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    said = "My father Zebrulon uses a wheelchair and we hate queues"
+    asked = "Quincunx, how many people are coming with you?"
+    claude_replies(monkeypatch, QuestionDraft=lambda: {"text": asked})
+    graph = planner(
+        FakeExtractor({"guests": "unreadable"}),
+        asker=AnthropicQuestionWriter(api_key=ANTHROPIC_KEY),
+    )
+
+    graph.invoke(
+        {"thread_id": THREAD_ID, "messages": [HumanMessage(content=said)]},
+        config=tracing.config(THREAD_ID),
+    )
+
+    spans = tracing.spans()
+    generations = [
+        s
+        for s in spans
+        if s.attributes.get("langfuse.observation.type") == "generation"
+    ]
+    assert generations, "the question writer made no recorded model call"
+    text = attribute_text(spans)
+    for secret in (said, "Zebrulon", "wheelchair", "Quincunx", ANTHROPIC_KEY):
         assert secret not in text, f"{secret!r} reached an exported span"

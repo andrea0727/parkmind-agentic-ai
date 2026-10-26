@@ -26,11 +26,11 @@ poetry run pytest tests/resilience -q
 | `test_configured_timeouts.py` | Timeouts and attempt counts | Reach the HTTP clients and the model clients; a dead provider fails typed after exactly the configured attempts, with exponential backoff |
 | `test_checkpoint_recovery.py` | Process restart (new graph, same checkpointer) | Resumes at the pending approval and activates the same plan without calling the model; a restart before confirmation asks again because the staged accessibility flags are gone |
 
-## Known gap
+## Replan after an outage
 
-`test_an_event_whose_replan_failed_replans_when_it_is_sent_again` is a strict `xfail`: the event is
-recorded before the replan runs, so when the replan fails on an outage the same event is later dropped
-as a duplicate and never replans.
+`test_an_event_whose_replan_failed_replans_when_it_is_sent_again` sends the same event twice while the
+snapshot store fails once. The first replan fails on the outage, the event is released, and the second
+send replans it.
 
 ## Helpers
 

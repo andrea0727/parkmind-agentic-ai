@@ -11,7 +11,7 @@ from typing import Any
 from e2e.kit.driver import Built
 from e2e.kit.recorder import RecordingExtractor
 from e2e.model import Scenario
-from elicit_support import FakeExtractor, make_intake, make_names
+from elicit_support import FakeExtractor, catalog, make_intake, make_names
 from explain_support import NoNarrator
 from fakes import InMemorySnapshotRepository
 from planning_support import (
@@ -73,6 +73,9 @@ class OfflineRuntime:
 
     def context(self, scenario: Scenario) -> AbstractContextManager[Any]:
         return nullcontext()
+
+    def height_restricted(self) -> list[str]:
+        return sorted(a.node_id for a in catalog() if a.height_restriction_cm)
 
     def rows(self, scenario: Scenario) -> int | None:
         return None

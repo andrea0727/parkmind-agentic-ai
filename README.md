@@ -337,7 +337,7 @@ PARKMIND_RUN_LIVE=1 poetry run pytest tests/evals -m live    # the same checks a
 
 Results are appended to `build/evals/results.jsonl` and `build/evals/dashboard.html` is rebuilt
 (pass rate per arm and dialogue, history by prompt version, every transcript with the judge's
-reason per turn). With the `LANGFUSE_*` variables set, each conversation is also sent to Langfuse
+reason per turn). With `PARKMIND_TRACING=langfuse` and the `LANGFUSE_*` variables set, each conversation is also sent to Langfuse
 as a trace with the scores `conversation_passed`, `flow_ok` and `naturalness`. The judge model is
 `PARKMIND_JUDGE_MODEL` (default `claude-sonnet-5`), deliberately not the model that writes the
 questions. Details in `tests/evals/README.md`. For Claude Code, the `parkmind-evals` skill describes
@@ -850,7 +850,8 @@ default). The ones you will touch:
 | `EXPLAIN_TIMEOUT_SECONDS` / `EXPLAIN_SDK_RETRIES` | `20` / `0` | Explain request cap and client retries |
 | `ASK_MODEL` | `ELICIT_MODEL` | Model that words the questions to the guests |
 | `ASK_TIMEOUT_SECONDS` | `10` | Ask request cap; past it the fixed question is used |
-| `PARKMIND_LLM_CALLS_PER_THREAD` | `40` | LLM calls one conversation may make; past it the agents use their deterministic path |
+| `PARKMIND_LLM_CALLS_PER_THREAD` | `40` | LLM calls the extractor and narrator of one conversation may make; past it the agents use their deterministic path |
+| `PARKMIND_ASK_CALLS_PER_THREAD` | `20` | LLM calls the question writer (ASK) of one conversation may make, counted apart so it cannot use up the calls above; past it the fixed question is used |
 | `PARKMIND_MAX_PARTY_SIZE` | `10` | Largest party the planner accepts |
 | `DATABASE_URL` | `postgresql://parkmind:parkmind@localhost:5432/parkmind` | Postgres |
 | `THEMEPARKS_BASE_URL`, `OPEN_METEO_BASE_URL` | public APIs | Park and weather data (no key) |
@@ -910,6 +911,11 @@ OPENAI_API_KEY=sk-...               # or GOOGLE_API_KEY
 
 Nothing else changes: the demo app, the e2e and the evals read the same settings. Keep
 `ANTHROPIC_API_KEY` too if you run the evals, because the judge is always Claude.
+
+The Docker image installs only the Anthropic package. To run the container on another
+provider, set `LLM_PROVIDER`, its key and `LLM_EXTRAS=openai` (or `google`) in `.env` and
+rebuild: `docker compose up -d --build`. Without the extra the server refuses to start and
+says which package is missing.
 
 ### Running every check
 

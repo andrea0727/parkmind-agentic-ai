@@ -97,3 +97,33 @@ def test_a_rejected_alternative_must_not_become_active() -> None:
     }
 
     assert v.j_closed_rejected(facts)[0] == "failed"
+
+
+def _heights(stop_nodes: list[str], **over: Any) -> dict[str, Any]:
+    return _happy(
+        height_restricted_nodes=["tron", "space-mountain"],
+        facts2={**PLAN, "n_stops": len(stop_nodes), "stop_nodes": stop_nodes, **over},
+    )
+
+
+def test_a_plan_without_a_height_restricted_stop_passes_whatever_the_narrator_says() -> (
+    None
+):
+    facts = _heights(["dumbo", "haunted-mansion"], explanation="tron space mountain")
+
+    assert v.j_sin_alturas_sin_mustdo(facts)[0] == "passed"
+
+
+def test_a_height_restricted_stop_fails_even_when_the_narrator_does_not_name_it() -> (
+    None
+):
+    facts = _heights(["dumbo", "space-mountain"], explanation="A calm day.")
+
+    assert v.j_sin_alturas_sin_mustdo(facts)[0] == "failed"
+
+
+def test_without_the_restricted_catalog_the_height_judge_fails_closed() -> None:
+    facts = _heights(["dumbo"])
+    facts["height_restricted_nodes"] = []
+
+    assert v.j_sin_alturas_sin_mustdo(facts)[0] == "failed"

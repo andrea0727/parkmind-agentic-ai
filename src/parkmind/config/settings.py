@@ -18,20 +18,19 @@ PROVIDERS = {
     "google": ("GOOGLE_API_KEY", "gemini-2.5-flash"),
 }
 
+# An unsupported LLM_PROVIDER is rejected where the provider is used (llm_client), not here:
+# importing the settings must not break parts that never call an LLM (e.g. the MCP server).
 _provider = os.getenv("LLM_PROVIDER", "anthropic").strip().lower()
-if _provider not in PROVIDERS:
-    raise ValueError(
-        f"LLM_PROVIDER={_provider!r} is not supported; use one of {sorted(PROVIDERS)}"
-    )
+_defaults = PROVIDERS.get(_provider, PROVIDERS["anthropic"])
 
 
 class Settings:
     # Which LLM provider backs the agents (see agents/llm_client.py).
     LLM_PROVIDER = _provider
-    LLM_API_KEY_ENV = PROVIDERS[_provider][0]
+    LLM_API_KEY_ENV = _defaults[0]
     LLM_API_KEY = os.getenv(LLM_API_KEY_ENV, "")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-    ELICIT_MODEL = os.getenv("ELICIT_MODEL", PROVIDERS[_provider][1])
+    ELICIT_MODEL = os.getenv("ELICIT_MODEL", _defaults[1])
     EXPLAIN_MODEL = os.getenv("EXPLAIN_MODEL", ELICIT_MODEL)
     # EXPLAIN is on the plan's path: seconds per request and the client's own retries
     # (the attempt loop already retries once, so 0 by default).
@@ -43,6 +42,8 @@ class Settings:
     # G12: LLM calls (retries included) one thread may make; past it the agents use
     # their deterministic path (elicit asks again, explain writes the template).
     LLM_CALLS_PER_THREAD = max(1, int(os.getenv("PARKMIND_LLM_CALLS_PER_THREAD", "40")))
+    # ASK has its own budget so wording questions can never use up the calls elicit needs.
+    ASK_CALLS_PER_THREAD = max(1, int(os.getenv("PARKMIND_ASK_CALLS_PER_THREAD", "20")))
     MAX_PARTY_SIZE = max(1, int(os.getenv("PARKMIND_MAX_PARTY_SIZE", "10")))
     DATABASE_URL = os.getenv(
         "DATABASE_URL", "postgresql://parkmind:parkmind@localhost:5432/parkmind"

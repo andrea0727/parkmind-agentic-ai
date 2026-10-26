@@ -16,7 +16,7 @@ env -u ANTHROPIC_BASE_URL -u ANTHROPIC_AUTH_TOKEN PYTHONPATH=src:tests \
 ```
 
 - Plays each dialogue (`unsure`, `english`, `clear`) `--runs` times in two arms: `fixed-template` (no LLM question writer) and `llm-ask`.
-- Appends to `build/evals/results.jsonl`, rebuilds `build/evals/dashboard.html`, and sends traces and scores to Langfuse (http://localhost:3000, project `parkmind-local`) when the `LANGFUSE_*` variables are set. `--no-langfuse` skips that.
+- Appends to `build/evals/results.jsonl`, rebuilds `build/evals/dashboard.html`, and sends traces and scores to Langfuse (http://localhost:3000, project `parkmind-local`) when `PARKMIND_TRACING=langfuse` and the `LANGFUSE_*` variables are set. `--no-langfuse` skips that.
 - The judge is `PARKMIND_JUDGE_MODEL` (default `claude-sonnet-5`), deliberately not the model that writes the questions.
 - Gate in pytest: `PARKMIND_RUN_LIVE=1 ... pytest tests/evals/test_conversation_live.py` (pass rate over `PARKMIND_CONVERSATION_RUNS`, default 5, must reach 80%).
 

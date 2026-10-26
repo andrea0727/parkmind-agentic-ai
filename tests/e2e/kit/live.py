@@ -6,7 +6,7 @@ from typing import Any
 
 from e2e.kit.driver import Built
 from e2e.kit.env import EDGE_URL, e2e_now, load_live_env
-from e2e.kit.facts import attraction_rows
+from e2e.kit.facts import attraction_rows, height_restricted_nodes
 from e2e.kit.faults import inject, park_open
 from e2e.kit.recorder import RecordingExtractor
 from e2e.model import Scenario
@@ -44,3 +44,6 @@ class LiveRuntime:
 
     def rows(self, scenario: Scenario) -> int | None:
         return attraction_rows(EDGE_URL) if scenario.id == CATALOG_FILLING else None
+
+    def height_restricted(self) -> list[str]:
+        return height_restricted_nodes(EDGE_URL)

@@ -6,3 +6,5 @@ Thin entry points for the live E2E layer. The scenarios, judges and runtime live
 python scripts/e2e/capture.py [ids]     # run live scenarios, write docs/e2e/raw/<id>.json (DB passwords scrubbed)
 python scripts/e2e/build_report.py      # judge the captures, write docs/e2e/REPORT.md and the Allure results
 ```
+
+These scripts put `tests/` on `sys.path` (next to `src/`) so they can import the `e2e` package: they are developer tools, not part of the application, and nothing under `src/` may import from them.

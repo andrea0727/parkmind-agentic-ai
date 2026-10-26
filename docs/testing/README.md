@@ -51,7 +51,7 @@ Judges are pure functions over the facts a run recorded, so the same judge decid
 
 ## Known issues the tests expose
 
-- A replan that failed on an outage is not retried when the same event is sent again: the event is committed first and then dropped as a duplicate (`tests/resilience`, strict xfail).
-- `height_cm` is not masked in Langfuse traces.
+- The guests' raw turns are stored in the in-memory checkpoint (ADR 0004, G5; `tests/unit/test_elicitation_graph.py`, strict xfail).
+
 
 Related: [e2e reproduction](../../tests/e2e/README.md), [evaluation methodology](../evaluation/README.md), per-layer READMEs in `tests/evals`, `tests/observability` and `tests/resilience`.

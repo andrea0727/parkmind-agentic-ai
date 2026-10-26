@@ -214,6 +214,20 @@ def test_a_figure_the_guests_said_is_allowed() -> None:
     )
 
 
+def test_a_figure_the_assistant_offered_earlier_does_not_ground_a_later_one() -> None:
+    turns = [
+        ("assistant", "How many people are coming?"),
+        ("guest", "not sure yet"),
+        ("assistant", "No worries. Is it 2, 3 or 4?"),
+        ("guest", "a few, I will confirm later"),
+    ]
+    invented = {"text": "Perfect. Do you want to stay about 3 hours?"}
+    writer = ScriptedWriter(invented, invented)
+
+    assert word_question(writer, fixed=FIXED, turns=turns, language="en") == FIXED
+    assert "3" in (writer.requests[1][1] or "")
+
+
 @pytest.mark.parametrize(
     "failure",
     [

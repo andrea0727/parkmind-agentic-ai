@@ -90,3 +90,18 @@ def attraction_rows(url: str) -> int | None:
             return row[0] if row else None
     except Exception:  # noqa: BLE001
         return None
+
+
+def height_restricted_nodes(url: str) -> list[str]:
+    """Node ids of the catalog attractions that have a minimum height."""
+    import psycopg
+
+    try:
+        with psycopg.connect(url) as connection:
+            rows = connection.execute(
+                "select node_id from attractions "
+                "where (payload->>'height_restriction_cm')::int > 0 order by node_id"
+            ).fetchall()
+            return [row[0] for row in rows]
+    except Exception:  # noqa: BLE001
+        return []

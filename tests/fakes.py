@@ -288,6 +288,10 @@ class InMemoryEventRepository:
         self.rows[key] = event
         return True
 
+    def forget(self, thread_id: str, event_ids: Sequence[str]) -> None:
+        for event_id in event_ids:
+            self.rows.pop((thread_id, event_id), None)
+
     def list_for_thread(
         self, thread_id: str, *, since: datetime | None = None
     ) -> list[Event]:

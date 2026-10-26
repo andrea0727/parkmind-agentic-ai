@@ -52,9 +52,7 @@ ENV = {
 }
 USAGE_TOKENS = {"input_tokens": 1234, "output_tokens": 567, "total_tokens": 1801}
 ANTHROPIC_KEY = "sk-" + "ant-api03-OBSERVABILITYCANARY"
-DATABASE_URL = (
-    "postgresql" + "://parkmind:hunter2-canary@db.internal:5432/parkmind"
-)
+DATABASE_URL = "postgresql" + "://parkmind:hunter2-canary@db.internal:5432/parkmind"
 MODEL_NAME = "claude-haiku-4-5-20251001"
 LLM_DELAY_SECONDS = 0.02
 
@@ -95,9 +93,22 @@ class Tracing:
     def spans(self) -> list[ReadableSpan]:
         self.flush()
         assert isinstance(self.exporter, InMemorySpanExporter)
-        return sorted(
-            self.exporter.get_finished_spans(), key=lambda s: s.start_time or 0
-        )
+        finished = self.exporter.get_finished_spans()
+        parents = {
+            s.context.span_id: s.parent.span_id
+            for s in finished
+            if s.context and s.parent
+        }
+
+        def depth(span: ReadableSpan) -> int:
+            levels, current = 0, span.context.span_id if span.context else None
+            while current in parents:
+                current = parents[current]
+                levels += 1
+            return levels
+
+        # A coarse clock (Windows) can give a parent and its child the same start time.
+        return sorted(finished, key=lambda s: (s.start_time or 0, depth(s)))
 
 
 @contextmanager
@@ -185,6 +196,7 @@ def planner(
     extractor: Any,
     *,
     narrator: Any = None,
+    asker: Any = None,
     deps_factory: Any = None,
 ) -> Any:
     """The initial planning graph on in-memory ports, as the quality tests build it."""
@@ -200,6 +212,7 @@ def planner(
         clock=lambda: NOW,
         names=make_names(),
         narrator=narrator or NoNarrator(),
+        asker=asker,
     )
 
 
