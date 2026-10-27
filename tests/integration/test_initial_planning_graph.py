@@ -28,6 +28,7 @@ from planning_support import (
     snapshot_context,
 )
 
+from parkmind.agents.ask_prompt import ASK_PROMPT_VERSION
 from parkmind.agents.elicit_prompt import ELICIT_PROMPT_VERSION
 from parkmind.core.contracts import (
     AttractionStatus,
@@ -743,6 +744,7 @@ def test_a_grounded_narration_is_what_the_guests_read(monkeypatch):
     assert proposal.explanation == "Here is your day at the park."
     assert proposal.provenance.prompt_versions["explain"] == "explain-v1"
     assert proposal.provenance.prompt_versions["elicit"] == ELICIT_PROMPT_VERSION
+    assert proposal.provenance.prompt_versions["ask"] == ASK_PROMPT_VERSION
     payload = json.loads(narrator.payloads[0])
     assert payload["stops"] and "preferences" in payload
 

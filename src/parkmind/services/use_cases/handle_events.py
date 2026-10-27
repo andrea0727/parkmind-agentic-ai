@@ -109,6 +109,16 @@ class HandleEventsUseCase:
         self._deps_factory = deps_factory
         self._config = config
 
+    def release(self, thread_id: str, events: Sequence[Event]) -> None:
+        """Take back events recorded for a replan that could not start.
+
+        A report of the same thing is then new to the thread and replans.
+        """
+        if not events:
+            return
+        with open_deps(self._deps_factory) as deps, deps.transaction():
+            deps.events.forget(thread_id, [e.event_id for e in events])
+
     def execute(
         self,
         thread_id: str,

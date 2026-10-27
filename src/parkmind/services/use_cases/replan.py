@@ -142,7 +142,10 @@ def effective_execution_state(
 def with_event_statuses(
     context: LiveContext, events: Iterable[Event], *, newer_only: bool = True
 ) -> LiveContext:
-    """``context`` with the availability reports newer than its snapshot applied.
+    """``context`` with the availability reports not older than its snapshot applied.
+
+    A report stamped at the snapshot's own instant is applied: the snapshot cannot be
+    known to reflect it, and ignoring a closure would send the party to a closed ride.
 
     ``newer_only=False`` applies them whatever their time: the events a caller sends
     with a replan say what happened for that replan, and a client's clock may lag
@@ -152,7 +155,7 @@ def with_event_statuses(
     for event in sorted(events, key=lambda e: (e.timestamp, e.event_id)):
         if event.attraction_id is None:
             continue
-        if newer_only and event.timestamp <= context.retrieved_at:
+        if newer_only and event.timestamp < context.retrieved_at:
             continue
         if event.type is EventType.ATTRACTION_DOWN:
             statuses[event.attraction_id] = AttractionStatus.DOWN

@@ -8,6 +8,14 @@ name: CI
 # `services: postgres:` container below. CI is set by GitHub Actions, so an
 # unreachable database FAILS those tests instead of skipping them.
 #
+# `pytest` runs every testing layer that needs no credentials (workflow, the
+# deterministic part of LLM evaluation, observability, reliability, security,
+# performance; see docs/testing/README.md). Tests marked `live` call real
+# services and are skipped here; run them locally with `pytest --live`.
+# The DeepEval metrics of layer 3 (`tests/evals/test_*.py`) are skipped here too:
+# the optional `eval` Poetry group is not installed in CI (it pins older click, rich
+# and huggingface-hub than the app), so they run locally with `poetry install --with eval`.
+#
 # That Postgres gets pgvector installed by the first step; the
 # embedding model is never downloaded here (tests use a deterministic embedder).
 
@@ -25,10 +33,10 @@ jobs:
     runs-on: ubuntu-24.04
     services:
       postgres:
-        # Official Docker Hub image via its AWS ECR Public mirror: anonymous
-        # Docker Hub pulls from shared runners hit the rate limit / auth
-        # timeouts and fail the job before any check runs.
-        image: public.ecr.aws/docker/library/postgres:16
+        # Official Docker Hub image via Google's public mirror: anonymous pulls
+        # from Docker Hub and from AWS ECR Public hit rate limits on shared
+        # runners and fail the job before any check runs.
+        image: mirror.gcr.io/library/postgres:16
         env:
           POSTGRES_USER: parkmind
           POSTGRES_PASSWORD: parkmind
@@ -79,7 +87,7 @@ jobs:
         env:
           PYTHONPATH: src
 
-      - name: Tests (pytest)
+      - name: Tests (pytest, all offline layers)
         run: poetry run pytest
         env:
           PARKMIND_TEST_DATABASE_URL: postgresql://parkmind:parkmind@localhost:5432/parkmind

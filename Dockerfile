@@ -11,7 +11,10 @@ ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 POETRY_VIRTUALENVS_CREATE=false
 WORKDIR /app
 RUN pip install poetry==2.* poetry-plugin-export
 COPY pyproject.toml poetry.lock ./
-RUN poetry install --only main --no-root
+# The image ships Anthropic only. For LLM_PROVIDER=openai or google, build with
+# --build-arg LLM_EXTRAS=openai (or google); docker-compose.yml reads LLM_EXTRAS from .env.
+ARG LLM_EXTRAS=""
+RUN poetry install --only main --no-root ${LLM_EXTRAS:+--extras "$LLM_EXTRAS"}
 COPY src ./src
 COPY database ./database
 COPY scripts ./scripts

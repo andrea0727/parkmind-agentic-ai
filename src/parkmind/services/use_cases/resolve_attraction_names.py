@@ -10,7 +10,11 @@ Fail closed, never guess: a name that matches no attraction, or more than one,
 is reported back so the human can say which one they mean. Matching is by
 normalized name (lowercase, no punctuation, possessive 's or doubled letters): first an exact
 match, then a unique match where every word the guest said is a word of the
-attraction's name ("splash" -> "Splash Mountain").
+attraction's name ("splash" -> "Splash Mountain"). As a last step a generic word
+the guest added ("fireworks", "show", "ride", "coaster") is dropped, but it still
+counts as a category hint: a show word only matches shows and a ride word never
+matches a show, so "castle show" does not become the castle walkthrough. When the
+hint leaves nothing, the name is asked, not guessed.
 The human sees the resolved official name when they confirm.
 """
 
@@ -57,6 +61,14 @@ class NameResolution:
 _POSSESSIVE = re.compile(r"['’`]s\b")
 _PUNCTUATION = re.compile(r"[^\w\s]")
 _REPEATED_LETTER = re.compile(r"([^\W\d_])\1+")
+
+
+_SHOW_WORDS = frozenset({"fireworks", "firework", "show"})
+_RIDE_WORDS = frozenset({"ride", "coaster"})
+_GENERIC_WORDS = _SHOW_WORDS | _RIDE_WORDS | {"attraction"}
+_STOPWORDS = frozenset(
+    {"the", "a", "an", "el", "la", "los", "las", "un", "una", "de", "del"}
+)
 
 
 def _normalize(text: str) -> str:
@@ -134,4 +146,20 @@ def _match(name: str, catalog: list[Attraction]) -> list[Attraction]:
     if exact:
         return exact
     words = set(wanted.split())
-    return [a for a in catalog if words <= set(_normalize(a.name).split())]
+    partial = [a for a in catalog if words <= set(_normalize(a.name).split())]
+    if partial:
+        return partial
+    if not words & _GENERIC_WORDS:
+        return []
+    core = words - _GENERIC_WORDS - _STOPWORDS
+    wants_show = bool(words & _SHOW_WORDS)
+    wants_ride = bool(words & _RIDE_WORDS)
+    if not core or (wants_show and wants_ride):
+        return []
+    return [
+        a
+        for a in catalog
+        if core <= set(_normalize(a.name).split())
+        and not (wants_show and a.category is not AttractionCategory.SHOW)
+        and not (wants_ride and a.category is AttractionCategory.SHOW)
+    ]

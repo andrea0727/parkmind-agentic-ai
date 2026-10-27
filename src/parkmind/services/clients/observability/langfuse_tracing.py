@@ -15,8 +15,9 @@ the span is exported. The mask is strict (the decision of 2026-10-14):
 - a Command's ``resume``: an answer to a clarifying question resumes the graph as plain
   text, alone or under its interrupt id, and that text is the guests' words;
 - correction text, ``Guest.label``, the confirmation echo and explanations (they
-  can carry a label), and every accessibility field are masked wherever they
-  appear;
+  can carry a label), every accessibility field and every stated height
+  (``height_cm``, and the ``height:g2: 122`` entry of a pending confirmation) are
+  masked wherever they appear;
 - an error's text: a paused graph's ``Interrupt`` carries its question, which repeats
   the guests' unmatched attraction names, so a status message keeps only the error's type;
 - the elicit prompt's guest block is masked if it shows up as a plain string.
@@ -52,8 +53,12 @@ _MASKED_KEYS = frozenset(
         "mobility_requirements",
         "ride_restrictions",
         "daily_walking_limit_minutes",
+        "height_cm",
+        "guest_height_cm",
     }
 )
+_HEIGHT_ENTRY = "height:"
+"""A pending confirmation for a stated height reads ``height:g2: 122``."""
 _GUEST_BLOCK = "Guest messages, oldest first"
 """The line that opens the guests' text in the elicit prompt (``AnthropicExtractor``)."""
 
@@ -72,7 +77,11 @@ def _masked(value: Any, *, depth: int) -> Any:
         return MASKED
     deeper = depth + 1
     if isinstance(value, str):
-        return MASKED if _GUEST_BLOCK in value else value
+        if _GUEST_BLOCK in value:
+            return MASKED
+        if value.startswith(_HEIGHT_ENTRY):
+            return f"{value.partition(': ')[0]}: {MASKED}"
+        return value
     if isinstance(value, (bool, int, float)) or value is None:
         return value
     if isinstance(

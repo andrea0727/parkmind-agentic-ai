@@ -3,6 +3,7 @@
 import pytest
 from elicit_support import FakeAttractionRepository, make_attraction, make_names
 
+from parkmind.core.contracts import AttractionCategory
 from parkmind.services.use_cases.resolve_attraction_names import (
     AttractionNameResolver,
     CatalogUnavailableError,
@@ -109,6 +110,83 @@ def test_a_spelling_variant_does_not_hide_an_ambiguous_name() -> None:
         "Prince Charming Regal Carrousel",
         "Walt Disney's Carousel of Progress",
     )
+
+
+def test_a_generic_descriptor_does_not_stop_a_unique_match() -> None:
+    catalog = [
+        make_attraction("id-hea", "Happily Ever After", AttractionCategory.SHOW),
+        make_attraction("id-tron", "TRON Lightcycle / Run"),
+    ]
+
+    resolution = make_names(catalog).resolve(["Happily Ever After fireworks"])
+
+    assert resolution.resolved["Happily Ever After fireworks"].node_id == "id-hea"
+
+
+def test_a_generic_descriptor_never_resolves_an_ambiguous_name() -> None:
+    catalog = [
+        make_attraction("id-a", "Peter Pan's Flight"),
+        make_attraction("id-b", "Peter Pan Mini Golf"),
+    ]
+
+    resolution = make_names(catalog).resolve(["Peter Pan ride"])
+
+    assert resolution.resolved == {}
+    assert "Peter Pan ride" in resolution.ambiguous
+
+
+@pytest.mark.parametrize(
+    "spoken", ["castle show", "castle fireworks", "pirates show", "bear ride"]
+)
+def test_a_generic_word_that_contradicts_the_category_is_asked_not_guessed(
+    spoken: str,
+) -> None:
+    catalog = [
+        make_attraction("id-castle", "Cinderella Castle", AttractionCategory.FAMILY),
+        make_attraction(
+            "id-pirates", "Pirates of the Caribbean", AttractionCategory.DARK_RIDE
+        ),
+        make_attraction("id-bears", "Country Bear Jamboree", AttractionCategory.SHOW),
+        make_attraction("id-hea", "Happily Ever After", AttractionCategory.SHOW),
+    ]
+
+    resolution = make_names(catalog).resolve([spoken])
+
+    assert resolution.resolved == {}
+    assert resolution.unknown == (spoken,)
+
+
+def test_a_show_word_resolves_to_the_show_and_a_ride_word_to_the_ride() -> None:
+    catalog = [
+        make_attraction(
+            "id-bear-show", "Country Bear Jamboree", AttractionCategory.SHOW
+        ),
+        make_attraction("id-bear-ride", "Bear Mountain", AttractionCategory.THRILL),
+    ]
+    resolution = make_names(catalog).resolve(["bear show", "bear ride"])
+
+    assert resolution.resolved["bear show"].node_id == "id-bear-show"
+    assert resolution.resolved["bear ride"].node_id == "id-bear-ride"
+
+
+def test_an_article_and_a_descriptor_alone_resolve_to_nothing() -> None:
+    catalog = [
+        make_attraction("id-a", "The Barnstormer"),
+        make_attraction("id-b", "The Hall of Presidents", AttractionCategory.SHOW),
+    ]
+
+    resolution = make_names(catalog).resolve(["the fireworks", "the show"])
+
+    assert resolution.resolved == {}
+    assert resolution.unknown == ("the fireworks", "the show")
+
+
+def test_only_descriptors_resolve_to_nothing() -> None:
+    resolution = make_names([make_attraction("id-a", "Fireworks Cafe")]).resolve(
+        ["the show"]
+    )
+
+    assert resolution.resolved == {}
 
 
 def test_node_ids_are_deduplicated_in_order() -> None:

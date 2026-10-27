@@ -1,6 +1,6 @@
 """Live EXPLAIN: how often the real model labels preference weights as the prompt asks.
 
-Skipped without ANTHROPIC_API_KEY (like the live elicit eval). Every miss in the
+Opt-in (`pytest --live`, marker `live`) and skipped without ANTHROPIC_API_KEY (like the live elicit eval). Every miss in the
 stated/learned label check costs a retry and, after two, the deterministic template,
 so the rate matters. Run with ``-s`` to see it.
 """
@@ -72,6 +72,7 @@ def _prepared() -> PreparedExplanation:
     )
 
 
+@pytest.mark.live
 @pytest.mark.skipif(
     not os.getenv("ANTHROPIC_API_KEY"), reason="needs ANTHROPIC_API_KEY"
 )

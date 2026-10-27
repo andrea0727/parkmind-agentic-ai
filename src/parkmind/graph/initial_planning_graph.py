@@ -66,6 +66,8 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 from pydantic import ValidationError
 
+from parkmind.agents.ask_agent import QuestionWriter
+from parkmind.agents.ask_prompt import ASK_PROMPT_VERSION
 from parkmind.agents.elicit_agent import ELICIT_PROMPT_VERSION, GuestInfoExtractor
 from parkmind.agents.explain_agent import (
     AnthropicNarrator,
@@ -297,12 +299,16 @@ def _make_build_plan_node(deps_factory: DepsFactory, clock: Clock) -> StateNode:
 
 
 def _with_elicit_version(plan: Plan) -> Plan:
-    """Record which elicit prompt read the constraints this plan was built from.
+    """Record which elicit and ask prompts produced the conversation this plan was built from.
 
     A replan copies the plan's provenance, so the version travels with it.
     """
     provenance = plan.provenance
-    versions = {**provenance.prompt_versions, "elicit": ELICIT_PROMPT_VERSION}
+    versions = {
+        **provenance.prompt_versions,
+        "elicit": ELICIT_PROMPT_VERSION,
+        "ask": ASK_PROMPT_VERSION,
+    }
     return plan.model_copy(
         update={
             "provenance": provenance.model_copy(update={"prompt_versions": versions})
@@ -732,6 +738,7 @@ def build_initial_planning_graph(
     clock: Clock = park_clock,
     names: AttractionNameResolver | None = None,
     narrator: PlanNarrator | None = None,
+    asker: QuestionWriter | None = None,
 ) -> Any:
     """Compile the end-to-end initial planning graph.
 
@@ -752,4 +759,5 @@ def build_initial_planning_graph(
             build_planning_stage(deps_factory, clock, narrator or AnthropicNarrator()),
         ),
         names=resolver,
+        asker=asker,
     )

@@ -47,7 +47,8 @@ the top on resume):
 Known limits: REJECT's "update preferences" step is not implemented (the reason is
 stored on the proposal and in the behavior log). After a replan finds no valid
 plan the events stay recorded, so a duplicate report does not retry it; a new event
-does.
+does. When the outage hits before the replan starts, the events are released, so
+the same report replans once the store is back.
 """
 
 import logging
@@ -96,8 +97,13 @@ from parkmind.services.use_cases.check_plan import CheckPlanUseCase
 from parkmind.services.use_cases.diff_plan import DiffPlanUseCase
 from parkmind.services.use_cases.explain_plan import ExplainPlanUseCase
 from parkmind.services.use_cases.handle_events import HandledEvents, HandleEventsUseCase
+from parkmind.services.use_cases.park_status import ParkClosedError
 from parkmind.services.use_cases.pending_proposal import PendingProposalUseCase
-from parkmind.services.use_cases.planning_deps import DepsFactory, default_planning_deps
+from parkmind.services.use_cases.planning_deps import (
+    DepsFactory,
+    PlanningUnavailableError,
+    default_planning_deps,
+)
 from parkmind.services.use_cases.propose_plan import ProposePlanUseCase
 from parkmind.services.use_cases.replan import ReplanRequest, ReplanUseCase
 from parkmind.services.use_cases.replan_reason import ReplanReasonUseCase
@@ -140,6 +146,31 @@ def _events_update(handled: HandledEvents, *, previous: list[Event]) -> dict[str
         # The proposal the guests were deciding on is dead; do not keep it open in state.
         update.update(discarded_proposal_update())
     return update
+
+
+def _releasing_events_on_failure(
+    node: StateNode, deps_factory: DepsFactory
+) -> StateNode:
+    """Un-record this run's events when the park information cannot be loaded.
+
+    The events were committed before the replan, so without this the guests'
+    next report of the same closure is dropped as a duplicate and no replan ever
+    happens. An edit re-entering ``load_context`` re-plans events that were
+    already handled, and a closed park is a real answer: neither is undone.
+    """
+    use_case = HandleEventsUseCase(deps_factory)
+
+    def releasing(state: ParkMindState) -> Any:
+        try:
+            return node(state)
+        except ParkClosedError:
+            raise
+        except PlanningUnavailableError:
+            if state.get("constraints_before_edit") is None:
+                use_case.release(state["thread_id"], list(state.get("events") or []))
+            raise
+
+    return releasing
 
 
 def _make_load_plan_node(deps_factory: DepsFactory) -> StateNode:
@@ -535,7 +566,12 @@ def build_replanning_graph(
     )
     graph.add_node(
         "load_context",
-        _guarded(_make_load_context_node(deps_factory, clock), then="resolve_group"),
+        _guarded(
+            _releasing_events_on_failure(
+                _make_load_context_node(deps_factory, clock), deps_factory
+            ),
+            then="resolve_group",
+        ),
         destinations=("resolve_group", END),
     )
     graph.add_node(

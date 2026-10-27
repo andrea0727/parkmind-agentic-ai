@@ -171,7 +171,7 @@ const R=(cx,cy,w,h)=>({x:cx-w/2,y:cy-h/2,w,h,cx,cy});
 const NODES=[
  {id:'start',kind:'term',shape:'circle',cx:60,cy:230,r:18,title:'START',dock:{what:'Thread starts; the guest message is added to state.messages.',notes:['<code>thread_id</code> keys the checkpointer and the SessionStore']}},
  {id:'elicit',kind:'llm',...R(240,230,200,60),title:'elicit',sub:'extractor proposes constraints',pay:{x:240,y:282,a:'middle'},
-  dock:{file:G+' · agents/elicit_agent.py',calls:'GuestInfoExtractor (AnthropicExtractor, Claude Haiku 4.5) · AccessibilityIntakeUseCase.stage · AttractionNameResolver',
+  dock:{file:G+' · agents/elicit_agent.py',calls:'GuestInfoExtractor (LLM via LLM_PROVIDER) · QuestionWriter (ask, rewords the fixed question) · AccessibilityIntakeUseCase.stage · AttractionNameResolver',
    reads:'messages',writes:'constraints · guest_profiles · pending_hard_constraint_confirmation · messages',
    notes:['Only <b>proposes</b>: <code>constraints_valid</code> stays False','Accessibility flags are staged in the intake use case; state keeps guest ids only [C19]','Must-do / avoid names are resolved to catalog node_ids, fail-closed','Router: constraints → confirm; last message is AI → ask_missing; otherwise elicit again']}},
  {id:'ask',kind:'human',...R(240,110,200,60),title:'ask_missing',sub:'interrupt · missing information',pay:{x:240,y:74,a:'middle'},
@@ -302,7 +302,7 @@ const HC_OUT='{kind:"hard_constraint_confirmation", pending, echo, accessibility
 const OK_RESUME='{confirmed:true, consent:true, retention_policy:"session_only"}';
 const head=()=>[
  S('start','A guest describes the party. The thread starts and the message lands in state.',{thread_id:'thread id',messages:'1 human message'}),
- S('elicit','The extractor (the only LLM in this path) proposes constraints. Nothing is trusted yet: constraints_valid stays False and the unconfirmed items are listed as pending.',
+ S('elicit','The extractor (an LLM, set by LLM_PROVIDER) proposes constraints. Nothing is trusted yet: constraints_valid stays False and the unconfirmed items are listed as pending.',
    {constraints:'party + must-do / avoid (proposed)',guest_profiles:'one profile per guest',pending_hard_constraint_confirmation:'[unconfirmed constraints, accessibility:guest]'}),
  S('confirm','Interrupt: a human must confirm the hard constraints. Accessibility data carries guest ids only; consent and retention come from the human, never the LLM.',
    {pending_hard_constraint_confirmation:'[ ]  (cleared by the human)',accessibility_ref:'guest ids only [C19]'},{human:{out:HC_OUT,resume:OK_RESUME}}),
@@ -331,7 +331,7 @@ const SCENARIOS=[
    end('No active plan. The candidate exists only as a REJECTED proposal.')]},
  {name:'Missing information · asks and waits',steps:[
    S('start','A guest gives a partial description (no departure time).',{thread_id:'thread id',messages:'1 human message'}),
-   S('elicit','The extractor cannot build complete constraints. It adds an AI question listing what is missing; the router sees an AI message last.',{messages:'human + AI question'}),
+   S('elicit','The extractor cannot build complete constraints. It adds an AI question listing what is missing (the ask agent words it; the fixed question is the fallback); the router sees an AI message last.',{messages:'human + AI question'}),
    S('ask','Interrupt: the run pauses here until the guest answers; the answer goes back to elicit.',{},{human:{out:'{kind:"missing_information", missing:["departure"], question}',resume:'"answer text" (str)'}}),
    end('The run waits at ask_missing until the guest answers.')]},
  {name:'Guest rejects the confirmation',steps:[
@@ -666,7 +666,7 @@ const ES={
 "A guest describes the party. The thread starts and the message lands in state.": "Un invitado describe al grupo. El hilo comienza y el mensaje llega al estado.",
 "thread id": "id del hilo",
 "1 human message": "1 mensaje humano",
-"The extractor (the only LLM in this path) proposes constraints. Nothing is trusted yet: constraints_valid stays False and the unconfirmed items are listed as pending.": "El extractor (el único LLM en este camino) propone restricciones. Aún no se confía en nada: constraints_valid sigue en False y los elementos sin confirmar quedan como pendientes.",
+"The extractor (an LLM, set by LLM_PROVIDER) proposes constraints. Nothing is trusted yet: constraints_valid stays False and the unconfirmed items are listed as pending.": "El extractor (un LLM, definido por LLM_PROVIDER) propone restricciones. Aún no se confía en nada: constraints_valid sigue en False y los elementos sin confirmar quedan como pendientes.",
 "party + must-do / avoid (proposed)": "grupo + must-do / evitar (propuestos)",
 "one profile per guest": "un perfil por invitado",
 "[unconfirmed constraints, accessibility:guest]": "[restricciones sin confirmar, accessibility:guest]",
@@ -694,7 +694,7 @@ const ES={
 "No active plan. The candidate exists only as a REJECTED proposal.": "Sin plan activo. El candidato existe solo como propuesta REJECTED.",
 "Missing information · asks and waits": "Información faltante · pregunta y espera",
 "A guest gives a partial description (no departure time).": "Un invitado da una descripción parcial (sin hora de salida).",
-"The extractor cannot build complete constraints. It adds an AI question listing what is missing; the router sees an AI message last.": "El extractor no puede armar restricciones completas. Agrega una pregunta de la IA con lo que falta; el router ve un mensaje de la IA al final.",
+"The extractor cannot build complete constraints. It adds an AI question listing what is missing (the ask agent words it; the fixed question is the fallback); the router sees an AI message last.": "El extractor no puede armar restricciones completas. Agrega una pregunta de la IA con lo que falta (el agente ask la redacta; la pregunta fija es el respaldo); el router ve un mensaje de la IA al final.",
 "human + AI question": "humano + pregunta de la IA",
 "Interrupt: the run pauses here until the guest answers; the answer goes back to elicit.": "Interrupt: la ejecución se pausa aquí hasta que el invitado responda; la respuesta vuelve a elicit.",
 "\"answer text\" (str)": "\"texto de la respuesta\" (str)",

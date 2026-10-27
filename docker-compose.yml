@@ -11,7 +11,10 @@ services:
   # PARKMIND_JWT_SECRET (see .env.example): the API refuses to start without credentials.
   # Single worker by design (in-memory sessions).
   app:
-    build: .
+    build:
+      context: .
+      args:
+        LLM_EXTRAS: ${LLM_EXTRAS:-}  # openai or google, only with LLM_PROVIDER set to it
     env_file:
       - path: .env
         required: false

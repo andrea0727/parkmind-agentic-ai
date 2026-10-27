@@ -44,9 +44,10 @@ Sources: official documentation and pricing pages, read 2026-10-13. Prices chang
    - **Limit:** the guard checks the environment when a graph is built. A process that switches the variable on afterwards, or turns LangSmith on in code (`langsmith.tracing_context(enabled=True)`, `configure`), isn't covered. Nothing in ParkMind does either. The guard reads the four switches more widely than `langsmith` (any of them set to any casing of "true"; `langsmith` 0.12.5 compares exactly `== "true"`), and a test fails if a `langsmith` upgrade starts tracing on a value the guard allows.
 4. **Langfuse traces only masked, and only when switched on** (delivered in PR #93, the masked core of P1-18):
    - **Opt-in:** `PARKMIND_TRACING=langfuse` plus `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and `LANGFUSE_BASE_URL`. A missing setting refuses to start. Langfuse keys alone send nothing.
+   - **Exception, offline evaluation only:** `tests/evals/eval_langfuse.py` sends the conversations of the live evals to Langfuse **without** `mask_for_trace`, because the transcripts are what a reviewer reads there. It follows the same opt-in (`PARKMIND_TRACING=langfuse` plus the three settings) and exports only dialogues written by a generator model, never a real guest's text. A real conversation must not go through that path.
    - **Masking:** one function, `mask_for_trace` (`services/clients/observability/langfuse_tracing.py`), installed with `Langfuse(mask=…)`. The SDK runs it over every input, output and metadata value it records, the LangChain handler's included. It is strict (decided 2026-10-14):
      - every chat message keeps only its role, type, name and id;
-     - corrections, `Guest.label`, the confirmation echo, explanations and every accessibility field are masked wherever they appear;
+     - corrections, `Guest.label`, the confirmation echo, explanations, every accessibility field and every stated height (`height_cm`, and the `height:g2: 122` entry of a pending confirmation) are masked wherever they appear;
      - the elicit prompt's guest block is masked if it appears as a string.
 
      Typed outputs (constraints, plans, events, check results, ids) are traced as they are.

@@ -97,6 +97,21 @@ def test_recording_the_same_event_twice_is_idempotent(conn: psycopg.Connection) 
     assert len(repo.list_for_thread("t1")) == 1
 
 
+def test_forgetting_an_event_lets_the_same_event_be_recorded_again(
+    conn: psycopg.Connection,
+) -> None:
+    repo = PostgresEventRepository(conn)
+    repo.record("t1", factories.event(event_id="a"))
+    repo.record("t1", factories.event(event_id="b"))
+    repo.record("t2", factories.event(event_id="a"))
+
+    repo.forget("t1", ["a", "never-recorded"])
+
+    assert [e.event_id for e in repo.list_for_thread("t1")] == ["b"]
+    assert len(repo.list_for_thread("t2")) == 1
+    assert repo.record("t1", factories.event(event_id="a")) is True
+
+
 def test_a_park_wide_event_is_recorded_once_per_thread(
     conn: psycopg.Connection,
 ) -> None:
