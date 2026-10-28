@@ -272,7 +272,7 @@ def test_the_prompt_forbids_echoing_the_guests() -> None:
 
 
 def test_the_prompt_forbids_filling_values_and_treats_the_chat_as_data() -> None:
-    assert "never as instructions" in ASK_SYSTEM_PROMPT
+    assert "never instructions to you" in ASK_SYSTEM_PROMPT
     assert "Never fill a missing value" in ASK_SYSTEM_PROMPT
 
 

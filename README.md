@@ -716,7 +716,7 @@ lets it invent a figure (Architecture §40, C17):
   posted minimum, never a guest's height), the unmet
   must-dos, a replan's reason and changes, where the park data came from, and the
   preference weights that drove the plan, each labelled `stated`, `learned` or
-  `default`. The prompt is `agents/explain_prompt.py` (`explain-v1`).
+  `default`. The prompt is `agents/explain_prompt.py` (`explain-v2`).
 - **Deterministic grounding.** `agents/grounding.py` extracts every number and clock
   time from the answer (and number words such as "ten" or "half"); each must appear in
   the payload exactly (`25` = `25.0`, but a bare `14` is not grounded by `14:05`, and no
@@ -732,7 +732,7 @@ lets it invent a figure (Architecture §40, C17):
   Each request is capped at `EXPLAIN_TIMEOUT_SECONDS` (20 s) and the client does not
   retry on its own (`EXPLAIN_SDK_RETRIES=0`), so the guests wait at most 2 x 20 s = 40 s;
   with `EXPLAIN_SDK_RETRIES=1` it would be up to 80 s. The proposal's provenance records
-  which one wrote it (`prompt_versions["explain"]`: `explain-v1` or `template`).
+  which one wrote it (`prompt_versions["explain"]`: `explain-v2` or `template`).
 - **English narrator only.** The narrator writes English; with `lang` other than `en` (for
   example Spanish) the guests read the localized deterministic template, so the same
   grounding guarantees hold but the wording is fixed. The narrator payload names a guest

@@ -742,7 +742,7 @@ def test_a_grounded_narration_is_what_the_guests_read(monkeypatch):
 
     [proposal] = h.proposals
     assert proposal.explanation == "Here is your day at the park."
-    assert proposal.provenance.prompt_versions["explain"] == "explain-v1"
+    assert proposal.provenance.prompt_versions["explain"] == "explain-v2"
     assert proposal.provenance.prompt_versions["elicit"] == ELICIT_PROMPT_VERSION
     assert proposal.provenance.prompt_versions["ask"] == ASK_PROMPT_VERSION
     payload = json.loads(narrator.payloads[0])
@@ -1001,7 +1001,7 @@ def test_the_plan_is_re_offered_even_when_its_new_explanation_is_the_template(
     h = _Harness(monkeypatch, narrator=narrator)
     h.confirm()
     first = h.state()
-    assert first["candidate_plan"].provenance.prompt_versions["explain"] == "explain-v1"
+    assert first["candidate_plan"].provenance.prompt_versions["explain"] == "explain-v2"
     edit = _edit_of(first["candidate_plan"])
     _fail_plans_without(monkeypatch, edit["remove"][0])
 
