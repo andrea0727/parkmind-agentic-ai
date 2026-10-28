@@ -25,6 +25,7 @@ from typing import Any, Literal, Protocol
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
+from parkmind.agents.concierge_prompt import PAYLOAD, as_data
 from parkmind.agents.explain_prompt import EXPLAIN_PROMPT_VERSION, EXPLAIN_SYSTEM_PROMPT
 from parkmind.agents.explain_schema import ExplanationDraft
 from parkmind.agents.grounding import (
@@ -133,7 +134,7 @@ class AnthropicNarrator:
     def narrate(
         self, payload_json: str, repair_hint: str | None = None
     ) -> Mapping[str, Any]:
-        content = f"Payload:\n{payload_json}"
+        content = f"Payload:\n{as_data(PAYLOAD, payload_json)}"
         if repair_hint:
             content += (
                 "\n\nYour previous explanation was rejected. Fix exactly this and "

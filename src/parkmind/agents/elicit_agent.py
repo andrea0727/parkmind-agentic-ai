@@ -25,6 +25,7 @@ from pydantic import ValidationError
 from parkmind.agents.ask_agent import QuestionWriter, Turn, word_question
 from parkmind.agents.ask_template import plain_question
 from parkmind.agents.clock_answer import parse_clock
+from parkmind.agents.concierge_prompt import GUEST_MESSAGES, as_data
 from parkmind.agents.elicit_prompt import ELICIT_PROMPT_VERSION, ELICIT_SYSTEM_PROMPT
 from parkmind.agents.elicit_schema import ElicitationExtraction, normalize_name
 from parkmind.agents.llm_budget import (
@@ -193,7 +194,7 @@ class AnthropicExtractor:
         listing = "\n".join(
             f"{i}. {text}" for i, text in enumerate(human_messages, start=1)
         )
-        content = f"Guest messages, oldest first:\n{listing}"
+        content = f"Guest messages, oldest first:\n{as_data(GUEST_MESSAGES, listing)}"
         if repair_hint:
             content += (
                 "\n\nYour previous output was rejected by validation. Fix exactly these "
