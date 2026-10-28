@@ -12,24 +12,14 @@ from typing import Any
 import pytest
 
 from parkmind.agents.ask_agent import AnthropicQuestionWriter
-from parkmind.agents.ask_prompt import ASK_JOB, ASK_PROMPT_VERSION, ASK_SYSTEM_PROMPT
 from parkmind.agents.concierge_prompt import (
     CONCIERGE_CORE,
     GUEST_MESSAGES,
     as_data,
 )
 from parkmind.agents.elicit_agent import AnthropicExtractor
-from parkmind.agents.elicit_prompt import (
-    ELICIT_JOB,
-    ELICIT_PROMPT_VERSION,
-    ELICIT_SYSTEM_PROMPT,
-)
 from parkmind.agents.explain_agent import AnthropicNarrator
-from parkmind.agents.explain_prompt import (
-    EXPLAIN_JOB,
-    EXPLAIN_PROMPT_VERSION,
-    EXPLAIN_SYSTEM_PROMPT,
-)
+from parkmind.agents.prompt_registry import CAPABILITIES, LlmCapability
 
 # version -> first 12 hex digits of the sha256 of the prompt's text.
 # Changed a prompt? Bump its *_PROMPT_VERSION and add the new pair here. Old pairs
@@ -44,21 +34,20 @@ FINGERPRINTS = {
     "ask-v14": "c790693024ae",
 }
 
-PROMPTS = [
-    pytest.param(ELICIT_PROMPT_VERSION, ELICIT_SYSTEM_PROMPT, id="elicit"),
-    pytest.param(EXPLAIN_PROMPT_VERSION, EXPLAIN_SYSTEM_PROMPT, id="explain"),
-    pytest.param(ASK_PROMPT_VERSION, ASK_SYSTEM_PROMPT, id="ask"),
-]
+EACH = pytest.mark.parametrize(
+    "capability", CAPABILITIES, ids=[c.name for c in CAPABILITIES]
+)
 
 
 def fingerprint(prompt: str) -> str:
     return hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:12]
 
 
-@pytest.mark.parametrize(("version", "prompt"), PROMPTS)
+@EACH
 def test_a_prompt_cannot_change_without_a_new_version(
-    version: str, prompt: str
+    capability: LlmCapability,
 ) -> None:
+    version, prompt = capability.prompt_version, capability.system_prompt
     assert version in FINGERPRINTS, (
         f"{version} has no recorded fingerprint: add {version!r}: "
         f"{fingerprint(prompt)!r} to FINGERPRINTS"
@@ -69,23 +58,19 @@ def test_a_prompt_cannot_change_without_a_new_version(
     )
 
 
-def test_every_version_is_distinct() -> None:
-    versions = [p.values[0] for p in PROMPTS]
-    assert len(set(versions)) == len(versions)
+def test_every_capability_has_its_own_name_version_and_provenance_key() -> None:
+    for field in ("name", "prompt_version", "provenance_key"):
+        values = [getattr(c, field) for c in CAPABILITIES]
+        assert len(set(values)) == len(values), field
 
 
-@pytest.mark.parametrize(
-    ("job", "prompt"),
-    [
-        pytest.param(ELICIT_JOB, ELICIT_SYSTEM_PROMPT, id="elicit"),
-        pytest.param(EXPLAIN_JOB, EXPLAIN_SYSTEM_PROMPT, id="explain"),
-        pytest.param(ASK_JOB, ASK_SYSTEM_PROMPT, id="ask"),
-    ],
-)
+@EACH
 def test_every_prompt_starts_with_the_concierge_core_and_its_own_job(
-    job: str, prompt: str
+    capability: LlmCapability,
 ) -> None:
-    assert prompt.startswith(CONCIERGE_CORE.format(job=job))
+    assert capability.system_prompt.startswith(
+        CONCIERGE_CORE.format(job=capability.job)
+    )
 
 
 def test_the_core_states_the_limits_of_the_llm() -> None:

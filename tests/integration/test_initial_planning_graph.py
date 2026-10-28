@@ -30,6 +30,7 @@ from planning_support import (
 
 from parkmind.agents.ask_prompt import ASK_PROMPT_VERSION
 from parkmind.agents.elicit_prompt import ELICIT_PROMPT_VERSION
+from parkmind.agents.prompt_registry import CAPABILITIES
 from parkmind.core.contracts import (
     AttractionStatus,
     CheckResult,
@@ -747,6 +748,19 @@ def test_a_grounded_narration_is_what_the_guests_read(monkeypatch):
     assert proposal.provenance.prompt_versions["ask"] == ASK_PROMPT_VERSION
     payload = json.loads(narrator.payloads[0])
     assert payload["stops"] and "preferences" in payload
+
+
+def test_every_registered_prompt_version_reaches_the_plan_provenance(monkeypatch):
+    """Each row of ``agents/prompt_registry.py`` is recorded under its key (G7)."""
+    h = _Harness(monkeypatch, narrator=ScriptedNarrator("Here is your day."))
+
+    h.confirm()
+
+    [proposal] = h.proposals
+    recorded = proposal.provenance.prompt_versions
+    assert {c.provenance_key: recorded.get(c.provenance_key) for c in CAPABILITIES} == {
+        c.provenance_key: c.prompt_version for c in CAPABILITIES
+    }
 
 
 def test_an_ungrounded_narration_falls_back_to_the_template(monkeypatch):
