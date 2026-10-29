@@ -17,7 +17,7 @@ from pydantic import ValidationError
 
 from parkmind.agents.ask_prompt import ASK_PROMPT_VERSION, ASK_SYSTEM_PROMPT
 from parkmind.agents.ask_schema import QuestionDraft
-from parkmind.agents.concierge_prompt import PAYLOAD, as_data
+from parkmind.agents.concierge_prompt import PAYLOAD, PREVIOUS_ANSWER, as_data
 from parkmind.agents.grounding import ungrounded_numerals
 from parkmind.agents.llm_budget import (
     LlmBudgetExhaustedError,
@@ -287,5 +287,5 @@ def word_question(
             return text
         # The rejected message can repeat the guests' own words (an echo is one reason
         # to reject it), so it goes back as data (G3).
-        hint = f"{problem}\n\nYour previous message:\n{as_data(PAYLOAD, text)}"
+        hint = f"{problem}\n\nYour previous message:\n{as_data(PREVIOUS_ANSWER, text)}"
     return stand_in

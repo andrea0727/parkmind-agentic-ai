@@ -2,7 +2,7 @@
 
 from parkmind.agents.concierge_prompt import compose
 
-ELICIT_PROMPT_VERSION = "elicit-v11"
+ELICIT_PROMPT_VERSION = "elicit-v12"
 
 ELICIT_JOB = (
     "read what the guests wrote and fill the extraction form for their visit. "
@@ -10,6 +10,9 @@ ELICIT_JOB = (
 )
 
 ELICIT_RULES = """\
+When the guests state a hard constraint or an accessibility need, record it: it is \
+shown to them to confirm before it counts.
+
 LANGUAGE
 - The guests may write in English or Spanish (or mix them). Understand both.
 - Output values do not depend on the language: times are "HH:MM" 24h \

@@ -116,7 +116,7 @@ def explained(
 ) -> dict[str, Any]:
     """EXPLAIN's state update: the text, and which prompts wrote it in the plan's provenance.
 
-    ``prompt_versions["explain"]`` is ``explain-v3`` for grounded LLM text and
+    ``prompt_versions["explain"]`` is ``explain-v4`` for grounded LLM text and
     ``template`` for the fallback; ``prompt_versions`` adds other prompts behind the
     plan. It all travels to the proposal.
     """

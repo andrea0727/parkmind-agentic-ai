@@ -25,7 +25,7 @@ from typing import Any, Literal, Protocol
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
-from parkmind.agents.concierge_prompt import PAYLOAD, as_data
+from parkmind.agents.concierge_prompt import PAYLOAD, PREVIOUS_ANSWER, as_data
 from parkmind.agents.explain_prompt import EXPLAIN_PROMPT_VERSION, EXPLAIN_SYSTEM_PROMPT
 from parkmind.agents.explain_schema import ExplanationDraft
 from parkmind.agents.grounding import (
@@ -185,7 +185,7 @@ def _with_previous(text: str, problem: str) -> str:
     The previous answer is the model's own text, built from the payload, so it goes
     back as data (G3): whatever it repeats from the payload cannot act as an instruction.
     """
-    return f"{problem}\n\nYour previous explanation:\n{as_data(PAYLOAD, text)}"
+    return f"{problem}\n\nYour previous explanation:\n{as_data(PREVIOUS_ANSWER, text)}"
 
 
 def _preference_labels(payload: ExplanationPayload) -> tuple[dict[str, str], set[str]]:

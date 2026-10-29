@@ -2,7 +2,7 @@
 
 from parkmind.agents.concierge_prompt import compose
 
-EXPLAIN_PROMPT_VERSION = "explain-v3"
+EXPLAIN_PROMPT_VERSION = "explain-v4"
 
 EXPLAIN_JOB = (
     "put a plan that the planner already built and validated into words for the guests."

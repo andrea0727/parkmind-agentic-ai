@@ -2,7 +2,7 @@
 
 from parkmind.agents.concierge_prompt import compose
 
-ASK_PROMPT_VERSION = "ask-v15"
+ASK_PROMPT_VERSION = "ask-v16"
 
 ASK_JOB = "word the next question to the guests so the conversation feels natural."
 
