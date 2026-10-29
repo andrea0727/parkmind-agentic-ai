@@ -8,6 +8,7 @@ from e2e.kit.verdicts import (
     j_past,
     j_show,
     j_stops_at_check,
+    j_walking_in_minutes,
 )
 from e2e.model import Criteria, Offline, Scenario
 
@@ -300,6 +301,42 @@ SCENARIOS: tuple[Scenario, ...] = (
             llm_eval="",
             observability="One trace for the run with a span per executed node; the pause for the guests is not an error",
             business_rules="A plan is built from what remains and contains no avoided ride",
+        ),
+    ),
+    Scenario(
+        id="caminata_en_km",
+        number=37,
+        area="Constraints and feasibility",
+        severity="normal",
+        title="Guests give their walking limit as a distance",
+        what="Grounding: a walking limit in km is asked again in minutes, never planned from minutes the model made up.",
+        steps=(
+            "Guests (2 adults) say they can walk about 2 km in total, leave at 10 PM",
+            "Look at what the app asks",
+        ),
+        setup="Walking limit stated as 2 km",
+        messages=(
+            (
+                "Somos 2 adultos. "
+                + H
+                + "Podemos caminar como 2 km en total. Salimos a las 10 de la noche."
+            ),
+        ),
+        expected="The app asks for the walking limit in minutes and explains that the plan counts minutes, not distance.",
+        judge=j_walking_in_minutes,
+        why="Live, the model turned '2 km' into 120 minutes; the generic re-ask never said minutes vs distance, so guests answering in km looped.",
+        criteria=Criteria(
+            workflow="The ELICIT node swaps the generic walking question for the minutes-not-distance one",
+            llm_eval="",
+            observability="One trace for the run with a span per executed node; the pause for the guests is not an error",
+            business_rules="A walking limit is only planned from minutes the guests gave, or from their distance converted at the routing pace and confirmed",
+        ),
+        offline=Offline(
+            extraction=extraction(
+                [adult(170), adult(170)],
+                departure="22:00",
+                walking_budget=120,
+            )
         ),
     ),
 )
