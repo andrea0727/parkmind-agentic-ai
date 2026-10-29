@@ -9,6 +9,7 @@ separately so the UI can ask for consent [C19].
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from parkmind.config.settings import settings
 from parkmind.core.language import DEFAULT_LANGUAGE, Language, guest_ref, text
 
 HEIGHT_PREFIX = "height:"
@@ -42,6 +43,10 @@ def echo_for(
     kind, _, value = entry.partition(": ")
     if kind in ("must_do", "avoid", "departure_time", "walking_budget"):
         return text(f"echo_{kind}", lang, solo=solo, value=value)
+    if kind == "walking_distance":
+        pace = settings.WALKING_SPEED_METERS_PER_MINUTE * 60 / 1000
+        shown = f"{pace:g}" if lang == "en" else f"{pace:g}".replace(".", ",")
+        return text("echo_walking_distance", lang, value=value, pace=shown)
     if kind == "lunch_window":
         start, _, end = value.partition("-")
         return text("echo_lunch_window", lang, start=start, end=end)

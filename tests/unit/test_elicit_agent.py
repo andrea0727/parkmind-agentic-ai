@@ -847,11 +847,12 @@ WALKING_BASE = {
 WALKING_FIRST = (
     "Somos 2 adultos, salimos a las 18:00 y podemos caminar como 2 km en total."
 )
+WALKING_VAGUE = "Somos 2 adultos, salimos a las 18:00 y mi papá camina poco."
 
 
-def _walking_turns(node, *replies: str) -> list[dict]:
+def _walking_turns(node, *replies: str, first: str = WALKING_FIRST) -> list[dict]:
     """Play the guests' replies, each answering the question the node asked before it."""
-    messages = [HumanMessage(content=WALKING_FIRST)]
+    messages = [HumanMessage(content=first)]
     updates = []
     for reply in [None, *replies]:
         if reply is not None:
@@ -868,14 +869,14 @@ def _asked(update: dict) -> list[str]:
 
 
 def test_a_bare_number_answering_the_walking_question_is_taken_as_minutes() -> None:
-    """The model invents 120 minutes from '2 km'; the guests answer the minutes question with '30'."""
+    """The model reads a limit nobody wrote; the guests answer the minutes question with '30'."""
     outputs = [
-        dict(WALKING_BASE, party_walking_budget_minutes=120),
+        dict(WALKING_BASE, party_walking_budget_minutes=60),
         dict(WALKING_BASE, party_walking_budget_minutes=30),
     ]
     node, _, _ = _node(FakeExtractor(*outputs))
 
-    first, answered = _walking_turns(node, "30")
+    first, answered = _walking_turns(node, "30", first=WALKING_VAGUE)
 
     assert "walking_budget_unverified" in _asked(first)
     assert "walking_budget: 30" in answered["pending_hard_constraint_confirmation"]
@@ -931,7 +932,69 @@ def test_a_bare_number_answers_the_departure_when_both_were_asked() -> None:
     ]
     node, _, _ = _node(FakeExtractor(*outputs))
 
-    first, answered = _walking_turns(node, "18")
+    first, answered = _walking_turns(node, "18", first=WALKING_VAGUE)
 
     assert {"departure_time", "walking_budget_unverified"} <= set(_asked(first))
     assert _asked(answered) == ["walking_budget_unverified"]
+
+
+def test_a_walking_limit_given_as_a_distance_is_asked_again_in_minutes() -> None:
+    """Live, the model turned '2 km' into 120 minutes; the generic question never said why."""
+    node, _, _ = _node(
+        FakeExtractor(dict(WALKING_BASE, party_walking_budget_minutes=120))
+    )
+
+    [first] = _walking_turns(node)
+
+    assert _asked(first) == ["walking_budget_in_minutes"]
+    assert "minutos, no en distancia" in first["messages"][0].content
+
+
+def test_a_second_distance_is_converted_at_the_routing_pace_and_shown() -> None:
+    outputs = [
+        dict(WALKING_BASE, party_walking_budget_minutes=120),
+        dict(WALKING_BASE, party_walking_budget_minutes=120),
+    ]
+    node, _, _ = _node(FakeExtractor(*outputs))
+
+    first, converted = _walking_turns(node, "unos 2 kilómetros")
+
+    assert _asked(first) == ["walking_budget_in_minutes"]
+    pending = converted["pending_hard_constraint_confirmation"]
+    assert "walking_budget: 26" in pending and "walking_distance: 2 km" in pending
+    assert converted["constraints"].party_walking_budget_minutes == 26
+    assert "2 km" in echo_for("walking_distance: 2 km", "es")
+    assert "4,5 km/h" in echo_for("walking_distance: 2 km", "es")
+
+
+def test_minutes_after_the_distance_question_need_no_conversion() -> None:
+    outputs = [
+        dict(WALKING_BASE, party_walking_budget_minutes=120),
+        dict(WALKING_BASE, party_walking_budget_minutes=120),
+    ]
+    node, _, _ = _node(FakeExtractor(*outputs))
+
+    _, answered = _walking_turns(node, "45")
+
+    pending = answered["pending_hard_constraint_confirmation"]
+    assert "walking_budget: 45" in pending
+    assert not any(e.startswith("walking_distance") for e in pending)
+
+
+def test_a_distance_answer_is_asked_in_minutes_even_when_the_model_dropped_it() -> None:
+    """Offline, a model that returns no budget for '2 kilómetros' lost the guests' limit."""
+    outputs = [
+        dict(WALKING_BASE, party_walking_budget_minutes=50),
+        dict(WALKING_BASE, party_walking_budget_minutes=None),
+    ]
+    node, _, _ = _node(FakeExtractor(*outputs))
+    messages = [
+        HumanMessage(content="Somos 2 adultos, salimos a las 18:00, caminamos poco.")
+    ]
+    first = node({"thread_id": "t1", "messages": messages, "language": "es"})
+    messages += [*first["messages"], HumanMessage(content="2 kilómetros")]
+
+    second = node({"thread_id": "t1", "messages": messages, "language": "es"})
+
+    assert _asked(first) == ["walking_budget_unverified"]
+    assert _asked(second) == ["walking_budget_in_minutes"]
