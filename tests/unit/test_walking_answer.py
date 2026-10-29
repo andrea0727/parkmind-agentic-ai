@@ -1,5 +1,10 @@
 """A reply to "how many minutes can you walk?" is read without the LLM, in the usual forms."""
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
 from parkmind.agents.walking_answer import (
@@ -9,6 +14,8 @@ from parkmind.agents.walking_answer import (
 )
 from parkmind.config.settings import settings
 from parkmind.services.clients import routing_client
+
+SRC = Path(__file__).resolve().parents[2] / "src"
 
 
 @pytest.mark.parametrize(
@@ -26,7 +33,17 @@ from parkmind.services.clients import routing_client
         ("30 min", 30),
         ("30 minutos", 30),
         ("30m", 30),
+        ("90m", 90),
         ("media hora", 30),
+        ("half an hour", 30),  # not 60: "half an hour" also contains "an hour"
+        ("an hour and a half", 90),
+        ("three quarters of an hour", 45),
+        ("dos horas y media", 150),
+        ("entre 30 y 45 minutos", 30),  # a range is a limit up to its lower end
+        ("30 to 45 minutes", 30),
+        ("30-45 min", 30),
+        ("5", 5),
+        ("3 minutos", 3),  # a unit makes even a small figure the guests' own
         ("1 hora", 60),
         ("una hora", 60),
         ("hora y media", 90),
@@ -52,6 +69,10 @@ def test_a_stated_walking_limit_is_read_in_minutes(answer: str, minutes: int) ->
         "1.5",  # a decimal with no unit says nothing about its unit
         "0",
         "18h30",  # a clock time, longer than a park day
+        "2",  # too ambiguous bare: hours? people?
+        "4",
+        "mide 1,20 m",  # a height, not a walking limit
+        "30 m",  # 30 meters is no day's walking limit
     ],
 )
 def test_a_reply_that_states_no_walking_limit_is_not_read(answer: str) -> None:
@@ -67,6 +88,8 @@ def test_a_reply_that_states_no_walking_limit_is_not_read(answer: str) -> None:
         ("dos kilómetros", 2000, "2 km"),
         ("1,5 km", 1500, "1,5 km"),
         ("800 m", 800, "800 m"),  # a distance, never 800 minutes
+        ("150 m", 150, "150 m"),  # spaced: meters, even after "minutes, not distance"
+        ("100m", 100, "100 m"),  # glued but above 90: meters
         ("800 metros", 800, "800 m"),
         ("1 mile", 1609.344, "1 mi"),
         ("podemos caminar como 2 km en total", 2000, "2 km"),
@@ -94,6 +117,34 @@ def test_a_distance_becomes_minutes_at_the_routing_pace_rounded_down() -> None:
     assert minutes_for_distance(10) == 1
 
 
-def test_a_distance_anywhere_in_the_guests_words_is_noticed() -> None:
+def test_only_a_distance_said_about_walking_is_a_walking_distance() -> None:
     assert walking_distance_mentioned(["Somos 2", "podemos caminar 2 km en total"])
+    assert walking_distance_mentioned(["We can walk about 1 mile."])
     assert not walking_distance_mentioned(["Somos 2 adultos", "salimos a las 18"])
+    assert not walking_distance_mentioned(["Ana mide 1,20 m"])  # a height
+    assert not walking_distance_mentioned(["El hotel está a 800 m."])  # not walking
+
+
+def test_a_walking_pace_of_zero_falls_back_to_the_minimum() -> None:
+    """``PARKMIND_WALKING_SPEED_METERS_PER_MINUTE=0`` would divide by zero."""
+    out = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import dotenv; dotenv.load_dotenv = lambda *a, **k: False; "
+                "from parkmind.config.settings import settings; "
+                "print(settings.WALKING_SPEED_METERS_PER_MINUTE)"
+            ),
+        ],
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            "PYTHONPATH": str(SRC),
+            "PARKMIND_WALKING_SPEED_METERS_PER_MINUTE": "0",
+        },
+        check=True,
+    )
+
+    assert float(out.stdout) == 1.0

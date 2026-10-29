@@ -202,6 +202,27 @@ _THREE_QUARTERS = re.compile(
 )
 
 
+MINUTE_UNIT = _MIN_UNIT
+"""The minute words ("min", "minutos"…), for readers that need a unit after a number."""
+
+_FRACTIONS = (
+    (_THREE_QUARTERS, 45),
+    (_HOUR_AND_A_HALF, 90),
+    (_HALF_AN_HOUR, 30),
+    (_QUARTER_HOUR, 15),
+)
+
+
+def spell_out_fractions(text: str) -> str:
+    """``text`` with each fraction of an hour written as its minutes ("half an hour" -> "30 minutes").
+
+    "half an hour" also reads as "an hour"; spelled out first, the phrase has one reading.
+    """
+    for pattern, minutes in _FRACTIONS:
+        text = pattern.sub(f"{minutes} minutes", text)
+    return text
+
+
 def _decimal(raw: str) -> float:
     return float(raw.replace(",", "."))
 

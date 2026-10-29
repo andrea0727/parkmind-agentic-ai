@@ -48,8 +48,8 @@ class Settings:
     # An easy walking pace (75 m/min, about 4.5 km/h): the routing client turns distances
     # into the walking minutes the planner counts, and elicit turns a walking limit the
     # guests gave as a distance into minutes at the same pace.
-    WALKING_SPEED_METERS_PER_MINUTE = float(
-        os.getenv("PARKMIND_WALKING_SPEED_METERS_PER_MINUTE", "75")
+    WALKING_SPEED_METERS_PER_MINUTE = max(
+        1.0, float(os.getenv("PARKMIND_WALKING_SPEED_METERS_PER_MINUTE", "75"))
     )
     DATABASE_URL = os.getenv(
         "DATABASE_URL", "postgresql://parkmind:parkmind@localhost:5432/parkmind"
