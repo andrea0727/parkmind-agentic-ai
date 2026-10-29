@@ -14,9 +14,10 @@ still missing. It never decides what the checker enforces:
 
 import logging
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time
+from itertools import pairwise
 from typing import Any, Protocol
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -38,6 +39,12 @@ from parkmind.agents.time_grounding import (
     departure_is_grounded,
     lunch_window_is_grounded,
     walking_budget_is_grounded,
+)
+from parkmind.agents.walking_answer import (
+    WalkingAnswer,
+    minutes_for_distance,
+    parse_walking_answer,
+    walking_distance_mentioned,
 )
 from parkmind.config.settings import settings
 from parkmind.core.contracts import (
@@ -281,6 +288,8 @@ _PARTY_TOO_LARGE = "party_too_large:"
 _UNVERIFIED_DEPARTURE = "departure_unverified"
 _UNVERIFIED_LUNCH = "lunch_window_unverified"
 _UNVERIFIED_WALKING_BUDGET = "walking_budget_unverified"
+_WALKING_IN_MINUTES = "walking_budget_in_minutes"
+"""The walking limit came as a distance: the guests are asked once more, in minutes."""
 _LUNCH_AFTER_DEPARTURE = "lunch_after_departure:"
 
 _HEIGHT_TOLERANCE_CM = 1.5
@@ -342,11 +351,13 @@ def ungrounded_times(
     texts: Sequence[str],
     *,
     clock_answer: str | None = None,
+    walking_answers: Collection[int] = (),
 ) -> list[str]:
     """Missing-information keys for a departure time, lunch window or walking budget the guests never wrote [G13].
 
     ``clock_answer`` is the departure read straight from a bare reply to "what
-    time do you leave?"; it is the guests' own answer, so it is grounded by construction.
+    time do you leave?", and ``walking_answers`` the minutes the guests gave in reply to
+    the walking question; each is the guests' own answer, so it is grounded by construction.
     """
     missing: list[str] = []
     departure = extraction.departure_time
@@ -362,7 +373,11 @@ def ungrounded_times(
     ):
         missing.append(_UNVERIFIED_LUNCH)
     budget = extraction.party_walking_budget_minutes
-    if budget is not None and not walking_budget_is_grounded(budget, texts):
+    if (
+        budget is not None
+        and budget not in walking_answers
+        and not walking_budget_is_grounded(budget, texts)
+    ):
         missing.append(_UNVERIFIED_WALKING_BUDGET)
     return missing
 
@@ -540,6 +555,8 @@ def _question_for(
             questions.append(text("q_unverified_lunch", lang, solo=solo))
         elif key == _UNVERIFIED_WALKING_BUDGET:
             questions.append(text("q_unverified_walking_budget", lang, solo=solo))
+        elif key == _WALKING_IN_MINUTES:
+            questions.append(text("q_walking_budget_in_minutes", lang, solo=solo))
         elif key.startswith(_LUNCH_AFTER_DEPARTURE):
             start, end, departure = key.removeprefix(_LUNCH_AFTER_DEPARTURE).split("|")
             questions.append(
@@ -647,12 +664,16 @@ def build_guest_profiles(
 
 
 def pending_confirmations(
-    extraction: ElicitationExtraction, resolution: NameResolution
+    extraction: ElicitationExtraction,
+    resolution: NameResolution,
+    *,
+    walking_distance: str | None = None,
 ) -> list[str]:
     """Every hard item the human must confirm before the checker may use it.
 
     must_do/avoid entries carry the attraction's official name, so the human
-    confirms what will actually be enforced.
+    confirms what will actually be enforced. ``walking_distance`` is the distance
+    ("2 km") the walking limit was converted from, so the guests see the conversion.
 
     Accessibility entries are guest-id tokens only (``accessibility:g2``): the
     list is checkpointed state and must not carry the flags themselves [C19].
@@ -668,6 +689,8 @@ def pending_confirmations(
         pending.append(f"lunch_window: {window.start}-{window.end}")
     if extraction.party_walking_budget_minutes is not None:
         pending.append(f"walking_budget: {extraction.party_walking_budget_minutes}")
+        if walking_distance is not None:
+            pending.append(f"walking_distance: {walking_distance}")
     pending.extend(
         f"{HEIGHT_PREFIX}g{index}: {guest.height_cm:g}"
         for index, guest in enumerate(extraction.guests, start=1)
@@ -721,13 +744,23 @@ def _staged(extraction: ElicitationExtraction) -> list[StagedAccessibility]:
     ]
 
 
-def _asked_for_departure(state: ParkMindState) -> bool:
+def _keys_asked(message: Any) -> tuple[str, ...]:
+    """The missing-information keys an AI question asked about; none for any other message."""
+    if getattr(message, "type", None) != "ai":
+        return ()
+    kwargs = getattr(message, "additional_kwargs", {})
+    return tuple(kwargs.get("missing_information") or ())
+
+
+def _last_asked(state: ParkMindState) -> tuple[str, ...]:
+    """What the question the guests' last message answers asked about."""
     messages = state.get("messages", [])
-    last = messages[-2] if len(messages) >= 2 else None
-    asked = getattr(last, "additional_kwargs", {}).get("missing_information") or ()
-    return getattr(last, "type", None) == "ai" and (
-        "departure_time" in asked or _UNVERIFIED_DEPARTURE in asked
-    )
+    return _keys_asked(messages[-2]) if len(messages) >= 2 else ()
+
+
+def _asked_for_departure(state: ParkMindState) -> bool:
+    asked = _last_asked(state)
+    return "departure_time" in asked or _UNVERIFIED_DEPARTURE in asked
 
 
 def _asked_for_heights(state: ParkMindState) -> bool:
@@ -741,6 +774,136 @@ def _asked_for_heights(state: ParkMindState) -> bool:
         )
         for m in state.get("messages", [])
     )
+
+
+_WALKING_KEYS = (_WALKING_IN_MINUTES, _UNVERIFIED_WALKING_BUDGET)
+
+
+def _walking_only(asked: Sequence[str]) -> str | None:
+    """The walking question, when the walking limit is all a question asked.
+
+    A bare "120" after a question about a height and the walking limit could answer
+    either, and "18" could be the departure: those replies are left to the extractor.
+    """
+    if asked and all(key in _WALKING_KEYS for key in asked):
+        return next(key for key in _WALKING_KEYS if key in asked)
+    return None
+
+
+def _read_walking(asked: str, reply: str) -> WalkingAnswer | None:
+    """The guests' answer to the walking question ``asked``.
+
+    A distance counts as minutes only once the guests were asked again in minutes and
+    still gave one: it is converted at the routing pace, and keeps the distance so the
+    confirmation can say so. A first distance stays a distance; the node asks in minutes.
+    """
+    answer = parse_walking_answer(reply)
+    if answer is None or answer.minutes is not None or answer.meters is None:
+        return answer
+    if asked != _WALKING_IN_MINUTES:
+        return answer
+    return replace(answer, minutes=minutes_for_distance(answer.meters))
+
+
+def _walking_answers(state: ParkMindState) -> list[WalkingAnswer]:
+    """Every answer the guests gave to a walking-only question, oldest first.
+
+    Kept across turns: a "30" answered two turns ago names no unit in any text, so
+    without it the walking question came back once another question came in between.
+    """
+    messages = state.get("messages", [])
+    answers: list[WalkingAnswer] = []
+    for question, reply in pairwise(messages):
+        asked = _walking_only(_keys_asked(question))
+        if asked is None or getattr(reply, "type", None) != "human":
+            continue
+        if (answer := _read_walking(asked, str(reply.content))) is not None:
+            answers.append(answer)
+    return answers
+
+
+def _with_earlier_walking_answer(
+    outcome: ExtractionOutcome,
+    texts: Sequence[str],
+    answers: Sequence[WalkingAnswer],
+) -> ExtractionOutcome:
+    """The guests' latest walking answer, when the extractor holds nothing they wrote.
+
+    Another question can come between the walking answer and the confirmation; on that
+    turn the extractor reads every text again and may keep a figure nobody wrote (live,
+    120 from "2 km") or drop the limit. The guests' answer stands then. A limit they
+    write later in their own words grounds on the text and wins.
+    """
+    extraction = outcome.extraction
+    latest = next((a.minutes for a in reversed(answers) if a.minutes), None)
+    if extraction is None or latest is None:
+        return outcome
+    budget = extraction.party_walking_budget_minutes
+    if budget is not None and (
+        budget in {a.minutes for a in answers}
+        or walking_budget_is_grounded(budget, texts)
+    ):
+        return outcome
+    update = {"party_walking_budget_minutes": latest}
+    return replace(outcome, extraction=extraction.model_copy(update=update))
+
+
+def _converted_distance(
+    answers: Sequence[WalkingAnswer], budget: int | None
+) -> str | None:
+    """The distance the walking ``budget`` was converted from, so the confirmation says so."""
+    return next(
+        (
+            a.distance
+            for a in reversed(answers)
+            if a.distance is not None and a.minutes is not None and a.minutes == budget
+        ),
+        None,
+    )
+
+
+def _with_walking_answer(
+    outcome: ExtractionOutcome, state: ParkMindState, answer: str
+) -> tuple[ExtractionOutcome, WalkingAnswer | None]:
+    """A short reply to "how many minutes can you walk?" is read here [G13].
+
+    The extractor never sees the question, and a bare "30" names no unit, so it could
+    never be grounded and the question came back forever. The reply is the guests' own
+    answer, so the minutes it states are grounded by construction (like ``clock_answer``),
+    and it wins over a stale reading the extractor kept (live, 120 from an earlier "2 km").
+    """
+    extraction = outcome.extraction
+    asked = _walking_only(_last_asked(state))
+    if extraction is None or asked is None:
+        return outcome, None
+    reply = _read_walking(asked, answer)
+    if reply is None or reply.minutes is None:
+        return outcome, reply
+    update = {"party_walking_budget_minutes": reply.minutes}
+    return replace(outcome, extraction=extraction.model_copy(update=update)), reply
+
+
+def _walking_in_minutes(
+    missing: list[str], texts: Sequence[str], reply: WalkingAnswer | None
+) -> list[str]:
+    """Ask for the walking limit in minutes when the guests gave it as a distance.
+
+    The model turns "2 km" into minutes it cannot ground (it said 120 live), and the
+    generic question never says the plan counts minutes. A distance the guests just
+    gave to the walking question is asked about even when the model dropped it.
+    """
+    if _UNVERIFIED_WALKING_BUDGET in missing and walking_distance_mentioned(texts):
+        missing = [
+            _WALKING_IN_MINUTES if key == _UNVERIFIED_WALKING_BUDGET else key
+            for key in missing
+        ]
+    if (
+        reply is not None
+        and reply.minutes is None
+        and _WALKING_IN_MINUTES not in missing
+    ):
+        missing = [*missing, _WALKING_IN_MINUTES]
+    return missing
 
 
 def _with_clock_answer(
@@ -834,6 +997,9 @@ def make_elicit_node(
             return _unavailable("assistant_unavailable", lang)
         outcome = _with_clock_answer(outcome, state, texts[-1])
         clock_answer = parse_clock(texts[-1]) if _asked_for_departure(state) else None
+        outcome, walking_answer = _with_walking_answer(outcome, state, texts[-1])
+        walking_answers = _walking_answers(state)
+        outcome = _with_earlier_walking_answer(outcome, texts, walking_answers)
         resolution = NameResolution()
         if outcome.extraction is None:
             missing = ["unreadable_response"]
@@ -848,7 +1014,10 @@ def make_elicit_node(
                 logger.exception("attraction names cannot be resolved")
                 return _unavailable("unavailable", lang)
             unverified_times = ungrounded_times(
-                outcome.extraction, texts, clock_answer=clock_answer
+                outcome.extraction,
+                texts,
+                clock_answer=clock_answer,
+                walking_answers={a.minutes for a in walking_answers if a.minutes},
             )
             missing = (
                 missing_information(outcome.extraction)
@@ -867,6 +1036,7 @@ def make_elicit_node(
                     else heights_needed(outcome.extraction, resolution)
                 )
             )
+            missing = _walking_in_minutes(missing, texts, walking_answer)
         if outcome.extraction is None or missing:
             fixed = _question_for(
                 missing,
@@ -919,7 +1089,11 @@ def make_elicit_node(
             "guest_profiles": build_guest_profiles(extraction, now=now()),
             "constraints_valid": False,
             "pending_hard_constraint_confirmation": pending_confirmations(
-                extraction, resolution
+                extraction,
+                resolution,
+                walking_distance=_converted_distance(
+                    walking_answers, extraction.party_walking_budget_minutes
+                ),
             ),
         }
 

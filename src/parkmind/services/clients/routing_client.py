@@ -11,6 +11,7 @@ import logging
 import math
 from typing import Any
 
+from parkmind.config.settings import settings
 from parkmind.services.ports import (
     InvalidRouteError,
     RouteNotFoundError,
@@ -26,7 +27,9 @@ from .routing_reference_data import (
 logger = logging.getLogger(__name__)
 
 # Default constants
-DEFAULT_WALKING_SPEED_METERS_PER_MINUTE: float = 75.0  # ~4.5 km/h / 2.8 mph
+DEFAULT_WALKING_SPEED_METERS_PER_MINUTE: float = (
+    settings.WALKING_SPEED_METERS_PER_MINUTE  # 75 m/min, ~4.5 km/h / 2.8 mph
+)
 DEFAULT_FALLBACK_WALKING_MINUTES: float = 10.0
 DEFAULT_TORTUOSITY_FACTOR: float = (
     1.2  # Real pedestrian paths vs straight-line distance

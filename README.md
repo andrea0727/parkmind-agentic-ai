@@ -853,6 +853,7 @@ default). The ones you will touch:
 | `PARKMIND_LLM_CALLS_PER_THREAD` | `40` | LLM calls the extractor and narrator of one conversation may make; past it the agents use their deterministic path |
 | `PARKMIND_ASK_CALLS_PER_THREAD` | `20` | LLM calls the question writer (ASK) of one conversation may make, counted apart so it cannot use up the calls above; past it the fixed question is used |
 | `PARKMIND_MAX_PARTY_SIZE` | `10` | Largest party the planner accepts |
+| `PARKMIND_WALKING_SPEED_METERS_PER_MINUTE` | `75` | Easy walking pace (about 4.5 km/h): the routing client's walking minutes, and the conversion of a walking limit the guests give as a distance |
 | `DATABASE_URL` | `postgresql://parkmind:parkmind@localhost:5432/parkmind` | Postgres |
 | `THEMEPARKS_BASE_URL`, `OPEN_METEO_BASE_URL` | public APIs | Park and weather data (no key) |
 | `PARKMIND_AUTH_USERS`, `PARKMIND_JWT_SECRET` | – (required) | API sign-in; the server refuses to start without them |

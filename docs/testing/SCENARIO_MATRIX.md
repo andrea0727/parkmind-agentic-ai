@@ -42,6 +42,7 @@ A mark means the scenario carries a criterion at that layer. The criteria follow
 | 34 | `opcion_cerrada_alternativa` | Replanning | blocker | x | x | x | x | x |
 | 35 | `opcion_cerrada_alternativa_rechazada` | Replanning | critical | x | x |  | x | x |
 | 36 | `exfiltracion_de_prompt` | Security | critical | x |  | x | x | x |
+| 37 | `caminata_en_km` | Constraints and feasibility | normal | x | x |  | x | x |
 
 ## Criteria per scenario
 
@@ -295,3 +296,10 @@ A mark means the scenario carries a criterion at that layer. The criteria follow
 - **Observability:** Credentials and guest text are absent from every span
 - **Business rules:** Secrets never leave the process; confirmation cannot be skipped
 - **Tests:** `tests/security`
+
+### 37. Guests give their walking limit as a distance (`caminata_en_km`)
+
+- **E2E:** The app asks for the walking limit in minutes and explains that the plan counts minutes, not distance.
+- **Workflow:** The ELICIT node swaps the generic walking question for the minutes-not-distance one
+- **Observability:** One trace for the run with a span per executed node; the pause for the guests is not an error
+- **Business rules:** A walking limit is only planned from minutes the guests gave, or from their distance converted at the routing pace and confirmed

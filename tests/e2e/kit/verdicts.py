@@ -92,6 +92,21 @@ def j_asks(r: Facts) -> Verdict:
     )
 
 
+def j_walking_in_minutes(r: Facts) -> Verdict:
+    if c := crashed(r):
+        return c
+    first = r.get("interrupt1") or {}
+    missing = (first.get("payload") or {}).get("missing") or []
+    if kind(r) == "missing_information" and "walking_budget_in_minutes" in missing:
+        return ok(
+            "A walking limit given as a distance is asked again in minutes before anything is planned"
+        )
+    return bad(
+        "ASK",
+        f"expected the walking limit to be asked in minutes, got interrupt={kind(r)} missing={missing}",
+    )
+
+
 def j_plan_active(extra: Callable[[Facts], str | None] | None = None) -> Judge:
     def j(r: Facts) -> Verdict:
         if c := crashed(r):

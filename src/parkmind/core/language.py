@@ -214,21 +214,41 @@ _CATALOG: dict[str, dict[Language, str]] = {
     "q_unverified_walking_budget": {
         "en": (
             "I couldn't match the walking limit I understood to what you wrote. "
-            "How many minutes in total can your party walk?"
+            "How many minutes in total can your party walk? For example 30 minutes or 1 hour."
         ),
         "es": (
             "No pude relacionar el límite de caminata que entendí con lo que escribieron. "
-            "¿Cuántos minutos en total puede caminar su grupo?"
+            "¿Cuántos minutos en total puede caminar su grupo? Por ejemplo, 30 minutos o 1 hora."
         ),
     },
     "q_unverified_walking_budget_solo": {
         "en": (
             "I couldn't match the walking limit I understood to what you wrote. "
-            "How many minutes in total can you walk?"
+            "How many minutes in total can you walk? For example 30 minutes or 1 hour."
         ),
         "es": (
             "No pude relacionar el límite de caminata que entendí con lo que escribiste. "
-            "¿Cuántos minutos en total puedes caminar?"
+            "¿Cuántos minutos en total puedes caminar? Por ejemplo, 30 minutos o 1 hora."
+        ),
+    },
+    "q_walking_budget_in_minutes": {
+        "en": (
+            "The plan counts walking in minutes, not distance. About how many minutes "
+            "in total can your party walk? For example 30 minutes or 1 hour."
+        ),
+        "es": (
+            "El plan cuenta la caminata en minutos, no en distancia. ¿Cuántos minutos "
+            "en total puede caminar su grupo, más o menos? Por ejemplo, 30 minutos o 1 hora."
+        ),
+    },
+    "q_walking_budget_in_minutes_solo": {
+        "en": (
+            "The plan counts walking in minutes, not distance. About how many minutes "
+            "in total can you walk? For example 30 minutes or 1 hour."
+        ),
+        "es": (
+            "El plan cuenta la caminata en minutos, no en distancia. ¿Cuántos minutos "
+            "en total puedes caminar, más o menos? Por ejemplo, 30 minutos o 1 hora."
         ),
     },
     "q_lunch_after_departure": {
@@ -307,6 +327,26 @@ _CATALOG: dict[str, dict[Language, str]] = {
     "echo_walking_budget": {
         "en": "The party's total walking must not exceed {value} minutes.",
         "es": "La caminata total del grupo no debe pasar de {value} minutos.",
+    },
+    "echo_walking_distance": {
+        "en": (
+            "Those minutes are the {value} you gave, at an easy pace of about "
+            "{pace} km/h. Tell us if it should be different."
+        ),
+        "es": (
+            "Esos minutos son los {value} que nos dieron, a un paso tranquilo de unos "
+            "{pace} km/h. Díganos si debe ser otro valor."
+        ),
+    },
+    "echo_walking_distance_solo": {
+        "en": (
+            "Those minutes are the {value} you gave, at an easy pace of about "
+            "{pace} km/h. Tell us if it should be different."
+        ),
+        "es": (
+            "Esos minutos son los {value} que nos diste, a un paso tranquilo de unos "
+            "{pace} km/h. Dinos si debe ser otro valor."
+        ),
     },
     "echo_height": {
         "en": (
