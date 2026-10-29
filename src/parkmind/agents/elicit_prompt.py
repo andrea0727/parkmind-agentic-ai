@@ -2,7 +2,7 @@
 
 from parkmind.agents.concierge_prompt import compose
 
-ELICIT_PROMPT_VERSION = "elicit-v10"
+ELICIT_PROMPT_VERSION = "elicit-v11"
 
 ELICIT_JOB = (
     "read what the guests wrote and fill the extraction form for their visit. "
