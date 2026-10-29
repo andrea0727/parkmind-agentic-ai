@@ -46,7 +46,7 @@ def echo_for(
     if kind == "walking_distance":
         pace = settings.WALKING_SPEED_METERS_PER_MINUTE * 60 / 1000
         shown = f"{pace:g}" if lang == "en" else f"{pace:g}".replace(".", ",")
-        return text("echo_walking_distance", lang, value=value, pace=shown)
+        return text("echo_walking_distance", lang, solo=solo, value=value, pace=shown)
     if kind == "lunch_window":
         start, _, end = value.partition("-")
         return text("echo_lunch_window", lang, start=start, end=end)

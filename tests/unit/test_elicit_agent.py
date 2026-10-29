@@ -938,6 +938,69 @@ def test_a_bare_number_answers_the_departure_when_both_were_asked() -> None:
     assert _asked(answered) == ["walking_budget_unverified"]
 
 
+def test_a_bare_number_is_not_a_walking_limit_when_a_height_was_asked_too() -> None:
+    """'120' after a question about a height and the walking limit could be either."""
+    child = {"role": "child", "height_cm": 110}
+    outputs = [
+        dict(
+            WALKING_BASE,
+            guests=[{"role": "adult"}, child],
+            party_walking_budget_minutes=60,
+        ),
+        dict(
+            WALKING_BASE,
+            guests=[{"role": "adult"}, dict(child, height_cm=120)],
+            party_walking_budget_minutes=60,
+        ),
+    ]
+    for reply in ("120", "mide 1,20 m"):
+        node, _, _ = _node(FakeExtractor(*outputs))
+
+        first, answered = _walking_turns(node, reply, first=WALKING_VAGUE)
+
+        assert any(k.startswith("height") for k in _asked(first))
+        assert "walking_budget_unverified" in _asked(first)
+        assert "walking_budget_unverified" in _asked(answered), reply
+
+
+def test_a_walking_answer_holds_when_another_question_comes_in_between() -> None:
+    """'30' answered, then the departure asked; on the next turn the model is back at 60."""
+    outputs = [
+        dict(WALKING_BASE, party_walking_budget_minutes=60),
+        dict(WALKING_BASE, departure_time=None, party_walking_budget_minutes=60),
+        dict(WALKING_BASE, departure_time=None, party_walking_budget_minutes=60),
+    ]
+    node, _, _ = _node(FakeExtractor(*outputs))
+
+    first, second, third = _walking_turns(node, "30", "18", first=WALKING_VAGUE)
+
+    assert _asked(first) == ["walking_budget_unverified"]
+    assert _asked(second) == ["departure_time"]
+    assert "walking_budget: 30" in third["pending_hard_constraint_confirmation"]
+
+
+def test_a_height_in_meters_is_not_a_walking_distance() -> None:
+    """'Ana mide 1,20 m' must not turn the walking question into 'minutes, not distance'."""
+    node, _, _ = _node(
+        FakeExtractor(dict(WALKING_BASE, party_walking_budget_minutes=60))
+    )
+
+    [first] = _walking_turns(
+        node,
+        first="Somos 2 adultos, salimos a las 18:00. Ana mide 1,20 m y camina poco.",
+    )
+
+    assert _asked(first) == ["walking_budget_unverified"]
+
+
+def test_the_distance_echo_speaks_to_the_party_or_to_one_guest() -> None:
+    group = echo_for("walking_distance: 2 km", "es")
+    alone = echo_for("walking_distance: 2 km", "es", solo=True)
+
+    assert "nos dieron" in group and "Díganos" in group
+    assert "nos diste" in alone and "Dinos" in alone
+
+
 def test_a_walking_limit_given_as_a_distance_is_asked_again_in_minutes() -> None:
     """Live, the model turned '2 km' into 120 minutes; the generic question never said why."""
     node, _, _ = _node(

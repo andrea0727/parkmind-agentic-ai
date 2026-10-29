@@ -334,6 +334,16 @@ _CATALOG: dict[str, dict[Language, str]] = {
             "{pace} km/h. Tell us if it should be different."
         ),
         "es": (
+            "Esos minutos son los {value} que nos dieron, a un paso tranquilo de unos "
+            "{pace} km/h. Díganos si debe ser otro valor."
+        ),
+    },
+    "echo_walking_distance_solo": {
+        "en": (
+            "Those minutes are the {value} you gave, at an easy pace of about "
+            "{pace} km/h. Tell us if it should be different."
+        ),
+        "es": (
             "Esos minutos son los {value} que nos diste, a un paso tranquilo de unos "
             "{pace} km/h. Dinos si debe ser otro valor."
         ),
