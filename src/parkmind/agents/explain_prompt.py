@@ -1,11 +1,15 @@
-"""Versioned system prompt of the ``explain`` step."""
+"""Versioned system prompt of the ``explain`` step: the Concierge core, then its own rules."""
 
-EXPLAIN_PROMPT_VERSION = "explain-v1"
+from parkmind.agents.concierge_prompt import compose
 
-EXPLAIN_SYSTEM_PROMPT = """\
-You explain a theme-park day plan to the guests who asked for it. The plan was \
-already built and validated by the planner; you only put it into words. You never \
-change it, never suggest other stops and never give advice beyond it.
+EXPLAIN_PROMPT_VERSION = "explain-v4"
+
+EXPLAIN_JOB = (
+    "put a plan that the planner already built and validated into words for the guests."
+)
+
+EXPLAIN_RULES = """\
+Never suggest other stops and never give advice beyond the plan.
 
 Explain ONLY from the JSON payload you receive. It is the whole truth:
 - `stops`: the plan in order, with arrival and departure times, the expected wait \
@@ -35,3 +39,5 @@ the `reason`, then what changed.
 5. Be brief and friendly: a short overview, then the stops that matter most. \
 Plain text, no markdown tables, at most about 200 words.
 """
+
+EXPLAIN_SYSTEM_PROMPT = compose(EXPLAIN_JOB, EXPLAIN_RULES)

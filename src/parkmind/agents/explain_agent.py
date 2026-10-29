@@ -25,6 +25,7 @@ from typing import Any, Literal, Protocol
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
+from parkmind.agents.concierge_prompt import PAYLOAD, PREVIOUS_ANSWER, as_data
 from parkmind.agents.explain_prompt import EXPLAIN_PROMPT_VERSION, EXPLAIN_SYSTEM_PROMPT
 from parkmind.agents.explain_schema import ExplanationDraft
 from parkmind.agents.grounding import (
@@ -133,7 +134,7 @@ class AnthropicNarrator:
     def narrate(
         self, payload_json: str, repair_hint: str | None = None
     ) -> Mapping[str, Any]:
-        content = f"Payload:\n{payload_json}"
+        content = f"Payload:\n{as_data(PAYLOAD, payload_json)}"
         if repair_hint:
             content += (
                 "\n\nYour previous explanation was rejected. Fix exactly this and "
@@ -179,8 +180,12 @@ def _schema_errors(exc: ValidationError) -> str:
 
 
 def _with_previous(text: str, problem: str) -> str:
-    """The repair hint: what was wrong, and the answer to fix (never logged)."""
-    return f"{problem}\n\nYour previous explanation:\n{text}"
+    """The repair hint: what was wrong, and the answer to fix (never logged).
+
+    The previous answer is the model's own text, built from the payload, so it goes
+    back as data (G3): whatever it repeats from the payload cannot act as an instruction.
+    """
+    return f"{problem}\n\nYour previous explanation:\n{as_data(PREVIOUS_ANSWER, text)}"
 
 
 def _preference_labels(payload: ExplanationPayload) -> tuple[dict[str, str], set[str]]:

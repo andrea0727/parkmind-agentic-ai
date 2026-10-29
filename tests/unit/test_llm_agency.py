@@ -21,6 +21,7 @@ from parkmind.agents.elicit_agent import AnthropicExtractor
 from parkmind.agents.elicit_schema import ElicitationExtraction
 from parkmind.agents.explain_agent import AnthropicNarrator
 from parkmind.agents.explain_schema import ExplanationDraft
+from parkmind.agents.prompt_registry import BY_NAME, CAPABILITIES
 
 
 class _RecordingChat:
@@ -45,16 +46,16 @@ def recording_chat(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("client", "schema"),
+    ("client", "schema", "name"),
     [
-        (lambda: AnthropicExtractor(api_key="k"), ElicitationExtraction),
-        (lambda: AnthropicNarrator(api_key="k"), ExplanationDraft),
-        (lambda: AnthropicQuestionWriter(api_key="k"), QuestionDraft),
+        (lambda: AnthropicExtractor(api_key="k"), ElicitationExtraction, "elicit"),
+        (lambda: AnthropicNarrator(api_key="k"), ExplanationDraft, "explain"),
+        (lambda: AnthropicQuestionWriter(api_key="k"), QuestionDraft, "ask"),
     ],
     ids=["elicit", "explain", "ask"],
 )
 def test_each_llm_gets_exactly_one_output_schema_forced_and_no_real_tool(
-    client, schema
+    client, schema, name
 ):
     client()._runnable()  # what every call goes through
 
@@ -62,6 +63,7 @@ def test_each_llm_gets_exactly_one_output_schema_forced_and_no_real_tool(
     assert tools == [schema]
     assert isinstance(tools[0], type) and issubclass(tools[0], BaseModel)
     assert choice == schema.__name__
+    assert BY_NAME[name].output_schema is schema  # the registry says what it binds
 
 
 # Every module that builds or binds an LLM client, and so must be pinned by the test above.
@@ -152,6 +154,14 @@ def test_no_llm_client_is_built_outside_the_modules_this_file_pins():
 
     assert builders == PINNED_CLIENT_MODULES
     assert importers == {"agents/llm_client.py"}
+
+
+def test_every_module_that_calls_an_llm_has_a_registered_prompt():
+    """A new LLM client cannot land without its row in ``agents/prompt_registry.py``."""
+    registered = [c.module for c in CAPABILITIES]
+
+    assert len(registered) == len(set(registered))
+    assert set(registered) == PINNED_CLIENT_MODULES - {"agents/llm_client.py"}
 
 
 @pytest.mark.parametrize(

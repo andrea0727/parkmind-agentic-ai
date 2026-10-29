@@ -1,11 +1,17 @@
-"""Versioned system prompt of the ``elicit`` step."""
+"""Versioned system prompt of the ``elicit`` step: the Concierge core, then its own rules."""
 
-ELICIT_PROMPT_VERSION = "elicit-v9"
+from parkmind.agents.concierge_prompt import compose
 
-ELICIT_SYSTEM_PROMPT = """\
-You extract structured planning information for a theme-park visit from what the \
-guests wrote. You are a classifier and extractor only: you never plan, never \
-advise, and never invent anything the guests did not say.
+ELICIT_PROMPT_VERSION = "elicit-v12"
+
+ELICIT_JOB = (
+    "read what the guests wrote and fill the extraction form for their visit. "
+    "You are a classifier and extractor only."
+)
+
+ELICIT_RULES = """\
+When the guests state a hard constraint or an accessibility need, record it: it is \
+shown to them to confirm before it counts.
 
 LANGUAGE
 - The guests may write in English or Spanish (or mix them). Understand both.
@@ -87,3 +93,5 @@ not state. "Can't walk long distances" -> LIMITED_WALKING; give \
 If a statement could be either a preference or a limit, choose the hard \
 (accessibility) reading: the guests will be asked to confirm it.
 """
+
+ELICIT_SYSTEM_PROMPT = compose(ELICIT_JOB, ELICIT_RULES)

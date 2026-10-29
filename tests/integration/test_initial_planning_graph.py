@@ -30,6 +30,7 @@ from planning_support import (
 
 from parkmind.agents.ask_prompt import ASK_PROMPT_VERSION
 from parkmind.agents.elicit_prompt import ELICIT_PROMPT_VERSION
+from parkmind.agents.prompt_registry import CAPABILITIES
 from parkmind.core.contracts import (
     AttractionStatus,
     CheckResult,
@@ -742,11 +743,24 @@ def test_a_grounded_narration_is_what_the_guests_read(monkeypatch):
 
     [proposal] = h.proposals
     assert proposal.explanation == "Here is your day at the park."
-    assert proposal.provenance.prompt_versions["explain"] == "explain-v1"
+    assert proposal.provenance.prompt_versions["explain"] == "explain-v4"
     assert proposal.provenance.prompt_versions["elicit"] == ELICIT_PROMPT_VERSION
     assert proposal.provenance.prompt_versions["ask"] == ASK_PROMPT_VERSION
     payload = json.loads(narrator.payloads[0])
     assert payload["stops"] and "preferences" in payload
+
+
+def test_every_registered_prompt_version_reaches_the_plan_provenance(monkeypatch):
+    """Each row of ``agents/prompt_registry.py`` is recorded under its key (G7)."""
+    h = _Harness(monkeypatch, narrator=ScriptedNarrator("Here is your day."))
+
+    h.confirm()
+
+    [proposal] = h.proposals
+    recorded = proposal.provenance.prompt_versions
+    assert {c.provenance_key: recorded.get(c.provenance_key) for c in CAPABILITIES} == {
+        c.provenance_key: c.prompt_version for c in CAPABILITIES
+    }
 
 
 def test_an_ungrounded_narration_falls_back_to_the_template(monkeypatch):
@@ -1001,7 +1015,7 @@ def test_the_plan_is_re_offered_even_when_its_new_explanation_is_the_template(
     h = _Harness(monkeypatch, narrator=narrator)
     h.confirm()
     first = h.state()
-    assert first["candidate_plan"].provenance.prompt_versions["explain"] == "explain-v1"
+    assert first["candidate_plan"].provenance.prompt_versions["explain"] == "explain-v4"
     edit = _edit_of(first["candidate_plan"])
     _fail_plans_without(monkeypatch, edit["remove"][0])
 

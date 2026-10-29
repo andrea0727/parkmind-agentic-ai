@@ -27,7 +27,7 @@ def test_the_request_bounds_come_from_settings_and_a_retry_is_not_doubled():
 
 
 def test_the_prompt_is_versioned_and_states_the_grounding_and_labelling_rules():
-    assert EXPLAIN_PROMPT_VERSION == "explain-v1"
+    assert EXPLAIN_PROMPT_VERSION == "explain-v4"
     for rule in (
         "exactly as given",
         "(stated)",

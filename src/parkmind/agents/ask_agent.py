@@ -17,6 +17,7 @@ from pydantic import ValidationError
 
 from parkmind.agents.ask_prompt import ASK_PROMPT_VERSION, ASK_SYSTEM_PROMPT
 from parkmind.agents.ask_schema import QuestionDraft
+from parkmind.agents.concierge_prompt import PAYLOAD, PREVIOUS_ANSWER, as_data
 from parkmind.agents.grounding import ungrounded_numerals
 from parkmind.agents.llm_budget import (
     LlmBudgetExhaustedError,
@@ -109,7 +110,7 @@ class AnthropicQuestionWriter:
     def write(
         self, request_json: str, repair_hint: str | None = None
     ) -> Mapping[str, Any]:
-        content = f"Request:\n{request_json}"
+        content = f"Request:\n{as_data(PAYLOAD, request_json)}"
         if repair_hint:
             content += (
                 "\n\nYour previous message was rejected. Fix exactly this and "
@@ -284,5 +285,7 @@ def word_question(
         )
         if problem is None:
             return text
-        hint = f"{problem}\n\nYour previous message:\n{text}"
+        # The rejected message can repeat the guests' own words (an echo is one reason
+        # to reject it), so it goes back as data (G3).
+        hint = f"{problem}\n\nYour previous message:\n{as_data(PREVIOUS_ANSWER, text)}"
     return stand_in

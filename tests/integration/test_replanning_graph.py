@@ -837,7 +837,7 @@ def test_a_replan_is_re_offered_even_when_its_new_explanation_is_the_template(
     r = _Replanning(monkeypatch, narrator=narrator)
     r.send(_down(r.stop_node()))
     original = r.values()["candidate_plan"]
-    assert original.provenance.prompt_versions["explain"] == "explain-v1"
+    assert original.provenance.prompt_versions["explain"] == "explain-v4"
     dropped = _optional_stop(original)
     check = rg.CheckPlanUseCase.execute_replan
 
