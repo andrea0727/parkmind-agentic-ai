@@ -180,8 +180,12 @@ def _schema_errors(exc: ValidationError) -> str:
 
 
 def _with_previous(text: str, problem: str) -> str:
-    """The repair hint: what was wrong, and the answer to fix (never logged)."""
-    return f"{problem}\n\nYour previous explanation:\n{text}"
+    """The repair hint: what was wrong, and the answer to fix (never logged).
+
+    The previous answer is the model's own text, built from the payload, so it goes
+    back as data (G3): whatever it repeats from the payload cannot act as an instruction.
+    """
+    return f"{problem}\n\nYour previous explanation:\n{as_data(PAYLOAD, text)}"
 
 
 def _preference_labels(payload: ExplanationPayload) -> tuple[dict[str, str], set[str]]:

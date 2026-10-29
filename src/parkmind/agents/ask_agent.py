@@ -285,5 +285,7 @@ def word_question(
         )
         if problem is None:
             return text
-        hint = f"{problem}\n\nYour previous message:\n{text}"
+        # The rejected message can repeat the guests' own words (an echo is one reason
+        # to reject it), so it goes back as data (G3).
+        hint = f"{problem}\n\nYour previous message:\n{as_data(PAYLOAD, text)}"
     return stand_in
