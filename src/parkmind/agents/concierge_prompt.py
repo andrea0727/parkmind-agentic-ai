@@ -46,7 +46,11 @@ def compose(job: str, rules: str) -> str:
 
 GUEST_MESSAGES = "guest_messages"
 PAYLOAD = "payload"
-_TAG_IN_TEXT = re.compile(rf"<\s*(/?)\s*({GUEST_MESSAGES}|{PAYLOAD})", re.IGNORECASE)
+# "<", the full-width "＜" and the small "﹤" all open a tag a model could read.
+# Known limit: an encoded "&lt;" or other look-alikes are not defused (ADR 0004, G3).
+_TAG_IN_TEXT = re.compile(
+    rf"[<＜﹤]\s*(/?)\s*({GUEST_MESSAGES}|{PAYLOAD})", re.IGNORECASE
+)
 
 
 def as_data(tag: str, text: str) -> str:
