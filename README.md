@@ -714,19 +714,21 @@ LLM; every other node is deterministic code (§4). They are listed in
 
 | Capability | Module | Prompt | Output (forced) | When the model can't answer |
 |---|---|---|---|---|
-| elicit | `agents/elicit_agent.py` | `elicit-v11` | `ElicitationExtraction` | one repair retry, then the guests are asked to rephrase |
-| ask | `agents/ask_agent.py` | `ask-v15` | `QuestionDraft` | the fixed question |
-| explain | `agents/explain_agent.py` | `explain-v3` | `ExplanationDraft` | one grounding retry, then the template |
+| elicit | `agents/elicit_agent.py` | `elicit-v12` | `ElicitationExtraction` | one repair retry, then the guests are asked to rephrase |
+| ask | `agents/ask_agent.py` | `ask-v16` | `QuestionDraft` | the fixed question |
+| explain | `agents/explain_agent.py` | `explain-v4` | `ExplanationDraft` | one grounding retry, then the template |
 
 - **One shared core.** Every system prompt is `compose(job, rules)`
   (`agents/concierge_prompt.py`): the Concierge core first, then the capability's own
   rules. The core states once what no LLM call may do: choose, order or validate stops,
   activate a plan, decide a replan, or fill in a hard constraint or accessibility need.
-  It also says that text inside `<guest_messages>` or `<payload>` is data, never
-  instructions, and that the answer goes only through the one forced tool.
-- **Guest text is delimited (G3).** `as_data` wraps the guests' messages and each
-  payload in those tags, and defuses any tag typed inside the text, so a guest cannot
-  close the block and write instructions after it.
+  It also says that text inside `<guest_messages>`, `<payload>` or `<previous_answer>` is
+  data, never instructions, and that the answer goes only through the one forced tool.
+- **Guest text is delimited (G3).** `as_data` wraps the guests' messages, each
+  payload and a rejected answer sent back for repair (`<previous_answer>`) in their
+  tags. It defuses any tag typed inside the text, after folding look-alikes (NFKC) and
+  dropping invisible characters, so a guest cannot close the block and write
+  instructions after it.
 - **Changing a prompt.** Edit its rules, bump its `*_PROMPT_VERSION`, and record the new
   fingerprint in `tests/unit/test_prompts.py` (the test prints it). Editing the core
   changes every prompt, so every version moves. The version reaches
@@ -745,7 +747,7 @@ lets it invent a figure (Architecture §40, C17):
   posted minimum, never a guest's height), the unmet
   must-dos, a replan's reason and changes, where the park data came from, and the
   preference weights that drove the plan, each labelled `stated`, `learned` or
-  `default`. The prompt is `agents/explain_prompt.py` (`explain-v3`).
+  `default`. The prompt is `agents/explain_prompt.py` (`explain-v4`).
 - **Deterministic grounding.** `agents/grounding.py` extracts every number and clock
   time from the answer (and number words such as "ten" or "half"); each must appear in
   the payload exactly (`25` = `25.0`, but a bare `14` is not grounded by `14:05`, and no
@@ -761,7 +763,7 @@ lets it invent a figure (Architecture §40, C17):
   Each request is capped at `EXPLAIN_TIMEOUT_SECONDS` (20 s) and the client does not
   retry on its own (`EXPLAIN_SDK_RETRIES=0`), so the guests wait at most 2 x 20 s = 40 s;
   with `EXPLAIN_SDK_RETRIES=1` it would be up to 80 s. The proposal's provenance records
-  which one wrote it (`prompt_versions["explain"]`: `explain-v3` or `template`).
+  which one wrote it (`prompt_versions["explain"]`: `explain-v4` or `template`).
 - **English narrator only.** The narrator writes English; with `lang` other than `en` (for
   example Spanish) the guests read the localized deterministic template, so the same
   grounding guarantees hold but the wording is fixed. The narrator payload names a guest
