@@ -456,7 +456,9 @@ def test_an_unreachable_model_is_a_flagged_message_not_a_raw_error() -> None:
     assert "ConnectError" not in update["messages"][0].content
 
 
-def test_a_failing_model_call_is_reported_as_unavailable_without_the_connection_details() -> None:
+def test_a_failing_model_call_is_reported_as_unavailable_without_the_connection_details() -> (
+    None
+):
     class Down:
         def invoke(self, *_: object) -> object:
             raise ConnectionError("https://user:secret@llm.internal:443 refused")
@@ -513,15 +515,17 @@ def test_a_height_clamped_into_the_schema_range_is_not_grounded() -> None:
 
 
 def test_a_height_nobody_stated_is_not_grounded() -> None:
-    assert ungrounded_heights(_with_heights(None, 120), ["Me and my son, leaving at 6 PM"]) == [
-        "height_unverified:g2"
-    ]
+    assert ungrounded_heights(
+        _with_heights(None, 120), ["Me and my son, leaving at 6 PM"]
+    ) == ["height_unverified:g2"]
 
 
 def test_durations_and_counts_are_not_mistaken_for_heights() -> None:
     text = "2 adults, 120 minutes of walking at most, 100 % sure, leaving at 18:00"
 
-    assert ungrounded_heights(_with_heights(None, 120), [text]) == ["height_unverified:g2"]
+    assert ungrounded_heights(_with_heights(None, 120), [text]) == [
+        "height_unverified:g2"
+    ]
 
 
 def test_a_height_stated_in_an_earlier_message_still_counts() -> None:
@@ -570,7 +574,9 @@ def test_a_label_reaches_the_guest_contract() -> None:
     extraction = _named("tu mamá", None)
     resolution = make_names().resolve([])
 
-    guests = build_party_constraints(extraction, today=TODAY, resolution=resolution).guests
+    guests = build_party_constraints(
+        extraction, today=TODAY, resolution=resolution
+    ).guests
 
     assert [g.label for g in guests] == ["tu mamá", None]
 
@@ -578,11 +584,15 @@ def test_a_label_reaches_the_guest_contract() -> None:
 def test_the_height_echo_uses_the_label_and_falls_back_to_the_number() -> None:
     labels = {"g2": "tu hija"}
 
-    assert echo_for("height:g2: 110", "es", labels=labels).startswith("Tu hija mide 110 cm")
+    assert echo_for("height:g2: 110", "es", labels=labels).startswith(
+        "Tu hija mide 110 cm"
+    )
     assert echo_for("height:g2: 110", "en", labels={"g2": "your daughter"}).startswith(
         "Your daughter is 110 cm"
     )
-    assert echo_for("height:g1: 110", "es", labels=labels).startswith("La Persona 1 mide")
+    assert echo_for("height:g1: 110", "es", labels=labels).startswith(
+        "La Persona 1 mide"
+    )
 
 
 def test_the_unverified_height_question_uses_the_label() -> None:
@@ -651,7 +661,9 @@ def _party(*heights: float | None, must_do: list[str]) -> dict:
 def test_a_must_do_with_a_minimum_height_asks_for_the_heights_nobody_gave() -> None:
     node = _height_node(FakeExtractor(_party(None, None, must_do=["Space Mountain"])))
 
-    update = node(_state("A parent and a child. We must ride Space Mountain, leaving at 6 PM."))
+    update = node(
+        _state("A parent and a child. We must ride Space Mountain, leaving at 6 PM.")
+    )
 
     message = update["messages"][0]
     assert update["constraints"] is None
@@ -693,7 +705,9 @@ def test_one_question_covers_every_must_do_with_a_minimum_height() -> None:
 def test_the_heights_question_is_in_the_guests_language() -> None:
     node = _height_node(FakeExtractor(_party(None, None, must_do=["Space Mountain"])))
 
-    update = node(_state("Somos dos, queremos Space Mountain. Salimos a las 6 de la tarde."))
+    update = node(
+        _state("Somos dos, queremos Space Mountain. Salimos a las 6 de la tarde.")
+    )
 
     assert "mínima" in update["messages"][0].content
     assert "cuánto mide" in update["messages"][0].content.lower()
@@ -710,7 +724,9 @@ def test_a_solo_guest_is_asked_in_the_singular() -> None:
 def test_no_height_is_asked_when_every_guest_gave_one() -> None:
     node = _height_node(FakeExtractor(_party(170, 130, must_do=["Space Mountain"])))
 
-    update = node(_state("Adult 170 cm and kid 130 cm. Space Mountain. Leaving at 6 PM."))
+    update = node(
+        _state("Adult 170 cm and kid 130 cm. Space Mountain. Leaving at 6 PM.")
+    )
 
     assert update["constraints"] is not None
 
@@ -727,7 +743,9 @@ def test_a_height_restricted_avoid_does_not_ask_for_heights() -> None:
     party = {**_party(None, None, must_do=[]), "avoid": ["Space Mountain"]}
     node = _height_node(FakeExtractor(party))
 
-    update = node(_state("A parent and a child. Avoid Space Mountain. Leaving at 6 PM."))
+    update = node(
+        _state("A parent and a child. Avoid Space Mountain. Leaving at 6 PM.")
+    )
 
     assert update["constraints"] is not None
 
@@ -742,7 +760,9 @@ def test_a_guest_who_does_not_answer_is_asked_only_once() -> None:
         {
             "thread_id": "t1",
             "messages": [
-                HumanMessage(content="A parent and a child. Space Mountain. Leaving at 6 PM."),
+                HumanMessage(
+                    content="A parent and a child. Space Mountain. Leaving at 6 PM."
+                ),
                 asked,
                 HumanMessage(content="I don't know their heights"),
             ],
@@ -753,7 +773,9 @@ def test_a_guest_who_does_not_answer_is_asked_only_once() -> None:
     assert {g.height_cm for g in second["constraints"].guests} == {None}
 
 
-def test_the_heights_that_are_missing_are_asked_alongside_other_missing_information() -> None:
+def test_the_heights_that_are_missing_are_asked_alongside_other_missing_information() -> (
+    None
+):
     party = {**_party(None, None, must_do=["Space Mountain"]), "departure_time": None}
     node = _height_node(FakeExtractor(party))
 
@@ -800,7 +822,9 @@ def test_a_party_at_the_limit_is_planned() -> None:
 def test_the_party_limit_message_is_in_the_guests_language() -> None:
     node = _height_node(FakeExtractor(_crowd(30)))
 
-    update = node(_state("Somos 30 adultos y queremos Dumbo. Salimos a las 6 de la tarde."))
+    update = node(
+        _state("Somos 30 adultos y queremos Dumbo. Salimos a las 6 de la tarde.")
+    )
 
     assert "máximo" in update["messages"][0].content.lower()
 
@@ -810,3 +834,52 @@ def test_the_prompt_makes_the_writer_guest_one_so_a_relative_is_guest_two() -> N
 
     assert "they are guest 1" in ELICIT_SYSTEM_PROMPT
     assert "`guest_ref` 2, never 1" in ELICIT_SYSTEM_PROMPT
+
+
+# --- the walking limit: the guests' answer to the walking question ------------
+
+
+WALKING_BASE = {
+    "guests": [{"role": "adult"}, {"role": "adult"}],
+    "party_size": 2,
+    "departure_time": "18:00",
+}
+WALKING_FIRST = (
+    "Somos 2 adultos, salimos a las 18:00 y podemos caminar como 2 km en total."
+)
+
+
+def _walking_turns(node, *replies: str) -> list[dict]:
+    """Play the guests' replies, each answering the question the node asked before it."""
+    messages = [HumanMessage(content=WALKING_FIRST)]
+    updates = []
+    for reply in [None, *replies]:
+        if reply is not None:
+            messages.append(HumanMessage(content=reply))
+        update = node({"thread_id": "t1", "messages": messages, "language": "es"})
+        updates.append(update)
+        messages.extend(update.get("messages") or [])
+    return updates
+
+
+def _asked(update: dict) -> list[str]:
+    [question] = update["messages"]
+    return question.additional_kwargs["missing_information"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="a bare '30' to '¿Cuántos minutos…?' is never grounded: the question loops",
+)
+def test_a_bare_number_answering_the_walking_question_is_taken_as_minutes() -> None:
+    """The model invents 120 minutes from '2 km'; the guests answer the minutes question with '30'."""
+    outputs = [
+        dict(WALKING_BASE, party_walking_budget_minutes=120),
+        dict(WALKING_BASE, party_walking_budget_minutes=30),
+    ]
+    node, _, _ = _node(FakeExtractor(*outputs))
+
+    first, answered = _walking_turns(node, "30")
+
+    assert "walking_budget_unverified" in _asked(first)
+    assert "walking_budget: 30" in answered["pending_hard_constraint_confirmation"]
