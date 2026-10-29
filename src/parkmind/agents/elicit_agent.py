@@ -39,6 +39,7 @@ from parkmind.agents.time_grounding import (
     lunch_window_is_grounded,
     walking_budget_is_grounded,
 )
+from parkmind.agents.walking_answer import parse_walking_answer
 from parkmind.config.settings import settings
 from parkmind.core.contracts import (
     PARK_TZ,
@@ -342,11 +343,13 @@ def ungrounded_times(
     texts: Sequence[str],
     *,
     clock_answer: str | None = None,
+    walking_answer: int | None = None,
 ) -> list[str]:
     """Missing-information keys for a departure time, lunch window or walking budget the guests never wrote [G13].
 
     ``clock_answer`` is the departure read straight from a bare reply to "what
-    time do you leave?"; it is the guests' own answer, so it is grounded by construction.
+    time do you leave?", and ``walking_answer`` the minutes read from a reply to the
+    walking question; each is the guests' own answer, so it is grounded by construction.
     """
     missing: list[str] = []
     departure = extraction.departure_time
@@ -362,7 +365,11 @@ def ungrounded_times(
     ):
         missing.append(_UNVERIFIED_LUNCH)
     budget = extraction.party_walking_budget_minutes
-    if budget is not None and not walking_budget_is_grounded(budget, texts):
+    if (
+        budget is not None
+        and budget != walking_answer
+        and not walking_budget_is_grounded(budget, texts)
+    ):
         missing.append(_UNVERIFIED_WALKING_BUDGET)
     return missing
 
@@ -743,6 +750,42 @@ def _asked_for_heights(state: ParkMindState) -> bool:
     )
 
 
+def _asked_for_walking(state: ParkMindState) -> bool:
+    """The last question asked for the walking limit, and not for the departure as well.
+
+    A bare "18" answers the departure; with both asked, the reply is left to the extractor.
+    """
+    messages = state.get("messages", [])
+    last = messages[-2] if len(messages) >= 2 else None
+    asked = getattr(last, "additional_kwargs", {}).get("missing_information") or ()
+    return (
+        getattr(last, "type", None) == "ai"
+        and _UNVERIFIED_WALKING_BUDGET in asked
+        and not _asked_for_departure(state)
+    )
+
+
+def _with_walking_answer(
+    outcome: ExtractionOutcome, state: ParkMindState, answer: str
+) -> tuple[ExtractionOutcome, int | None]:
+    """A short reply to "how many minutes can you walk?" is read here [G13].
+
+    The extractor never sees the question, and a bare "30" names no unit, so it could
+    never be grounded and the question came back forever. The reply is the guests' own
+    answer, so the minutes it states are grounded by construction (like ``clock_answer``).
+    """
+    extraction = outcome.extraction
+    if extraction is None or not _asked_for_walking(state):
+        return outcome, None
+    reply = parse_walking_answer(answer)
+    if reply is None:
+        return outcome, None
+    update = {"party_walking_budget_minutes": reply.minutes}
+    return replace(
+        outcome, extraction=extraction.model_copy(update=update)
+    ), reply.minutes
+
+
 def _with_clock_answer(
     outcome: ExtractionOutcome, state: ParkMindState, answer: str
 ) -> ExtractionOutcome:
@@ -834,6 +877,7 @@ def make_elicit_node(
             return _unavailable("assistant_unavailable", lang)
         outcome = _with_clock_answer(outcome, state, texts[-1])
         clock_answer = parse_clock(texts[-1]) if _asked_for_departure(state) else None
+        outcome, walking_answer = _with_walking_answer(outcome, state, texts[-1])
         resolution = NameResolution()
         if outcome.extraction is None:
             missing = ["unreadable_response"]
@@ -848,7 +892,10 @@ def make_elicit_node(
                 logger.exception("attraction names cannot be resolved")
                 return _unavailable("unavailable", lang)
             unverified_times = ungrounded_times(
-                outcome.extraction, texts, clock_answer=clock_answer
+                outcome.extraction,
+                texts,
+                clock_answer=clock_answer,
+                walking_answer=walking_answer,
             )
             missing = (
                 missing_information(outcome.extraction)

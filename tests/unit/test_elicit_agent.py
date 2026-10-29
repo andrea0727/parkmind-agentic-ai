@@ -867,10 +867,6 @@ def _asked(update: dict) -> list[str]:
     return question.additional_kwargs["missing_information"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="a bare '30' to '¿Cuántos minutos…?' is never grounded: the question loops",
-)
 def test_a_bare_number_answering_the_walking_question_is_taken_as_minutes() -> None:
     """The model invents 120 minutes from '2 km'; the guests answer the minutes question with '30'."""
     outputs = [
@@ -883,3 +879,59 @@ def test_a_bare_number_answering_the_walking_question_is_taken_as_minutes() -> N
 
     assert "walking_budget_unverified" in _asked(first)
     assert "walking_budget: 30" in answered["pending_hard_constraint_confirmation"]
+
+
+def test_the_guests_answer_wins_over_an_extraction_that_kept_an_old_reading() -> None:
+    """Live, the model kept the 120 it invented from '2 km' even after '30 minutos'."""
+    outputs = [
+        dict(WALKING_BASE, party_walking_budget_minutes=120),
+        dict(WALKING_BASE, party_walking_budget_minutes=120),
+    ]
+    node, _, _ = _node(FakeExtractor(*outputs))
+
+    _, answered = _walking_turns(node, "30 minutos")
+
+    assert "walking_budget: 30" in answered["pending_hard_constraint_confirmation"]
+    assert answered["constraints"].party_walking_budget_minutes == 30
+
+
+def test_hours_and_minutes_answer_the_walking_question() -> None:
+    outputs = [
+        dict(WALKING_BASE, party_walking_budget_minutes=120),
+        dict(WALKING_BASE, party_walking_budget_minutes=60),
+    ]
+    node, _, _ = _node(FakeExtractor(*outputs))
+
+    _, answered = _walking_turns(node, "1h30")
+
+    assert "walking_budget: 90" in answered["pending_hard_constraint_confirmation"]
+
+
+def test_a_bare_number_is_not_a_walking_limit_when_walking_was_not_asked() -> None:
+    node, _, _ = _node(
+        FakeExtractor(dict(WALKING_BASE, departure_time=None), WALKING_BASE)
+    )
+    messages = [HumanMessage(content="Somos 2 adultos.")]
+    asked = node({"thread_id": "t1", "messages": messages, "language": "es"})
+    messages += [*asked["messages"], HumanMessage(content="18")]
+
+    update = node({"thread_id": "t1", "messages": messages, "language": "es"})
+
+    assert "departure_time" in _asked(asked)
+    assert not any(
+        e.startswith("walking_budget")
+        for e in update["pending_hard_constraint_confirmation"]
+    )
+
+
+def test_a_bare_number_answers_the_departure_when_both_were_asked() -> None:
+    outputs = [
+        dict(WALKING_BASE, departure_time=None, party_walking_budget_minutes=120),
+        dict(WALKING_BASE, departure_time=None, party_walking_budget_minutes=120),
+    ]
+    node, _, _ = _node(FakeExtractor(*outputs))
+
+    first, answered = _walking_turns(node, "18")
+
+    assert {"departure_time", "walking_budget_unverified"} <= set(_asked(first))
+    assert _asked(answered) == ["walking_budget_unverified"]

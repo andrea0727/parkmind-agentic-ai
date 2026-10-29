@@ -155,7 +155,7 @@ def lunch_window_is_grounded(start: str, end: str, texts: Sequence[str]) -> bool
 
 # -- walking budget ---------------------------------------------------------------------
 
-_QUANTITY_WORDS = {
+QUANTITY_WORDS = {
     "a": 1, "an": 1, "un": 1, "una": 1, "one": 1, "uno": 1, "two": 2, "dos": 2,
     "three": 3, "tres": 3, "four": 4, "cuatro": 4, "five": 5, "cinco": 5, "six": 6,
     "seis": 6, "seven": 7, "siete": 7, "eight": 8, "ocho": 8, "nine": 9, "nueve": 9,
@@ -168,7 +168,7 @@ _QUANTITY_WORDS = {
     "cincuenta y cinco": 55, "sixty": 60, "sesenta": 60, "seventy": 70, "setenta": 70,
     "eighty": 80, "ochenta": 80, "ninety": 90, "noventa": 90,
 }  # fmt: skip
-_QUANTITY_WORD = "|".join(sorted(_QUANTITY_WORDS, key=len, reverse=True))
+_QUANTITY_WORD = "|".join(sorted(QUANTITY_WORDS, key=len, reverse=True))
 _MIN_UNIT = r"(?:minutes?|mins?|minutos?|mn)(?![a-z])"
 _HOUR_UNIT = r"(?:hours?|hrs?|horas?|hs?)(?![a-z])"
 _NUM = r"(\d+(?:[.,]\d+)?)"
@@ -176,7 +176,10 @@ _HALF_SUFFIX = r"\s*(?:and\s+(?:a\s+)?half|y\s+media)"
 
 _DIGITS_MINUTES = re.compile(rf"{_NUM}\s*{_MIN_UNIT}", re.IGNORECASE)
 _DIGITS_HOURS = re.compile(
-    rf"{_NUM}\s*{_HOUR_UNIT}(?:({_HALF_SUFFIX})|\s*(?:and|y)?\s*(\d{{1,2}})\s*{_MIN_UNIT})?",
+    rf"{_NUM}\s*{_HOUR_UNIT}(?:({_HALF_SUFFIX})|\s*(?:and|y)?\s*(\d{{1,2}})\s*{_MIN_UNIT}"
+    # The minutes of that hour with no unit: glued ("1h30"), or spaced ("1 h 30") when no
+    # word follows, so "2 horas 30 personas" stays two hours.
+    r"|(\d{2})(?!\d)|\s+(\d{2})(?!\d)(?!\s*[a-záéíóúñ]))?",
     re.IGNORECASE,
 )
 _WORDS_UNIT = re.compile(
@@ -215,8 +218,10 @@ def walking_minutes_mentioned(texts: Sequence[str]) -> list[float]:
                 found.append(hours + 30)
             if m.group(3):
                 found.append(hours + int(m.group(3)))
+            if glued := m.group(4) or m.group(5):
+                found.append(hours + int(glued))
         for m in _WORDS_UNIT.finditer(text):
-            quantity = _QUANTITY_WORDS[re.sub(r"\s+", " ", m.group(1).lower())]
+            quantity = QUANTITY_WORDS[re.sub(r"\s+", " ", m.group(1).lower())]
             is_hours = re.match(_HOUR_UNIT, m.group(2), re.IGNORECASE) is not None
             total = quantity * (60 if is_hours else 1)
             found.append(total)
