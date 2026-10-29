@@ -133,6 +133,8 @@ def test_a_lunch_window_nobody_stated_is_not_grounded(text: str) -> None:
         ("caminar media hora", 30),
         ("caminar máximo 1 hora", 60),
         ("an hour", 60),
+        ("caminar 1h30 como mucho", 90),
+        ("we can walk for 1 h 30", 90),
     ],
 )
 def test_a_walking_budget_the_guests_wrote_is_grounded(text: str, minutes: int) -> None:
@@ -146,6 +148,7 @@ def test_a_walking_budget_the_guests_wrote_is_grounded(text: str, minutes: int) 
         ("keep walking under 2 hours", 90),
         ("walk 30 minutes", 300),
         ("two adults and three kids", 120),
+        ("2 horas 30 personas", 150),  # minutes after an hour only when no word follows
     ],
 )
 def test_a_walking_budget_nobody_stated_is_not_grounded(

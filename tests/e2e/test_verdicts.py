@@ -47,6 +47,19 @@ def test_asking_after_planning_started_fails_the_asks_judge() -> None:
     assert v.j_asks(facts)[0] == "failed"
 
 
+def test_the_walking_judge_wants_the_minutes_question_not_the_generic_one() -> None:
+    def asked(*missing: str) -> dict[str, Any]:
+        return {
+            "interrupt1": {
+                "kind": "missing_information",
+                "payload": {"missing": list(missing)},
+            }
+        }
+
+    assert v.j_walking_in_minutes(asked("walking_budget_in_minutes"))[0] == "passed"
+    assert v.j_walking_in_minutes(asked("walking_budget_unverified"))[0] == "failed"
+
+
 def test_children_alone_with_an_active_plan_is_a_failure() -> None:
     assert v.j_solo_ninos({"plan_active": True})[0] == "failed"
 

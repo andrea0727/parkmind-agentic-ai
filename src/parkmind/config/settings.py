@@ -45,6 +45,12 @@ class Settings:
     # ASK has its own budget so wording questions can never use up the calls elicit needs.
     ASK_CALLS_PER_THREAD = max(1, int(os.getenv("PARKMIND_ASK_CALLS_PER_THREAD", "20")))
     MAX_PARTY_SIZE = max(1, int(os.getenv("PARKMIND_MAX_PARTY_SIZE", "10")))
+    # An easy walking pace (75 m/min, about 4.5 km/h): the routing client turns distances
+    # into the walking minutes the planner counts, and elicit turns a walking limit the
+    # guests gave as a distance into minutes at the same pace.
+    WALKING_SPEED_METERS_PER_MINUTE = max(
+        1.0, float(os.getenv("PARKMIND_WALKING_SPEED_METERS_PER_MINUTE", "75"))
+    )
     DATABASE_URL = os.getenv(
         "DATABASE_URL", "postgresql://parkmind:parkmind@localhost:5432/parkmind"
     )
