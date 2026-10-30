@@ -568,7 +568,9 @@ def test_the_optimizer_keeps_a_ride_its_riders_like_and_drops_one_nobody_wants()
         scores.group["coaster"] > 0 > scores.group["dark"]
     )  # 2 of 4 ride it and like it; nobody wants dark
 
-    optimizer = GreedyInsertionOptimizer(_graph({}, routing=_FlatRouting()))
+    optimizer = GreedyInsertionOptimizer(
+        _graph({}, routing=_FlatRouting()), fill_day=False
+    )
     day = optimizer.build_plan(
         party_constraints(party_size=4, guests=[guest(guest_id=g) for g in party]),
         context,
