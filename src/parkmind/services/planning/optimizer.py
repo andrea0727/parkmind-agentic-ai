@@ -112,8 +112,10 @@ class GreedyInsertionOptimizer:
         default_rest_duration_minutes: float = _DEFAULT_REST_DURATION_MIN,
         default_show_duration_minutes: float = _DEFAULT_SHOW_DURATION_MIN,
         show_arrival_buffer_minutes: float = SHOW_ARRIVAL_BUFFER_MINUTES,
+        fill_day: bool = True,
     ) -> None:
         self._graph = park_graph
+        self._fill_day = fill_day
         self._attraction_dur = default_attraction_duration_minutes
         self._meal_dur = default_meal_duration_minutes
         self._rest_dur = default_rest_duration_minutes
@@ -540,7 +542,8 @@ class GreedyInsertionOptimizer:
                 chosen_id = fitting_must_dos[0][3]
             elif fitting_others:
                 fitting_others.sort(reverse=True)
-                if fitting_others[0][1] >= 0.0:
+                # fill_day: a negative-utility ride still beats leaving hours empty.
+                if self._fill_day or fitting_others[0][1] >= 0.0:
                     chosen_id = fitting_others[0][3]
 
             # 4. If a candidate was chosen, insert it
